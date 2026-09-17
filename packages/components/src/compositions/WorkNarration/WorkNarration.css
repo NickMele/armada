@@ -1,0 +1,153 @@
+/* A step's work as the Drone told it. The rows under a sentence are the
+   caller's log; everything here is the task headings, the sentences and the
+   line that folds the calls. Colour and motion are #1196's, so nothing here
+   takes a hue the tokens do not already give it. */
+.armada-narration {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.armada-narration__section,
+.armada-narration__beats,
+.armada-narration__beat,
+.armada-narration__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* A task's heading, in the log's own rhythm. */
+.armada-narration__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+  min-width: 0;
+}
+
+button.armada-narration__head {
+  cursor: pointer;
+}
+
+button.armada-narration__head:hover,
+.armada-narration__calls:hover {
+  background: var(--bg-hover);
+}
+
+/* A heading with nothing to open keeps the chevron's width, so titles align. */
+span.armada-narration__fold {
+  display: inline-block;
+  width: var(--space-3);
+}
+
+.armada-narration__fold {
+  flex: none;
+  color: var(--fg-subtle);
+}
+
+.armada-narration__task {
+  flex: none;
+  color: var(--fg-subtle);
+}
+
+/* A task's title wraps rather than gives way to its counts: it is what the
+   heading is for. */
+.armada-narration__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.armada-narration__head {
+  align-items: baseline;
+}
+
+.armada-narration__meta {
+  color: var(--fg-subtle);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-narration__head > .armada-narration__meta {
+  flex: none;
+}
+
+/* The sentences inside a task sit one step in from its heading. */
+.armada-narration__section > .armada-narration__beats {
+  padding-left: var(--space-4);
+}
+
+.armada-narration__said {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-1) var(--space-3) 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+  min-width: 0;
+}
+
+.armada-narration__at {
+  flex: none;
+  font-size: var(--text-2xs);
+  color: var(--fg-subtle);
+}
+
+/* Wraps rather than truncates: the sentence is the thing being read. */
+.armada-narration__words {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The line under a sentence that opens its calls. */
+.armada-narration__calls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0 var(--space-3) var(--space-1);
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.armada-narration__earlier,
+.armada-narration__empty {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+.armada-narration__earlier {
+  padding: var(--space-1) var(--space-3);
+}
+
+/* The plan bar on the Working header — the Plan well's bar and figure. */
+.armada-narration__plan {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}

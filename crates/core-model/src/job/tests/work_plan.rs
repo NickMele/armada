@@ -235,3 +235,78 @@ fn a_done_task_may_be_reopened_and_a_dropped_one_stays_dropped() {
         );
     }
 }
+
+fn updated_at(id: &str, to: TaskUpdate, at: &str) -> PlanEntry {
+    PlanEntry {
+        at: Timestamp::from_rfc3339(at),
+        ..updated(id, to)
+    }
+}
+
+fn windows(plan: &WorkPlan, id: &str) -> Vec<(String, Option<String>)> {
+    plan.task(TaskId::read(id).expect("an id"))
+        .expect("the task")
+        .working_windows()
+        .iter()
+        .map(|w| {
+            (
+                w.entered.as_str().to_string(),
+                w.left.as_ref().map(|at| at.as_str().to_string()),
+            )
+        })
+        .collect()
+}
+
+fn at(minute: u32) -> String {
+    format!("2026-09-13T10:{minute:02}:00.000Z")
+}
+
+/// A window opens on the move into `working` and closes on the move out, so
+/// Bridge can place a turn in the task the Drone had marked when it happened.
+#[test]
+fn each_move_into_working_opens_a_window_and_the_move_out_closes_it() {
+    let plan = WorkPlan::fold(&[
+        recorded(&["one", "two", "three"]),
+        updated_at("T1", TaskUpdate::Working, &at(1)),
+        updated_at("T1", TaskUpdate::Working, &at(2)),
+        updated_at("T1", TaskUpdate::Done, &at(3)),
+        updated_at("T2", TaskUpdate::Working, &at(4)),
+        updated_at("T1", TaskUpdate::Working, &at(5)),
+        updated_at("T1", TaskUpdate::Open, &at(6)),
+    ])
+    .expect("replays")
+    .expect("a plan");
+
+    assert_eq!(
+        windows(&plan, "T1"),
+        [(at(1), Some(at(3))), (at(5), Some(at(6)))],
+        "working twice in a row is one window, and a reopened task gets a second"
+    );
+    assert_eq!(
+        windows(&plan, "T2"),
+        [(at(4), None)],
+        "a task still working has a window with no end"
+    );
+    assert!(
+        windows(&plan, "T3").is_empty(),
+        "never marked, never windowed"
+    );
+}
+
+/// A drop closes the window as any move out does, and a recording starts every
+/// task again with none — its tasks are new, whatever their ids.
+#[test]
+fn a_drop_closes_a_window_and_a_recording_forgets_them() {
+    let reason = crate::DropReason::new("not needed").expect("a reason");
+    let plan = WorkPlan::fold(&[
+        recorded(&["one"]),
+        updated_at("T1", TaskUpdate::Working, &at(1)),
+        updated_at("T1", TaskUpdate::Dropped(reason), &at(2)),
+    ])
+    .expect("replays")
+    .expect("a plan");
+    assert_eq!(windows(&plan, "T1"), [(at(1), Some(at(2)))]);
+
+    let again = WorkPlan::after(Some(&plan), &recorded(&["one again"])).expect("a recording");
+    assert!(windows(&again, "T1").is_empty());
+}

@@ -301,3 +301,5 @@ export * from "./compositions/HeldFlag/HeldFlag";
 // The message box fixed under an activity log — sending a redirect without
 // leaving the log to reach the step header's button. #1154.
 export * from "./compositions/DroneMessageBox/DroneMessageBox";
+// A step's work as the Drone told it, under the plan task it served. #1185.
+export * from "./compositions/WorkNarration/WorkNarration";

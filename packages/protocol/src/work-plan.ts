@@ -29,6 +29,21 @@ export type PlanTask = {
   state: string;
   /** Present on a dropped task and on nothing else. */
   reason?: string;
+  /**
+   * Each stretch the task was marked `working`, oldest first. Since 14.5.
+   * Absent on a task nobody marked working — and on a Fleet before 14.5.
+   */
+  working_windows?: WorkingWindow[];
+};
+
+/**
+ * From the change that marked a task `working` to the change that moved it
+ * out. **A turn belongs to the task whose window holds its instant**, never to
+ * one whose words match its path. `left` is absent while it is still working.
+ */
+export type WorkingWindow = {
+  entered: string;
+  left?: string;
 };
 
 /**

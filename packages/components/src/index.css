@@ -276,6 +276,9 @@
    rule below, per HeldFlag's note. #1260. */
 @import "./glass.css";
 
+/* A step's work as the Drone told it, under the plan task it served. #1185. */
+@import "./compositions/WorkNarration/WorkNarration.css";
+
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */
 .armada-helm-dock {

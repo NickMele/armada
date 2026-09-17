@@ -69,6 +69,55 @@ fn a_plan_crosses_whole_and_reads_back_as_itself() {
 }
 
 #[test]
+fn a_task_marked_working_carries_its_windows_and_one_never_marked_carries_none() {
+    let mut history = vec![PlanEntry {
+        change: PlanChange::Recorded {
+            approach: Approach::new("Bound the reader").expect("an approach"),
+            tasks: vec![
+                NewTask::new("Stop at the end", "").expect("a title"),
+                NewTask::new("Cover the bound", "").expect("a title"),
+            ],
+        },
+        by: PlanAuthor::Person,
+        at: Timestamp::from_rfc3339("2026-09-13T10:00:00.000Z"),
+    }];
+    for (to, at) in [
+        (TaskUpdate::Working, "2026-09-13T10:01:00.000Z"),
+        (TaskUpdate::Done, "2026-09-13T10:02:00.000Z"),
+        (TaskUpdate::Working, "2026-09-13T10:03:00.000Z"),
+    ] {
+        history.push(PlanEntry {
+            change: PlanChange::Updated {
+                task: TaskId::read("T1").expect("an id"),
+                to,
+            },
+            by: PlanAuthor::Person,
+            at: Timestamp::from_rfc3339(at),
+        });
+    }
+    let plan = core_model::WorkPlan::fold(&history)
+        .expect("replays")
+        .expect("a plan");
+    let body = encode(&WorkPlan::from(&plan)).expect("plain data");
+    let received: WorkPlan = decode("a plan", body.as_bytes()).expect("reads back");
+
+    let windows = &received.tasks[0].working_windows;
+    assert_eq!(windows.len(), 2);
+    assert_eq!(windows[0].entered.as_str(), "2026-09-13T10:01:00.000Z");
+    assert_eq!(
+        windows[0].left.as_ref().map(|at| at.as_str()),
+        Some("2026-09-13T10:02:00.000Z")
+    );
+    assert_eq!(windows[1].left, None, "still working, so no end is sent");
+    assert!(received.tasks[1].working_windows.is_empty());
+    assert_eq!(
+        body.matches("working_windows").count(),
+        1,
+        "left out on the task never marked: {body}"
+    );
+}
+
+#[test]
 fn a_row_with_no_plan_carries_no_task_field() {
     let summary = JobSummary::from(&job());
     let body = encode(&summary).expect("plain data");

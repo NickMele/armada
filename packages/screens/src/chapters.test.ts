@@ -621,11 +621,20 @@ describe("a step whose transcript is not being read", () => {
   });
 
   it("keeps saying it with rows in hand, because the rows do not answer for the socket", () => {
+    // A Drone's sentence, since the Working area leaves Armada's instruction to
+    // the Instructed row above it. #1185.
+    const reading: Turn = {
+      ts: "2026-09-02T13:12:00Z",
+      seq: 2,
+      step: "plan",
+      by: "drone",
+      saw: { event: "said", text: "Reading the reducer first." },
+    };
     const markup = renderToStaticMarkup(
-      chapters({ rows: [instructed("go")], transcript: NOT_READ })[1]!.preview,
+      chapters({ rows: [instructed("go"), reading], transcript: NOT_READ })[1]!.preview,
     );
     expect(markup).toContain("The transcript could not be read.");
-    expect(markup).toContain("Armada opened the step.");
+    expect(markup).toContain("Reading the reducer first.");
   });
 
   it("leaves the ordinary sentence alone while the socket is reading", () => {
