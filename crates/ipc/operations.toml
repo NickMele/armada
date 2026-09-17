@@ -218,6 +218,8 @@ agent_access = "Helm only"
 description = "Name a Studio, or name it again, and answer with it"
 notes = """
 A blank name is refused as `fleet.studio_name_blank`. `Helm only` because naming an untitled Studio is one of the things `studio.md` lets Helm do unasked — `fleet::helm::reach::UNASKED`. From Helm it also publishes `studio.helm_acted`.
+
+**A person names a Studio too, and that is what the column does not say** (#1364). `agent_access` narrows which *agents* reach a route; a person on Bridge reaches every command, and this one had no capability on Bridge at all until then — so the owner clicked "Untitled Studio", nothing happened, and the only way to name one was to ask Helm. The name is editable where it is drawn, on the list row and on the open Studio, and Helm keeps naming an untitled one unasked.
 """
 
 [operations.delete_studio]
@@ -238,6 +240,8 @@ notes = """
 A node starts in its kind's first state and nothing in the request sets one. `produced_by` names the node that made this one, and the Studio draws the `produced` edge itself.
 
 **From Helm, only a kind that starts `proposed`** — a Finding today — and anything else is refused as `fleet.studio_node_not_helms`: Helm adds proposed nodes, and a Note is what a person pointed at. A blank field is refused as `fleet.studio_node_blank`.
+
+**From Bridge, only a kind a person makes**: a Note typed, a Link pasted, a Sketch placed, decided with the owner on #1364. Anything else is refused as `fleet.studio_node_not_a_persons` — a Finding comes from a scout, a Run from a run, a Cluster or a Deferral from promotion, an Issue draft from writing up, a Job from dispatch. So the two refusals meet over the kinds neither side mints by hand, and the route carries a person's `+ Node` as well as Helm's proposal.
 
 **No act writes a node's content afterwards**, which is what fixes a Note at capture.
 

@@ -200,6 +200,31 @@ function edgeLabel(edge: StudioWhiteboardEdge, titleOf: (id: string) => string):
   return `${titleOf(edge.source)} ${said} ${titleOf(edge.target)}${proposed}`;
 }
 
+/**
+ * Where a node a person adds now should land: the middle of what they are
+ * looking at, in the board's own coordinates. `#1364`.
+ *
+ * **Only callable from inside the board**, since what it reads is the viewport
+ * React Flow is holding — which is why the aside is a component of the
+ * caller's rather than markup passed down. A node placed at the origin on a
+ * board panned somewhere else is a node a person has to go and find.
+ */
+export function useStudioPlacement(): () => { x: number; y: number } {
+  const flow = useReactFlow();
+  return useCallback(() => {
+    const board = document.querySelector(".armada-studio-whiteboard");
+    const at = board?.getBoundingClientRect();
+    if (board === null || at === undefined) return { x: 0, y: 0 };
+    const middle = flow.screenToFlowPosition({ x: at.x + at.width / 2, y: at.y + at.height / 2 });
+    // A node is placed by its top-left corner, so half a card back puts the
+    // card in the middle rather than starting there. The width is read off the
+    // token the card is drawn at rather than restated here.
+    const wide = Number.parseFloat(getComputedStyle(board).getPropertyValue("--w-studio-node"));
+    const half = Number.isFinite(wide) ? wide / 2 : 0;
+    return { x: Math.round(middle.x - half), y: Math.round(middle.y) };
+  }, [flow]);
+}
+
 function Controls() {
   const flow = useReactFlow();
   return (

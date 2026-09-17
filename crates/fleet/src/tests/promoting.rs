@@ -75,6 +75,28 @@ async fn a_studio(fleet: &Fixture) -> Studio {
         .expect("a Studio in the repository Fleet starts in")
 }
 
+/// A node no route mints, written straight through the store.
+///
+/// **A Contradiction is the one kind this test needs and nothing can add**:
+/// reading in is what makes one (`#1293`), and a person adds a Note, a Link or
+/// a Sketch by hand and nothing else (`#1364`). So the four outcomes are
+/// exercised against a Contradiction the record holds, rather than through a
+/// door that would have to be opened for a test.
+async fn seeded(fleet: &Fixture, studio: &Studio, content: StudioNodeContent) -> StudioNodeId {
+    let id = studio.id.to_domain();
+    let at = fleet.now();
+    let node = core_model::StudioNode::added(
+        core_model::StudioNodeId::carried(fleet.mint().ulid()),
+        content.to_domain(),
+        core_model::StudioPosition { x: 0, y: 0 },
+        at.clone(),
+        core_model::StudioAuthor::Person,
+    );
+    let mut store = fleet.store().lock().await;
+    store.add_studio_node(&id, &node, None, &at).expect("added");
+    StudioNodeId::from(node.id())
+}
+
 async fn added(fleet: &Fixture, studio: &Studio, content: StudioNodeContent) -> StudioNodeId {
     let studio = fleet
         .add_studio_node(
@@ -434,7 +456,7 @@ async fn a_contradiction_ends_one_of_four_ways_and_never_twice() {
 
     // Written up: the Contradiction ends as `issue_draft`, and the draft is a
     // node on the far end of a Produced edge.
-    let written_up = added(&fleet, &studio, disagreement()).await;
+    let written_up = seeded(&fleet, &studio, disagreement()).await;
     let after = fleet
         .write_up_studio_node(
             studio.id.clone(),
@@ -452,7 +474,7 @@ async fn a_contradiction_ends_one_of_four_ways_and_never_twice() {
     assert_eq!(state(&after, &written_up), Some("issue_draft"));
 
     // Deferred: it ends as `deferral`.
-    let put_off = added(&fleet, &studio, disagreement()).await;
+    let put_off = seeded(&fleet, &studio, disagreement()).await;
     let after = fleet
         .defer_on_studio(
             studio.id.clone(),
@@ -469,7 +491,7 @@ async fn a_contradiction_ends_one_of_four_ways_and_never_twice() {
     assert_eq!(state(&after, &put_off), Some("deferral"));
 
     // Not a problem, and Resolved here, which keeps the answer on the node.
-    let held = added(&fleet, &studio, disagreement()).await;
+    let held = seeded(&fleet, &studio, disagreement()).await;
     let after = fleet
         .settle_contradiction(
             studio.id.clone(),
@@ -483,7 +505,7 @@ async fn a_contradiction_ends_one_of_four_ways_and_never_twice() {
         .expect("both statements holding");
     assert_eq!(state(&after, &held), Some("not_a_problem"));
 
-    let settled = added(&fleet, &studio, disagreement()).await;
+    let settled = seeded(&fleet, &studio, disagreement()).await;
     let after = fleet
         .settle_contradiction(
             studio.id.clone(),

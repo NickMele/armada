@@ -90,7 +90,7 @@ test("a Studio started, laid out, closed, reopened read-only, continued, and a r
   open(fleet.scenario, first.api);
 
   await page.getByRole("button", { name: "Studios", exact: true }).first().click();
-  await page.getByRole("button", { name: "Untitled Studio" }).click();
+  await page.getByRole("button", { name: "Untitled Studio", exact: true }).click();
   await expect.element(page.getByText("Read-only", { exact: true })).toBeVisible();
   await expect.element(node(/^Note: Drag me somewhere/)).toBeVisible();
   expect(fleet.studios()[0]!.nodes.find((one) => one.kind === "note")!.position).toEqual(left);
@@ -112,6 +112,54 @@ test("a Studio started, laid out, closed, reopened read-only, continued, and a r
   await page.getByRole("button", { name: /^Accept: Finding What does the note point at\? answers Note Drag me somewhere/ }).click();
   await expect.poll(() => fleet.studios()[0]!.edges.map((edge) => edge.standing)).toEqual(["accepted"]);
   await expect.poll(() => page.getByRole("button", { name: /^Accept: / }).query()).toBeNull();
+});
+
+/**
+ * #1364's definition of done: a person opens a new Studio, names it, types a
+ * note onto it, pastes a link beside it, and reloads Bridge to find all three
+ * where they left them — without asking Helm for any of it.
+ */
+test("a Studio named by hand, with a note typed and a link pasted, survives a reload", async () => {
+  const fleet = studying([]);
+  const first = open(fleet.scenario);
+
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await page.getByRole("button", { name: "New Studio" }).click();
+  await expect.element(page.getByRole("heading", { name: "Untitled Studio" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Rename Untitled Studio" }).click();
+  await userEvent.keyboard("The Board's legend{Enter}");
+  await expect.element(page.getByRole("heading", { name: "The Board's legend" })).toBeVisible();
+  await expect.poll(() => fleet.studios()[0]!.named_by).toBe("person");
+
+  // The menu, and the two keys behind it. `N` is the note and `V` the link,
+  // read off the registry by the surface that binds them.
+  await page.getByRole("button", { name: /Node/ }).click();
+  await page.getByRole("menuitem", { name: /Note/ }).click();
+  // A single key is suppressed while a field holds focus: the `V` in this note
+  // stays in the note rather than opening a Link beside it.
+  await userEvent.fill(page.getByLabelText("Note", { exact: true }), "The legend is unreadable in View");
+  expect(page.getByLabelText("Link", { exact: true }).query()).toBeNull();
+  await page.getByRole("button", { name: "Add note" }).click();
+  await expect.element(node(/^Note: The legend is unreadable in View/)).toBeVisible();
+
+  await userEvent.keyboard("V");
+  await userEvent.fill(page.getByLabelText("Link", { exact: true }), "docs/contracts/design-system.md");
+  await page.getByRole("button", { name: "Add link" }).click();
+  await expect.element(node(/^Link: docs\/contracts\/design-system\.md/)).toBeVisible();
+
+  // Both are a person's, and neither landed at the origin: a node goes where
+  // the person is looking, and two at one point would read as one node.
+  const [kept] = fleet.studios();
+  expect(kept!.nodes.map((one) => one.added_by)).toEqual(["person", "person"]);
+  expect(kept!.nodes[0]!.position).not.toEqual(kept!.nodes[1]!.position);
+
+  close();
+  open(fleet.scenario, first.api);
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await page.getByRole("button", { name: "The Board's legend", exact: true }).click();
+  await expect.element(node(/^Note: The legend is unreadable in View/)).toBeVisible();
+  await expect.element(node(/^Link: docs\/contracts\/design-system\.md/)).toBeVisible();
 });
 
 test("Delete node confirms, with Cancel first, and takes the node's edges with it", async () => {
@@ -155,12 +203,12 @@ test("every-state keeps Studios, so the surface opens on a list and not a read f
   open("every-state");
   await openStudios();
 
-  await expect.element(page.getByRole("button", { name: "Every kind of node and edge" })).toBeVisible();
+  await expect.element(page.getByRole("button", { name: "Every kind of node and edge", exact: true })).toBeVisible();
   // Untitled, so the list draws what an unnamed Studio is called.
-  await expect.element(page.getByRole("button", { name: "Untitled Studio" })).toBeVisible();
+  await expect.element(page.getByRole("button", { name: "Untitled Studio", exact: true })).toBeVisible();
   expect(page.getByText(FAILED).query()).toBeNull();
 
-  await page.getByRole("button", { name: "Every kind of node and edge" }).click();
+  await page.getByRole("button", { name: "Every kind of node and edge", exact: true }).click();
   await expect.element(node(/^Note: The legend under the step bar is unreadable/)).toBeVisible();
   // A Job node reads its state off the Board row this window already holds.
   await expect.element(node(/^Job: /)).toBeVisible();
@@ -186,7 +234,7 @@ test("a Note draws the frame it kept, opens it full size, and a Note without one
   // The `studios` scenario has this repository picked already, and keeps the legend Studio.
   open(studying().scenario);
   await page.getByRole("button", { name: "Studios", exact: true }).first().click();
-  await page.getByRole("button", { name: "The Board's legend" }).click();
+  await page.getByRole("button", { name: "The Board's legend", exact: true }).click();
 
   const kept = node(/^Note: The legend under the step bar is unreadable/);
   await expect.element(kept).toBeVisible();

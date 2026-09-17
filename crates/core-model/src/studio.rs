@@ -234,6 +234,21 @@ impl StudioNodeKind {
     pub fn starts_proposed(&self) -> bool {
         self.states().first() == Some(&StudioNodeState::Proposed)
     }
+
+    /// A kind a person may put on a Studio by hand — `#1364`, decided with the
+    /// owner. A Note typed here, a Link pasted, a Sketch placed.
+    ///
+    /// **Every other kind is made by the act that earns it**, and adding one by
+    /// hand would be a claim nothing stands behind: a Finding comes from a
+    /// scout, a Run from a run, a Cluster or a Deferral from promotion, an
+    /// Issue draft from writing up, a Job from dispatch, a Contradiction from
+    /// two sources read in. `docs/concepts/studio.md`, *Promotion*.
+    pub fn added_by_hand(&self) -> bool {
+        matches!(
+            self,
+            StudioNodeKind::Note | StudioNodeKind::Link | StudioNodeKind::Sketch
+        )
+    }
 }
 
 impl From<StudioRelation> for StudioEdgeKind {

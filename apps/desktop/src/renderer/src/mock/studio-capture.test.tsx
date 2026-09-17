@@ -73,7 +73,7 @@ test("a Studio open, a press on another surface, and the note lands on it", asyn
 
   // And on the Studio, reopened from the list.
   await page.getByRole("button", { name: "Studios", exact: true }).first().click();
-  await page.getByRole("button", { name: "Untitled Studio" }).click();
+  await page.getByRole("button", { name: "Untitled Studio", exact: true }).click();
   await expect.element(page.getByRole("group", { name: /^Note: The rail's count is stale/ })).toBeVisible();
 });
 

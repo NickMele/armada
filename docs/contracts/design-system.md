@@ -1079,6 +1079,9 @@ g              open the stage       (detail only)
 B              raise the cost cap   (detail only) (confirms)
 T              raise the turn cap   (detail only) (confirms)
 r              open the run sheet   (detail only)
+N              add a note           (open studio only)
+V              add a link           (open studio only)
+S              add a sketch         (open studio only)
 ```
 
 **This is the map, not a pattern.** It was settled by drawing the Job
@@ -1123,6 +1126,15 @@ Three reversals against what stood before, each with a reason:
 
 **`x` for kill and every safety rule below are unchanged.** Neither was
 in play, and the destructive-key rule is what kept `x` off `k`.
+
+**A Studio's three are shifted, and `open studio` is a place rather than
+an object.** Every other contextual scope names what the act acts on —
+the focused row, the open job, the dispatch card. These act on the board
+a person is looking at, and the node they make lands where they are
+looking rather than at the origin. They are shifted because the letters
+the design drew are all spoken for: `n` is dispatch and its scope is
+`anywhere`, `v` is observe and `s` is restart step, so an unshifted key
+would answer twice on one press. See [Studio](../concepts/studio.md).
 
 **`⌘1`–`⌘8` follow the rail** — Overview, Job Board, Studios, Alerts,
 Doctor, Manifest, Cleanup, Settings — since Active Jobs, Reviews and the Activity

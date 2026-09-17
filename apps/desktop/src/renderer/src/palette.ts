@@ -102,6 +102,13 @@ export function dormantIn(where: {
     open_diff: "the story's own Produced chapter",
     open_stage: "the phase strip",
 
+    // The Studio's own control, for the reason above it: `Studios` holds which
+    // kind is being written, and `App` has no handle to it. A wiring gap,
+    // written as one — the keys `N`, `V` and `S` reach all three.
+    add_note: "the Studio's own + Node control",
+    add_link: "the Studio's own + Node control",
+    add_sketch: "the Studio's own + Node control",
+
     // Global acts with no surface behind them. The rail carries the Job Board
     // and nothing else — four disabled rows would be a promise Armada does not
     // keep, which is `Shell.tsx`'s own reasoning about the rail.

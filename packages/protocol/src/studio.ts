@@ -156,6 +156,26 @@ export type AddStudioNode = StudioNodeContent & {
 };
 
 /**
+ * What a person puts on a Studio by hand — a Note typed, a Link pasted, a
+ * Sketch placed. Since 14.12, #1364.
+ *
+ * **Narrower than `StudioNodeContent` on purpose.** Fleet refuses every other
+ * kind from Bridge as `fleet.studio_node_not_a_persons`, because each is made
+ * by the act that earns it; this is that rule as a type, so the renderer
+ * cannot ask for a Finding no scout read for and a capability added to the
+ * preload bridge stays as small as the act it carries.
+ *
+ * **A Sketch is structured content and never pixels** — `docs/concepts/studio.md`
+ * has it that an agent can read a record and cannot read a drawing — so `body`
+ * is the diagram written out, the way an Outline's is.
+ */
+export type StudioNodeByHand =
+  /** Typed here rather than pointed at, so it carries no `capture`: that is `capture_studio_note`'s. */
+  | { kind: "note"; said: string }
+  | { kind: "link"; address: string }
+  | { kind: "sketch"; body: string };
+
+/**
  * What a Note keeps of where a person pointed — the development annotation
  * layer's own fields (`apps/desktop/src/shared/annotations.ts`) plus the four
  * it does not record. Since 14.11, #1290, `crates/ipc/src/capturing.rs`.
