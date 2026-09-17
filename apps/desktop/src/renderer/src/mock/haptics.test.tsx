@@ -43,7 +43,7 @@ test("an accepted act taps once, in alignment", async () => {
 
 test("a refused act plays the level change, from the same place", async () => {
   const api = await opened(reviewAtDelivery(), () => ({
-    mergePullRequest: async () => ({ ok: false, outcome: NOT_CONNECTED }),
+    mergePullRequest: async () => NOT_CONNECTED,
   }));
   const tap = vi.spyOn(api, "tap");
   await page.getByRole("button", { name: /^Merge/ }).first().click();
