@@ -315,6 +315,25 @@ and `mountTwo` sets two windows on one main. `onBoard(jobs, …)` in
 Storybook `play` asserts what `App` does with a press — the dialog, the
 composer, the file written — rather than that a callback was called.
 
+## Annotating Bridge
+
+**⌥⌘A turns the annotation layer on** in Bridge under `pnpm dev` and in the mock
+above, and it is absent from a packaged app. Click anything, write a note, and
+⌘Enter saves it as one file under `.armada/annotations/` at the repository root,
+gitignored. Each file names the component under the click and the ones around
+it, a selector, the screen and the mock scenario, which is what an agent needs to
+find the code without asking where you clicked.
+
+**A note reaches work one of two ways.**
+
+| Way | What happens |
+|---|---|
+| *Send to Fleet*, on the note or for every open note on the screen | Proposed as a Job at the approval gate, with a screenshot of the area attached. Nothing runs until you approve it on the Board, and no session has to be open. The pin says where it went |
+| `/annotations`, in a session | The agent reads the open notes, fixes, asks or leaves each for Fleet, and marks it done — `.claude/skills/annotations/` |
+
+**Send needs Bridge and its Fleet.** In the mock there is no Fleet, so the layer
+says so and the note stays a file for `/annotations`.
+
 ## Running a Check or a Command by hand
 
 **`armada check` and `armada run` need no Fleet.** They read `armada.yml` and

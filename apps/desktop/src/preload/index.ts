@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
 import { ANNOTATE_FLAG, ANNOTATION_CHANNELS } from "../shared/annotations";
-import type { Annotation, AnnotationsDevApi } from "../shared/annotations";
+import type { Annotation, AnnotationsDevApi, Box } from "../shared/annotations";
 import { frameStreamUrl } from "../shared/streaming";
 import type { BridgeState, Summons } from "../shared/bridge";
 import type { BridgeApi, CommandExplainedRead } from "../shared/api";
@@ -576,6 +576,8 @@ if (process.argv.includes(ANNOTATE_FLAG)) {
     list: (): Promise<Annotation[]> => ipcRenderer.invoke(ANNOTATION_CHANNELS.list),
     save: (note: Annotation): Promise<void> => ipcRenderer.invoke(ANNOTATION_CHANNELS.save, note),
     remove: (id: string): Promise<void> => ipcRenderer.invoke(ANNOTATION_CHANNELS.remove, id),
+    root: (): Promise<string | null> => ipcRenderer.invoke(ANNOTATION_CHANNELS.root),
+    capture: (box: Box): Promise<ArrayBuffer | null> => ipcRenderer.invoke(ANNOTATION_CHANNELS.capture, box),
   };
   contextBridge.exposeInMainWorld("armadaDev", annotations);
 }

@@ -12,8 +12,6 @@ their work before advancing them. Rust daemon, Electron app, one repo.
   A bare `#123` stays bare *inside* the repo — docs autolink and gates parse it.
 - **Never edit the checkout at `main`.** Cut a worktree on a branch before the
   first edit, and land it as a pull request. `.claude/skills/agent-worktrees/`.
-- **Ask the code graph what a change breaks, before the edit and before the
-  commit.** `docs/practices/code-graph.md`.
 
 | Looking for | Go to |
 |---|---|

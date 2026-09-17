@@ -7,6 +7,7 @@ import { Button, KbdChord, Textarea } from "@armada/components";
 import { byCreation, type Annotation, type Box } from "../../../shared/annotations";
 import { capture, locate } from "./capture";
 import { componentsOf, fiberOf } from "./fiber";
+import { sendToFleet, unsendable } from "./send";
 import type { Sink } from "./sink";
 import "./annotate.css";
 
@@ -63,6 +64,9 @@ export function Layer({ sink }: { sink: Sink }) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [frames, setFrames] = useState<Record<string, Box | null>>({});
+  // Which send is out: one note's id, or every open note on this screen.
+  const [sending, setSending] = useState<string | null>(null);
+  const cannotSend = unsendable(sink);
   const draftRef = useRef(draft);
   draftRef.current = draft;
 
@@ -166,6 +170,41 @@ export function Layer({ sink }: { sink: Sink }) {
     }
   }
 
+  /** One note to Fleet. Written back with its Job only once Fleet took it. */
+  async function send(note: Annotation): Promise<boolean> {
+    const box = frames[note.id] ?? note.box;
+    try {
+      const answer = await sendToFleet(note, box, sink, window.armada, new Date());
+      if (!answer.ok) {
+        setError(`Not sent: ${answer.saying}`);
+        return false;
+      }
+      const next = { ...note, sent: answer.sent, updatedAt: answer.sent.at };
+      await sink.save(next);
+      setNotes((was) => was.map((n) => (n.id === note.id ? next : n)));
+      setError(null);
+      return true;
+    } catch (cause) {
+      fail("Sending", cause);
+      return false;
+    }
+  }
+
+  async function sendOne(note: Annotation): Promise<void> {
+    setSending(note.id);
+    await send(note);
+    setSending(null);
+  }
+
+  /** Every open, unsent note on this screen, one Job each, stopping at the first Fleet refuses. */
+  async function sendHere(): Promise<void> {
+    setSending("here");
+    for (const note of notes.filter((n) => n.status === "open" && n.sent === undefined && frames[n.id] != null)) {
+      if (!(await send(note))) break;
+    }
+    setSending(null);
+  }
+
   async function remove(note: Annotation): Promise<void> {
     try {
       await sink.remove(note.id);
@@ -196,6 +235,7 @@ export function Layer({ sink }: { sink: Sink }) {
   const draftBox = draft === null ? null : frames["draft"] ?? draft.note.box;
   const offScreen = notes.filter((n) => frames[n.id] == null).length;
   const open = notes.filter((n) => n.status === "open").length;
+  const sendableHere = notes.filter((n) => n.status === "open" && n.sent === undefined && frames[n.id] != null).length;
 
   return (
     <div className="armada-annotate" data-armada-annotate="" onKeyDown={keyed}>
@@ -216,8 +256,9 @@ export function Layer({ sink }: { sink: Sink }) {
             type="button"
             className="armada-annotate__pin"
             data-status={note.status}
+            data-sent={note.sent === undefined ? undefined : ""}
             style={place(box)}
-            aria-label={`Note ${i + 1}, ${note.status}: ${note.text}`}
+            aria-label={`Note ${i + 1}, ${note.status}${note.sent === undefined ? "" : `, sent as ${note.sent.handle}`}: ${note.text}`}
             onClick={() => {
               setDraft(null);
               setDeleting(false);
@@ -256,6 +297,10 @@ export function Layer({ sink }: { sink: Sink }) {
         <div className="armada-annotate__card" role="dialog" aria-label="Note" {...cardProps(openBox)}>
           <p className="armada-annotate__meta">{chain(openNote)}</p>
           <p className="armada-annotate__text">{openNote.text}</p>
+          {openNote.sent !== undefined && (
+            <p className="armada-annotate__meta">Sent to Fleet as {openNote.sent.handle}, waiting on approval on the Board</p>
+          )}
+          {openNote.sent === undefined && cannotSend !== null && <p className="armada-annotate__meta">{cannotSend}</p>}
           <div className="armada-annotate__actions">
             <Button
               variant="ghost"
@@ -271,6 +316,16 @@ export function Layer({ sink }: { sink: Sink }) {
             >
               {openNote.status === "open" ? "Mark done" : "Reopen"}
             </Button>
+            {openNote.sent === undefined && openNote.status === "open" && (
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={cannotSend !== null || sending !== null}
+                onClick={() => void sendOne(openNote)}
+              >
+                {sending === openNote.id ? "Sending…" : "Send to Fleet"}
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -281,6 +336,11 @@ export function Layer({ sink }: { sink: Sink }) {
           {open} open, {notes.length - open} done
           {offScreen > 0 ? `, ${offScreen} not on this screen` : ""}
         </span>
+        {cannotSend === null && sendableHere > 0 && (
+          <Button variant="secondary" size="sm" disabled={sending !== null} onClick={() => void sendHere()}>
+            {sending === "here" ? "Sending…" : `Send ${sendableHere} to Fleet`}
+          </Button>
+        )}
         {error !== null && <span className="armada-annotate__error">{error}</span>}
         <KbdChord keys={["⌥", "⌘", "A"]} aria-label="Option Command A turns annotating off" />
       </div>

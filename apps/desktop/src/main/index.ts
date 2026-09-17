@@ -350,7 +350,19 @@ const attention = new Attention({
 
 void app.whenReady().then(() => {
   wearTheMark();
-  if (!app.isPackaged) handleAnnotations(ipcMain, app.getAppPath());
+  if (!app.isPackaged) {
+    // A sent note's screenshot: the part of the window the note points at, #1250.
+    handleAnnotations(ipcMain, app.getAppPath(), async (event, box) => {
+      const image = await (event as Electron.IpcMainInvokeEvent).sender.capturePage({
+        x: Math.max(0, Math.round(box.x)),
+        y: Math.max(0, Math.round(box.y)),
+        width: Math.max(1, Math.round(box.width)),
+        height: Math.max(1, Math.round(box.height)),
+      });
+      const png = image.toPNG();
+      return png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer;
+    });
+  }
 
   // A recording plays from here, forwarded to the port main already holds.
   // **The port is read at request time and never captured**, for the reason

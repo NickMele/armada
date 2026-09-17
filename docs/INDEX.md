@@ -43,9 +43,6 @@ Each ends with the questions it found and did not answer.
   checking and stopping a local Fleet: what it prints, what it refuses before it
   binds a port, what `armada clean` will not delete, and Bridge on a mock Fleet
   with `pnpm mock`
-- [`practices/code-graph.md`](practices/code-graph.md) — what to ask GitNexus
-  before an edit and before a commit, how to build its index with
-  `pnpm gitnexus:index`, and what it cannot see
 
 ## Contracts
 
@@ -208,6 +205,7 @@ can find them.
 | Finding out what a Job did and why it stopped | `what-happened-to-a-job` |
 | Reporting something Armada got wrong | `armada-bug` |
 | Filing what the owner finds while he walks the app | `app-walkthrough` |
+| Working through the notes the owner left on Bridge with the annotation layer | `annotations` |
 | Working one issue end to end — worktree, plan, implement, test, commit, merge | `work-issue` |
 | Cutting an agent worktree, and giving it back when its branch merges | `agent-worktrees` |
 | Running a whole milestone by dispatching agents at its issues | `orchestrate-milestone` |
@@ -215,9 +213,3 @@ can find them.
 | Putting a decision to a person, and writing the options | `asking-a-person` |
 | Running a whole milestone from one approval, wave by wave | `epic-as-one-job` |
 | Moving the owner's Fleet onto a merged fix | `restart-fleet` |
-| Asking the code graph how something works | `gitnexus-exploring` |
-| Asking the code graph what a change breaks | `gitnexus-impact-analysis` |
-| Tracing a bug through the code graph | `gitnexus-debugging` |
-| Renaming, extracting or moving code through the code graph | `gitnexus-refactoring` |
-| Looking up a GitNexus tool, resource or schema | `gitnexus-guide` |
-| Building, checking or cleaning the GitNexus index | `gitnexus-cli` |

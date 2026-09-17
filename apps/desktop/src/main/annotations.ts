@@ -21,6 +21,7 @@ import {
   isAnnotationId,
   serializeAnnotation,
   type Annotation,
+  type Box,
 } from "../shared/annotations";
 
 /**
@@ -87,12 +88,15 @@ type Handles = {
   handle: (channel: string, listener: (event: unknown, ...args: unknown[]) => unknown) => void;
 };
 
+/** What main captures a window's area with. Passed in, so this module needs no Electron. */
+export type Capture = (event: unknown, box: Box) => Promise<ArrayBuffer | null>;
+
 /**
- * Registers the three channels against the repository above `appPath`. Returns
- * the directory, or null when no repository was found — a Bridge run from
+ * Registers the channels against the repository above `appPath`. Returns the
+ * directory, or null when no repository was found — a Bridge run from
  * somewhere that is not this repository has nowhere to write, and says so.
  */
-export function handleAnnotations(ipc: Handles, appPath: string): string | null {
+export function handleAnnotations(ipc: Handles, appPath: string, capture: Capture): string | null {
   const root = repositoryRoot(appPath);
   if (root === null) {
     console.warn(`annotations: no repository above ${appPath}; the layer cannot save`);
@@ -102,5 +106,13 @@ export function handleAnnotations(ipc: Handles, appPath: string): string | null 
   ipc.handle(ANNOTATION_CHANNELS.list, () => listAnnotations(dir));
   ipc.handle(ANNOTATION_CHANNELS.save, (_event, note) => saveAnnotation(dir, note));
   ipc.handle(ANNOTATION_CHANNELS.remove, (_event, id) => removeAnnotation(dir, id));
+  ipc.handle(ANNOTATION_CHANNELS.root, () => root);
+  ipc.handle(ANNOTATION_CHANNELS.capture, (event, box) => (isBoxOf(box) ? capture(event, box) : null));
   return dir;
+}
+
+function isBoxOf(value: unknown): value is Box {
+  if (typeof value !== "object" || value === null) return false;
+  const box = value as Record<string, unknown>;
+  return ["x", "y", "width", "height"].every((key) => typeof box[key] === "number" && Number.isFinite(box[key]));
 }

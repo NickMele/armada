@@ -100,10 +100,6 @@ __screenshots__/
 .armada/*
 !.armada/workflows/
 
-# The code graph `pnpm gitnexus:index` builds: a database of a few hundred MB,
-# rebuilt from the source it describes. `docs/practices/code-graph.md`.
-.gitnexus/
-
 # Python bytecode cache, produced by `python3 -m py_compile` or an import
 # while testing `scripts/job` by hand.
 __pycache__/

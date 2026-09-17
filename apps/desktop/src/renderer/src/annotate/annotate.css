@@ -61,6 +61,13 @@
   cursor: pointer;
 }
 
+/* Sent to Fleet, not yet done: the Job is where it went, so the pin steps back from the open ones. */
+.armada-annotate__pin[data-sent] {
+  background: var(--bg-raised);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .armada-annotate__pin[data-status="done"] {
   border-color: var(--border-default);
   background: var(--bg-raised);
