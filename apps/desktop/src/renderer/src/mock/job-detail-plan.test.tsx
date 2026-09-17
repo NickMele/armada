@@ -34,6 +34,13 @@ async function opened(fixture: JobFixture, behaves?: Scenario["behaves"], whereO
   return app.api;
 }
 
+/** Whether some element reading exactly `text` is laid out on screen — the bar's own tooltip carries a hidden copy. */
+function shownWithText(text: string): boolean {
+  return [...document.querySelectorAll<HTMLElement>("body *")].some(
+    (one) => one.textContent?.trim() === text && one.children.length === 0 && one.getClientRects().length > 0 && getComputedStyle(one).visibility !== "hidden",
+  );
+}
+
 /** A plan row, found by its task's title. */
 async function rowOf(title: string) {
   const found = page.getByText(title);
@@ -44,9 +51,9 @@ async function rowOf(title: string) {
 test("a plan partway done: its region, its count, its tasks, and the branch in Where things are", async () => {
   await opened(withPlan(PLAN_PARTWAY));
   await expect.element(page.getByText("Plan", { exact: true })).toBeVisible();
-  await expect.element(page.getByText("1 of 3").first()).toBeVisible();
+  await expect.poll(() => shownWithText("1 of 3")).toBe(true);
   await expect.element(page.getByText("T1", { exact: true })).toBeVisible();
-  await expect.element(page.getByText("Re-point the reducer's own import at it")).toBeVisible();
+  await expect.poll(() => shownWithText("Re-point the reducer's own import at it")).toBe(true);
   const where = page.getByRole("button", { expanded: false, name: /Where things are/i });
   await expect.element(where.getByText("fix/settings-split-selectors")).toBeVisible();
 });
@@ -54,7 +61,7 @@ test("a plan partway done: its region, its count, its tasks, and the branch in W
 test("a dropped task reads its reason, and offers no second drop", async () => {
   await opened(withPlan(PLAN_WITH_A_DROPPED_TASK));
   await expect.element(page.getByText("The existing integration test already exercises this path.")).toBeVisible();
-  await expect.element(page.getByText("1 of 3").first()).toBeVisible();
+  await expect.poll(() => shownWithText("1 of 3")).toBe(true);
   const dropped = await rowOf("Add a unit test that does not construct the store");
   expect(dropped.getByRole("button", { name: "Drop…" }).query()).toBeNull();
 });
