@@ -18,9 +18,11 @@ function isStableId(id: string): boolean {
   return id !== "" && !/[«»:]/.test(id) && /^[A-Za-z][\w-]*$/.test(id);
 }
 
+const CSS_IDENT = /^[A-Za-z_][\w-]*$/;
+
 /** A BEM class from the component library, which is what a search of the code finds. */
 function sourceClasses(node: NodeLike): string[] {
-  return [...node.classList].filter((c) => /^armada-[\w-]+$/.test(c));
+  return [...node.classList].filter((c) => c.startsWith("armada-") && CSS_IDENT.test(c));
 }
 
 const quote = (value: string): string => `"${value.replace(/["\\]/g, "\\$&")}"`;
