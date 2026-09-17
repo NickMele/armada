@@ -5,9 +5,9 @@
 // with that suffix as a story, and this is data rather than one.
 
 import type { DeclaredCheck, WorkPlan } from "@armada/protocol";
-import type { JobFixture } from "../../../fixtures/fixture";
-import { awaitingApproval, running } from "../../../fixtures/build/index";
-import { watchedRead } from "../../../fixtures/build/base";
+import type { JobFixture } from "@armada/screens/src/fixtures/fixture";
+import { awaitingApproval, running } from "@armada/screens/src/fixtures/build/index";
+import { watchedRead } from "@armada/screens/src/fixtures/build/base";
 
 const PLAN_APPROACH =
   "Split the selectors module out of the reducer so the memoised selector can " +

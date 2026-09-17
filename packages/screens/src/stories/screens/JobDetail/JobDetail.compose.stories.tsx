@@ -3,7 +3,7 @@ import { expect, fn, within } from "storybook/test";
 
 import { running } from "../../../fixtures/build/index";
 import { JobDetailFrom } from "./JobDetail";
-import { PLAN_PARTWAY, withPlan } from "./plan-fixtures";
+import { PLAN_PARTWAY, withPlan } from "../../../../../../../apps/desktop/src/renderer/src/mock/job-plan-fixtures";
 
 /** Job detail, split by group — #1044. Same `title` as the rest of this directory, so ids hold. */
 const meta: Meta<typeof JobDetailFrom> = {

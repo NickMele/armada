@@ -84,6 +84,19 @@ function holding(name: string, says: string, fixtures: JobFixture[], opens?: str
 }
 
 /**
+ * One Job, already open, the way a pressed notification opens it — for a test
+ * that moved a fixture to a moment no builder names. `whereOpen` is the
+ * person's own preference for the Where things are section.
+ */
+export function onJob(fixture: JobFixture, { whereOpen = false }: { whereOpen?: boolean } = {}): Scenario {
+  const scenario = holding("job", fixture.name, [fixture], fixture.job.id);
+  return {
+    ...scenario,
+    state: { ...scenario.state, preferences: { ...scenario.state.preferences, where_things_are_open: whereOpen } },
+  };
+}
+
+/**
  * The fixture, moved onto another id, handle and title.
  *
  * **Every `build/` fixture is the same Job** — one narrative at many
