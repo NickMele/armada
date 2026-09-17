@@ -13,13 +13,18 @@
 # and holds it with `fcntl.flock`: the kernel drops the lock when the holder
 # dies, so there is no timeout to evict a slow holder that is still running.
 #
+# **Two worktrees under `.armada/land/`, kept and reused.** One for the
+# candidate, one for `main`'s own runs. Each turn resets its worktree and cleans
+# it, keeping `target/` and `node_modules/` — so the second turn onward finds
+# both warm. One turn at a time is what makes reuse safe.
+#
 # **The runner is detached with `start_new_session=True`, not launchd.** It has
 # to outlive the Bash call that queued it, which kills its command at 600 s, and
 # a new session reparented to launchd does that. `scripts/restart` needs a
 # launchd label because Fleet must be *restarted*; a runner only has to finish,
 # and a second one started by `--status` picks up whatever a dead one left.
 #
-# **`verify-foundations` runs on every turn**, in a throwaway detached worktree,
+# **`verify-foundations` runs on every turn**, in this line's own worktree,
 # and only a failing line `main`'s own run lacks is red. **The Checks rerun only
 # when `main` has moved**: `main` is merged in first, and every Check whose
 # `when:` matches what landed or what the branch changed runs there — `armada
@@ -73,6 +78,10 @@ FOUNDATIONS = shlex.split(
 # answer, named in the capability doc as what does not port.
 SETUP = os.environ.get("ARMADA_LAND_SETUP", "bootstrap browsers").split()
 SEED = os.environ.get("ARMADA_LAND_SEED", "target").split()
+# What survives the clean between turns: the build directories, which is what
+# makes reusing a worktree worth anything. Another copy of what `armada.yml`
+# knows, named in the capability doc with the rest of them.
+KEEP = SEED + os.environ.get("ARMADA_LAND_KEEP", "node_modules").split()
 # How long GitHub may take to see a pushed head before the merge pins it.
 HEAD_WAIT = float(os.environ.get("ARMADA_LAND_HEAD_WAIT", "120"))
 # Rounds of "main moved again while this was gated" before giving the turn up.
@@ -177,8 +186,8 @@ def main_tree(repo):
     return git(repo, "worktree", "list", "--porcelain").splitlines()[0].split(" ", 1)[1]
 
 
-def gates_root(repo):
-    """Where a turn's throwaway worktrees go: **inside the repository**, beside
+def land_root(repo):
+    """Where this line's two worktrees live: **inside the repository**, beside
     the ones Fleet cuts for a Job.
 
     A checkout outside the repository directory is not a place this project's
@@ -186,10 +195,39 @@ def gates_root(repo):
     allow list and `tsc` cannot name a type through it — so a gate out there
     fails three Bridge Checks for reasons that have nothing to do with the
     branch. `.armada/*` is ignored but `.armada/workflows/` is not, which is the
-    same arrangement `.armada/worktrees/` relies on; `gates/` rather than
-    `worktrees/` keeps these out of what `armada clean` accounts for."""
-    at = os.path.join(main_tree(repo), ".armada", "gates")
+    same arrangement `.armada/worktrees/` relies on; `land/` is neither
+    `worktrees/` nor `bases/`, so nothing here is mistaken for a Job's checkout
+    or swept by `armada clean`."""
+    at = os.path.join(main_tree(repo), ".armada", "land")
     os.makedirs(at, exist_ok=True)
+    return at
+
+
+def reused(repo, name, commit, logs):
+    """One of this line's two worktrees, at `commit`, holding nothing of the
+    turn before it but its build directories.
+
+    **Kept and reused rather than cut per turn.** A worktree cut each time left
+    a checkout and its build behind on every run — gigabytes apiece, with
+    nothing reclaiming them — and paid for a cold build each turn. The lock
+    means one turn at a time, so there is never a second reader of either of
+    these: reuse is safe by construction rather than by agreement.
+
+    **Remade rather than repaired** where it is missing, unregistered, or no
+    longer a worktree at all. A killed runner leaves a half-merged tree, and a
+    `reset --hard` clears the merge with it."""
+    at = os.path.join(land_root(repo), name)
+    listed = run(["git", "-C", at, "rev-parse", "--git-dir"], repo, check=False).returncode == 0
+    if not listed:
+        drop_worktree(repo, at)
+        git(repo, "worktree", "add", "--quiet", "--detach", at, commit)
+    # An interrupted merge, then the commit, then everything the last turn
+    # wrote — but never the build directories, which are the reason for reuse.
+    run(["git", "merge", "--abort"], at, check=False)
+    git(at, "checkout", "--detach", "--force", commit)
+    git(at, "reset", "--hard", "--quiet", commit)
+    keep = [arg for path in KEEP for arg in ("-e", path)]
+    run(["git", "clean", "-xdff", "--quiet", *keep], at, check=False, log=os.path.join(logs, "setup.log"))
     return at
 
 
@@ -419,12 +457,15 @@ def runner(common):
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         return 0
-    # Holding the turn means nothing else is gating, so every gate worktree
-    # still on disk belongs to a runner that died.
+    # **What earlier versions of this script left behind**, taken back on the
+    # first turn that holds the lock. Only what this line made: `.armada/bases/`
+    # next door is Fleet's own and `armada clean` is what gives those back.
     repo = os.path.dirname(state)
-    gates = gates_root(repo)
-    for left in sorted(os.listdir(gates)):
-        drop_worktree(repo, os.path.join(gates, left))
+    stale = os.path.join(main_tree(repo), ".armada", "gates")
+    for left in sorted(os.listdir(stale)) if os.path.isdir(stale) else []:
+        drop_worktree(repo, os.path.join(stale, left))
+    if os.path.isdir(stale) and not os.listdir(stale):
+        os.rmdir(stale)
 
     while True:
         line = queued(state)
@@ -498,9 +539,9 @@ def take_turn(state, entry):
 
 
 def gate(state, entry, head, base, logs, moved):
-    """Read the tree in a throwaway worktree, and where `base` has moved, merge
-    it in first, rerun what the combination hits and push the merge onto the
-    branch. Returns the commit that will be merged.
+    """Read the tree in this line's candidate worktree, and where `base` has
+    moved, merge it in first, rerun what the combination hits and push the merge
+    onto the branch. Returns the commit that will be merged.
 
     **`verify-foundations` runs on every turn and the Checks only on a moved
     one.** The gate reads the tree rather than the combination, and an unmoved
@@ -509,117 +550,112 @@ def gate(state, entry, head, base, logs, moved):
     seconds, which is where the two part."""
     repo = os.path.dirname(state)
     branch = entry["branch"]
-    where = os.path.join(gates_root(repo), key(branch))
-    drop_worktree(repo, where)
-    git(repo, "worktree", "add", "--quiet", "--detach", where, head)
-    try:
-        if moved:
-            say(state, branch, "gating", f"merging {BASE} ({base[:10]}) in")
-            merge_in(state, entry, where, base, logs)
-            nothing_left(where, "the merge")
-        else:
-            say(state, branch, "gating", f"{BASE} has not moved; reading the gate, and no Check")
-        candidate = git(where, "rev-parse", "HEAD")
+    where = reused(repo, "candidate", head, logs)
+    if moved:
+        say(state, branch, "gating", f"merging {BASE} ({base[:10]}) in")
+        merge_in(state, entry, where, base, logs)
+        nothing_left(where, "the merge")
+    else:
+        say(state, branch, "gating", f"{BASE} has not moved; reading the gate, and no Check")
+    candidate = git(where, "rev-parse", "HEAD")
 
-        # Whether or not a Check reruns: verify-foundations always does, and a
-        # tree without `target/` reads its own missing build as a new failure.
-        seed(repo, where, logs)
-        rerun = []
-        if moved:
-            since = git(repo, "merge-base", head, base)
-            landed = git(repo, "diff", "--name-only", since, base).splitlines()
-            changed = git(repo, "diff", "--name-only", since, head).splitlines()
-            # **Either side, not both.** A Check only one side hits is exactly
-            # the seam that breaks in combination — a Rust change landing on the
-            # base against a branch's TypeScript, where the generated types
-            # meet. One call over both sets is that union, in the Manifest's order.
-            rerun = covers(where, landed + changed)
+    # Whether or not a Check reruns: verify-foundations always does, and a
+    # tree without `target/` reads its own missing build as a new failure.
+    seed(repo, where, logs)
+    rerun = []
+    if moved:
+        since = git(repo, "merge-base", head, base)
+        landed = git(repo, "diff", "--name-only", since, base).splitlines()
+        changed = git(repo, "diff", "--name-only", since, head).splitlines()
+        # **Either side, not both.** A Check only one side hits is exactly
+        # the seam that breaks in combination — a Rust change landing on the
+        # base against a branch's TypeScript, where the generated types
+        # meet. One call over both sets is that union, in the Manifest's order.
+        rerun = covers(where, landed + changed)
 
-        # **Before setup, and that is what keeps the comparison honest.** The
-        # base worktree needs no install to run this, so running one here would
-        # be the only difference between the two trees.
-        say(state, branch, "gating", "reading verify-foundations against " + BASE)
-        new_lines, crashed = foundations_delta(state, where, base, logs)
-        nothing_left(where, "verify-foundations")
-        log_paths = [os.path.join(logs, "foundations.log")]
+    # **Before setup, and that is what keeps the comparison honest.** The
+    # base worktree needs no install to run this, so running one here would
+    # be the only difference between the two trees.
+    say(state, branch, "gating", "reading verify-foundations against " + BASE)
+    new_lines, crashed = foundations_delta(state, where, base, logs)
+    nothing_left(where, "verify-foundations")
+    log_paths = [os.path.join(logs, "foundations.log")]
 
-        failed, uninstalled = [], []
-        if rerun:
-            setup(where, logs)
-            nothing_left(where, "preparing the gate")
-        for name in rerun:
-            say(state, branch, "gating", f"running {name} ({', '.join(rerun)})", logs=log_paths)
-            log = os.path.join(logs, f"{name}.log")
-            log_paths.append(log)
-            ran = run([ARMADA, "check", name], where, check=False, log=log)
-            if ran.returncode == 0:
-                continue
-            # **A tool that is not on the machine is not the branch breaking.**
-            missing = not_installed(ran.stdout + ran.stderr)
-            (uninstalled if missing else failed).append(f"{name} ({missing})" if missing else name)
+    failed, uninstalled = [], []
+    if rerun:
+        setup(where, logs)
+        nothing_left(where, "preparing the gate")
+    for name in rerun:
+        say(state, branch, "gating", f"running {name} ({', '.join(rerun)})", logs=log_paths)
+        log = os.path.join(logs, f"{name}.log")
+        log_paths.append(log)
+        ran = run([ARMADA, "check", name], where, check=False, log=log)
+        if ran.returncode == 0:
+            continue
+        # **A tool that is not on the machine is not the branch breaking.**
+        missing = not_installed(ran.stdout + ran.stderr)
+        (uninstalled if missing else failed).append(f"{name} ({missing})" if missing else name)
 
-        # A Check that wrote in the tree measured something the candidate commit
-        # does not carry.
-        nothing_left(where, "the Checks")
+    # A Check that wrote in the tree measured something the candidate commit
+    # does not carry.
+    nothing_left(where, "the Checks")
 
-        already = []
-        if failed:
-            say(state, branch, "gating", f"{', '.join(failed)} failed; asking whether {BASE} fails them too",
-                logs=log_paths)
-            already = checks_on_the_base(state, base, failed, logs)
-            failed = [name for name in failed if name not in already]
-            log_paths += [os.path.join(logs, f"{name}-on-{BASE}.log") for name in already]
+    already = []
+    if failed:
+        say(state, branch, "gating", f"{', '.join(failed)} failed; asking whether {BASE} fails them too",
+            logs=log_paths)
+        already = checks_on_the_base(state, base, failed, logs)
+        failed = [name for name in failed if name not in already]
+        log_paths += [os.path.join(logs, f"{name}-on-{BASE}.log") for name in already]
 
-        if uninstalled:
-            # Before the red, because a verdict reached without a Check that
-            # never ran is not a verdict.
-            raise Stop(
-                "stopped",
-                f"{', '.join(uninstalled)} could not run: the command each names is not on this "
-                "machine. Install it and land again — nothing was pushed or merged"
-                + (f". {', '.join(failed)} failed beside it" if failed else "")
-                + (f", and {len(new_lines)} verify-foundations line(s) {BASE} does not have" if new_lines else ""),
-                failed=failed, new_lines=new_lines, logs=log_paths,
-            )
-
-        # **A Check that fails on `main` too is not this branch's.** Said in the
-        # same shape as a gate that cannot run there: name it, and send the
-        # reader at `main` rather than at their own diff.
-        theirs = (
-            f"{', '.join(already)} already fails on {BASE} itself, so that much is not this "
-            f"branch's — fix {BASE} and land that first"
-            if already else None
+    if uninstalled:
+        # Before the red, because a verdict reached without a Check that
+        # never ran is not a verdict.
+        raise Stop(
+            "stopped",
+            f"{', '.join(uninstalled)} could not run: the command each names is not on this "
+            "machine. Install it and land again — nothing was pushed or merged"
+            + (f". {', '.join(failed)} failed beside it" if failed else "")
+            + (f", and {len(new_lines)} verify-foundations line(s) {BASE} does not have" if new_lines else ""),
+            failed=failed, new_lines=new_lines, logs=log_paths,
         )
-        if failed or new_lines or crashed:
-            # One report, whatever went wrong: a gate that could not run must
-            # not hide the Checks that failed beside it.
-            against = f"with {BASE} merged in" if moved else f"against {BASE}"
-            raise Stop(
-                "red",
-                f"red {against}: " + ", ".join(
-                    ([f"{', '.join(failed)} failed"] if failed else [])
-                    + ([crashed] if crashed else [])
-                    + ([f"{len(new_lines)} verify-foundations line(s) {BASE} does not have"] if new_lines else [])
-                    + ([theirs] if theirs else [])
-                ) + ". Nothing was pushed or merged.",
-                failed=failed, already=already, new_lines=new_lines, logs=log_paths,
-            )
-        if already:
-            raise Stop("stopped", f"{theirs}. Nothing was pushed or merged",
-                       already=already, logs=log_paths)
 
-        if not moved:
-            return candidate
+    # **A Check that fails on `main` too is not this branch's.** Said in the
+    # same shape as a gate that cannot run there: name it, and send the
+    # reader at `main` rather than at their own diff.
+    theirs = (
+        f"{', '.join(already)} already fails on {BASE} itself, so that much is not this "
+        f"branch's — fix {BASE} and land that first"
+        if already else None
+    )
+    if failed or new_lines or crashed:
+        # One report, whatever went wrong: a gate that could not run must
+        # not hide the Checks that failed beside it.
+        against = f"with {BASE} merged in" if moved else f"against {BASE}"
+        raise Stop(
+            "red",
+            f"red {against}: " + ", ".join(
+                ([f"{', '.join(failed)} failed"] if failed else [])
+                + ([crashed] if crashed else [])
+                + ([f"{len(new_lines)} verify-foundations line(s) {BASE} does not have"] if new_lines else [])
+                + ([theirs] if theirs else [])
+            ) + ". Nothing was pushed or merged.",
+            failed=failed, already=already, new_lines=new_lines, logs=log_paths,
+        )
+    if already:
+        raise Stop("stopped", f"{theirs}. Nothing was pushed or merged",
+                   already=already, logs=log_paths)
 
-        pushed = run(["git", "push", "--quiet", REMOTE, f"{candidate}:refs/heads/{branch}"], where, check=False)
-        if pushed.returncode != 0:
-            raise Stop("stopped", f"{branch} moved on {REMOTE} while it was gated — preflight and land again")
-        say(state, branch, "gating", f"{', '.join(rerun) or 'no Check'} passed with {BASE} merged in; waiting for GitHub to see {candidate[:10]}",
-            pushed=candidate, logs=log_paths)
-        wait_for_head(repo, entry["pr"], candidate)
+    if not moved:
         return candidate
-    finally:
-        drop_worktree(repo, where)
+
+    pushed = run(["git", "push", "--quiet", REMOTE, f"{candidate}:refs/heads/{branch}"], where, check=False)
+    if pushed.returncode != 0:
+        raise Stop("stopped", f"{branch} moved on {REMOTE} while it was gated — preflight and land again")
+    say(state, branch, "gating", f"{', '.join(rerun) or 'no Check'} passed with {BASE} merged in; waiting for GitHub to see {candidate[:10]}",
+        pushed=candidate, logs=log_paths)
+    wait_for_head(repo, entry["pr"], candidate)
+    return candidate
 
 
 def merge_in(state, entry, where, base, logs):
@@ -759,15 +795,10 @@ def base_foundations(state, base, logs):
     marked, _, body = held.partition("\n")
     if marked == "report":
         return failing_lines(body)
-    at = os.path.join(gates_root(repo), f"base-{base[:12]}")
-    drop_worktree(repo, at)
-    git(repo, "worktree", "add", "--quiet", "--detach", at, base)
-    try:
-        seed(repo, at, logs)
-        done = run(FOUNDATIONS, at, check=False, log=os.path.join(logs, "foundations-base.log"))
-        said = done.stdout + done.stderr
-    finally:
-        drop_worktree(repo, at)
+    at = reused(repo, "base", base, logs)
+    seed(repo, at, logs)
+    done = run(FOUNDATIONS, at, check=False, log=os.path.join(logs, "foundations-base.log"))
+    said = done.stdout + done.stderr
     if not a_report(said, done.returncode):
         raise Stop("stopped", f"{BASE} itself is broken: `{shlex.join(FOUNDATIONS)}` exited {done.returncode} "
                               f"there and named no failing rule, so nothing can be gated against it and this "
@@ -799,17 +830,12 @@ def checks_on_the_base(state, base, names, logs):
     known = read_json(cached) or {}
     unknown = [name for name in names if name not in known]
     if unknown:
-        at = os.path.join(gates_root(repo), f"base-{base[:12]}")
-        drop_worktree(repo, at)
-        git(repo, "worktree", "add", "--quiet", "--detach", at, base)
-        try:
-            seed(repo, at, logs)
-            setup(at, logs)
-            for name in unknown:
-                log = os.path.join(logs, f"{name}-on-{BASE}.log")
-                known[name] = run([ARMADA, "check", name], at, check=False, log=log).returncode == 0
-        finally:
-            drop_worktree(repo, at)
+        at = reused(repo, "base", base, logs)
+        seed(repo, at, logs)
+        setup(at, logs)
+        for name in unknown:
+            log = os.path.join(logs, f"{name}-on-{BASE}.log")
+            known[name] = run([ARMADA, "check", name], at, check=False, log=log).returncode == 0
         write_json(cached, known)
     return [name for name in names if known.get(name) is False]
 
@@ -858,7 +884,7 @@ def prove(state, entry, base):
 
 
 def drop_worktree(repo, where):
-    """Only ever this runner's own throwaway gate trees, under the state directory."""
+    """Only ever this line's own worktrees, under `.armada/`."""
     if os.path.exists(where):
         run(["git", "worktree", "remove", "--force", where], repo, check=False)
         shutil.rmtree(where, ignore_errors=True)
