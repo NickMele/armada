@@ -1,0 +1,60 @@
+/* The card treatment under Depth — `docs/contracts/design-system.md`, Tokens →
+   Depth. Glass lifted off the lit canvas: a vertical gradient from --bg-glass
+   to --bg-glass-end, a --border-glass edge and --shadow-card.
+
+   **One recipe, and every card on the canvas takes it rather than copying it.**
+   Put `armada-glass` beside a component's own class on the element that sits
+   directly on the canvas:
+
+       <section className="armada-panel armada-glass">
+
+   Today: the left column's panels (`Panel`), Helm's dock (`TheShell`), and
+   Drift and Verify on the Manifest surface. Next: Overview's summary tiles
+   (#1261), Overview's empty state (#1262) and the dock's Helm frame (#1264),
+   which lays its own indigo edge and wash over this rather than restating it.
+   Drift and Verify are named by their own class below only because #1260 did
+   not reach their markup; each moves onto `armada-glass` with one className.
+
+   What this class does not carry, so the component keeps it:
+
+   - **Radius.** The contract names it per card (--radius-lg on every card
+     today) and the component already owns its geometry.
+   - **Layout, padding and overflow.**
+   - **A wash.** A tile's status hue or the dock's --helm-faint layers over the
+     gradient in the component's own stylesheet — a second `background-image`
+     on top of this one, never a replacement for it.
+
+   **Nothing inside a card takes a shadow.** A row, a well, an input or a
+   control inside one stays flat on its Ground token; a shadowed row inside a
+   card reads as a second card. The one exception is the view's single
+   Primary, which Button gives --shadow-primary. Light and glass carry no
+   information: never a status hue here, and nothing reads a state from it.
+
+   A secondary Button inside a card takes `ground="card"` (--bg-sunken), which
+   reads as a box on the glass. `ground="sunken"`'s --bg-raised is within a
+   few levels of the glass and shows only its border.
+
+   **No backdrop blur, although the contract's card has one.** Two reasons,
+   both measured in headless Chromium on 17 Sep 2026 against these tokens:
+
+   1. **It draws nothing.** The only thing behind a card is the canvas's
+      radial light, which is already smooth, and a --glass-blur of it changed
+      no pixel inside a card by more than 1/255 (mean 0.04/255).
+   2. **It breaks every layer inside a card.** A `backdrop-filter` makes its
+      element the containing block for `position: fixed` descendants.
+      Tooltip, Popover and DropdownMenu all place themselves `position: fixed`
+      with anchor positioning, and Stats' rows and the dock's questions carry
+      Tooltips — so the bubble was laid out against the card and clipped by
+      its `overflow: hidden`, cut off at the card's edge rather than the
+      window's.
+
+   The glass is 86% opaque precisely so it paints the same without the blur,
+   which is the contract's own fallback. --glass-blur has no reader until
+   something with detail sits behind a card. */
+.armada-glass,
+.armada-drift-panel,
+.armada-verify-panel {
+  border: var(--border-width) solid var(--border-glass);
+  background: linear-gradient(var(--bg-glass), var(--bg-glass-end));
+  box-shadow: var(--shadow-card);
+}

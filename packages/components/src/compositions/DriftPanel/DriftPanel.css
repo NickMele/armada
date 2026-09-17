@@ -1,13 +1,12 @@
 /* Drift — Journey 9's free read on opening the Manifest surface. A panel of
-   its own above the run page, beside Verify's and never inside it. */
+   its own above the run page, beside Verify's and never inside it. It sits on
+   the canvas, so its surface is the card treatment in `src/glass.css`. #1260. */
 .armada-drift-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  border: var(--border-width) solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  background: var(--bg-raised);
   min-width: 0;
   flex: 0 0 auto;
 }

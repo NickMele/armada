@@ -477,13 +477,15 @@ function Dock({
           <DockHandle width={restingWidth} availableWidth={availableWidth} leftWidth={leftWidth} onResize={onResize} />
         )}
         <aside
-          className="armada-shell__dock"
+          className="armada-shell__dock armada-glass"
           aria-label={DOCK_TITLE}
           style={width === undefined ? undefined : { width: `${restingWidth}px` }}
         >
           <div className="armada-shell__dock-head">
             <h2 className="armada-shell__dock-title">{DOCK_TITLE}</h2>
-            <Button variant="secondary" size="sm" ground="sunken" onClick={() => onOpen(false)}>
+            {/* On the glass, so `card`: `sunken`'s --bg-raised fill is within a
+                few levels of it and showed only the border. #1260. */}
+            <Button variant="secondary" size="sm" ground="card" onClick={() => onOpen(false)}>
               Close
               {binding === undefined ? null : <KbdCmd shortcut={binding} />}
             </Button>
