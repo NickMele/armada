@@ -1160,6 +1160,14 @@ and an act the app cannot reach from where you are standing. Both are
 facts rather than a list of exceptions, which is the same reasoning the
 `not built` annotation carries under Two tiers.
 
+**One exception: an act on one Job, with no Job focused, is left out.**
+Open, Review, Attest, Redirect, Kill, Redispatch and Restart step need a
+Job to act on. With no Job open and nothing under the Board's cursor, six
+dimmed rows all saying *no job focused* led the palette and told a person
+nothing they could act on. They come back when a Job is focused, which
+is where their shortcuts are learned. A `not built` row is never left
+out. Settled 2026-09-17.
+
 **The palette is the discovery surface.** It is how a person learns
 forty shortcuts without a cheat sheet, which is why every entry displays
 its binding and why no action may exist outside it.
