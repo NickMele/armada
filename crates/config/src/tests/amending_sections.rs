@@ -36,7 +36,8 @@ fn exit_code(name: &str, code: i64) -> Edit {
 }
 
 const SERVE: &str =
-    "pnpm -C packages/components exec storybook dev -p ${port.storybook} --no-open --ci";
+    "pnpm -C apps/desktop exec vite --config vite.mock.config.ts --port ${port.mock} --strictPort";
+const READY: &str = "curl -sf http://localhost:${port.mock}";
 const RUN: &str = "pnpm -C packages/components exec playwright test {}";
 
 /// Each new kind of edit, and the edit that takes it back.
@@ -51,12 +52,8 @@ fn pairs() -> Vec<(Edit, Edit)> {
             evidence(EvidenceEdit::Serve(Some(SERVE.to_string()))),
         ),
         (
-            evidence(EvidenceEdit::Ready(Some(
-                "curl -sf http://localhost:${port.storybook}/".to_string(),
-            ))),
-            evidence(EvidenceEdit::Ready(Some(
-                "curl -sf http://localhost:${port.storybook}".to_string(),
-            ))),
+            evidence(EvidenceEdit::Ready(Some(format!("{READY}/")))),
+            evidence(EvidenceEdit::Ready(Some(READY.to_string()))),
         ),
         (
             evidence(EvidenceEdit::Run(format!("{RUN} --retries 0"))),
