@@ -2,8 +2,10 @@
 // of the Studio Fleet sent and the Board this window holds, so it is tested as one.
 
 import type { StudioWhiteboardEdge, StudioWhiteboardNode } from "@armada/components";
-import type { JobSummary, Studio, StudioNode, StudioSummary } from "@armada/protocol";
+import type { JobSummary, Studio, StudioNode, StudioRunKept, StudioSummary } from "@armada/protocol";
 import { STUDIO_EDGE_LABEL, STUDIO_NODE_KIND } from "@armada/components";
+
+import { runOutcomeOf } from "./rehearsal";
 
 /**
  * What an untitled Studio is called wherever it is named. A name is optional on the wire and
@@ -17,6 +19,19 @@ export function studioName(studio: Pick<StudioSummary, "name">): string {
   return studio.name ?? UNTITLED_STUDIO;
 }
 
+/**
+ * What a kept run says beside its name: the command, its exit against what was expected, and how
+ * long it took. **The run sheet's own wording**, so a run reads the same on a Studio as it does
+ * there — `pastRunOf` in `rehearsal.ts`. A run killed before it exited has no exit line, and its
+ * state already says it stopped.
+ */
+function runFacts(kept: StudioRunKept): string[] {
+  const took = `${(kept.duration_ms / 1000).toFixed(1)}s`;
+  return kept.exit_code === undefined
+    ? [kept.command, took]
+    : [kept.command, `exit ${kept.exit_code} (expects ${kept.expect_exit_code})`, took];
+}
+
 /** The first line of a body, for a node whose title is prose. */
 function firstLine(body: string): string {
   return body.split("\n").find((line) => line.trim() !== "")?.trim() ?? body;
@@ -26,8 +41,13 @@ function firstLine(body: string): string {
 function cardOf(node: StudioNode, jobs: readonly JobSummary[]): StudioWhiteboardNode["node"] {
   switch (node.kind) {
     case "run":
-      // A reference and never a state: the run is read by #1289, so nothing is said of it yet.
-      return { kind: "run", title: node.run_id };
+      // What was run, the way the run sheet names it — the Check's name, its command and its
+      // result. **A run whose record the Studio has not kept says so** rather than drawing its
+      // id as a title: the id names the run to Fleet and says nothing to a person, and the run
+      // is still Fleet's to read (#1289). It stays as a fact, where an identifier belongs.
+      return node.kept === undefined
+        ? { kind: "run", title: "Not read yet", facts: [node.run_id] }
+        : { kind: "run", state: runOutcomeOf(node.kept), title: node.kept.name, facts: runFacts(node.kept) };
     case "job": {
       // The Job's state is the Board's, read off the row this window already holds.
       const job = jobs.find((one) => one.id === node.job_id);

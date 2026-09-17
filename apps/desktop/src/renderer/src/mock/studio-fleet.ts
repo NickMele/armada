@@ -201,7 +201,25 @@ export function everyKind(jobId: string): Studio {
     { id: "every-note-wide", kind: "note", said: "It wraps at 720 wide", position: place(0, 1), created_at: MADE },
     { id: "every-note-states", kind: "note", said: "Queued and preparing read the same at a glance", position: place(1, 1), created_at: MADE },
     { id: "every-cluster", kind: "cluster", title: "The legend cannot be read", position: place(0, 2), created_at: MADE },
-    { id: "every-run", kind: "run", run_id: "01RUNEVERYKIND000000000000", position: place(1, 2), created_at: MADE },
+    {
+      id: "every-run",
+      kind: "run",
+      run_id: "01RUNEVERYKIND000000000000",
+      // Swept by retention, so the Studio kept the run whole — #1289. A Studio outlives a run's log.
+      kept: {
+        name: "typecheck",
+        command: "pnpm typecheck",
+        exit_code: 2,
+        expect_exit_code: 0,
+        stopped: false,
+        duration_ms: 8400,
+        lines: ["src/renderer/src/Board.tsx(212,9): error TS2322", "Found 1 error."],
+        total_lines: 96,
+        whole: false,
+      },
+      position: place(1, 2),
+      created_at: MADE,
+    },
     { id: "every-finding", kind: "finding", asked: "Where do the legend's colours come from?", state: "frozen", position: place(2, 2), created_at: MADE },
     { id: "every-finding-asked", kind: "finding", asked: "Which states share a token?", state: "proposed", position: place(2, 3), created_at: MADE },
     {
