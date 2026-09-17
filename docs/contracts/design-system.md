@@ -1528,6 +1528,9 @@ accent, and it is the one beside the empty space.
 frame    a 1px --helm-edge top edge fading to --border-glass, over the card
          treatment, with --helm-faint washed in from the top trailing corner
 chip     --helm-muted fill, --helm icon, beside "Helm"
+folded   the sheet the dock folds to below the breakpoint takes the same frame
+         and chip, over the sheet's --bg-overlay: --helm reads 4.65:1 on its
+         chip there, against the 3:1 a non-text mark takes
 composer --bg-sunken, --border-glass
 Send     --helm-muted fill, --helm text, --helm-edge border
 ```

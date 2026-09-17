@@ -145,6 +145,14 @@
   padding: var(--space-3) var(--space-4);
 }
 
+/* Beside the title at the head's leading edge, and never wrapped away from
+   it: it does not shrink, and the titles' basis is what yields first. */
+.armada-sheet__leading {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
 .armada-sheet__titles {
   display: flex;
   flex: 1 1 var(--w-run-column);
