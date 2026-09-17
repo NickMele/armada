@@ -92,6 +92,7 @@ pub fn a_studio_with_two_notes() -> StudioGraph {
             StudioNodeId::carried(Ulid::carried(id)),
             StudioNodeContent::Note {
                 said: said.to_string(),
+                capture: None,
             },
             StudioPosition { x, y: 0 },
             at(1),
@@ -222,6 +223,7 @@ pub fn a_studio_with_a_run_started_from_a_note(
         StudioNodeId::carried(Ulid::carried("01NOTEFIRST")),
         StudioNodeContent::Note {
             said: FIRST_NOTE.to_string(),
+            capture: None,
         },
         StudioPosition { x: 0, y: 0 },
         at(1),
@@ -297,5 +299,110 @@ pub fn a_long_log() -> ipc::RunOutput {
         bytes: lines.iter().map(|line| line.len() as u64 + 1).sum(),
         whole: true,
         lines,
+    }
+}
+
+/// The component the bench's capture landed on, and the chain above it.
+pub const COMPONENT: &str = "FilterChip";
+pub const OWNERS: [&str; 2] = ["BoardFilters", "Board"];
+
+/// The selector the capture found the chip by, and finds it by again.
+pub const SELECTOR: &str = "div.armada-board__filters > button.armada-chip:nth-of-type(2)";
+
+/// The rail item marked current when the capture was made.
+pub const SCREEN: &str = "Job Board";
+
+/// The markup the capture trimmed, and the properties it read off the element.
+pub const MARKUP: &str = "<button class=\"armada-chip\" aria-pressed=\"true\">Queued 3</button>";
+pub const STYLES: [(&str, &str); 2] = [("color", "rgb(232, 232, 237)"), ("font-size", "12px")];
+
+/// The frame Fleet kept beside the Studio's records, and what it weighs.
+pub const FRAME_FILE: &str = "01NOTEPOINTED.png";
+pub const FRAME_BYTES: u64 = 214_880;
+
+/// The capture as Bridge sends it: the request encoded, sent, and read back.
+///
+/// **`frame` is what Fleet kept, not what Bridge staged.** The staged path is
+/// an input to the command and reaches no client, so what a Studio answers
+/// with is the file name and its size.
+pub fn a_capture_sent() -> ipc::CaptureStudioNote {
+    let sent = ipc::CaptureStudioNote {
+        said: FIRST_NOTE.to_string(),
+        capture: ipc::StudioCapture {
+            component: Some(COMPONENT.to_string()),
+            owners: OWNERS.iter().map(|name| name.to_string()).collect(),
+            selector: SELECTOR.to_string(),
+            element: ipc::CaptureElement {
+                tag: "button".to_string(),
+                text: "Queued 3".to_string(),
+                label: None,
+            },
+            screen: Some(SCREEN.to_string()),
+            layer: None,
+            location: "/".to_string(),
+            bounds: ipc::CaptureBounds {
+                x: 312,
+                y: 148,
+                width: 96,
+                height: 28,
+            },
+            window: ipc::CaptureWindow {
+                width: 1440,
+                height: 900,
+            },
+            styles: STYLES
+                .iter()
+                .map(|(property, value)| (property.to_string(), value.to_string()))
+                .collect(),
+            markup: MARKUP.to_string(),
+            source: None,
+            frame: None,
+        },
+        position: ipc::StudioPosition { x: 0, y: 0 },
+        frame: Some(ipc::StagedFrame {
+            staged_path: "/tmp/armada-frames/4f3a/frame.png".to_string(),
+            width: 2880,
+            height: 1800,
+        }),
+        produced_by: None,
+    };
+    let body = ipc::encode(&sent).expect("a capture that serialises");
+    ipc::decode("a Note to capture", body.as_bytes()).expect("a capture that reads back")
+}
+
+/// A Studio holding one Note, built from [`a_capture_sent`] the way Fleet
+/// builds it: the request's capture to the domain, the frame Fleet kept in
+/// place of the one Bridge staged, and the node added by a person.
+pub fn a_studio_with_a_captured_note() -> StudioGraph {
+    let sent = a_capture_sent();
+    let staged = sent.frame.as_ref().expect("the bench stages a frame");
+    let mut capture = sent.capture.to_domain();
+    capture.frame = Some(core_model::CaptureFrame {
+        filename: FRAME_FILE.to_string(),
+        byte_size: FRAME_BYTES,
+        width: staged.width,
+        height: staged.height,
+    });
+    let note = StudioNode::added(
+        StudioNodeId::carried(Ulid::carried("01NOTEPOINTED")),
+        StudioNodeContent::Note {
+            said: sent.said,
+            capture: Some(capture),
+        },
+        sent.position.to_domain(),
+        at(5),
+        StudioAuthor::Person,
+    );
+    StudioGraph {
+        studio: Studio {
+            id: StudioId::carried(Ulid::carried("01STUDIOCAPTURE")),
+            manifest_id: ManifestId::carried(Ulid::carried(REPOSITORY)),
+            name: None,
+            named_by: None,
+            created_at: at(5),
+            touched_at: at(5),
+        },
+        nodes: vec![note],
+        edges: Vec::new(),
     }
 }

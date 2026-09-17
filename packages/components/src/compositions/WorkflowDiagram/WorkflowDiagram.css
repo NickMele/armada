@@ -38,17 +38,28 @@
   list-style: none;
 }
 
+/* The row scrolls, rather than the command inside it: a scroll container
+   synthesises its baseline from its own bottom edge, which would drop `covers`
+   to the foot of a command that wraps to three lines. One word too wide for
+   the box is the only thing that ever puts something here to scroll to. */
 .armada-diagram__row {
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
+  overflow-x: auto;
 }
 
 .armada-diagram__command {
-  overflow-wrap: anywhere;
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--fg-muted);
+}
+
+/* One word of a command. It breaks nowhere, so the breaks fall on the spaces
+   between these and a flag stays whole. */
+.armada-diagram__word {
+  white-space: nowrap;
 }
 
 .armada-diagram__covers {

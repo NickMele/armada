@@ -67,6 +67,7 @@ fn a_state_is_held_only_by_a_kind_that_has_it() {
         node_id("01NOTE"),
         StudioNodeContent::Note {
             said: String::from("the count is stale"),
+            capture: None,
         },
         Some(StudioNodeState::Frozen),
         StudioPosition { x: 0, y: 0 },
@@ -196,6 +197,7 @@ fn only_a_proposed_finding_is_started() {
         node_id("01NOTE"),
         StudioNodeContent::Note {
             said: String::from("the count is stale"),
+            capture: None,
         },
         StudioPosition { x: 0, y: 0 },
         at(),

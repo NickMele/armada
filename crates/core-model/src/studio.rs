@@ -13,6 +13,7 @@
 
 mod edge;
 mod finding;
+mod note;
 
 use alloc::string::String;
 
@@ -21,6 +22,7 @@ pub use finding::{
     FrozenFinding, GatheringFinding, NotScoutable, ScoutCheckout, ScoutEnded, ScoutLook,
     ScoutOutcome, Scouted, StudioFinding,
 };
+pub use note::{CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, StudioCapture};
 
 use crate::envelope::{Timestamp, Ulid};
 use crate::job::{id_newtype, JobId, ManifestId};
@@ -287,8 +289,13 @@ pub enum StudioNodeContent {
         run_id: String,
         kept: Option<StudioRunKept>,
     },
-    /// What a person pointed at and said, fixed at capture.
-    Note { said: String },
+    /// What a person pointed at and said, fixed at capture. `capture` is
+    /// where they pointed — absent on a Note added before `#1290`, and on one
+    /// typed rather than pointed.
+    Note {
+        said: String,
+        capture: Option<StudioCapture>,
+    },
     /// Notes a person accepted as one thing.
     Cluster { title: String },
     /// What a scout was asked, and what it read.
@@ -330,7 +337,7 @@ impl StudioNodeContent {
     pub fn blank(&self) -> Option<&'static str> {
         let fields: &[(&'static str, &str)] = match self {
             StudioNodeContent::Run { run_id, .. } => &[("run_id", run_id)],
-            StudioNodeContent::Note { said } => &[("said", said)],
+            StudioNodeContent::Note { said, .. } => &[("said", said)],
             StudioNodeContent::Cluster { title } => &[("title", title)],
             StudioNodeContent::Finding(finding) => &[("asked", finding.ask())],
             StudioNodeContent::Contradiction { first, second } => {

@@ -91,6 +91,18 @@ destructive = false
 confirms = false
 notes = "Toggles Helm's dock, which sits beside the content on every Bridge surface rather than in the rail. Decided with the owner on 2026-09-13 (#948): Helm left the rail, so it no longer takes the digit after the last surface, and the rail's digits are the rail's alone. It read ⌘5 until 2026-09-03 and ⌘6 until this. The glyph is the registry's own assignment for Helm."
 
+[actions.capture_note]
+kind = "Action"
+tier = "Global"
+verb = "Capture a note"
+icon = ""
+icon_absent = "undecided"
+shortcut = "⌥⌘C"
+scope = "anywhere"
+destructive = false
+confirms = false
+notes = "Studio capture (#1290): point at something wrong anywhere in Bridge and it lands on the open Studio as a Note. Global, because what is wrong is on whatever surface a person is looking at rather than on the Studio. The modifier pair is the development annotation layer's own — ⌥⌘A, which stays permanently and is not in this registry because it ships in no packaged build — so the two capture tools sit a key apart and neither is a bare ⌘. C for capture; ⌥⌘C is bound by no Electron default menu and by nothing else here. No glyph: nothing registered means pointing at a thing, and the nearest silhouettes are all spoken for — `flag` is an alert's, `stamp` is attest's, `message-square` is Helm's."
+
 [actions.toggle_sidebar]
 kind = "Action"
 tier = "Global"

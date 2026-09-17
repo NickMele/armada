@@ -45,8 +45,8 @@ export type StudioNodeContent =
    * this is all there is. Since 14.10, #1289.
    */
   | { kind: "run"; run_id: string; kept?: StudioRunKept }
-  /** What a person pointed at and said, fixed at capture. */
-  | { kind: "note"; said: string }
+  /** What a person pointed at and said, fixed at capture. `capture` since 14.11, #1290. */
+  | { kind: "note"; said: string; capture?: StudioCapture }
   | { kind: "cluster"; title: string }
   /** What a scout was asked, and from its start what it read. Since 14.7. */
   | ({ kind: "finding" } & StudioFinding)
@@ -146,6 +146,52 @@ export type RenameStudio = { name: string };
  */
 export type AddStudioNode = StudioNodeContent & {
   position: StudioPosition;
+  produced_by?: string;
+};
+
+/**
+ * What a Note keeps of where a person pointed — the development annotation
+ * layer's own fields (`apps/desktop/src/shared/annotations.ts`) plus the four
+ * it does not record. Since 14.11, #1290, `crates/ipc/src/capturing.rs`.
+ */
+export type StudioCapture = {
+  /** The innermost React component under the press, where one was found. */
+  component?: string;
+  /** The components above it, nearest first — the parent chain. */
+  owners?: string[];
+  selector: string;
+  element: { tag: string; text: string; label?: string };
+  screen?: string;
+  layer?: string;
+  location: string;
+  /** Where the element sat in the window, in CSS pixels. */
+  bounds: { x: number; y: number; width: number; height: number };
+  window: { width: number; height: number };
+  /** `getComputedStyle`, for the properties Bridge declares it reads. */
+  styles?: Record<string, string>;
+  markup: string;
+  /**
+   * **Absent unless the build exposes one.** React 19 fibers carry no
+   * `_debugSource`, so no path is guessed for one.
+   */
+  source?: string;
+  /** The frame Fleet kept beside the Studio's records. */
+  frame?: { filename: string; byte_size: number; width: number; height: number };
+};
+
+/** The PNG Bridge took, written to disk before the request. Never read back. */
+export type StagedFrame = { staged_path: string; width: number; height: number };
+
+/**
+ * `POST /studios/:studio_id/capture_note`. A person's act and no agent's:
+ * pointing at something wrong needs a pointer.
+ */
+export type CaptureStudioNote = {
+  said: string;
+  /** Where they pointed, without the frame — Fleet fills that in from `frame`. */
+  capture: StudioCapture;
+  position: StudioPosition;
+  frame?: StagedFrame;
   produced_by?: string;
 };
 

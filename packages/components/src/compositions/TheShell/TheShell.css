@@ -1,4 +1,4 @@
-/* Helm's dock, the edge strip it folds to, and the left column's own handle.
+/* Helm's dock, the edge strip and sheet it folds to, and the left column's own handle.
    The frame around them is screens.css's. */
 
 /* The canvas under Depth: --bg-base under two faint pools of light, so a quiet
@@ -84,7 +84,8 @@
    content; the card's own background would paint under the glass and vanish.
    The ellipse is the dock's full width across and 384px down (48·8) — no
    token carries a wash's reach, so it is composed from the spacing scale. */
-.armada-shell__dock::after {
+.armada-shell__dock::after,
+.armada-shell__helm-sheet .armada-sheet::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -92,6 +93,24 @@
   border-radius: inherit;
   background: radial-gradient(100% calc(var(--space-12) * 8) at 100% 0, var(--helm-faint), transparent);
   pointer-events: none;
+}
+
+/* Helm's folded dock takes the same frame as the dock beside the content
+   (#1320), on the rules above and below rather than a copy of them. The
+   sheet keeps the primitive's --bg-overlay surface: it is a layer, not a
+   card on the canvas, so the frame lies over the overlay rather than glass.
+   Positioned and isolated so the wash's `z-index: -1` paints over that
+   background and under the content, as it does over the dock's glass.
+
+   **Not flattened under the scrim.** Depth lets decoration under a Sheet go
+   flat; this sheet is the layer on top, so its frame stays on. */
+.armada-shell__helm-sheet {
+  display: contents;
+}
+
+.armada-shell__helm-sheet .armada-sheet {
+  position: relative;
+  isolation: isolate;
 }
 
 /* The handle supplies its own margin in the gap it now occupies — #1094's
@@ -164,7 +183,8 @@
    alpha only, so any opaque token draws it. `::before` of the head, not the
    card: the card's `::before` is the glass and its `::after` the wash. At
    `z-index: -1` it joins the card's stacking context after the glass. */
-.armada-shell__dock-head::before {
+.armada-shell__dock-head::before,
+.armada-shell__helm-sheet .armada-sheet__head::before {
   content: "";
   position: absolute;
   top: calc(var(--border-width) * -1);
@@ -182,6 +202,25 @@
     linear-gradient(var(--fg-default), var(--fg-default)) border-box;
   mask-composite: exclude;
   pointer-events: none;
+}
+
+/* The sheet's own edges, not the card's: no top or trailing border, since it
+   is flush to the top of the work and to the window's trailing edge, and a
+   radius on the leading corner only. So the edge starts at the sheet's top
+   rather than one border above it, lies over its leading hairline, and draws
+   no trailing side down the window's edge. At the floor the sheet drops its
+   hairline and radius, and the edge follows. */
+.armada-shell__helm-sheet .armada-sheet__head::before {
+  top: 0;
+  right: 0;
+  border-right: 0;
+  border-radius: var(--radius-lg) 0 0 0;
+}
+
+.armada-shell__helm-sheet .armada-sheet[data-floor] .armada-sheet__head::before {
+  left: 0;
+  border-left: 0;
+  border-radius: 0;
 }
 
 /* 28px at --radius-md with the glyph at 16px, the geometry iconography.md

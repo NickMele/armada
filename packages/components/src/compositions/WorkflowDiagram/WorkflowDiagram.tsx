@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 /**
  * Workflow diagram — one box per step, top to bottom, and the gate between
@@ -68,6 +68,30 @@ function boxRow(i: number): number {
   return i * 2 + 1;
 }
 
+/**
+ * A command, in mono, wrapped at its spaces and nowhere else.
+ *
+ * **Each word is its own `nowrap` element, because no CSS property keeps a flag
+ * whole.** Every line-breaking rule allows a break after a hyphen, so the line
+ * ended `--` and the next began `locked`; in Chromium `overflow-wrap: normal`,
+ * `word-break: keep-all` and `white-space: pre-wrap` all still broke
+ * `--no-verify-cache` after `--no-`. The words are still the text nodes, so the
+ * whole string remains the element's text — what a locator reads and a
+ * selection copies.
+ */
+function Command({ text }: { text: string }) {
+  return (
+    <span className="armada-diagram__command">
+      {text.split(" ").map((word, w) => (
+        <Fragment key={w}>
+          {w === 0 ? null : " "}
+          <span className="armada-diagram__word">{word}</span>
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
 export function WorkflowDiagram({ steps }: WorkflowDiagramProps) {
   // Shortest loop nearest the boxes, so a loop inside another never crosses it.
   const loops = steps
@@ -92,7 +116,7 @@ export function WorkflowDiagram({ steps }: WorkflowDiagramProps) {
             <ul className="armada-diagram__declared">
               {(step.checks ?? []).map((check, c) => (
                 <li className="armada-diagram__row" key={`check-${c}`}>
-                  <span className="armada-diagram__command">{check.command}</span>
+                  <Command text={check.command} />
                   {check.covers === undefined ? null : (
                     <span className="armada-diagram__covers">{check.covers}</span>
                   )}
@@ -100,7 +124,7 @@ export function WorkflowDiagram({ steps }: WorkflowDiagramProps) {
               ))}
               {(step.declarations ?? []).map((declared, d) => (
                 <li className="armada-diagram__row" key={`declared-${d}`}>
-                  <span className="armada-diagram__command">{declared.label}</span>
+                  <Command text={declared.label} />
                 </li>
               ))}
             </ul>

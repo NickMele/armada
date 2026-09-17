@@ -41,6 +41,9 @@ mod breakage;
 /// How many Drones Fleet may run, how many it is running, and what holds the
 /// next one back. **Fleet-wide, and not a Job's field.**
 mod capacity;
+/// A scout's run, as its Finding records it, and the acts that start and stop one.
+/// `#1292`.
+mod capturing;
 mod checks;
 mod codec;
 /// A command a Drone was not given, and what a person answers about it. **Two
@@ -129,8 +132,6 @@ mod resources;
 /// What Scan found in a repository nobody set up for Armada. **Evidence,
 /// never a proposal** — every finding carries the file it came from.
 mod scan;
-/// A scout's run, as its Finding records it, and the acts that start and stop one.
-/// `#1292`.
 mod scouting;
 mod seeding;
 /// A Command that stays running, held by Fleet. **Lifecycle on `/events`,
@@ -175,6 +176,10 @@ pub use asking::{JudgeAnswer, JudgeAnswered, JudgeQuestion, SetWhenRefused, When
 pub use attempt::{ended_at, first_started_at, Move, StepAttempt};
 pub use breakage::{ClaimedBreakage, WaitingOnFix};
 pub use capacity::{AdmissionHold, FleetCapacity};
+pub use capturing::{
+    CaptureBounds, CaptureElement, CaptureFrame, CaptureStudioNote, CaptureWindow, StagedFrame,
+    StudioCapture,
+};
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use commanding::{

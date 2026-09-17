@@ -603,6 +603,9 @@ export const CHANNELS = {
   moveStudioNode: "bridge:move-studio-node",
   removeStudioNode: "bridge:remove-studio-node",
   decideStudioEdge: "bridge:decide-studio-edge",
+  // Studio capture — #1290. One channel: the renderer says where it pointed and
+  // main takes the frame of its own window, so no image ever reaches the renderer.
+  captureStudioNote: "bridge:capture-studio-note",
   // A press Fleet answered, felt on the trackpad. Sent, never invoked: nothing waits on it.
   tap: "bridge:tap",
 } as const;

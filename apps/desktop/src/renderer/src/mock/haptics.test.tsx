@@ -15,7 +15,7 @@ import type { JobFixture } from "@armada/screens/src/fixtures/fixture";
 import type { BridgeApi } from "../../../shared/api";
 import type { Scenario } from "./scenario";
 import { onJob } from "./scenario";
-import { mount, unmountAfterEach } from "./testing";
+import { entered, mount, unmountAfterEach } from "./testing";
 
 unmountAfterEach();
 
@@ -32,11 +32,18 @@ function rowOf(title: string) {
   return page.getByRole("listitem").filter({ hasText: title }).first();
 }
 
+/** The confirming dialog an act goes through, once it has finished scaling up — #1323. */
+async function confirming() {
+  const dialog = page.getByRole("dialog");
+  await entered(dialog);
+  return dialog;
+}
+
 test("an accepted act taps once, in alignment", async () => {
   const api = await opened(reviewAtDelivery());
   const tap = vi.spyOn(api, "tap");
   await page.getByRole("button", { name: /^Merge/ }).first().click();
-  await page.getByRole("dialog").getByRole("button", { name: /^Merge/ }).click();
+  await (await confirming()).getByRole("button", { name: /^Merge/ }).click();
   await expect.poll(() => tap.mock.calls.length).toBe(1);
   expect(tap).toHaveBeenCalledWith("alignment");
 });
@@ -47,7 +54,7 @@ test("a refused act plays the level change, from the same place", async () => {
   }));
   const tap = vi.spyOn(api, "tap");
   await page.getByRole("button", { name: /^Merge/ }).first().click();
-  await page.getByRole("dialog").getByRole("button", { name: /^Merge/ }).click();
+  await (await confirming()).getByRole("button", { name: /^Merge/ }).click();
   await expect.poll(() => tap.mock.calls.length).toBe(1);
   expect(tap).toHaveBeenCalledWith("level_change");
 });

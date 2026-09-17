@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import type { JobSummary, Studio, StudioSummary } from "@armada/protocol";
+import type { JobSummary, Studio, StudioRunKept, StudioSummary } from "@armada/protocol";
 
 import { nodeNamed, proposedRelations, studioName, UNTITLED_STUDIO, whiteboardEdges, whiteboardNodes } from "./studio";
 import { foldStudio } from "./studio-reads";
@@ -28,6 +28,25 @@ const STUDIO: Studio = {
 
 const JOB = { id: "j1", status: "running", title: "Fix the legend", handle: "12-fix-the-legend" } as JobSummary;
 
+/** A run the Studio kept once retention swept it. `exit_code` absent is a run killed before it exited. */
+const KEPT: StudioRunKept = {
+  name: "typecheck",
+  command: "pnpm typecheck",
+  expect_exit_code: 0,
+  stopped: false,
+  duration_ms: 8400,
+  lines: ["Found 1 error."],
+  total_lines: 96,
+  whole: false,
+};
+
+/** A Studio holding one Run node, kept as given. */
+const ran = (kept: StudioRunKept): Studio => ({
+  ...STUDIO,
+  nodes: [{ id: "n4", kind: "run", run_id: "r1", kept, position: { x: 0, y: 0 }, created_at: AT }],
+  edges: [],
+});
+
 test("an untitled Studio is called one, and a named one by its name", () => {
   expect(studioName({})).toBe(UNTITLED_STUDIO);
   expect(studioName({ name: "The legend" })).toBe("The legend");
@@ -51,8 +70,26 @@ test("a Job node takes its state off the Board, and says none where the Board ha
   expect(whiteboardNodes(STUDIO, [])[2]!.node).toEqual({ kind: "job", title: "j1" });
 });
 
-test("a Run node carries no state, because the Studio holds only a reference", () => {
-  expect(whiteboardNodes(STUDIO, [])[3]!.node).toEqual({ kind: "run", title: "r1" });
+test("a Run the Studio has not kept says so, and keeps its id as a fact rather than a title", () => {
+  expect(whiteboardNodes(STUDIO, [])[3]!.node).toEqual({ kind: "run", title: "Not read yet", facts: ["r1"] });
+});
+
+test("a kept Run reads as the run sheet reads it: the name, the command, the exit and how long", () => {
+  const kept = { ...KEPT, exit_code: 1, duration_ms: 12300 };
+  expect(whiteboardNodes(ran(kept), [])[0]!.node).toEqual({
+    kind: "run",
+    state: "failed",
+    title: "typecheck",
+    facts: ["pnpm typecheck", "exit 1 (expects 0)", "12.3s"],
+  });
+  expect(whiteboardNodes(ran({ ...KEPT, exit_code: 0 }), [])[0]!.node).toMatchObject({ state: "passed" });
+  // Killed before it exited: no exit line, and the state is what says it stopped.
+  expect(whiteboardNodes(ran({ ...KEPT, stopped: true }), [])[0]!.node).toEqual({
+    kind: "run",
+    state: "stopped",
+    title: "typecheck",
+    facts: ["pnpm typecheck", "8.4s"],
+  });
 });
 
 test("edges keep their standing, and a kind this build does not know is left off", () => {

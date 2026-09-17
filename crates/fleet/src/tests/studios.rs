@@ -34,6 +34,7 @@ fn a_note(said: &str, x: i64) -> AddStudioNode {
     AddStudioNode {
         content: StudioNodeContent::Note {
             said: said.to_string(),
+            capture: None,
         },
         position: StudioPosition { x, y: 0 },
         produced_by: None,
@@ -242,4 +243,133 @@ async fn drained(watching: &mut Subscription) -> Vec<String> {
         seen.push(delivered.event.kind());
     }
     seen
+}
+
+/// The capture a test sends, with `staged` as its frame's path.
+fn a_capture(said: &str, staged: Option<&std::path::Path>) -> ipc::CaptureStudioNote {
+    ipc::CaptureStudioNote {
+        said: said.to_string(),
+        capture: ipc::StudioCapture {
+            component: Some("FilterChip".to_string()),
+            owners: vec!["Board".to_string()],
+            selector: "button.armada-chip".to_string(),
+            element: ipc::CaptureElement {
+                tag: "button".to_string(),
+                text: "Queued 3".to_string(),
+                label: None,
+            },
+            screen: Some("Job Board".to_string()),
+            layer: None,
+            location: "/".to_string(),
+            bounds: ipc::CaptureBounds {
+                x: 312,
+                y: 148,
+                width: 96,
+                height: 28,
+            },
+            window: ipc::CaptureWindow {
+                width: 1440,
+                height: 900,
+            },
+            styles: [("color".to_string(), "rgb(232, 232, 237)".to_string())]
+                .into_iter()
+                .collect(),
+            markup: "<button class=\"armada-chip\">Queued 3</button>".to_string(),
+            source: None,
+            frame: None,
+        },
+        position: StudioPosition { x: 0, y: 0 },
+        frame: staged.map(|path| ipc::StagedFrame {
+            staged_path: path.to_string_lossy().to_string(),
+            width: 2880,
+            height: 1800,
+        }),
+        produced_by: None,
+    }
+}
+
+/// **A capture lands as a Note whose frame is a file beside the Studio's
+/// records.** `#1290`, `docs/concepts/studio.md`, *Notes*.
+///
+/// The failure this is against is a frame that only ever existed in Bridge's
+/// temporary directory: the Note would name an image nothing can open the day
+/// the machine is swept. So the staged PNG is copied into Fleet's own keeping
+/// and the Note names what Fleet kept, never where Bridge staged it.
+#[tokio::test]
+async fn a_capture_keeps_its_frame_beside_the_studios_records_and_names_what_it_kept() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home);
+    let studio = a_studio(&fleet).await;
+    let staged = home.path().join("staged.png");
+    std::fs::write(&staged, [0u8; 512]).expect("a frame to stage");
+
+    let captured = fleet
+        .capture_studio_note(
+            studio.id.clone(),
+            a_capture("The chip keeps its count", Some(&staged)),
+            None,
+        )
+        .await
+        .expect("a person's capture");
+
+    let node = captured.nodes.first().expect("the Note");
+    assert_eq!(node.added_by.map(|by| by.as_wire()), Some("person"));
+    let StudioNodeContent::Note { said, capture } = &node.content else {
+        panic!("a Note: {:?}", node.content);
+    };
+    assert_eq!(said, "The chip keeps its count");
+    let capture = capture.as_ref().expect("where they pointed");
+    assert_eq!(capture.selector, "button.armada-chip");
+    let frame = capture.frame.as_ref().expect("the frame Fleet kept");
+    assert_eq!(frame.filename, format!("{}.png", node.id.as_str()));
+    assert_eq!(frame.byte_size, 512, "what the staged file weighed");
+
+    let kept = std::path::Path::new(&fleet.host().studio_frames_dir)
+        .join(studio.id.as_str())
+        .join(&frame.filename);
+    assert!(kept.exists(), "the frame is a file at {}", kept.display());
+
+    // Deleting a Studio takes its frames with it: nothing else ever read them.
+    fleet
+        .delete_studio(studio.id.clone(), None)
+        .await
+        .expect("a person's delete");
+    assert!(!kept.exists(), "the frame goes with the Studio");
+}
+
+/// A frame Fleet cannot read is refused rather than dropped, and so is one over
+/// the cap: a person who saw a frame taken and gets a Note with none would have
+/// no way to tell.
+#[tokio::test]
+async fn a_frame_that_cannot_be_kept_refuses_the_capture_rather_than_dropping_it() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home);
+    let studio = a_studio(&fleet).await;
+
+    let missing = home.path().join("never-written.png");
+    let refused = fleet
+        .capture_studio_note(studio.id.clone(), a_capture("said", Some(&missing)), None)
+        .await
+        .expect_err("a staged frame that is not there");
+    assert_eq!(code(&refused), "fleet.studio_frame_unreadable");
+
+    let heavy = home.path().join("heavy.png");
+    std::fs::write(&heavy, vec![0u8; 4 * 1024 * 1024 + 1]).expect("a frame over the cap");
+    let refused = fleet
+        .capture_studio_note(studio.id.clone(), a_capture("said", Some(&heavy)), None)
+        .await
+        .expect_err("a frame over the cap");
+    assert_eq!(code(&refused), "fleet.studio_frame_too_large");
+
+    let blank = fleet
+        .capture_studio_note(studio.id.clone(), a_capture("   ", None), None)
+        .await
+        .expect_err("a Note saying nothing");
+    assert_eq!(code(&blank), "fleet.studio_node_blank");
+
+    let held = fleet
+        .get_studio(studio.id.clone(), None)
+        .await
+        .expect("the Studio");
+    assert!(held.nodes.is_empty(), "nothing refused was written");
 }

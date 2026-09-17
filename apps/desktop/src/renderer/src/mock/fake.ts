@@ -12,6 +12,7 @@ import type { BridgeApi } from "../../../shared/api";
 import type { BridgeState, Summons } from "../../../shared/bridge";
 import { unanswered } from "./scenario";
 import type { Scenario } from "./scenario";
+import { keeping } from "./studio-fleet";
 
 const OK: Outcome = { ok: true };
 
@@ -44,6 +45,9 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
   function forget(jobIds: readonly string[]): void {
     publish({ jobs: state.jobs.filter((job) => !jobIds.includes(job.id)) });
   }
+
+  /** This window's Fleet for Studios, over the Studios the scenario names. */
+  const studios = keeping(scenario.studios).routes({ state: () => state, publish });
 
   const readsOf = (jobId: string) => scenario.reads[jobId];
   const path = (jobId: string, route = "") => `/jobs/${encodeURIComponent(jobId)}${route}`;
@@ -195,19 +199,9 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
     frameStreamUrl: (jobId, kept) => `armada-frame://frame/${jobId}/${kept}`,
     readReports: async (want) => publish({ reports: want ? unread("/reports") : nothing }),
     readHeld: async (want) => publish({ held: want ? unread("/worktrees/held") : nothing }),
-    // A scenario with no Studios says so, and every act on one is refused: `studios` answers them.
-    watchStudios: async (manifestId) =>
-      publish({
-        studios: manifestId === null ? nothing : { state: "failed", manifestId, outcome: unanswered("/studios") },
-      }),
-    watchStudio: async (studioId) =>
-      publish({
-        studio: studioId === null ? nothing : { state: "failed", studioId, outcome: unanswered(`/studios/${studioId}`) },
-      }),
-    createStudio: async () => refused("/studios/create"),
-    moveStudioNode: async (studioId) => refused(`/studios/${studioId}/move_node`).outcome,
-    removeStudioNode: async (studioId) => refused(`/studios/${studioId}/remove_node`).outcome,
-    decideStudioEdge: async (studioId) => refused(`/studios/${studioId}/decide_edge`).outcome,
+    // Every scenario keeps Studios, so the surface opens wherever it is reached. A scenario naming
+    // none keeps an empty list and draws its empty state, never a read failure — #1341.
+    ...studios,
     approveReview: async () => OK,
     mergePullRequest: async () => OK,
     rerunFailedChecks: async () => OK,

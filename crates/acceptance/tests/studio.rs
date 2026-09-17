@@ -12,7 +12,6 @@
 //!
 //! | Step of the claim | Carried by |
 //! |---|---|
-//! | 3. A Note is captured, and nothing writes to it afterwards | #1290 |
 //! | 4. A scout's Finding lists the sources it read beyond the checkout — an issue, a page, a session, a Helm thread | #1293. **The checkout half is asserted below** |
 //! | 5. An issue from the repository's forge is read in, and a Contradiction appears | #1293 |
 //! | 6. Two Notes are clustered, written up as an Issue draft, and dispatched, and a Job node stands at the gate | #1291. **The dispatch's far half is asserted below**: an Issue draft's text alone reaches the Job proposer, and the Job it proposes is told all of it |
@@ -39,11 +38,12 @@ use ipc::door::{DRAFTING, HELM_ONLY, REACHABLE};
 use ipc::{HelmStudioAct, StudioNodeContent};
 
 use bench::studio::{
-    a_failed_run, a_long_log, a_studio_with_a_frozen_finding,
-    a_studio_with_a_run_started_from_a_note, a_studio_with_two_notes, an_issue_draft, held,
-    helms_manifest, one_job_under, received_event, received_request, received_studio, ASKED,
-    COMMIT, COST, DRAFT_TITLE, FIRST_NOTE, LEFT_AT, READ, REPOSITORY, SECOND_NOTE, THE_COMMAND,
-    THE_FAILURE, THE_RUN,
+    a_capture_sent, a_failed_run, a_long_log, a_studio_with_a_captured_note,
+    a_studio_with_a_frozen_finding, a_studio_with_a_run_started_from_a_note,
+    a_studio_with_two_notes, an_issue_draft, held, helms_manifest, one_job_under, received_event,
+    received_request, received_studio, ASKED, COMMIT, COMPONENT, COST, DRAFT_TITLE, FIRST_NOTE,
+    FRAME_BYTES, FRAME_FILE, LEFT_AT, MARKUP, OWNERS, READ, REPOSITORY, SCREEN, SECOND_NOTE,
+    SELECTOR, STYLES, THE_COMMAND, THE_FAILURE, THE_RUN,
 };
 
 /// Step 6's far half: **an Issue draft is dispatched from its text, through the
@@ -121,7 +121,7 @@ fn a_studio_reads_back_with_every_node_where_it_was_left_and_its_proposal_unacce
         .nodes
         .iter()
         .map(|node| match &node.content {
-            StudioNodeContent::Note { said } => said.as_str(),
+            StudioNodeContent::Note { said, .. } => said.as_str(),
             other => panic!("only Notes were put on it: {other:?}"),
         })
         .collect();
@@ -159,6 +159,89 @@ fn a_studio_reads_back_with_every_node_where_it_was_left_and_its_proposal_unacce
     assert_eq!(by(studio.named_by), Some("person"));
 }
 
+/// Step 3: **a Note is captured with everything a person pointed at, and
+/// nothing writes to it afterwards.** `docs/concepts/studio.md`, *Notes*.
+///
+/// **The failure this is against is a note that says what is wrong and not
+/// where.** "The chip keeps its count" sends whoever reads it looking; the
+/// component, the selector, the markup and the styles are what turn it back
+/// into the element. So the capture crosses the wire and the Note is held to
+/// it field by field, with the frame named as the file Fleet kept rather than
+/// the one Bridge staged.
+///
+/// **Fixed at capture is proved on the seam**, which is where a rewrite would
+/// have to arrive: of the routes on a Studio's nodes, one adds, one captures,
+/// one moves and one removes, and none of them names a node and new content.
+#[test]
+fn a_captured_note_keeps_where_it_was_pointed_and_no_route_can_rewrite_it() {
+    let graph = a_studio_with_a_captured_note();
+    let studio = received_studio(&graph);
+    assert_eq!(studio, ipc::Studio::of(&graph), "nothing lost on the wire");
+
+    let note = studio.nodes.first().expect("the Note");
+    assert_eq!(note.added_by.map(|by| by.as_wire()), Some("person"));
+    assert!(note.state.is_none(), "a Note has no state");
+    let StudioNodeContent::Note { said, capture } = &note.content else {
+        panic!("a Note: {:?}", note.content);
+    };
+    assert_eq!(said, FIRST_NOTE, "what the person said, verbatim");
+    let capture = capture.as_ref().expect("where they pointed");
+
+    assert_eq!(capture.component.as_deref(), Some(COMPONENT));
+    assert_eq!(capture.owners, OWNERS, "the chain above it, nearest first");
+    assert_eq!(capture.selector, SELECTOR, "what finds the element again");
+    assert_eq!(capture.element.text, "Queued 3", "what a person read");
+    assert_eq!(capture.screen.as_deref(), Some(SCREEN));
+    assert_eq!(capture.markup, MARKUP, "the markup, trimmed");
+    for (property, value) in STYLES {
+        assert_eq!(
+            capture.styles.get(property).map(String::as_str),
+            Some(value),
+            "`{property}` is read off the element"
+        );
+    }
+    assert!(
+        capture.source.is_none(),
+        "React 19 carries no `_debugSource`, so no path is invented for one"
+    );
+
+    let frame = capture.frame.as_ref().expect("the frame Fleet kept");
+    assert_eq!(frame.filename, FRAME_FILE, "a file name, never a path");
+    assert_eq!(frame.byte_size, FRAME_BYTES);
+    assert_eq!(
+        (frame.width, frame.height),
+        (2880, 1800),
+        "the image's own pixels, so a reader knows what it is looking at"
+    );
+    let staged = a_capture_sent().frame.expect("the bench stages one");
+    assert!(
+        !ipc::encode(&studio)
+            .expect("a Studio that serialises")
+            .contains(&staged.staged_path),
+        "where Bridge staged the PNG reaches no client"
+    );
+
+    let on_a_node = |route: &&api::Route| {
+        route.operation.contains("studio_node") || route.operation == "capture_studio_note"
+    };
+    let mut named: Vec<&str> = api::SERVED
+        .iter()
+        .filter(on_a_node)
+        .map(|route| route.operation)
+        .collect();
+    named.sort_unstable();
+    assert_eq!(
+        named,
+        [
+            "add_studio_node",
+            "capture_studio_note",
+            "move_studio_node",
+            "remove_studio_node"
+        ],
+        "a node is added, captured, moved or removed, and never written again"
+    );
+}
+
 /// **Accepting a relation, removing a node and deleting a Studio are a
 /// person's acts**, whatever Helm's authority says: no agent is offered one,
 /// and Helm alone is offered what it may propose. **A scout starts only on a
@@ -178,6 +261,8 @@ fn no_agent_is_offered_a_persons_act_on_a_studio() {
         "delete_studio",
         "ask_scout",
         "stop_scout",
+        // #1290: capture is a person pointing at Bridge, and no agent points.
+        "capture_studio_note",
     ] {
         assert!(!offered(persons), "`{persons}` reaches an agent");
     }

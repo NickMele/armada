@@ -45,6 +45,7 @@ fn helms_node_edge_and_name_read_back_as_helms() {
         node("01NOTE"),
         StudioNodeContent::Note {
             said: "the count is stale".to_string(),
+            capture: None,
         },
         StudioPosition { x: 0, y: 0 },
         at(),

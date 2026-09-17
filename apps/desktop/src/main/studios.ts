@@ -9,7 +9,16 @@
 // Studios would each read the other's list after a switch. Overview went per window for exactly
 // this, and the day two windows hold Studios open at once, this follows it.
 
-import type { Outcome, Studio, StudioDeleted, StudioList, StudioPosition } from "@armada/protocol";
+import type {
+  CaptureStudioNote,
+  Outcome,
+  StagedFrame,
+  Studio,
+  StudioCapture,
+  StudioDeleted,
+  StudioList,
+  StudioPosition,
+} from "@armada/protocol";
 import { foldStudio } from "@armada/screens/src/studio-reads";
 import type { StudioAnswer, StudioRead, StudiosRead } from "@armada/screens/src/studio-reads";
 import { ask } from "./request";
@@ -19,6 +28,9 @@ type Publish = (change: { studios?: StudiosRead; studio?: StudioRead }) => void;
 const NOT_CONNECTED: Outcome = { ok: false, why: "not_connected" };
 
 const member = (studioId: string, act = "") => `/studios/${encodeURIComponent(studioId)}${act}`;
+
+/** How far under the lowest node a capture lands, in canvas units. A node card's height and a gap. */
+const NOTE_APART = 260;
 
 export class StudioReads {
   private readonly publish: Publish;
@@ -75,6 +87,40 @@ export class StudioReads {
     const answer = await this.act(`/studios/create?manifest_id=${encodeURIComponent(manifestId)}`, {});
     if (answer.ok) this.changed(answer.studio);
     return answer;
+  }
+
+  /**
+   * Put a Note where a person pointed — #1290. **The frame is staged and named,
+   * never sent**: Fleet copies it into the Studio's own keeping, so a frame
+   * Bridge could not take leaves a Note that carries none rather than failing.
+   *
+   * **It lands under what is already there.** A Studio is laid out by hand, so
+   * the placement only has to be somewhere a person can find it — and two Notes
+   * at one point read as one Note.
+   */
+  async captureNote(
+    studioId: string,
+    said: string,
+    capture: StudioCapture,
+    frame: StagedFrame | null,
+  ): Promise<Outcome> {
+    const body: CaptureStudioNote = {
+      said,
+      capture,
+      position: { x: 0, y: await this.under(studioId) },
+      ...(frame === null ? {} : { frame }),
+    };
+    return this.acted(await this.act(member(studioId, "/capture_note"), body));
+  }
+
+  /** A row below the lowest node on the Studio, or the origin on an empty one. */
+  private async under(studioId: string): Promise<number> {
+    const port = this.port();
+    if (port === null) return 0;
+    const answer = await ask(port, "GET", member(studioId));
+    if (!answer.ok) return 0;
+    const nodes = (answer.body as Studio).nodes;
+    return nodes.length === 0 ? 0 : Math.max(...nodes.map((node) => node.position.y)) + NOTE_APART;
   }
 
   async moveNode(studioId: string, nodeId: string, position: StudioPosition): Promise<Outcome> {

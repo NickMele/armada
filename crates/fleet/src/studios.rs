@@ -19,10 +19,10 @@ use core_model::{
 use std::sync::Arc;
 
 use ipc::{
-    AddStudioNode, AskScout, CreateStudio, DecideStudioEdge, HelmStudioAct, ManifestId,
-    MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout, StartStudioRun,
-    StopScout, StudioDeleted, StudioHelmActed, StudioList, StudioRunStarted, StudioSummary,
-    WireError,
+    AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, HelmStudioAct,
+    ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, StartScout,
+    StartStudioRun, StopScout, StudioDeleted, StudioHelmActed, StudioList, StudioRunStarted,
+    StudioSummary, WireError,
 };
 use store::{LoadJobError, Store, StudioError};
 
@@ -54,6 +54,15 @@ const FINDING_IS_THE_SCOUTS: &str = "fleet.studio_finding_is_the_scouts";
 const NODE_IS_A_RUN: &str = "fleet.studio_node_is_a_run";
 /// A rename to nothing. A 422.
 const NAME_BLANK: &str = "fleet.studio_name_blank";
+/// A frame over [`MOST_A_FRAME_MAY_WEIGH`]. A 422.
+const FRAME_TOO_LARGE: &str = "fleet.studio_frame_too_large";
+/// A staged frame Fleet could not read or could not keep. A 422.
+const FRAME_UNREADABLE: &str = "fleet.studio_frame_unreadable";
+
+/// The most one frame may weigh. A window at twice its CSS pixels is under a
+/// megabyte and a half of PNG; four leaves room for a large display without
+/// letting a Studio grow without bound, since nothing expires one.
+const MOST_A_FRAME_MAY_WEIGH: u64 = 4 * 1024 * 1024;
 /// Who is kept as having acted: the transport's word, never the body's.
 fn author(by: Redirector) -> StudioAuthor {
     match by {
@@ -143,6 +152,55 @@ where
         self.events()
             .publish(ipc::Event::StudioChanged(studio.clone()));
         Ok(studio)
+    }
+
+    /// Where one Studio's frames are kept: a directory of its own, beside the
+    /// records rather than in them.
+    pub(crate) fn studio_frames(&self, studio_id: &StudioId) -> std::path::PathBuf {
+        std::path::Path::new(&self.host().studio_frames_dir).join(studio_id.as_str())
+    }
+
+    /// Copy a staged PNG into the Studio's own keeping, named for the node it
+    /// belongs to. **Refused, not dropped**, for the reason `drafting`'s
+    /// attachments are: a person who saw a frame taken and gets a Note with
+    /// none is worse off than one whose capture was refused.
+    fn frame_kept(
+        &self,
+        studio_id: &StudioId,
+        node_id: &StudioNodeId,
+        staged: ipc::StagedFrame,
+    ) -> Result<core_model::CaptureFrame, Refusal> {
+        let unreadable = |cause: std::io::Error| {
+            self.studio_unacceptable(
+                FRAME_UNREADABLE,
+                format!(
+                    "the frame at `{}` was not kept: {cause}",
+                    staged.staged_path
+                ),
+            )
+        };
+        let byte_size = std::fs::metadata(&staged.staged_path)
+            .map_err(unreadable)?
+            .len();
+        if byte_size > MOST_A_FRAME_MAY_WEIGH {
+            return Err(self.studio_unacceptable(
+                FRAME_TOO_LARGE,
+                format!(
+                    "a frame weighs at most {MOST_A_FRAME_MAY_WEIGH} bytes and this one weighs \
+                     {byte_size}"
+                ),
+            ));
+        }
+        let filename = format!("{}.png", node_id.as_str());
+        let dir = self.studio_frames(studio_id);
+        std::fs::create_dir_all(&dir).map_err(unreadable)?;
+        std::fs::copy(&staged.staged_path, dir.join(&filename)).map_err(unreadable)?;
+        Ok(core_model::CaptureFrame {
+            filename,
+            byte_size,
+            width: staged.width,
+            height: staged.height,
+        })
     }
 
     /// Publish `act` as Helm's own, **after** the write's `studio.changed` and
@@ -266,6 +324,9 @@ where
             store
                 .delete_studio(&id)
                 .map_err(|why| self.studio_refusal(why))?;
+            // Nothing else reads these, and a Studio is the only thing that
+            // ever held them.
+            let _ = std::fs::remove_dir_all(self.studio_frames(&id));
             StudioDeleted {
                 id: studio_id,
                 manifest_id: ManifestId::from(&graph.studio.manifest_id),
@@ -351,6 +412,55 @@ where
         };
         self.published_as_helms(by, &studio, added);
         Ok(studio)
+    }
+
+    /// **A person's, always.** The route reaches no agent, so nothing here
+    /// asks who acted, and the Note is fixed the moment it is written.
+    async fn capture_studio_note(
+        &self,
+        studio_id: ipc::StudioId,
+        capture: CaptureStudioNote,
+        within: Option<ManifestId>,
+    ) -> Result<ipc::Studio, Refusal> {
+        if capture.said.trim().is_empty() {
+            return Err(
+                self.studio_unacceptable(NODE_BLANK, "a note node's `said` cannot be blank".into())
+            );
+        }
+        let id = studio_id.to_domain();
+        // The Studio is held before the frame is written, so a capture onto a
+        // Studio that is not there leaves no file behind.
+        {
+            let store = self.store().lock().await;
+            self.studio_held(&store, &id, within.as_ref())?;
+        }
+        let node_id = StudioNodeId::carried(self.mint().ulid());
+        let mut pointed = capture.capture.to_domain();
+        pointed.frame = match capture.frame {
+            None => None,
+            Some(staged) => Some(self.frame_kept(&id, &node_id, staged)?),
+        };
+        let at = self.now();
+        let node = StudioNode::added(
+            node_id,
+            StudioNodeContent::Note {
+                said: capture.said,
+                capture: Some(pointed),
+            },
+            capture.position.to_domain(),
+            at.clone(),
+            StudioAuthor::Person,
+        );
+        let produced_by = capture
+            .produced_by
+            .map(|from| (from.to_domain(), StudioEdgeId::carried(self.mint().ulid())));
+        self.written(&studio_id, within, |store, id| {
+            let produced_by = produced_by
+                .as_ref()
+                .map(|(from, edge)| (from, edge.clone()));
+            store.add_studio_node(id, &node, produced_by, &at)
+        })
+        .await
     }
 
     async fn move_studio_node(
