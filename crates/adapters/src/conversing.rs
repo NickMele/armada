@@ -47,6 +47,23 @@ pub fn wrote_the_checkout(tool: &str) -> bool {
     CHANGES_THE_CHECKOUT.contains(&tool)
 }
 
+/// The file a write call named, out of the detail [`crate::transcript`] composed
+/// for it — a path, then `+added -removed` where the call said how much.
+///
+/// **Read here rather than where the event is published**, because the two ends
+/// of that spelling are both this crate's and would drift apart in one move.
+pub fn path_written(detail: &str) -> &str {
+    let mut path = detail;
+    for mark in ['-', '+'] {
+        if let Some((head, size)) = path.rsplit_once(' ') {
+            if size.starts_with(mark) && size[1..].chars().all(|c| c.is_ascii_digit()) {
+                path = head;
+            }
+        }
+    }
+    path
+}
+
 /// Every tool the agent's door serves, as the CLI allows a whole server.
 pub fn door_tools() -> String {
     format!("mcp__{}", ipc::door::SERVER)

@@ -75,7 +75,8 @@ mod tests;
 
 pub use ci_workflows::ActionsWorkflows;
 pub use conversing::{
-    door_tools, wrote_the_checkout, ConversationRefused, Conversing, CHANGES_THE_CHECKOUT,
+    door_tools, path_written, wrote_the_checkout, ConversationRefused, Conversing,
+    CHANGES_THE_CHECKOUT,
 };
 pub use error::{CommitWorkError, CreateWorktreeError, ReadWorkProductError};
 pub use harness::{

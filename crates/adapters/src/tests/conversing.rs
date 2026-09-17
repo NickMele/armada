@@ -105,6 +105,25 @@ fn the_tools_that_change_a_checkout_are_named_and_bash_is_not_among_them() {
     }
 }
 
+/// The detail a write call leaves on a row is the path and how much moved, and
+/// the event carries the path alone.
+#[test]
+fn the_file_a_write_named_is_read_back_out_of_its_row() {
+    for (detail, path) in [
+        (
+            "~/armada/crates/api/src/lib.rs +3 -1",
+            "~/armada/crates/api/src/lib.rs",
+        ),
+        ("~/armada/README.md +12", "~/armada/README.md"),
+        ("~/armada/README.md", "~/armada/README.md"),
+        ("a name with spaces.md +1 -0", "a name with spaces.md"),
+        // Not a size: left alone rather than guessed at.
+        ("notes -draft.md", "notes -draft.md"),
+    ] {
+        assert_eq!(crate::conversing::path_written(detail), path);
+    }
+}
+
 #[test]
 fn a_later_message_resumes_the_session_by_id() {
     let resuming = fresh()
