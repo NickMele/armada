@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, within } from "storybook/test";
+import { expect, fn, waitFor, within } from "storybook/test";
 
 import { LocateForm, type LocateFormProps } from "./LocateForm";
 
@@ -40,7 +40,7 @@ export const AFolder: Story = {
   args: BASE,
   play: async ({ args, canvasElement, userEvent }) => {
     const dialog = within(canvasElement).getByRole("dialog", { name: "Add a repository" });
-    await expect(within(dialog).getByLabelText("Project location")).toBeVisible();
+    await waitFor(() => expect(within(dialog).getByLabelText("Project location")).toBeVisible());
     await expect(within(dialog).getByRole("button", { name: /^Add repository/ })).toBeDisabled();
     await userEvent.click(within(dialog).getByRole("button", { name: "Choose a folder" }));
     await expect(args.onChoose).toHaveBeenCalledWith("path");
@@ -76,7 +76,7 @@ export const CloneUnderway: Story = {
   args: { ...CloneFromAURL.args, sending: true },
   play: async ({ args, canvasElement, userEvent }) => {
     const dialog = within(canvasElement).getByRole("dialog", { name: "Add a repository" });
-    await expect(within(dialog).getByText(/Git is cloning into/)).toBeVisible();
+    await waitFor(() => expect(within(dialog).getByText(/Git is cloning into/)).toBeVisible());
     await expect(within(dialog).getByRole("button", { name: /^Clone repository/ })).toBeDisabled();
     await userEvent.keyboard("{Enter}");
     await expect(args.onSend).not.toHaveBeenCalled();

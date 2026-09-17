@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Bell, ClipboardList, FileCog, HardDrive, LayoutDashboard, Settings, Stethoscope } from "lucide-react";
-import { expect, fn } from "storybook/test";
+import { expect, fn, waitFor } from "storybook/test";
 
 import { actsIn, ALIASES, globalActs, type Action } from "../../actions";
 import { Dialog } from "../Dialog/Dialog";
@@ -393,7 +393,7 @@ export const DestructiveEntryConfirms: Story = {
 
     await userEvent.keyboard("{Enter}");
 
-    await expect(canvas.getByRole("dialog", { name: "Kill the drone on job 12?" })).toBeVisible();
+    await waitFor(() => expect(canvas.getByRole("dialog", { name: "Kill the drone on job 12?" })).toBeVisible());
     await expect(canvas.getByRole("dialog", { name: "Command palette" })).toBeVisible();
 
     // `Esc` answers the top layer: the confirmation goes, and the list chosen from stays.
@@ -559,7 +559,7 @@ export const ClickInsideAConfirmationDoesNotClose: Story = {
   },
   play: async ({ canvas, userEvent }) => {
     await userEvent.keyboard("{Enter}");
-    await expect(canvas.getByRole("dialog", { name: "Kill the drone on job 12?" })).toBeVisible();
+    await waitFor(() => expect(canvas.getByRole("dialog", { name: "Kill the drone on job 12?" })).toBeVisible());
 
     await userEvent.click(canvas.getByRole("button", { name: "Cancel" }));
 

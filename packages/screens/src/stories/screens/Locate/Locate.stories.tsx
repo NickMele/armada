@@ -60,7 +60,7 @@ export const AFolderAdded: Story = {
     // Scoped to the open menu: the left column's Stats panel reads the same
     // two words for a repository's own setup state, #1088.
     const menu = canvas.getByRole("menu");
-    await expect(within(menu).getByText("Not set up")).toBeVisible();
+    await waitFor(() => expect(within(menu).getByText("Not set up")).toBeVisible());
     await expect(within(menu).getByRole("menuitem", { name: "scratch" })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     await expect(await canvas.findByRole("region", { name: "Workspaces" })).toBeVisible();
@@ -224,7 +224,7 @@ export const ThePickersNames: Story = {
     await expect(canvas.queryByRole("menuitem", { name: "services/api" })).toBeNull();
     // Scoped to the open menu: the left column's Stats panel reads the same
     // two words for a repository's own setup state, #1088.
-    await expect(within(canvas.getByRole("menu")).getByText("Not set up")).toBeVisible();
+    await waitFor(() => expect(within(canvas.getByRole("menu")).getByText("Not set up")).toBeVisible());
     await expect(canvas.getByRole("menuitem", { name: "scratch" })).toBeInTheDocument();
     await expect(canvas.getByRole("menuitem", { name: "code/api" })).toBeInTheDocument();
     await expect(canvas.getByRole("menuitem", { name: "old/api" })).toBeInTheDocument();

@@ -278,7 +278,7 @@ export const BothListed: Story = {
     // Scoped to the open menu: the left column's Stats panel reads the same
     // two words for a repository's own setup state, #1088.
     const menu = canvas.getByRole("menu");
-    await expect(within(menu).getByText("Not set up")).toBeVisible();
+    await waitFor(() => expect(within(menu).getByText("Not set up")).toBeVisible());
     await expect(within(menu).getByRole("menuitem", { name: "scratch" })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     await expect(canvas.queryByRole("region", { name: "Workspaces" })).toBeNull();

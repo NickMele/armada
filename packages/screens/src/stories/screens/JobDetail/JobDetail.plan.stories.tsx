@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, within } from "storybook/test";
+import { expect, waitFor, within } from "storybook/test";
 
 import { preparing, running } from "../../../fixtures/build/index";
 import { JobDetailFrom } from "./JobDetail";
@@ -92,7 +92,7 @@ export const PlanAddTaskOpen: Story = {
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(await canvas.findByRole("button", { name: "Add task" }));
     const dialog = within(document.body).getByRole("dialog");
-    await expect(within(dialog).getByLabelText("Title")).toBeVisible();
+    await waitFor(() => expect(within(dialog).getByLabelText("Title")).toBeVisible());
     await expect(within(dialog).getByLabelText("Detail — optional")).toBeVisible();
     await expect(within(dialog).getByRole("button", { name: "Add task" })).toBeDisabled();
   },
