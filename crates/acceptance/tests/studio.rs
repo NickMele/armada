@@ -17,7 +17,7 @@
 //! | 4. A scout's Finding arrives Frozen, listing every file and source it read | #1292 |
 //! | 5. An issue from the repository's forge is read in, and a Contradiction appears | #1293 |
 //! | 6. Two Notes are clustered, written up as an Issue draft, and dispatched, and a Job node stands at the gate | #1291. **The dispatch's far half is asserted below**: an Issue draft's text alone reaches the Job proposer, and the Job it proposes is told all of it |
-//! | Helm's unasked proposals, and the acts it takes only on a person's ask | #1288 |
+//! | Helm starts a Run node, writes up an Issue draft, and dispatches from one, each only on a person's ask | #1289 and #1291. **Helm's rule for them is asserted below**, with what it proposes unasked and the runs it reads |
 //!
 //! | Not proved here | Why not |
 //! |---|---|
@@ -26,6 +26,7 @@
 //! | That a Studio survives a restart on disk | It touches a file. `store` and `fleet` reopen one in their own tests; what is asserted here is the record reading back through the wire |
 //! | That a reopened Studio is read-only until Continue | A Bridge state; #1287's mock browser test proves it |
 //! | Anything a person sees | Nothing here renders. The whiteboard is #1286 and #1287 |
+//! | That Helm keeps to what it is told | A model's. `fleet`'s `helm_studio` drives the door through a stand-in agent |
 
 // The bench is shared with the other milestones' tests and none of them uses
 // all of it.
@@ -34,11 +35,11 @@ mod bench;
 
 use fleet::{Brief, Proposal};
 use ipc::door::{DRAFTING, HELM_ONLY, REACHABLE};
-use ipc::StudioNodeContent;
+use ipc::{HelmStudioAct, StudioNodeContent};
 
 use bench::studio::{
-    a_studio_with_two_notes, an_issue_draft, held, one_job_under, received_request,
-    received_studio, DRAFT_TITLE, FIRST_NOTE, LEFT_AT, REPOSITORY, SECOND_NOTE,
+    a_studio_with_two_notes, an_issue_draft, held, helms_manifest, one_job_under, received_event,
+    received_request, received_studio, DRAFT_TITLE, FIRST_NOTE, LEFT_AT, REPOSITORY, SECOND_NOTE,
 };
 
 /// Step 6's far half: **an Issue draft is dispatched from its text, through the
@@ -168,4 +169,57 @@ fn no_agent_is_offered_a_persons_act_on_a_studio() {
         );
     }
     assert!(REACHABLE.iter().any(|row| row.operation == "get_studio"));
+}
+
+/// **Helm proposes on a Studio unasked, acts on one only when asked, and what
+/// it did is its own event.** `docs/concepts/studio.md`, *Helm on a Studio*.
+///
+/// **The failure this is against is an agent reorganising a person's work.**
+/// The door answers a call the same whether it was asked for, so the line is
+/// the brief's: the unasked calls are named, writing up never dispatches on its
+/// own, and each unasked call is offered to Helm alone. What Helm did then
+/// reaches a client as `studio.helm_acted`, a kind no person's act publishes,
+/// and a run it was asked to start is one it can read back.
+#[test]
+fn helm_proposes_unasked_acts_on_an_ask_and_its_acts_are_its_own_event() {
+    let brief = fleet::helm::brief(&helms_manifest(), fleet::helm::Authority::Acting, None);
+    let (_, studio) = brief
+        .as_str()
+        .split_once("ON A STUDIO")
+        .expect("Helm is told about Studios");
+    for unasked in ["add_studio_node", "propose_studio_edge", "rename_studio"] {
+        assert!(studio.contains(unasked), "`{unasked}` is named as unasked");
+        assert!(
+            HELM_ONLY.iter().any(|row| row.operation == unasked)
+                && !REACHABLE.iter().any(|row| row.operation == unasked),
+            "`{unasked}` is offered to Helm alone"
+        );
+    }
+    assert!(
+        studio.contains("\"write it up\" alone is a draft and nothing more"),
+        "writing up never dispatches on its own: {studio}"
+    );
+    for read in ["list_checkout_runs", "get_checkout_run_output"] {
+        assert!(HELM_ONLY
+            .iter()
+            .any(|row| row.operation == read && row.kind == "query"));
+        assert!(studio.contains(read), "Helm is told it reads `{read}`");
+    }
+
+    let acted = ipc::Event::StudioHelmActed(ipc::StudioHelmActed {
+        studio_id: ipc::StudioId::carried("01STUDIO"),
+        manifest_id: ipc::ManifestId::carried(REPOSITORY),
+        act: HelmStudioAct::AddedNode {
+            node_id: ipc::StudioNodeId::carried("01FINDING"),
+        },
+        at: ipc::Instant::carried("2026-09-17T09:00:00.000Z"),
+    });
+    let received = received_event(&acted);
+    assert_eq!(received, acted, "nothing lost on the wire");
+    assert_eq!(received.kind(), "studio.helm_acted");
+    assert_eq!(
+        received.about(),
+        (None, Some(REPOSITORY.to_string())),
+        "a poll's tally names the repository"
+    );
 }

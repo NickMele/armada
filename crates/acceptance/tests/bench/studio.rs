@@ -124,3 +124,18 @@ pub fn received_studio(graph: &StudioGraph) -> ipc::Studio {
     let body = ipc::encode(&ipc::Studio::of(graph)).expect("a Studio that serialises");
     ipc::decode("a Studio", body.as_bytes()).expect("a Studio that reads back")
 }
+
+/// The repository Helm is briefed for, named and never quoted.
+pub fn helms_manifest() -> config::Manifest {
+    config::Manifest::parse(
+        std::path::Path::new("/work/storefront/armada.yml"),
+        &format!("version: 1\nid: {REPOSITORY}\n"),
+    )
+    .expect("a Manifest")
+}
+
+/// Helm's act on a Studio as a client reads it off the stream.
+pub fn received_event(event: &ipc::Event) -> ipc::Event {
+    let body = ipc::encode(event).expect("an event that serialises");
+    ipc::decode("an event", body.as_bytes()).expect("an event that reads back")
+}
