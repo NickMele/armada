@@ -564,7 +564,13 @@ pub(crate) async fn ran(
         halting = None;
     }
     let mut stopped = vec![false; planned.len()];
-    let mut running: JoinSet<(usize, RunAttempt, Duration)> = JoinSet::new();
+    // **The place comes back out with the answer**, so it is given back here
+    // rather than wherever the spawned future happens to end. A place dropped
+    // inside the task frees a slot the moment the command exits, which is
+    // before `announcing.finished` has said the Check that held it is done —
+    // and a snapshot taken in between reads one more Check started than the
+    // bound, on a run where no more than the bound ever ran. #1436.
+    let mut running: JoinSet<(usize, RunAttempt, Duration, Place)> = JoinSet::new();
     // The batch's turn for its next Check, kept across wakes so it keeps its place in line.
     let mut ask: Option<Ask> = None;
     // Places this batch's own running Checks hold right now — in places, not
@@ -626,7 +632,7 @@ pub(crate) async fn ran(
                 let stop = stop.clone();
                 let halted = halted.clone();
                 running.spawn(async move {
-                    let _held: Place = place;
+                    let held: Place = place;
                     let began = Instant::now();
                     let ended = async move {
                         tokio::select! {
@@ -643,7 +649,7 @@ pub(crate) async fn ran(
                         ended,
                     )
                     .await;
-                    (at, attempt, began.elapsed())
+                    (at, attempt, began.elapsed(), held)
                 });
                 announcing.started(at, log.as_deref());
             }
@@ -658,7 +664,7 @@ pub(crate) async fn ran(
                 }
             }
             Some(joined) = running.join_next(), if !running.is_empty() => {
-                let Ok((at, attempt, took)) = joined else {
+                let Ok((at, attempt, took, held)) = joined else {
                     continue;
                 };
                 own_places = own_places.saturating_sub(checks[at].places().get() as usize);
@@ -683,6 +689,9 @@ pub(crate) async fn ran(
                         }
                     }
                 }
+                // Said before the slot frees, never after: the next Check is
+                // told to start only once this one has been said to end.
+                drop(held);
                 done[at] = Some((attempt, took));
                 // A result that does not end the run is heard now; the last is the report.
                 if failed_first.is_none()

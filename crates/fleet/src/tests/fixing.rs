@@ -207,12 +207,12 @@ async fn the_call_answers_before_the_test_on_main_finishes() {
 }
 
 /// **A pass on main is the Drone's own change**, and nothing is drafted.
-/// **Skipped while the machine is loaded, `#1436`.** It passes alone and
+/// **Skipped while the machine is loaded, `#1467`.** It passes alone and
 /// fails only when the whole suite runs on a saturated machine, which is
-/// what the merge line does — so it refused every branch tonight. Whether
-/// this is a defect it is catching, a timing dependence, or a test worth
-/// keeping at all is `#1436`'s to settle.
-#[ignore = "flaky under load, #1436"]
+/// what the merge line does — so it refused every branch on the night it
+/// was switched off. `#1467` carries the causes already found and what is
+/// left to read; switching it back on is that issue's, not this file's.
+#[ignore = "flaky under load, #1467"]
 #[tokio::test]
 async fn a_test_passing_on_main_drafts_nothing() {
     let home = TempDir::new();
