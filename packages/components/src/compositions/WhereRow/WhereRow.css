@@ -6,9 +6,10 @@
    alignment. */
 .armada-wrow {
   display: grid;
-  /* Two --space-12, 96px: wide enough for Pulse's `Size on disk` at --text-xs,
-     which is what set it once the rows went up a size. Pulse's card uses the
-     same column, so the two cards read as one list. */
+  /* Two --space-12, 96px. Pulse's `Size on disk` is what set it once the rows
+     went up a size; that row folded into `Worktree` in #1481 and the width
+     stays, because this card's own `Workflow` and `Worktree` want it and the
+     two cards share the column so they read as one list. */
   grid-template-columns:
     calc(var(--space-12) * 2)
     minmax(0, 1fr)

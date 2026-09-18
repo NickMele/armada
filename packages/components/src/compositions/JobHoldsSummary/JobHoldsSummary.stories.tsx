@@ -68,18 +68,27 @@ async function everyRowSharesItsEdges(canvasElement: HTMLElement, line: HoldsLin
 }
 
 /**
- * **A Job holding a live worktree.** Two processes, a checkout on disk and the
- * size it takes — the four figures a person came to this column for, in five
+ * **A Job holding a live worktree.** Two processes and a checkout that takes
+ * 1.2 GiB — the figures a person came to this column for, in a handful of
  * lines instead of a card.
+ *
+ * **The worktree row is the size.** It said `on disk` over a `Size on disk`
+ * row until #1481, and `on disk` was the same word on every Job ever opened:
+ * nothing looks at a worktree unless somebody presses `Look now`.
  */
 export const HoldingALiveWorktree: Story = {
   args: {
     latest: LATEST,
-    figures: { processes: 2, worktree: "healthy", size: "1.2 GiB" },
+    spend: "at least ~$1.96",
+    turns: "82 of 300",
+    figures: { processes: 2, worktree: "1.2 GiB" },
     age: "3s",
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvas, canvasElement }) => {
     await everyRowSharesItsEdges(canvasElement, LATEST);
+    // One worktree row, carrying the figure the second row used to hold.
+    await expect(canvas.queryByText("Size on disk")).toBeNull();
+    await expect(canvas.getByText("1.2 GiB")).toBeVisible();
   },
 };
 
@@ -94,9 +103,39 @@ export const HoldingALiveWorktree: Story = {
 export const TheReadHasNotAnswered: Story = {
   args: {
     latest: LATEST,
+    spend: "~$0.84",
+    turns: "31 of 300",
     figures: null,
     note: "Fleet did not answer, so what this Job holds is unknown.",
     age: "3s",
+  },
+  /**
+   * **What the Job is spending does not wait on the look.** Spend and Turns
+   * come off the Job itself; a silent machine read is a fact about the machine
+   * and says nothing about either figure.
+   */
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("~$0.84")).toBeVisible();
+    await expect(canvas.getByText("31 of 300")).toBeVisible();
+    await expect(canvas.queryByText("Processes")).toBeNull();
+  },
+};
+
+/**
+ * **A Fleet that does not price, on a Job that has taken turns.** Spend draws
+ * no row rather than `~$0.00` — a Job that cost nothing and a Fleet with no
+ * figure are two different facts, and a zero says the first about the second.
+ */
+export const NothingIsPriced: Story = {
+  args: {
+    latest: LATEST,
+    turns: "7 of 300",
+    figures: { processes: 1, worktree: "640 MiB" },
+    age: "5s",
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText("Spend")).toBeNull();
+    await expect(canvas.getByText("7 of 300")).toBeVisible();
   },
 };
 
@@ -104,32 +143,44 @@ export const TheReadHasNotAnswered: Story = {
  * **A Job that holds nothing, and is right to.** A Job at its approval gate has
  * no process and no checkout, which is a real answer and reads as one.
  *
- * **No size row.** There is nothing on disk to size, and the worktree line above
- * already says so — a `0 B` beside it would be the same absence drawn twice as
- * a figure.
+ * **Words rather than a figure, in the slot the figure uses.** There is nothing
+ * on disk to size, and `0 B` would claim a directory was walked.
  */
 export const HoldingNothing: Story = {
   args: {
     latest: { at: "09:22:04", actor: "Fleet", said: "Worktree reclaimed" },
+    spend: "~$3.10",
+    turns: "144 of 300",
     figures: { processes: 0, worktree: "none on disk" },
     age: "11s",
   },
-  /**
-   * **The absent size must not come back as an empty row.** A figure with no
-   * value renders as a label and a gap, which is indistinguishable from a
-   * figure that failed to arrive — and nothing about the rendering says which
-   * of the two a blank cell is.
-   */
   play: async ({ canvas }) => {
-    await expect(canvas.queryByText("Size on disk")).toBeNull();
     await expect(canvas.getByText("none on disk")).toBeVisible();
+    await expect(canvas.queryByText("0 B")).toBeNull();
+  },
+};
+
+/**
+ * **The walk ran past its bound.** A size that did not finish is worth knowing
+ * and it is not zero, so the row says so in the slot the figure would take.
+ */
+export const TheWalkDidNotFinish: Story = {
+  args: {
+    latest: LATEST,
+    spend: "~$2.40",
+    turns: "96 of 300",
+    figures: { processes: 1, worktree: "not measured" },
+    age: "8s",
   },
 };
 
 /**
  * **The worktree is in trouble.** The Job reads running, Fleet holds no process
  * for it and the checkout it recorded is gone — the state the full reading was
- * built for, said here in two words and a hue.
+ * built for, said here in one word and a hue.
+ *
+ * **The fault takes the size's slot rather than sitting beside it.** A size for
+ * a directory that is not there is a figure about nothing.
  *
  * **Whether an absence is loud is the caller's answer, not this block's.** The
  * sheet decides it from the examination; a second judgment made here would
@@ -138,6 +189,8 @@ export const HoldingNothing: Story = {
 export const TheWorktreeIsInTrouble: Story = {
   args: {
     latest: { at: "09:16:47", actor: "Fleet", said: "A preparation command failed", wrong: true },
+    spend: "at least ~$5.28",
+    turns: "300 of 300",
     figures: {
       processes: 0,
       nothingRunningIsWrong: true,
@@ -152,7 +205,9 @@ export const TheWorktreeIsInTrouble: Story = {
 export const APersonActedLast: Story = {
   args: {
     latest: { at: "14:40:12", actor: "You", said: "Approved dispatch" },
-    figures: { processes: 1, worktree: "healthy", size: "1.2 GiB" },
+    spend: "~$0.12",
+    turns: "3 of 300",
+    figures: { processes: 1, worktree: "1.2 GiB" },
     age: "2s",
   },
 };

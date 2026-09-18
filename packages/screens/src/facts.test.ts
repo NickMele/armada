@@ -102,11 +102,9 @@ describe("the pull request it opened", () => {
     expect(fact?.label).toBeUndefined();
   });
 
-  it("sits beside the branch it was opened from", () => {
+  it("draws no branch beside it — Where things are has that, since #1481", () => {
     const fields = run(detail({ pull_request: "https://forge.invalid/pull/4711" }));
-    const branch = fields.findIndex((field) => field.value === job().branch);
-    const address = fields.findIndex((field) => field.href !== undefined);
-    expect(address).toBe(branch + 1);
+    expect(fields.some((field) => field.value === job().branch)).toBe(false);
   });
 });
 
@@ -172,23 +170,46 @@ describe("did this land", () => {
   });
 });
 
-describe("Elapsed", () => {
+describe("Run time", () => {
   const now = Date.parse("2026-08-31T09:05:00Z");
+  const ran = (over: Partial<JobSummary>): ReactNode =>
+    factsOf(job(over), null, now).find((field) => field.label === "Run time")?.value;
 
   it("draws nothing for a Job that has never run", () => {
-    const drawn = factsOf(job({ status: "awaiting_approval", started_at: undefined }), null, now);
-    expect(drawn.find((field) => field.label === "Elapsed")).toBeUndefined();
+    expect(ran({ status: "awaiting_approval", started_at: undefined })).toBeUndefined();
   });
 
-  it("draws the span from started_at once the Job has run", () => {
-    const drawn = factsOf(job({ status: "running", started_at: "2026-08-31T09:00:00Z" }), null, now);
-    expect(drawn.find((field) => field.label === "Elapsed")?.value).toBe("5m 00s");
+  it("runs to now while the Job is running", () => {
+    expect(ran({ status: "running", started_at: "2026-08-31T09:00:00Z" })).toBe("5m 00s");
+  });
+
+  // The defect the owner met: a Job killed in the morning read `10h 29m` in the
+  // evening, because the figure was measured against the clock rather than
+  // against the instant the Job stopped.
+  it("stops where the Job stopped, rather than climbing after it died", () => {
+    expect(
+      ran({
+        status: "killed",
+        started_at: "2026-08-31T09:00:00Z",
+        ended_at: "2026-08-31T09:02:00Z",
+      }),
+    ).toBe("2m 00s");
   });
 });
 
-describe("repository", () => {
-  it("leads the run, named by the Manifest id", () => {
-    expect(run(null)[0]).toEqual({ value: "01M1CNPKTV0018H2M1CXDNBK06", mono: true });
+describe("what the run no longer carries", () => {
+  // #1481. Each of these is drawn a second time somewhere a person goes to
+  // fetch it, and the header is what they read on the way past.
+  const drawn = run(detail(undefined));
+
+  it("draws no repository — Where things are names the Manifest", () => {
+    expect(drawn.some((field) => field.value === "01M1CNPKTV0018H2M1CXDNBK06")).toBe(false);
+  });
+
+  it("draws no spend or turns — Pulse carries both", () => {
+    const labelled = drawn.map((field) => field.label);
+    expect(labelled).not.toContain("Spend");
+    expect(labelled).not.toContain("Turns");
   });
 });
 
