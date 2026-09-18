@@ -6,19 +6,22 @@
 //! for how it spells an argument, and this is it for how it spells a home.
 //! Nothing above this crate learns either.
 
-//! **It reads and it cannot grant.** A server here is carried as a name and a
-//! word for what sort it is; its command, arguments, URL and environment are
-//! deserialised into [`serde::de::IgnoredAny`], which keeps nothing. This
-//! adapter cannot hand a caller an address because it never holds one, so no
-//! import path exists that could arrive switched on. Grep `IgnoredAny` here,
-//! and grep this module's name in [`mcp`](mod@crate::mcp) — where a Drone's
-//! server document is written — and find nothing.
+//! **It reads and it cannot grant.** A server is carried as its name, the
+//! program's own file name, or the host it is at — enough to tell two apart
+//! and to see one pointing somewhere wrong. What comes after any of those is
+//! where a key sits, and each has a type here that keeps nothing: [`Program`],
+//! [`Origin`] and two [`IgnoredAny`] fields. So what survives could not start
+//! the server it names, and this adapter holds no credential rather than being
+//! careful not to draw one. Grep `IgnoredAny` and `Kept` here; grep this
+//! module's name in [`mcp`](mod@crate::mcp) — where a Drone's server document
+//! is written — and find nothing.
 
 //! **It reads and it cannot write.** [`SetupFiles`] has no write method, so
 //! nothing here can repair a file it fails to parse. A file that will not read
 //! is named in the answer and left exactly as it is.
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -244,8 +247,9 @@ impl<F: SetupFiles> ExistingSetup<F> {
         WhatWasRead::Read { items, unreadable }
     }
 
-    /// The servers a person connected outside Armada, **by name and sort
-    /// only**. See this module's header for why nothing else survives the read.
+    /// The servers a person connected outside Armada, by name and by the
+    /// program or host they are at. See this module's header for what does not
+    /// survive the read, and [`Connected`] for how.
     fn connected(&self) -> WhatWasRead {
         let (mut items, mut unreadable) = (Vec::new(), Vec::new());
         match self.files.read(CONNECTED) {
@@ -255,7 +259,7 @@ impl<F: SetupFiles> ExistingSetup<F> {
                         for (name, server) in config.mcp_servers {
                             items.push(SetupItem {
                                 name,
-                                says: Some(server.sort().into()),
+                                says: Some(server.shown()),
                                 source: self.at(CONNECTED),
                             });
                         }
@@ -377,23 +381,109 @@ struct UserConfig {
     mcp_servers: BTreeMap<String, Connected>,
 }
 
-/// One connected server, **read as whether it has an address and never as what
-/// that address is**. `IgnoredAny` deserialises anything and keeps nothing, so
-/// there is no command, argument list, URL or environment for this adapter to
-/// hand on even by accident.
+/// One connected server: **the program's own name, or the host it is at, and
+/// nothing after either**.
+///
+/// A person has to be able to tell two servers apart and to spot one pointing
+/// somewhere wrong — the owner's decision, 18 Sep. What carries a key is what
+/// comes after: the argument list, the query string, the userinfo, the
+/// environment. Each of those has a type here that keeps nothing, so this
+/// adapter cannot hold one rather than being careful not to draw one.
 #[derive(Deserialize)]
 struct Connected {
-    command: Option<IgnoredAny>,
-    url: Option<IgnoredAny>,
+    command: Option<Program>,
+    url: Option<Origin>,
+    /// **Never read.** `-e API_KEY=…` is an argument like any other.
+    #[serde(default)]
+    args: Option<IgnoredAny>,
+    /// **Never read**, and the likeliest place of the four.
+    #[serde(default)]
+    env: Option<IgnoredAny>,
 }
 
 impl Connected {
-    fn sort(&self) -> &'static str {
-        match (self.command.is_some(), self.url.is_some()) {
-            (true, _) => "a program this machine starts",
-            (_, true) => "an address opened over the network",
-            _ => "connected outside Armada",
+    /// What the row says: the program, or the host. Never both — a server has
+    /// one or the other, and a file with neither says only that it is there.
+    fn shown(&self) -> String {
+        match (&self.command, &self.url) {
+            (Some(program), _) => program.0.clone(),
+            (_, Some(origin)) => origin.0.clone(),
+            _ => String::from("connected outside Armada"),
         }
+    }
+}
+
+/// A program, kept as **the file it is** and never as the path it sits at.
+///
+/// A path can be a secret on its own — a checkout under a client's name, a
+/// directory named for a token — and the file name is what tells two servers
+/// apart. The visitor keeps the last segment and allocates nothing else, so
+/// this type has nowhere to put the rest.
+struct Program(String);
+
+/// A host, kept as **the host alone**: no scheme, no userinfo, no port, no
+/// path, no query, no fragment.
+///
+/// `https://user:key@host/mcp?token=…` is one string carrying three places a
+/// key hides, and the host is the only one a person needs in order to see
+/// where a server points.
+struct Origin(String);
+
+impl<'de> Deserialize<'de> for Program {
+    fn deserialize<D: serde::Deserializer<'de>>(input: D) -> Result<Program, D::Error> {
+        input.deserialize_str(Kept(|whole: &str| {
+            let file = whole.rsplit('/').next().unwrap_or(whole);
+            Program(String::from(file))
+        }))
+    }
+}
+
+impl<'de> Deserialize<'de> for Origin {
+    fn deserialize<D: serde::Deserializer<'de>>(input: D) -> Result<Origin, D::Error> {
+        input.deserialize_str(Kept(|whole: &str| Origin(String::from(host_of(whole)))))
+    }
+}
+
+/// The host of a URL, or the whole of what was given where it is not one.
+///
+/// **Everything a `@`, a `:`, a `/`, a `?` or a `#` introduces is dropped**, in
+/// that order, so userinfo goes with the port, the path, the query and the
+/// fragment. A bracketed IPv6 literal keeps its brackets and loses its port.
+fn host_of(url: &str) -> &str {
+    let after_scheme = url.split_once("://").map(|(_, rest)| rest).unwrap_or(url);
+    let authority = after_scheme
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or(after_scheme);
+    let host_port = authority
+        .rsplit_once('@')
+        .map(|(_, host)| host)
+        .unwrap_or(authority);
+    match host_port.strip_prefix('[') {
+        Some(inside) => match inside.split_once(']') {
+            Some((literal, _)) => &host_port[..literal.len() + 2],
+            None => host_port,
+        },
+        None => host_port.split(':').next().unwrap_or(host_port),
+    }
+}
+
+/// A visitor that reads a string and keeps what `K` makes of it.
+///
+/// **The whole string is borrowed from the reader and never owned.** What is
+/// allocated is what `K` returns, which is how [`Program`] and [`Origin`] come
+/// to have nowhere to put a credential rather than a rule against holding one.
+struct Kept<T, K: Fn(&str) -> T>(K);
+
+impl<T, K: Fn(&str) -> T> serde::de::Visitor<'_> for Kept<T, K> {
+    type Value = T;
+
+    fn expecting(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(out, "a string")
+    }
+
+    fn visit_str<E: serde::de::Error>(self, whole: &str) -> Result<T, E> {
+        Ok((self.0)(whole))
     }
 }
 

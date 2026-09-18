@@ -22,6 +22,12 @@
 // **The ask replaces the servers and not the screen.** What a person already
 // has is this machine's and answers for every repository, so it is drawn with
 // no pick at all; it is the second tier that needs one.
+//
+// **Two homes, and the screen says which is which** — the owner's decision, 18
+// Sep, `kit.md`. Above is the harness's own home, which Armada reads and he
+// edits where it lives; below is Armada's own, which is changed here. Neither
+// is authoritative over the other's idea of anything, and a person who cannot
+// tell them apart is the failure two homes was weighed against.
 
 import type { ReactNode } from "react";
 
@@ -46,31 +52,39 @@ export function Kit(props: KitProps) {
   return (
     <div className="armada-kit">
       <KitSetup setup={kit.setup} />
-      {props.repository === null ? (
-        props.ask
-      ) : (
-        <KitServers
-          here={props.repository}
-          servers={kit.kit?.servers.map((server) => ({
-            name: server.name,
-            address: addressReads(server.address),
-            kind: server.address.transport,
-            reachesByDefault: server.drones === "yes",
-            here: server.manifest,
-            resolves: server.resolves,
-          }))}
-          refused={kit.refused === null ? undefined : said(kit.refused)}
-          onAdd={({ name, kind, address }) => {
-            const typed = addressTyped(kind, address);
-            // Fleet refuses the same shapes and says why. What is refused here is
-            // an empty field, which has nothing to send and nothing to say.
-            if (typed !== null) kit.onAdd({ name, address: typed });
-          }}
-          onForget={kit.onForget}
-          onKitReach={(name, reaches) => kit.onKitReach(name, reaches ? "yes" : "no")}
-          onHereReach={kit.onManifestReach}
-        />
-      )}
+      <section className="armada-kit__own" aria-label="What Armada holds">
+        <header className="armada-kit__head">
+          <h3 className="armada-kit__title">What Armada holds</h3>
+          <p className="armada-kit__where">
+            Armada&rsquo;s own, and changed here. The setup above is edited where it lives.
+          </p>
+        </header>
+        {props.repository === null ? (
+          props.ask
+        ) : (
+          <KitServers
+            here={props.repository}
+            servers={kit.kit?.servers.map((server) => ({
+              name: server.name,
+              address: addressReads(server.address),
+              kind: server.address.transport,
+              reachesByDefault: server.drones === "yes",
+              here: server.manifest,
+              resolves: server.resolves,
+            }))}
+            refused={kit.refused === null ? undefined : said(kit.refused)}
+            onAdd={({ name, kind, address }) => {
+              const typed = addressTyped(kind, address);
+              // Fleet refuses the same shapes and says why. What is refused here is
+              // an empty field, which has nothing to send and nothing to say.
+              if (typed !== null) kit.onAdd({ name, address: typed });
+            }}
+            onForget={kit.onForget}
+            onKitReach={(name, reaches) => kit.onKitReach(name, reaches ? "yes" : "no")}
+            onHereReach={kit.onManifestReach}
+          />
+        )}
+      </section>
     </div>
   );
 }

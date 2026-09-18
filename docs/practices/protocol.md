@@ -1584,9 +1584,14 @@ rather than as a literal Bridge holds. A second harness is a second adapter and 
 move.
 
 **Nothing on it can widen a Drone.** A row is a name, the item's own words for itself and where it
-came from — no address, no command, no argument list, no environment — so a server a person
-connected outside Armada is visible here and still reaches no Drone. `add_kit_server` and
-`set_kit_server_reach` are the two separate acts they were.
+came from; a connected server carries the program's own file name or the host it is at, and never
+the argument list, query string, userinfo or environment that follow either. What crosses could not
+start the server it names, so one connected outside Armada is visible here and still reaches no
+Drone. `add_kit_server` and `set_kit_server_reach` are the two separate acts they were.
+
+**The field is the same shape either way.** `says` was optional and a string when this was written
+and still is; what changed on the owner's word is what an adapter puts in it, which no peer parses
+differently. 17.2 stands.
 
 ## Open questions
 

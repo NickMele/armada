@@ -119,13 +119,16 @@ where
 
 /// One thing a person already has, as `get_kit_inventory` lists it — `#1491`.
 ///
-/// **No address and no credential.** `adapter_traits::SetupItem` carries none,
-/// so a caller that wanted to turn one of these into a server a Drone gets has
-/// nothing to build one out of. Allowing stays its own act on a Kit row.
+/// **No credential.** A connected server crosses as the program's own file name
+/// or the host it is at, and never as what comes after either — no argument
+/// list, no query string, no userinfo, no environment. What crosses could not
+/// start the server it names, and allowing one stays its own act on a Kit row
+/// a person added themselves.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetupItem {
     pub name: String,
-    /// The item's own words for itself, where its file carries them.
+    /// The item's own words for itself, where its file carries them — or, for
+    /// a connected server, the program or host it is at.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub says: Option<String>,
     /// Where it came from, as a person would type it.

@@ -7,8 +7,8 @@ import type { ReactNode } from "react";
  * **Seeing is the whole of it.** Nothing here is a control, because nothing
  * here reaches a drone: a server a person connected outside Armada is drawn
  * and still handed to nobody, and allowing one stays a separate act on a kit
- * row below. The rows carry no address for the same reason — a name, the
- * thing's own words for itself, and where it came from.
+ * row below. A server is drawn as the program or host it is at and never as
+ * what follows either, so what is on the screen could not start it.
  *
  * **A kind nothing reads yet says so.** Drawing it as empty would say a person
  * has none of something they have plenty of, which is the report this whole
@@ -54,7 +54,7 @@ export type KitSetupKind = {
 
 export type KitSetupItem = {
   name: string;
-  /** Its own words for itself, where its file carries them. */
+  /** Its own words for itself — or, for a server, the program or host it is at. */
   says?: string;
   /** Where it came from. Drawn small, and never a control. */
   source: string;

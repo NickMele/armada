@@ -167,36 +167,72 @@ fn a_plugin_file_that_will_not_parse_is_named_and_takes_nothing_else_down() {
     assert_eq!(items(&files, SetupKind::Skills).len(), 1);
 }
 
+/// Every place a key sits in a connected server, planted at once: the argument
+/// list, the query string, the userinfo, the environment, and the directory a
+/// program is kept in.
+const KEYS_EVERYWHERE: &str = r#"{
+  "oauthAccount": {"emailAddress": "someone@example.com"},
+  "mcpServers": {
+    "tracker": {
+      "command": "/opt/sk-live-SECRET/bin/tracker-server",
+      "args": ["-y", "@scope/tracker", "--key=SECRET"],
+      "env": {"API_KEY": "SECRET"}
+    },
+    "docs": {"type": "http", "url": "https://user:SECRET@docs.example.com/mcp?token=SECRET"}
+  }
+}"#;
+
 /// **The whole safety of this seam, as a test.** A server a person connected
-/// is carried by name and by sort, and the address is not in the answer at all
-/// — so nothing downstream can build a `KitServer` out of what was read.
+/// crosses as its name and as the program or host it is at, and not one of the
+/// five places a credential hides survives — so what is drawn could not start
+/// the server it names.
 #[test]
-fn a_connected_server_crosses_as_a_name_and_never_as_an_address() {
+fn a_connected_server_crosses_without_one_place_a_key_hides() {
+    let read = items(&[(".claude.json", KEYS_EVERYWHERE)], SetupKind::McpServers);
+    let said = format!("{read:?}");
+    for place in [
+        "SECRET",       // the argument list, the query, the userinfo, the environment
+        "sk-live",      // the directory the program is kept in
+        "--key",        // any argument at all
+        "token",        // the query string, key and value alike
+        "user:",        // the userinfo
+        "emailAddress", // the account the file also holds
+    ] {
+        assert!(!said.contains(place), "`{place}` survived the read: {said}");
+    }
+    let named: Vec<&str> = read.iter().map(|item| item.name.as_str()).collect();
+    assert_eq!(named, vec!["docs", "tracker"]);
+    // What a person is left with: the host, and the program's own file name.
+    assert_eq!(read[0].says.as_deref(), Some("docs.example.com"));
+    assert_eq!(read[1].says.as_deref(), Some("tracker-server"));
+}
+
+/// A port is not a secret and is dropped anyway: it is noise beside the host,
+/// and keeping it would mean keeping the one thing after the `:`.
+#[test]
+fn a_host_crosses_without_its_scheme_or_its_port() {
     let read = items(
         &[(
             ".claude.json",
-            r#"{"oauthAccount":{"emailAddress":"someone@example.com"},
-                "mcpServers":{"tracker":{"command":"npx","args":["-y","@scope/tracker","--key=SECRET"]},
-                              "docs":{"type":"http","url":"https://docs.example.com/mcp?token=SECRET"}}}"#,
+            r#"{"mcpServers":{"near":{"type":"http","url":"http://127.0.0.1:8931/mcp"},
+                              "six":{"type":"http","url":"http://[::1]:8931/mcp"}}}"#,
         )],
         SetupKind::McpServers,
     );
-    let said = format!("{read:?}");
-    assert!(
-        !said.contains("SECRET"),
-        "an address survived the read: {said}"
+    assert_eq!(read[0].says.as_deref(), Some("127.0.0.1"));
+    assert_eq!(read[1].says.as_deref(), Some("[::1]"));
+}
+
+/// Neither key is a file a person wrote by hand having a bad day — it is a
+/// server this adapter cannot describe, and it is still one they have.
+#[test]
+fn a_server_with_neither_a_program_nor_an_address_is_still_listed() {
+    let read = items(
+        &[(".claude.json", r#"{"mcpServers":{"odd":{"type":"sse"}}}"#)],
+        SetupKind::McpServers,
     );
-    assert!(!said.contains("npx"), "a command survived the read: {said}");
-    assert!(
-        !said.contains("example.com"),
-        "a host survived the read: {said}"
-    );
-    let named: Vec<&str> = read.iter().map(|item| item.name.as_str()).collect();
-    assert_eq!(named, vec!["docs", "tracker"]);
-    assert_eq!(
-        read[1].says.as_deref(),
-        Some("a program this machine starts")
-    );
+    assert_eq!(read[0].name, "odd");
+    assert_eq!(read[0].says.as_deref(), Some("connected outside Armada"));
 }
 
 #[test]

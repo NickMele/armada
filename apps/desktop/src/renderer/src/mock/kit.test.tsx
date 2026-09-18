@@ -106,4 +106,22 @@ test("a server Armada can see is not a server a Drone gets", async () => {
   await expect.element(page.getByText(/A drone here is handed none of them/)).toBeVisible();
   await expect.element(page.getByText(/Nothing in your Kit yet/)).toBeVisible();
   expect(page.getByText("Gets it").elements()).toHaveLength(0);
+
+  // The row says what it is at — enough to tell two servers apart — and never
+  // the arguments, the query or the environment that follow it. #1491.
+  await expect.element(page.getByText("gitnexus-mcp")).toBeVisible();
+});
+
+/**
+ * **Two homes, and the screen says which is which** — the owner's decision, 18
+ * Sep. Above is his own, which Armada reads and he edits where it lives; below
+ * is Armada's own, which is changed here.
+ */
+test("Kit names the home each half came from", async () => {
+  await kit();
+
+  await expect.element(page.getByText("What you already have")).toBeVisible();
+  await expect.element(page.getByText("An agent CLI")).toBeVisible();
+  await expect.element(page.getByText("What Armada holds")).toBeVisible();
+  await expect.element(page.getByText(/edited where it lives/)).toBeVisible();
 });

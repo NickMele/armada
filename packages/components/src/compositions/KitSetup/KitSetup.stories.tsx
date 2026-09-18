@@ -77,7 +77,7 @@ const FULL: KitSetupRead = {
         items: [
           {
             name: "tracker",
-            says: "a program this machine starts",
+            says: "tracker-server",
             source: "/Users/user/.agent.json",
           },
         ],

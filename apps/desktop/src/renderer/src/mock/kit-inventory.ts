@@ -74,7 +74,7 @@ export const KIT_INVENTORY: KitInventory = {
         items: [
           {
             name: "gitnexus",
-            says: "a program this machine starts",
+            says: "gitnexus-mcp",
             source: "/Users/user/.agent.json",
           },
         ],

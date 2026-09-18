@@ -252,12 +252,47 @@
 /* A screen that hands the scrolling to a child — the Board, whose own actions
    and controls stay in place and only the rows under them move. */
 /* Kit: what a person already has, then what Armada holds. One gap wider than a
-   stack, because the two are different readings rather than one list. #1491. */
+   stack, because the two are different readings rather than one list. #1491.
+
+   Two homes, and the screen says which is which — the harness's own above,
+   which Armada reads, and Armada's own below, which is changed here. */
 .armada-kit {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
   min-width: 0;
+}
+
+.armada-kit__own {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.armada-kit__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-kit__title {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}
+
+.armada-kit__where {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  text-wrap: pretty;
 }
 
 .armada-screen__stack {

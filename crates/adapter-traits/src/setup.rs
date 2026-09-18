@@ -9,13 +9,16 @@
 
 //! # Reading is not granting
 //!
-//! **Nothing an implementation returns may reach a Drone by having been read**,
-//! and the types are shaped so that it cannot. [`SetupItem`] carries a name,
-//! the item's own words for itself and where it came from — no address, no
-//! command, no argument list, no environment. There is nothing in an
-//! [`Inventory`] a `core_model::ServerAddress` could be built out of, so there
-//! is nothing a `KitServer` could be built out of, so allowing a server stays
-//! what it is: a separate act on a row a person added themselves.
+//! **Nothing an implementation returns may reach a Drone by having been read.**
+//! [`SetupItem`] carries a name, the item's own words for itself and where it
+//! came from. For a server a person connected, those words are the program's
+//! own file name or the host it is at — **enough to tell two apart, and never
+//! what comes after either**: no argument list, no query string, no userinfo,
+//! no environment. What survives could not start the server it names, so an
+//! import built out of an [`Inventory`] would produce something that does not
+//! run rather than something that quietly works. Allowing stays what it is: a
+//! separate act on a row a person added themselves, and `KitServer::added`
+//! takes no reach.
 
 //! [`SetupFiles`] has **no write method**, so a reader cannot repair, migrate
 //! or tidy the directory it is reading — the call does not exist. Writing back
@@ -97,8 +100,9 @@ impl SetupKind {
 pub struct SetupItem {
     /// What it is called, as the harness names it.
     pub name: String,
-    /// Its own words for what it is, where the file carries them. Never a
-    /// path, never a command, and never more than a sentence or two.
+    /// Its own words for what it is, where the file carries them, or what it
+    /// is at where it is a server. **Never a whole command and never a whole
+    /// URL**, and never more than a sentence or two.
     pub says: Option<String>,
     /// Where it came from, as a person would type it. **The only path here**,
     /// and it names a file rather than carrying one.

@@ -78,14 +78,16 @@ export type SetManifestServerReach = {
 // The setup a person already works with, read from their agent harness's own
 // home and shown by kind. Since protocol 17.2. `crates/ipc/src/kit.rs`, #1491.
 //
-// **No address on any of it.** A row names a thing and says where it came from,
-// and there is nothing here a server a drone gets could be built out of —
-// reading is not granting, and allowing stays its own act on a kit row.
+// **No credential on any of it.** A connected server crosses as the program's
+// own file name or the host it is at, and never as what follows either — no
+// argument list, no query string, no userinfo, no environment. What crosses
+// could not start the server it names, and allowing one stays its own act on a
+// kit row a person added themselves.
 
 /** One thing a person already has. */
 export type SetupItem = {
   name: string;
-  /** Its own words for itself, where its file carries them. */
+  /** Its own words for itself — or, for a connected server, what it is at. */
   says?: string;
   /** Where it came from, as a person would type it. */
   source: string;
