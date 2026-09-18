@@ -72,6 +72,9 @@ pub struct Fleet<H, V, W> {
     repositories: Arc<crate::repositories::Repositories>,
     /// Reading a folder a person adds. The composition root's.
     locating: Arc<dyn crate::repositories::Locating>,
+    /// Reading the setup a person already has, to show it — `crate::kit`. It
+    /// reads and cannot write, and nothing it returns reaches a Drone. `#1491`.
+    setup: Arc<dyn adapter_traits::HarnessSetup + Send + Sync>,
     host: Local,
     /// The range a Job's port span is claimed from, and the granule its width
     /// rounds up to. See [`crate::ports`].

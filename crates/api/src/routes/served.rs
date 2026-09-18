@@ -360,6 +360,13 @@ pub const SERVED: &[Route] = &[
     // Kit's servers, machine-wide, with the Manifest scoping the second tier
     // rather than naming a resource — `#1275`. Each act spells itself in its
     // last segment, as the remove above does.
+    // The setup a person already has, read to be shown — `#1491`. Machine-wide
+    // like the servers above, and under `/kit` for the surface that draws both.
+    Route {
+        operation: "get_kit_inventory",
+        method: "GET",
+        path: "/kit/inventory",
+    },
     Route {
         operation: "get_kit_servers",
         method: "GET",

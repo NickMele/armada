@@ -150,6 +150,7 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
             "/manifest/allowed_commands/remove",
             post(remove_repository_allowed_command::<D>),
         )
+        .route("/kit/inventory", get(crate::kit::get_kit_inventory::<D>))
         .route("/kit/servers", get(crate::kit::get_kit_servers::<D>))
         .route("/kit/servers/add", post(crate::kit::add_kit_server::<D>))
         .route(

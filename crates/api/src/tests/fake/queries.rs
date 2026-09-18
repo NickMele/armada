@@ -298,6 +298,17 @@ impl Queries for FakeDaemon {
     }
 
     /// Whatever the fake's own acts have left — `#1275`.
+    /// **A setup with nothing in it**, which is what a route test asserts the
+    /// shape of. What a real read makes of a real home is `adapters`' own case.
+    async fn get_kit_inventory(&self) -> Result<ipc::KitInventory, Refusal> {
+        Ok(ipc::KitInventory {
+            harness: "a harness".to_string(),
+            home: "/home/someone/.setup".to_string(),
+            present: true,
+            kinds: Vec::new(),
+        })
+    }
+
     async fn get_kit_servers(
         &self,
         _manifest_id: Option<ipc::ManifestId>,

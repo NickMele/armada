@@ -46,9 +46,10 @@ const AGENT_FILE: &str = ".claude/CLAUDE.md";
 const PLUGINS: &str = ".claude/plugins/installed_plugins.json";
 
 /// How far under `skills/` a skill may sit. One level is a skill a person
-/// wrote; two is a folder of skills that arrived together, which is how a
-/// synced set lands and would otherwise read as one skill that will not parse.
-const SKILL_DEPTH: usize = 2;
+/// wrote. **Three is measured, not guessed**: a synced set lands under a folder
+/// and then under the id of the set it came from, and at two the owner's eight
+/// synced skills read as nothing at all.
+const SKILL_DEPTH: usize = 3;
 /// The same, for commands: a namespaced command is a file in a subfolder.
 const COMMAND_DEPTH: usize = 2;
 
@@ -289,8 +290,11 @@ impl<F: SetupFiles> HarnessSetup for ExistingSetup<F> {
                     SetupKind::SubAgents => self.markdown_in(SUB_AGENTS, 1),
                     SetupKind::Commands => self.markdown_in(COMMANDS, COMMAND_DEPTH),
                     SetupKind::McpServers => self.connected(),
-                    SetupKind::Allowlist | SetupKind::Models => WhatWasRead::NotRead {
-                        why: NOT_READ.to_string(),
+                    SetupKind::Allowlist => WhatWasRead::NotRead {
+                        why: NO_ALLOWLIST.to_string(),
+                    },
+                    SetupKind::Models => WhatWasRead::NotRead {
+                        why: NO_MODELS.to_string(),
                     },
                 },
             })
@@ -304,11 +308,16 @@ impl<F: SetupFiles> HarnessSetup for ExistingSetup<F> {
     }
 }
 
-/// Why the last two kinds are not read. **Half-reading an allowlist is worse
-/// than not reading one**: a rule drawn out of its two tiers reads as a grant,
-/// and which tier a row belongs to is `#41`'s question.
-const NOT_READ: &str =
-    "not read yet — an allowlist drawn out of its two tiers reads as a grant, and the tiers are #41";
+/// **Half-reading an allowlist is worse than not reading one**: a rule drawn
+/// out of its two tiers reads as a grant, and which tier a row belongs to is
+/// `#41`'s question.
+const NO_ALLOWLIST: &str =
+    "not read yet: a rule drawn out of its two tiers reads as a grant, and the tiers are #41";
+
+/// Which models a Drone may use is resolved by `config` against a Manifest, and
+/// a second list read off a harness would be a second answer to that.
+const NO_MODELS: &str =
+    "not read yet: which models a Job may use is resolved against a Manifest, and that is #41";
 
 /// The front matter a skill, a sub agent or a command carries.
 #[derive(Deserialize)]
