@@ -21,6 +21,7 @@ import {
   EvidenceSheet,
   JobDiffSheet,
   JobHoldsSheet,
+  PlanTaskSheet,
   RunSheet,
   railOfPatch,
   type ActivityFilter,
@@ -36,6 +37,7 @@ import type {
   Turn,
 } from "@armada/protocol";
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
+import type { PlanTaskRow } from "./InsideAJob";
 import type { Calls } from "./calls";
 import { checkSheetOf } from "./checks";
 import { DecidedDiff } from "./Decide";
@@ -76,7 +78,7 @@ import { NOTHING_YET_ON_THIS_STEP, whyNotWatching, type LogRow } from "./story";
  *
  * **`check` is the sixth**: one Check's output, from its row, closing onto the Checks chapter.
  */
-export type OpenSheet = "log" | "diff" | "holds" | "settings" | "run" | "check" | null;
+export type OpenSheet = "log" | "diff" | "holds" | "settings" | "run" | "check" | "task" | null;
 
 /**
  * Where the log's reading was held, and how much it had then.
@@ -157,6 +159,16 @@ export type DetailSheetProps = {
    * the arguments for how to read a `Holds` live in `resources.ts`.
    */
   holds: Omit<JobHoldsSheetProps, "open" | "floor" | "onClose">;
+  /**
+   * Which task the task sheet is reading, where one is open.
+   *
+   * **Named rather than handed the task.** `SheetReading` carries the id the
+   * way it carries a Check's, so the sheet reads the plan as it stands now —
+   * a task marked done while its sheet is open says done.
+   */
+  taskId?: string;
+  /** Every task of the plan, for the sheet to find `taskId` among. */
+  planTasks?: readonly PlanTaskRow[];
   /** What the Job settings panel reads and sends, beyond the Job it already has. */
   settings: Omit<SettingsSheetProps, "job" | "whole" | "floor" | "onClose">;
   /**
@@ -185,6 +197,8 @@ export function DetailSheet({
   held,
   now,
   checkId,
+  taskId,
+  planTasks = [],
   outputs,
   following,
   onHold,
@@ -264,6 +278,26 @@ export function DetailSheet({
         checkId={checkId}
         outputs={outputs}
         following={following}
+        floor={floor}
+        onClose={onClose}
+      />
+    );
+  }
+  if (which === "task" && taskId !== undefined) {
+    const task = planTasks.find((one) => one.id === taskId);
+    // A task the plan no longer holds draws nothing rather than an empty
+    // sheet: a recording replaces the plan whole, so an id can go.
+    return task === undefined ? null : (
+      <PlanTaskSheet
+        open
+        id={task.id}
+        title={task.title}
+        state={task.state}
+        reason={task.reason}
+        note={task.note}
+        scope={task.scope}
+        expects={task.expects}
+        shown={task.shown}
         floor={floor}
         onClose={onClose}
       />
@@ -476,13 +510,15 @@ export type SheetReading =
   | { which: null }
   | { which: "log"; attempt?: number; held: HeldAt | null }
   | { which: "check"; checkId: string }
-  | { which: Exclude<OpenSheet, "log" | "check" | null> };
+  | { which: "task"; taskId: string }
+  | { which: Exclude<OpenSheet, "log" | "check" | "task" | null> };
 
 /** What can happen to it: a sheet goes up, comes down, or the log is held or let go. */
 export type SheetMove =
   | { move: "open"; which: "log"; attempt?: number; held?: HeldAt }
   | { move: "open"; which: "check"; checkId: string }
-  | { move: "open"; which: Exclude<OpenSheet, "log" | "check" | null> }
+  | { move: "open"; which: "task"; taskId: string }
+  | { move: "open"; which: Exclude<OpenSheet, "log" | "check" | "task" | null> }
   | { move: "close" }
   | { move: "hold"; held: HeldAt | null };
 
@@ -493,6 +529,7 @@ export function sheetMoved(was: SheetReading, move: SheetMove): SheetReading {
   if (move.move === "close") return NO_SHEET;
   if (move.move === "hold") return was.which === "log" ? { ...was, held: move.held } : was;
   if (move.which === "check") return { which: "check", checkId: move.checkId };
+  if (move.which === "task") return { which: "task", taskId: move.taskId };
   if (move.which !== "log") return { which: move.which };
   return {
     which: "log",

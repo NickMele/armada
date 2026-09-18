@@ -186,4 +186,39 @@ describe("what the sheet is reading, as one value", () => {
       expect(sheetMoved(checked, { move: "close" })).toBe(NO_SHEET);
     });
   });
+
+  // `#1421`'s fields left the 380px rail for this layer. The task sheet carries
+  // an id the way a Check's does, so it reads the plan as it stands rather
+  // than a copy taken when it opened.
+  describe("the task sheet", () => {
+    it("carries which task it is reading", () => {
+      expect(sheetMoved(NO_SHEET, { move: "open", which: "task", taskId: "T1" })).toEqual({
+        which: "task",
+        taskId: "T1",
+      });
+    });
+
+    it("replaces one task with another on a second press, rather than stacking", () => {
+      const first = sheetMoved(NO_SHEET, { move: "open", which: "task", taskId: "T1" });
+      expect(sheetMoved(first, { move: "open", which: "task", taskId: "T4" })).toEqual({
+        which: "task",
+        taskId: "T4",
+      });
+    });
+
+    it("is replaced by another sheet, and replaces one in turn", () => {
+      const task = sheetMoved(NO_SHEET, { move: "open", which: "task", taskId: "T1" });
+      expect(sheetMoved(task, { move: "open", which: "diff" })).toEqual({ which: "diff" });
+      const diff = sheetMoved(NO_SHEET, { move: "open", which: "diff" });
+      expect(sheetMoved(diff, { move: "open", which: "task", taskId: "T2" })).toEqual({
+        which: "task",
+        taskId: "T2",
+      });
+    });
+
+    it("closes like every other sheet", () => {
+      const task = sheetMoved(NO_SHEET, { move: "open", which: "task", taskId: "T1" });
+      expect(sheetMoved(task, { move: "close" })).toBe(NO_SHEET);
+    });
+  });
 });

@@ -166,9 +166,9 @@ pub const SERVED: &[Route] = &[
         path: "/studios/:studio_id/move_node",
     },
     Route {
-        operation: "remove_studio_node",
+        operation: "remove_studio_nodes",
         method: "POST",
-        path: "/studios/:studio_id/remove_node",
+        path: "/studios/:studio_id/remove_nodes",
     },
     Route {
         operation: "propose_studio_edge",

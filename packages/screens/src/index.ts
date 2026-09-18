@@ -34,6 +34,7 @@ export * from "./BridgeSettings";
 export * from "./Studios";
 export * from "./studio";
 export * from "./studio-frames";
+export * from "./studio-clearing";
 export * from "./studio-promotion";
 export * from "./studio-reads";
 export * from "./pending";
