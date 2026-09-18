@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { PlanTask, Turn, WorkPlan } from "@armada/protocol";
 
 import { answered, called, said } from "./fixtures/build/base";
-import { callsSaid, narrationOf, planBarOf, taskAt, workSaid } from "./narration";
+import { callsSaid, declaredBy, narrationOf, planBarOf, taskAt, workSaid } from "./narration";
 import { entriesOf, hideUnread } from "./story";
 
 const STEP = "implement";
@@ -145,6 +145,205 @@ describe("work groups under the task marked working when it happened", () => {
     ];
     const closed = tasks().map((task) => ({ ...task, working_windows: [] }));
     expect(read(turns, planOf(closed)).sections[0]?.task).toBeUndefined();
+  });
+});
+
+// `#1498`. The owner read Job `3-show-what-s-running-in-the-drones-stat` while
+// it ran: T5 declared two files, edited both, moved `open` → `done` without
+// ever being marked `working`, and its edits drew outside every task.
+describe("an edit no window covers draws under the task that declared its path", () => {
+  const TREE = "~/Development/armada/.armada/worktrees/01K5/";
+  const OVERVIEW = "packages/screens/src/overview.ts";
+  const SPEC = "packages/screens/src/overview.test.ts";
+  const LEFT = "packages/screens/src/left-column.ts";
+
+  /** T5 is never marked working, so Fleet rightly sends it no window. T1 is. */
+  const declaring = (): PlanTask[] => [
+    {
+      id: "T1",
+      title: "Give the left column its own reading",
+      state: "working",
+      scope: [LEFT],
+      working_windows: [{ entered: at(60) }],
+    },
+    { id: "T5", title: "Show what is running", state: "done", scope: [OVERVIEW, SPEC] },
+  ];
+
+  /** Every section in order, by task id — `undefined` is the outside row. */
+  const headings = (narration: ReturnType<typeof read>) =>
+    narration.sections.map((work) => work.task?.id);
+
+  /** Every call row of a section, as `[tool, what it named]`. */
+  function calls(work: { beats: { rows: { called?: { tool: string; detail: string } }[] }[] }) {
+    return work.beats
+      .flatMap((beat) => beat.rows)
+      .filter((row) => row.called !== undefined)
+      .map((row) => [row.called?.tool, row.called?.detail]);
+  }
+
+  it("draws all three edits under it and takes the sentence over them with it", () => {
+    const turns = [
+      said(STEP, at(0), "Now the overview reading."),
+      called(STEP, at(1), "a", "Edit", `${TREE}${OVERVIEW} +8 -3`),
+      answered(STEP, at(2), "a"),
+      called(STEP, at(3), "b", "Edit", `${TREE}${SPEC} +30`),
+      answered(STEP, at(4), "b"),
+      called(STEP, at(5), "c", "Edit", `${TREE}${SPEC} +10`),
+      answered(STEP, at(6), "c"),
+    ];
+    const narration = read(turns, planOf(declaring()));
+    // No outside row at all: the sentence went with its run, so nothing is left
+    // for a heading to stand over.
+    expect(headings(narration)).toEqual(["T1", "T5"]);
+    const [t1, t5] = narration.sections;
+    expect(t5?.beats.map((beat) => beat.said)).toEqual(["Now the overview reading."]);
+    expect(calls(t5!)).toEqual([
+      ["Edit", OVERVIEW],
+      ["Edit", SPEC],
+      ["Edit", SPEC],
+    ]);
+    // Only `called` turns are counted, so the sentence adds nothing to the
+    // three — and the stretch reaches back over it, at(0) to at(5).
+    expect(t5?.calls).toBe(3);
+    expect(workSaid(t5!)).toBe("3 calls · 5s");
+    expect(t1?.beats).toEqual([]);
+  });
+
+  it("keeps the sentence outside where one Read in its run stayed there", () => {
+    const turns = [
+      said(STEP, at(0), "Read it, then reword it."),
+      called(STEP, at(1), "a", "Read", `${TREE}${OVERVIEW}`),
+      answered(STEP, at(2), "a"),
+      called(STEP, at(3), "b", "Edit", `${TREE}${OVERVIEW} +8 -3`),
+      answered(STEP, at(4), "b"),
+    ];
+    const narration = read(turns, planOf(declaring()));
+    expect(headings(narration)).toEqual([undefined, "T1", "T5"]);
+    const [outside, , t5] = narration.sections;
+    expect(outside?.beats.map((beat) => beat.said)).toEqual(["Read it, then reword it."]);
+    expect(calls(outside!)).toEqual([["Read", OVERVIEW]]);
+    expect(calls(t5!)).toEqual([["Edit", OVERVIEW]]);
+  });
+
+  it("keeps the sentence outside where its run split between two declarations", () => {
+    const turns = [
+      said(STEP, at(0), "Both columns at once."),
+      called(STEP, at(1), "a", "Edit", `${TREE}${LEFT} +3`),
+      answered(STEP, at(2), "a"),
+      called(STEP, at(3), "b", "Edit", `${TREE}${OVERVIEW} +8`),
+      answered(STEP, at(4), "b"),
+    ];
+    const narration = read(turns, planOf(declaring()));
+    expect(headings(narration)).toEqual([undefined, "T1", "T5"]);
+    const [outside, t1, t5] = narration.sections;
+    expect(outside?.beats.map((beat) => beat.said)).toEqual(["Both columns at once."]);
+    expect(calls(outside!)).toEqual([]);
+    expect(calls(t1!)).toEqual([["Edit", LEFT]]);
+    expect(calls(t5!)).toEqual([["Edit", OVERVIEW]]);
+  });
+
+  // **A call and its answer are one thing that happened.** A failed Edit draws
+  // two rows, and the second is the one somebody opened the log for — it has to
+  // stand under the same heading as the call, not under one for work that did
+  // not happen there.
+  it("draws a failed edit's answer beside its call, and opens that task's beat", () => {
+    const turns = [
+      said(STEP, at(0), "Reword the stat."),
+      called(STEP, at(1), "a", "Edit", `${TREE}${OVERVIEW} +8 -3`),
+      answered(STEP, at(2), "a", true),
+    ];
+    const narration = read(turns, planOf(declaring()));
+    expect(headings(narration)).toEqual(["T1", "T5"]);
+    const [, t5] = narration.sections;
+    // One beat, holding the sentence, the call and what came back.
+    expect(t5?.beats).toHaveLength(1);
+    const [beat] = t5?.beats ?? [];
+    expect(beat?.said).toBe("Reword the stat.");
+    expect(beat?.rows.map((row) => row.kind)).toEqual(["called", "answered"]);
+    // `beat.wrong` is what draws a beat open and unfoldable, and it is T5's
+    // beat that has to open rather than one over work that did not fail.
+    expect(beat?.wrong).toBe(true);
+  });
+
+  // The behaviour the owner did not ask to change: a sentence said before the
+  // Drone marked T1 working stays outside, even though every call under it is
+  // T1's. The clock placed it, and a declaration only fills a gap the clock left.
+  it("leaves a sentence outside where a window, not a declaration, placed its calls", () => {
+    const turns = [
+      said(STEP, at(59), "Now the left column."),
+      called(STEP, at(61), "a", "Edit", `${TREE}${LEFT} +3`),
+      answered(STEP, at(62), "a"),
+    ];
+    const narration = read(turns, planOf(declaring()));
+    expect(headings(narration)).toEqual([undefined, "T1", "T5"]);
+    const [outside, t1] = narration.sections;
+    expect(outside?.beats.map((beat) => beat.said)).toEqual(["Now the left column."]);
+    expect(calls(t1!)).toEqual([["Edit", LEFT]]);
+  });
+
+  it("leaves a Read of the same file outside, because it names no task it was for", () => {
+    const turns = [
+      called(STEP, at(1), "a", "Read", `${TREE}${OVERVIEW}`),
+      answered(STEP, at(2), "a"),
+      called(STEP, at(3), "b", "Edit", `${TREE}${OVERVIEW} +8 -3`),
+      answered(STEP, at(4), "b"),
+      called(STEP, at(5), "c", "Bash", `pnpm -C packages/screens test ${OVERVIEW}`),
+      answered(STEP, at(6), "c"),
+    ];
+    const [outside, , t5] = read(turns, planOf(declaring())).sections;
+    expect(calls(outside!)).toEqual([
+      ["Read", OVERVIEW],
+      ["Bash", `pnpm -C packages/screens test ${OVERVIEW}`],
+    ]);
+    expect(calls(t5!)).toEqual([["Edit", OVERVIEW]]);
+  });
+
+  it("does not let a declaration take an edit a window already covers", () => {
+    const turns = [
+      called(STEP, at(61), "a", "Edit", `${TREE}${OVERVIEW} +2`),
+      answered(STEP, at(62), "a"),
+    ];
+    const [t1, t5] = read(turns, planOf(declaring())).sections;
+    expect(t1?.task?.id).toBe("T1");
+    expect(calls(t1!)).toEqual([["Edit", OVERVIEW]]);
+    expect(t5?.beats).toEqual([]);
+  });
+});
+
+describe("the task a declared path names", () => {
+  const TREE = "~/Development/armada/.armada/worktrees/01K5/";
+
+  it("matches at a path segment and not on a shared spelling", () => {
+    const tasks: PlanTask[] = [{ id: "T1", title: "a", state: "open", scope: ["crates/ipc"] }];
+    expect(declaredBy(`${TREE}crates/ipc/operations.toml`, tasks)).toBe("T1");
+    expect(declaredBy(`${TREE}crates/ipc-extra/x.rs`, tasks)).toBeUndefined();
+  });
+
+  it("reads a declared directory as holding the files under it", () => {
+    const tasks: PlanTask[] = [{ id: "T1", title: "a", state: "open", scope: ["crates/ipc/"] }];
+    expect(declaredBy(`${TREE}crates/ipc/src/lib.rs`, tasks)).toBe("T1");
+  });
+
+  it("gives the file to the exact declaration over the directory holding it", () => {
+    const tasks: PlanTask[] = [
+      { id: "T1", title: "a", state: "open", scope: ["crates/ipc"] },
+      { id: "T2", title: "b", state: "open", scope: ["crates/ipc/operations.toml"] },
+    ];
+    expect(declaredBy(`${TREE}crates/ipc/operations.toml`, tasks)).toBe("T2");
+  });
+
+  it("gives a tie to plan order, and says nothing where no task named the path", () => {
+    const same: PlanTask[] = [
+      { id: "T1", title: "a", state: "open", scope: ["crates/ipc/operations.toml"] },
+      { id: "T2", title: "b", state: "open", scope: ["crates/ipc/operations.toml"] },
+    ];
+    expect(declaredBy(`${TREE}crates/ipc/operations.toml`, same)).toBe("T1");
+    expect(declaredBy(`${TREE}crates/store/src/lib.rs`, same)).toBeUndefined();
+  });
+
+  it("says nothing for a task that declared nothing", () => {
+    const bare: PlanTask[] = [{ id: "T1", title: "a", state: "open" }];
+    expect(declaredBy(`${TREE}crates/ipc/x.rs`, bare)).toBeUndefined();
   });
 });
 
