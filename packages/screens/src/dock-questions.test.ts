@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { JobSummary, RepositorySummary } from "@armada/protocol";
-import { dockQuestionsOf, jobNumber } from "./dock-questions";
+import { dockCardsOf, dockQuestionsOf, jobNumber } from "./dock-questions";
 import type { Outstanding } from "./outstanding";
 
 function job(over: Partial<JobSummary> = {}): JobSummary {
@@ -169,5 +169,29 @@ describe("a helm call in the dock", () => {
     card?.onAnswer?.("allow_and_remember");
 
     expect(onAnswer).toHaveBeenCalledWith(HELM, "allow_and_remember");
+  });
+});
+
+describe("where each card is drawn", () => {
+  // #1519: a helm ask used to sit in the block at the top of the dock, above
+  // the conversation it stopped, so answering it meant scrolling up past every
+  // message. The split is here rather than in Bridge, which is why it is
+  // tested here.
+  it("sends a helm ask to helm's thread and a job's question to the dock's block", () => {
+    const { questions, asks } = dockCardsOf([HELM, DRONE, COMMAND], [job()], REPOSITORIES, Date.now());
+
+    expect(asks.map((card) => card.id)).toEqual(["helm:helm-1"]);
+    expect(questions.map((card) => card.id)).toEqual(["a:drone", "a:command"]);
+  });
+
+  it("gives each side the same wording and the same answers it had in one list", () => {
+    const now = Date.parse("2026-09-13T10:03:00Z");
+    const { asks } = dockCardsOf([HELM], [], REPOSITORIES, now);
+
+    expect(asks).toEqual(dockQuestionsOf([HELM], [], REPOSITORIES, now));
+  });
+
+  it("draws nothing on either side where nothing is waiting", () => {
+    expect(dockCardsOf([], [], REPOSITORIES, Date.now())).toEqual({ questions: [], asks: [] });
   });
 });

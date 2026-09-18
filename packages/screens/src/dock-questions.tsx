@@ -44,6 +44,40 @@ export function jobNumber(job: JobSummary): string {
   return /^(\d+)-/.exec(job.handle)?.[1] ?? job.handle;
 }
 
+/** Every card waiting on a person, split by where it is drawn. #1519. */
+export type DockCards = {
+  /** The block at the top of the dock: a Drone's question and a Judge's, which belong to a Job. */
+  questions: DockQuestion[];
+  /** Helm's own permission asks, drawn at the end of Helm's thread. */
+  asks: DockQuestion[];
+};
+
+/**
+ * The cards, by destination.
+ *
+ * **One producer, two places.** A Drone's question and a Judge's belong to a Job and have no
+ * conversation to sit in, so the dock's own block is the only surface they have. A Helm ask has
+ * one — the reply it stopped — and a person answering it should not have to scroll past the
+ * conversation to find it. Splitting here rather than in Bridge keeps the wording, the ordering
+ * and the `acts` wiring in the one place that already holds them.
+ *
+ * **`onDiscuss` never reaches an ask.** A Helm card names no Job, and `dockQuestionsOf` reads the
+ * act only down the branches that have one.
+ */
+export function dockCardsOf(
+  questions: readonly Outstanding[],
+  jobs: readonly JobSummary[],
+  repositories: readonly RepositorySummary[],
+  now: number,
+  acts: DockActs = {},
+): DockCards {
+  const of = (kept: readonly Outstanding[]) => dockQuestionsOf(kept, jobs, repositories, now, acts);
+  return {
+    questions: of(questions.filter((question) => question.kind !== "helm")),
+    asks: of(questions.filter((question) => question.kind === "helm")),
+  };
+}
+
 /**
  * The cards, oldest first. **A question on a Job the Board does not hold is left out**: it has no
  * number or repository to name, and main re-reads the Board when a move names a Job it lacks.

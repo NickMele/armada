@@ -114,6 +114,14 @@ export type ShellProps = {
   onSurface?: (surfaceId: string) => void;
   /** Every question waiting on a person, from every repository, as the dock's cards. Oldest first. */
   questions?: readonly DockQuestion[];
+  /**
+   * How many Helm asks are waiting inside `helm` rather than in the block
+   * above it — #1519. The folded strip's count is every question waiting on a
+   * person, and an ask drawn down in the conversation is still one of them;
+   * without this the strip would say nothing was waiting while a reply sat
+   * held open.
+   */
+  asking?: number;
   /** Helm's own conversation, under the questions — #944. Bridge builds it; the dock only mounts it. */
   helm?: ReactNode;
   /**
@@ -141,6 +149,7 @@ export function Shell({
   showing,
   onSurface,
   questions = [],
+  asking = 0,
   helm,
   helmAction,
   children,
@@ -167,12 +176,16 @@ export function Shell({
         // whether the left column is at its rail.
         folded: narrow,
         binding: HELM_KEY,
-        questions: questions.length,
+        questions: questions.length + asking,
         width: dockWidth,
         onResize: resizeDock,
         action: helmAction,
         children: (
           <>
+            {/* A Drone's question and a Judge's belong to a Job and have no
+                conversation to sit in, so the dock is the only surface they
+                have. A Helm ask has one, and is drawn at the end of it
+                instead — #1519. `asking` is how it still reaches the count. */}
             {questions.length === 0 ? null : <DockQuestions questions={questions} />}
             {helm}
           </>
