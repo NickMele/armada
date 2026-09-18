@@ -153,14 +153,36 @@ function placingOf(
   turnOf: Map<string, Turn>,
   tasks: readonly PlanTask[],
 ): (string | undefined)[] {
-  const own = rows.map<Placing | undefined>((row) => {
-    const turn = turnOf.get(row.id);
-    if (turn === undefined) return undefined;
+  /** What the clock, and then the declarations, say about one turn alone. */
+  const placingAt = (turn: Turn): Placing => {
     const window = taskAt(turn.ts, tasks);
     if (window !== undefined) return { id: window, declared: false };
     const declared = declaredFor(turn, tasks);
     return declared === undefined ? { declared: false } : { id: declared, declared: true };
-  });
+  };
+
+  // **A call and its answer are one thing that happened** — `story.ts`'s own
+  // rule for folding the two into one row, and the rule for placing the
+  // failure it does not fold. The clock used to place them together because
+  // their instants are a fraction apart; a declaration moves only the call, so
+  // the answer has to be told where the call went or the row saying what came
+  // back draws under a heading for work that did not happen there.
+  const own: (Placing | undefined)[] = [];
+  const byCall = new Map<string, Placing>();
+  for (const row of rows) {
+    const turn = turnOf.get(row.id);
+    if (turn === undefined) {
+      own.push(undefined);
+      continue;
+    }
+    const saw = turn.saw;
+    // A refused call answers the same way, and carries the same `call`.
+    const answering =
+      saw.event === "answered" || saw.event === "refused" ? byCall.get(saw.call) : undefined;
+    const placing = answering ?? placingAt(turn);
+    if (saw.event === "called") byCall.set(saw.call, placing);
+    own.push(placing);
+  }
 
   const placed = own.map((one) => one?.id);
   for (const [index, row] of rows.entries()) {

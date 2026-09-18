@@ -242,6 +242,29 @@ describe("an edit no window covers draws under the task that declared its path",
     expect(calls(t5!)).toEqual([["Edit", OVERVIEW]]);
   });
 
+  // **A call and its answer are one thing that happened.** A failed Edit draws
+  // two rows, and the second is the one somebody opened the log for — it has to
+  // stand under the same heading as the call, not under one for work that did
+  // not happen there.
+  it("draws a failed edit's answer beside its call, and opens that task's beat", () => {
+    const turns = [
+      said(STEP, at(0), "Reword the stat."),
+      called(STEP, at(1), "a", "Edit", `${TREE}${OVERVIEW} +8 -3`),
+      answered(STEP, at(2), "a", true),
+    ];
+    const narration = read(turns, planOf(declaring()));
+    expect(headings(narration)).toEqual(["T1", "T5"]);
+    const [, t5] = narration.sections;
+    // One beat, holding the sentence, the call and what came back.
+    expect(t5?.beats).toHaveLength(1);
+    const [beat] = t5?.beats ?? [];
+    expect(beat?.said).toBe("Reword the stat.");
+    expect(beat?.rows.map((row) => row.kind)).toEqual(["called", "answered"]);
+    // `beat.wrong` is what draws a beat open and unfoldable, and it is T5's
+    // beat that has to open rather than one over work that did not fail.
+    expect(beat?.wrong).toBe(true);
+  });
+
   // The behaviour the owner did not ask to change: a sentence said before the
   // Drone marked T1 working stays outside, even though every call under it is
   // T1's. The clock placed it, and a declaration only fills a gap the clock left.
