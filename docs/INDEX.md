@@ -28,6 +28,10 @@ Each ends with the questions it found and did not answer.
 - [`practices/bridge.md`](practices/bridge.md) — the three-process split, the
 - [`practices/react.md`](practices/react.md) — how a component is written, and which React advice does not apply to a window that loads from disk
   security posture, and the v1 failure the desktop app exists to escape.
+- [`practices/capture-window.md`](practices/capture-window.md) — the security
+  review behind the one window that loads another repository's running web app:
+  what it may load, what the injected layer may touch, what the page can reach
+  back into, and what is refused outright.
 - [`practices/protocol.md`](practices/protocol.md) — the one seam between Rust
   and TypeScript: version skew, DTOs, and what survives when the two disagree.
 - [`practices/writing-an-issue.md`](practices/writing-an-issue.md) — an issue has
