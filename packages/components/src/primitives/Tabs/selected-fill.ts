@@ -5,15 +5,14 @@ import { useLayoutEffect, useRef } from "react";
  * that travels*, at `--duration-base`, so the eye follows the selection from
  * the tab it left; an edge or a fill per tab can only swap.
  *
- * Measured from `offsetLeft` and `offsetWidth` before paint, and again when any
- * tab or the strip changes size — a count arriving moves every tab after it.
- * Written to the fill's style rather than rendered: a render would be a commit
- * between the layout and the paint. **The first placement does not travel**:
- * `data-travel`, which the transition is keyed on, is set a frame later.
+ * **All four offsets, not two.** A strip too wide for its column wraps inside
+ * its track rather than spilling out of it, so the chosen tab can be on a
+ * second row — which the underline this replaced never answered for.
  *
- * **Both strips call this one hook.** It was written twice, verbatim, in `Tabs`
- * and `TabsWithCounts`; #1383 restyled the fill in both, which is the edit that
- * would have had to be made twice and drifted on the third.
+ * Measured before paint, and again when any tab or the strip resizes: a count
+ * arriving moves every tab after it. Written to the fill's style, because a
+ * render would be a commit between layout and paint. **The first placement
+ * does not travel** — `data-travel` is set a frame later.
  */
 export function useSelectedFill(active: string | undefined, key: string) {
   const strip = useRef<HTMLDivElement>(null);
@@ -33,7 +32,9 @@ export function useSelectedFill(active: string | undefined, key: string) {
       }
       shape.hidden = false;
       shape.style.setProperty("--armada-tab-fill-x", `${tab.offsetLeft}px`);
+      shape.style.setProperty("--armada-tab-fill-y", `${tab.offsetTop}px`);
       shape.style.setProperty("--armada-tab-fill-w", `${tab.offsetWidth}px`);
+      shape.style.setProperty("--armada-tab-fill-h", `${tab.offsetHeight}px`);
     }
 
     place();

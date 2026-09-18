@@ -2,21 +2,17 @@ import { useLayoutEffect, useRef, useState, type HTMLAttributes } from "react";
 import { useSelectedFill } from "./selected-fill";
 
 /**
- * Sections of one object, drawn as a segmented control: one `--bg-sunken`
- * track, and the chosen tab filled inside it at `--accent-muted` with
- * `--fg-default` and weight 500; the rest sit in `--fg-muted`. Nothing animates
- * in — no entrance animations on data — but the fill travels from the tab it
- * left to the tab that was chosen, and a body drawn under the strip in a
- * `TabPanel` crossfades in.
+ * Sections of one object, drawn as the contract's segmented control: a
+ * `--bg-sunken` track, and the chosen tab filled `--accent-muted` inside it.
+ * Nothing animates in, but the fill travels and a `TabPanel` under the strip
+ * crossfades.
  *
- * **Filled rather than underlined since #1383.** The rail's selected row is
- * `--accent-muted` filled and a panel's tabs sit in the same eyeline as it, so
- * an underline drew the two selections as two different ideas. It is the same
- * shadcn `tabs` primitive painted differently, not a new one.
+ * **Filled rather than underlined since #1383**, because the rail's selected
+ * row is filled and these sit in the same eyeline. Still the shadcn `tabs`
+ * primitive, painted differently.
  *
- * These carry no count. They are views of one job and there is nothing to
- * tally. The counted form is a separate component, and a separate row in the
- * registry.
+ * These carry no count: they are views of one job and there is nothing to
+ * tally. The counted form is its own component and its own registry row.
  */
 export type TabsItem = {
   id: string;

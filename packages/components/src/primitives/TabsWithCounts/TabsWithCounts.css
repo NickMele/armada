@@ -18,7 +18,14 @@
   width: fit-content;
   max-width: 100%;
   align-items: center;
+  /* Wraps rather than spilling. At --window-floor the Job Board's six counted
+     tabs are wider than the column they share with its search field, and a
+     bordered track they escape from reads as a broken control where a plain
+     row of text only read as a row running long. Nothing is hidden and nothing
+     truncates, which is the responsive rule the Job row already keeps. */
+  flex-wrap: wrap;
   gap: 0;
+  row-gap: var(--armada-tab-inset);
   padding: var(--armada-tab-inset);
   border: var(--border-width) solid var(--border-default);
   border-radius: var(--radius-md);
@@ -93,8 +100,9 @@
   color: var(--fg-muted);
 }
 
-/* The fill, one for the whole strip, behind the chosen tab and inset by the
- * track's own padding. The component writes where that is.
+/* The fill, one for the whole strip. It sits behind the chosen tab wherever
+ * that tab is, including a second row: the component measures all four of its
+ * offsets and writes them here.
  *
  * It travels at --duration-base, and only once `data-travel` is set, so the
  * first placement lands rather than slides. Transform and width, so nothing
@@ -102,12 +110,12 @@
 .armada-tabs-counts__fill {
   position: absolute;
   left: 0;
-  top: var(--armada-tab-inset);
-  bottom: var(--armada-tab-inset);
+  top: 0;
   width: var(--armada-tab-fill-w, 0);
+  height: var(--armada-tab-fill-h, 0);
   border-radius: var(--radius-sm);
   background: var(--accent-muted);
-  transform: translateX(var(--armada-tab-fill-x, 0));
+  transform: translate(var(--armada-tab-fill-x, 0), var(--armada-tab-fill-y, 0));
   pointer-events: none;
 }
 
@@ -115,5 +123,6 @@
   transition:
     transform var(--duration-base) var(--ease),
     width var(--duration-base) var(--ease),
+    height var(--duration-base) var(--ease),
     background-color var(--duration-fast) var(--ease);
 }

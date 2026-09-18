@@ -553,8 +553,7 @@ function RunPageGroupList({
  * **What is already in memory, and nothing more.** The runs are the list
  * *Earlier runs* is drawn from and drift is the read the surface takes on
  * opening; whether the gate runs a Check a Drone skips, and the paths that
- * decide whether it applies at all, are not on the wire —
- * https://github.com/NickMele/armada/issues/1437.
+ * decide whether it applies at all, are not on the wire — #1437.
  */
 function RunPageEntryFacts({ entry }: { entry: RunPageEntry }) {
   if (entry.last === undefined && entry.destructive !== true) return null;

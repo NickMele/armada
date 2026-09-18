@@ -219,8 +219,8 @@ export function Manifest(props: ManifestProps) {
           <div className="armada-screen__tabs-acts">
             <Button variant="ghost" size="sm" onClick={() => setReading("drift")}>
               Drift
-              {gone === undefined || gone === 0 ? null : (
-                <span className="armada-screen__drifted">{`${gone} gone`}</span>
+              {gone.size === 0 ? null : (
+                <span className="armada-screen__drifted">{`${gone.size} gone`}</span>
               )}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setReading("verify")}>

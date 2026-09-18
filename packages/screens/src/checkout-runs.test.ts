@@ -13,7 +13,6 @@ import type {
   ServerState,
 } from "@armada/protocol";
 import {
-  checkoutGoneOf,
   checkoutGroupsOf,
   checkoutOutputOf,
   checkoutResultRunOf,
@@ -22,6 +21,7 @@ import {
   runningEntryOf,
 } from "./checkout-runs";
 import { checkoutStartOf, followedWorkspaceOf } from "./checkout-workspace";
+import { driftGoneOf } from "./verify";
 
 function entry(name: string, run: string, over: Partial<RunEntry> = {}): RunEntry {
   return {
@@ -121,14 +121,6 @@ describe("what a row carries beyond its declaration", () => {
     drift: { verdict: "gone" as const, missing: ["package.json: scripts.bridge-test"] },
     unfollowed: [],
   });
-  const current = (name: string) => ({
-    section: "checks",
-    name,
-    key: "run",
-    run: "pnpm typecheck",
-    drift: { verdict: "current" as const, checked: 1 },
-    unfollowed: [],
-  });
   const read = (declarations: Declaration[]): ManifestDriftRead => ({
     state: "read",
     drift: { path: "/r/armada.yml", checkout: "/r", declarations },
@@ -144,19 +136,9 @@ describe("what a row carries beyond its declaration", () => {
       ...over,
     }) as CheckoutRunRecord;
 
-  it("says nothing has gone before the read answers, rather than nothing is gone", () => {
-    expect(checkoutGoneOf({ state: "reading" }).size).toBe(0);
-    expect(checkoutGoneOf(read([current("test")])).size).toBe(0);
-  });
-
-  it("names the entries whose line went, and only those", () => {
-    const set = checkoutGoneOf(read([gone("test"), current("fmt")]));
-    expect([...set]).toEqual(["test"]);
-  });
-
   it("marks the row whose own line went, and leaves the rest alone", () => {
     const groups = checkoutGroupsOf(SHEET, false, {
-      gone: checkoutGoneOf(read([gone("test")])),
+      gone: driftGoneOf(read([gone("test")])),
       runs: [],
     });
     const rows = groups.flatMap((group) => group.entries);

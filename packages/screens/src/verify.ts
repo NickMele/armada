@@ -49,15 +49,23 @@ function driftRowOf(line: Declaration, at: number): DriftPanelRow {
 }
 
 /**
- * How many lines name something the checkout no longer has — what the Drift act
- * carries beside its label.
+ * Which entries name something the checkout no longer has — the Drift act's own
+ * count, and which rows of the list carry `gone`.
  *
- * **Absent until the read answers.** A zero before the answer would say the
- * file is still true when nothing has looked yet.
+ * **One reader for one field.** The act wants how many and a row wants whether
+ * it is this one; two functions over `declarations` is how the two would come
+ * to disagree. Empty until the read answers, which draws nothing either way.
+ *
+ * **Joined by name, not by section.** A name identifies a runnable on its own —
+ * it is all `StartCheckoutRun` carries and what `Fleet::entry_at` resolves from
+ * — while the wire says a drift row's section is rendered and never matched on,
+ * so a registry added later still joins here.
  */
-export function driftGoneOf(read: ManifestDriftRead): number | undefined {
-  if (read.state !== "read") return undefined;
-  return read.drift.declarations.filter((line) => line.drift.verdict === "gone").length;
+export function driftGoneOf(read: ManifestDriftRead): ReadonlySet<string> {
+  if (read.state !== "read") return new Set();
+  return new Set(
+    read.drift.declarations.filter((line) => line.drift.verdict === "gone").map((line) => line.name),
+  );
 }
 
 /** What the Verify panel needs of the surface. */
