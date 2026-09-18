@@ -397,9 +397,7 @@ where
                 check.one_test(),
             ];
             for run in lines.into_iter().flatten() {
-                if let Some(program) = run.split_whitespace().next() {
-                    runners.push((name.clone(), program.to_string()));
-                }
+                runners.push((name.clone(), run.to_string()));
             }
         }
         runners
