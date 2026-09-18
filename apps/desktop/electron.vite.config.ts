@@ -33,9 +33,11 @@ import { createRequire } from 'node:module'
 // works the same in `dev`, `build` and `preview`, which a path reaching back
 // into `packages/` through a workspace symlink would not.
 //
-// **The accent-filled variant is what these carry, and the app tile is the only
-// place it is allowed.** `packages/icons/icons.toml` states it on the
-// `armada-mark` row: "Accent fill permitted on the macOS app tile alone."
+// **What these carry is the dark-bodied variant, not the accent one.** Both are
+// drawn, but only the dark one goes into the iconset these two files are built
+// from, and it always has. `packages/icons/icons.toml` permits the accent fill
+// on the `armada-mark` row — "Accent fill permitted on the macOS app tile
+// alone" — and permitted is all it is; nothing has taken it up.
 const APP_ICONS = ['AppIcon.icns', 'AppIcon.png'] as const
 
 function appIcon(): Plugin {
