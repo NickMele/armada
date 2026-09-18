@@ -297,7 +297,7 @@ test("an Epic says which of its issues it took, how many that left out and how m
   // Narrowed: which state it took, what that left out, and what it kept
   // because somebody had worked on it — #1405.
   expect(epics([epic("b", { issues: 14, total: 30, took: "open", left_out: 16, kept: 2 })])[0]!.node).toMatchObject({
-    facts: ["#17", "14 of 30 issues", "Open issues only, 16 left out", "2 kept, already worked on"],
+    facts: ["#17", "14 of 30 issues", "Open issues only", "16 left out", "2 kept, worked on"],
   });
   // **An Epic read in before 14.20 says nothing about an answer nobody gave
   // it**, and still says how much of it is here.

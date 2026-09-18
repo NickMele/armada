@@ -86,9 +86,15 @@ function forgeState(state: string): string {
 function epicRead(read: EpicRead): string[] {
   const count = read.issues === read.total ? `${read.total} issues` : `${read.issues} of ${read.total} issues`;
   if (read.took === undefined) return [count];
-  const left = read.left_out === undefined || read.left_out === 0 ? "" : `, ${read.left_out} left out`;
-  const kept = read.kept === undefined || read.kept === 0 ? [] : [`${read.kept} kept, already worked on`];
-  return [count, `${EPIC_TOOK[read.took] ?? read.took}${left}`, ...kept];
+  // **One fact each, because a chip is one fact.** A card is 240 wide and a
+  // chip that does not fit is clipped, so a sentence written across three of
+  // them reads and a sentence written into one does not.
+  return [
+    count,
+    EPIC_TOOK[read.took] ?? read.took,
+    ...(read.left_out ? [`${read.left_out} left out`] : []),
+    ...(read.kept ? [`${read.kept} kept, worked on`] : []),
+  ];
 }
 
 /**

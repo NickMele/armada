@@ -481,7 +481,8 @@ test("reading an epic in asks what to take, and narrowing leaves what a person w
   await expect.element(node(/^Issue: An issue cannot be read into a Studio/)).toBeVisible();
   await expect.poll(() => epic()).toMatchObject({ read_in: { issues: 2, total: 3, took: "open", left_out: 1 } });
   // The Epic says which state it took and how many it left out.
-  await expect.element(node(/^Epic: Studio/)).toHaveTextContent("Open issues only, 1 left out");
+  await expect.element(node(/^Epic: Studio/)).toHaveTextContent("Open issues only");
+  await expect.element(node(/^Epic: Studio/)).toHaveTextContent("1 left out");
   expect(studio().nodes.some((one) => one.kind === "issue" && one.number === "1291")).toBe(false);
 
   // Widening takes the closed one too, and a Note is written against it.
@@ -504,7 +505,7 @@ test("reading an epic in asks what to take, and narrowing leaves what a person w
   await expect.poll(() => epic()).toMatchObject({ read_in: { issues: 3, took: "open", left_out: 1, kept: 1 } });
   await expect.element(node(/^Issue: Promotion: cluster, defer, write up/)).toBeVisible();
   await expect.element(node(/^Deferral: does this still hold\?/)).toBeVisible();
-  await expect.element(node(/^Epic: Studio/)).toHaveTextContent("1 kept, already worked on");
+  await expect.element(node(/^Epic: Studio/)).toHaveTextContent("1 kept, worked on");
 });
 
 /**
