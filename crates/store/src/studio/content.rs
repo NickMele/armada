@@ -198,7 +198,10 @@ pub(super) fn read(kind: &str, stored: &str) -> Result<StudioNodeContent, Unread
                 kind,
                 text("address")?,
                 text("number")?,
-                object.get("said").and_then(Value::as_str).map(str::to_string),
+                object
+                    .get("said")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
             )
             .expect("one of the three forge kinds");
             let state = match object.get("state").and_then(Value::as_str) {
@@ -213,12 +216,11 @@ pub(super) fn read(kind: &str, stored: &str) -> Result<StudioNodeContent, Unread
             let read_in = match object.get("read_in") {
                 None => None,
                 Some(read) => Some(EpicRead {
-                    issues: read
-                        .get("issues")
-                        .and_then(Value::as_u64)
-                        .ok_or(UnreadableContent::MissingField {
+                    issues: read.get("issues").and_then(Value::as_u64).ok_or(
+                        UnreadableContent::MissingField {
                             field: "read_in.issues",
-                        })?,
+                        },
+                    )?,
                     total: read.get("total").and_then(Value::as_u64).ok_or(
                         UnreadableContent::MissingField {
                             field: "read_in.total",

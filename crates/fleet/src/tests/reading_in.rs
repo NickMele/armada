@@ -46,8 +46,8 @@ case "$*" in
     printf 'Studio\t3\n'
     ;;
   *)
-    printf 'https://example.invalid/o/r/issues/1\t#1 The rail is unreadable — open\n'
-    printf 'https://example.invalid/o/r/issues/2\t#2 The legend wraps — closed\n'
+    printf 'https://example.invalid/o/r/issues/1\t1\tThe rail is unreadable\topen\n'
+    printf 'https://example.invalid/o/r/issues/2\t2\tThe legend wraps\tclosed\n'
     ;;
 esac
 "##;
@@ -153,7 +153,6 @@ async fn a_link(fleet: &Arc<Reading>, address: &str) -> (ipc::Studio, ipc::Studi
                     address: address.to_string(),
                     said: None,
                     named: None,
-                    forge: None,
                 },
                 position: StudioPosition { x: 0, y: 0 },
                 produced_by: None,
@@ -209,6 +208,9 @@ fn kind(node: &StudioNode) -> &'static str {
         StudioNodeContent::Finding { .. } => "finding",
         StudioNodeContent::Contradiction { .. } => "contradiction",
         StudioNodeContent::Link { .. } => "link",
+        StudioNodeContent::Issue { .. } => "issue",
+        StudioNodeContent::PullRequest { .. } => "pull_request",
+        StudioNodeContent::Epic { .. } => "epic",
         other => panic!("nothing else is read in: {other:?}"),
     }
 }
@@ -377,25 +379,47 @@ async fn a_milestone_read_in_puts_one_link_per_issue_on_the_studio() {
         )
         .await
         .expect("read in");
-    assert_eq!(kinds(&read), ["link", "link", "link"], "no Finding is made");
-
-    let StudioNodeContent::Link { address, named, .. } = &read.nodes[0].content else {
-        panic!("a Link");
-    };
-    assert_eq!(address, &address_pasted, "a Link keeps its address");
     assert_eq!(
-        named.as_deref(),
-        Some("Studio — 2 of 3 issues read in"),
-        "a read that did not take every issue says so on the board"
+        kinds(&read),
+        ["epic", "issue", "issue"],
+        "one Issue per issue, and no Finding"
+    );
+
+    let StudioNodeContent::Epic {
+        address,
+        number,
+        title,
+        read_in,
+        ..
+    } = &read.nodes[0].content
+    else {
+        panic!("an Epic");
+    };
+    assert_eq!(address, &address_pasted, "an Epic keeps its address");
+    assert_eq!(number, "17", "read off the address");
+    assert_eq!(title.as_deref(), Some("Studio"));
+    assert_eq!(
+        read_in.map(|read| (read.issues, read.total)),
+        Some((2, 3)),
+        "a read that did not take every issue says so as two numbers"
     );
 
     let issues: Vec<_> = read.nodes[1..]
         .iter()
         .map(|node| match &node.content {
-            StudioNodeContent::Link { address, named, .. } => {
-                (address.clone(), named.clone().unwrap_or_default())
-            }
-            other => panic!("a Link: {other:?}"),
+            StudioNodeContent::Issue {
+                address,
+                number,
+                title,
+                state,
+                ..
+            } => (
+                address.clone(),
+                number.clone(),
+                title.clone().unwrap_or_default(),
+                state.map(|state| format!("{state:?}")).unwrap_or_default(),
+            ),
+            other => panic!("an Issue: {other:?}"),
         })
         .collect();
     assert_eq!(
@@ -403,14 +427,18 @@ async fn a_milestone_read_in_puts_one_link_per_issue_on_the_studio() {
         [
             (
                 "https://example.invalid/o/r/issues/1".to_string(),
-                "#1 The rail is unreadable — open".to_string()
+                "1".to_string(),
+                "The rail is unreadable".to_string(),
+                "Open".to_string()
             ),
             (
                 "https://example.invalid/o/r/issues/2".to_string(),
-                "#2 The legend wraps — closed".to_string()
+                "2".to_string(),
+                "The legend wraps".to_string(),
+                "Closed".to_string()
             ),
         ],
-        "its number, title and state, beside the address a Job comes from"
+        "its number, title and state as fields, beside the address a Job comes from"
     );
     assert!(
         read.edges

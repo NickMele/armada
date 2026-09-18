@@ -45,28 +45,29 @@ pub(crate) const NOT_A_LINK: &str = "fleet.studio_not_a_link";
 const NOT_A_CONTRADICTION: &str = "fleet.studio_not_a_contradiction";
 
 /// The request a node dispatches as, and `None` on a node that dispatches
-/// nothing — `#1379`.
+/// nothing — `#1379`, `#1394`.
 ///
-/// **An Issue draft sends its own words and a Link sends its address.** The
-/// first is text nobody has filed, which is why it is carried whole; the
-/// second names an issue that already exists, and the [Job
-/// proposer](../../../docs/concepts/job-proposer.md) has taken a ticket link
-/// as a request since it shipped, so there is nothing to summarise or fetch on
-/// the way.
+/// **An Issue draft sends its own words and the three forge kinds send their
+/// address**, whole either way: the first is text nobody has filed, the second
+/// names something already on the forge, and the [Job
+/// proposer](../../../docs/concepts/job-proposer.md) has taken such a link as a
+/// request since it shipped. A Link is an address nothing recognised — a board,
+/// a page, a session — so there is nothing filed to dispatch against.
 ///
-/// **A pull request is not dispatched**, and neither is a milestone: what a
-/// milestone holds is read in as a Link per issue, and each of those is
-/// dispatched on its own.
+/// **Read off the kind; no address is read here.** Which host is the forge was
+/// `crates/adapters`' answer when the node was made, and asking again would be
+/// a second answer the day the first changed. Which workflow each of the three
+/// runs under is the proposer's, off each definition's `for_requests` line.
 fn dispatched_as(content: &StudioNodeContent) -> Option<String> {
     if let Some(request) = content.dispatched_as() {
         return Some(request);
     }
-    let address = content.address()?;
     matches!(
-        adapters::forge_named(address),
-        Some(ipc::StudioLinkForge::Issue)
+        content.kind(),
+        StudioNodeKind::Issue | StudioNodeKind::PullRequest | StudioNodeKind::Epic
     )
-    .then(|| String::from(address))
+    .then(|| content.address().map(String::from))
+    .flatten()
 }
 /// A Contradiction ended twice. A 409.
 const CONTRADICTION_SETTLED: &str = "fleet.studio_contradiction_settled";

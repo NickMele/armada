@@ -286,10 +286,7 @@ where
         let read = self.store().lock().await.studio(studio);
         if let Ok(graph) = read {
             self.events()
-                .publish(ipc::Event::StudioChanged(ipc::Studio::of(
-                    &graph,
-                    &adapters::forge_named,
-                )));
+                .publish(ipc::Event::StudioChanged(ipc::Studio::of(&graph)));
         }
     }
 
@@ -300,7 +297,7 @@ where
     ) -> Result<ipc::Studio, Refusal> {
         let store = self.store().lock().await;
         self.studio_held(&store, &studio_id.to_domain(), within.as_ref())
-            .map(|graph| ipc::Studio::of(&graph, &adapters::forge_named))
+            .map(|graph| ipc::Studio::of(&graph))
     }
 
     /// The checkout of the repository the Studio belongs to, refused where a

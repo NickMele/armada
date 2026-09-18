@@ -328,12 +328,15 @@ async fn a_job_dispatched_from_a_draft_stands_at_the_gate_with_the_drafts_own_wo
     );
 }
 
-/// `#1379`: **an issue already on the forge is dispatched from its Link, and
-/// the address is the whole request.** Nothing is filed and nothing is
-/// fetched on the way — the issue exists, and the Job proposer has taken a
-/// ticket link as a request since it shipped.
+/// `#1379`, `#1394`: **an issue already on the forge is dispatched from its
+/// Issue node, and the address is the whole request.** Nothing is filed and
+/// nothing is fetched on the way — the issue exists, and the Job proposer has
+/// taken a ticket link as a request since it shipped.
+///
+/// **The node was pasted as a Link.** Bridge cannot read an address, so what
+/// arrives on the seam is a Link and Fleet writes what it is.
 #[tokio::test]
-async fn a_link_naming_an_issue_dispatches_its_address_and_the_job_node_hangs_off_it() {
+async fn a_pasted_issue_dispatches_its_address_and_the_job_node_hangs_off_it() {
     let home = TempDir::new();
     let fleet = std::sync::Arc::new(a_fleet_that_proposes(&home));
     let studio = a_studio(&fleet).await;
@@ -344,8 +347,7 @@ async fn a_link_naming_an_issue_dispatches_its_address_and_the_job_node_hangs_of
         StudioNodeContent::Link {
             address: address.clone(),
             said: None,
-            named: Some("#1379 An issue on a Studio cannot be dispatched — open".to_string()),
-            forge: None,
+            named: None,
         },
     )
     .await;
@@ -371,22 +373,32 @@ async fn a_link_naming_an_issue_dispatches_its_address_and_the_job_node_hangs_of
         [&link],
         "the Job points back at the Link it was dispatched from"
     );
-    let [kept] = of_kind(&dispatched, StudioNodeKind::Link)[..] else {
-        panic!("the Link is still there");
+    assert!(
+        of_kind(&dispatched, StudioNodeKind::Link).is_empty(),
+        "what was pasted as a Link is an Issue: the adapter recognised the address"
+    );
+    let [kept] = of_kind(&dispatched, StudioNodeKind::Issue)[..] else {
+        panic!("the Issue is still there");
     };
-    let StudioNodeContent::Link {
+    let StudioNodeContent::Issue {
         address: still,
-        forge,
+        number,
+        title,
+        state,
         ..
     } = &kept.content
     else {
-        panic!("a Link");
+        panic!("an Issue");
     };
-    assert_eq!(still, &address, "a Link never stops being its address");
     assert_eq!(
-        *forge,
-        Some(ipc::StudioLinkForge::Issue),
-        "and the wire says what it names, so Bridge never reads the address"
+        still, &address,
+        "an address node never stops being its address"
+    );
+    assert_eq!(number, "1379", "read off the address, with no fetch");
+    assert_eq!(
+        (title, state),
+        (&None, &None),
+        "what the forge calls it waits on a read-in"
     );
 
     let listed = api::Queries::list_jobs(fleet.as_ref(), None)
@@ -646,7 +658,6 @@ async fn each_rung_refuses_the_kinds_it_is_not_for() {
             address: "https://example.invalid/board".to_string(),
             said: None,
             named: None,
-            forge: None,
         },
     )
     .await;

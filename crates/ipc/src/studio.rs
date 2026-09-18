@@ -811,7 +811,15 @@ impl StudioNodeContent {
                 said,
                 title,
                 state,
-            } => forge_content(core_model::StudioNodeKind::Issue, address, number, said, title, state, None),
+            } => forge_content(
+                core_model::StudioNodeKind::Issue,
+                address,
+                number,
+                said,
+                title,
+                state,
+                None,
+            ),
             StudioNodeContent::PullRequest {
                 address,
                 number,

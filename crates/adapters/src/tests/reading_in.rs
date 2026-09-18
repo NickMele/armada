@@ -115,14 +115,16 @@ fn a_milestone_is_two_calls_and_reads_back_bounded_with_its_total() {
 
     let mut printed = String::from("Studio\t137\n");
     for n in 0..MOST_ISSUES + 20 {
-        printed.push_str(&format!("https://x/issues/{n}\t#{n} Something — open\n"));
+        printed.push_str(&format!("https://x/issues/{n}\t{n}\tSomething\topen\n"));
     }
     let read = milestone_read(&printed, "17");
     assert_eq!(read.title, "Studio");
     assert_eq!(read.total, 137);
     assert_eq!(read.issues.len(), MOST_ISSUES, "bounded");
     assert_eq!(read.issues[0].address, "https://x/issues/0");
-    assert_eq!(read.issues[0].named, "#0 Something — open");
+    assert_eq!(read.issues[0].number, "0");
+    assert_eq!(read.issues[0].title, "Something");
+    assert_eq!(read.issues[0].state, Some(core_model::ForgeState::Open));
 }
 
 /// **Headings and text, and no markup.** A script's body is dropped whole
