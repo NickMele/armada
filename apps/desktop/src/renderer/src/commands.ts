@@ -200,6 +200,11 @@ export const startServer = (name: string, jobId?: string) => window.armada.start
 export const stopServer = (serverId: string) => window.armada.stopServer(serverId);
 export const openServerLink = (serverId: string, url: string) =>
   window.armada.openServerLink(serverId, url);
+
+// The capture window on a server Run — #1294. One entry, and everything the
+// window then does is its own bar's.
+export const openCaptureWindow = (serverId: string, url: string) =>
+  window.armada.openCaptureWindow(serverId, url);
 export const stageAttachment = (bytes: ArrayBuffer, filename: string, mimeType: string) =>
   window.armada.stageAttachment(bytes, filename, mimeType);
 /** Paths under the checkout narrowed against typed text, for the `@` mention popup. */

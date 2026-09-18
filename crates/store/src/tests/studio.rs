@@ -400,6 +400,12 @@ fn a_captured_notes_styles_markup_and_frame_read_back_after_a_reopen() {
             width: 2880,
             height: 1800,
         }),
+        // Captured in the capture window rather than on Bridge — `#1294`.
+        served: Some(core_model::CaptureServed {
+            run: "01SERVER".to_string(),
+            name: "web_dev".to_string(),
+            address: "http://127.0.0.1:41207".to_string(),
+        }),
     };
     let studio = {
         let mut store = open(&dir);

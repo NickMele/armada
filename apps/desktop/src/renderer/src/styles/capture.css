@@ -1,0 +1,19 @@
+/* The capture window's bar document, #1294.
+ *
+ * The app's own stylesheet, and one thing it must not inherit: a background.
+ * This document is a view composited over the page's view, and while capture
+ * is armed it covers the whole window — so anything it paints below the bar
+ * is the page hidden. Transparency is what makes the bar a bar rather than a
+ * lid.
+ *
+ * Not a design value: it is the window's own composition. `CaptureBar.css` is
+ * where the bar's surface is declared, and nothing here restates a value. */
+@import "./index.css";
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}

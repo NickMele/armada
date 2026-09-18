@@ -43,3 +43,27 @@ export type Followed =
   | { ok: false; why: "not_addressable"; address: string }
   /** The address was handed over and this machine did not open it. */
   | { ok: false; why: "refused"; address: string; detail: string };
+
+/**
+ * Whether the capture window opened on a server Run, and why it did not —
+ * `#1294`, `docs/practices/capture-window.md`.
+ *
+ * **Here beside `Followed` for `Followed`'s reason**, and not on the wire: no
+ * protocol version moves and Fleet is not involved. What puts it in this
+ * package is that main, the preload and a screen all have to name the same
+ * type, and they are projects that deliberately cannot see each other.
+ *
+ * **Four arms and not one**, because each sends a person somewhere else: start
+ * the server again, reopen the Studio, use the browser, or open the Studio the
+ * Run belongs to. The sentences are `screens/src/capturing.ts`'s.
+ */
+export type CaptureOpened =
+  | { ok: true }
+  /** The Run has stopped serving. A loopback port is not an identity once it has. */
+  | { ok: false; why: "not_serving" }
+  /** The live holder carries no such server, or no such link on it. */
+  | { ok: false; why: "no_address" }
+  /** A Manifest may declare a server behind a public host or a tunnel. This window is not for one. */
+  | { ok: false; why: "not_loopback"; address: string }
+  /** Nothing main is holding says which Studio a Note captured there would land on. */
+  | { ok: false; why: "no_studio" };

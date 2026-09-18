@@ -21,6 +21,7 @@ import {
   createStudio,
   decideStudioEdge,
   moveStudioNode,
+  openCaptureWindow,
   openServerLink,
   openStudioNode,
   promoteOnStudio,
@@ -170,6 +171,8 @@ export function StudiosSurface(props: StudiosSurfaceProps) {
         // The address is main's to find, off the server it published — the same
         // rule a node's own address is opened under.
         onOpenServerLink={openServerLink}
+        // Capture on that server's page, in a window pinned to its origin — #1294.
+        onCaptureOn={openCaptureWindow}
       />
     </Boundary>
   );

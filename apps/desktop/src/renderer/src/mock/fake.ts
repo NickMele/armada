@@ -189,6 +189,20 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
     startServer: async () => OK,
     stopServer: async () => OK,
     openServerLink: async () => ({ ok: false, why: "no_address" }),
+    // The capture window is a second window main opens — #1294. The mock has
+    // none, so this says what a Studio nothing is holding would say.
+    openCaptureWindow: async () => ({ ok: false, why: "no_studio" }),
+    captureWindow: {
+      read: () => () => {},
+      arm: async () => null,
+      aim: async () => null,
+      hold: async () => null,
+      release: async () => {},
+      save: async () => OK,
+      reload: async () => {},
+      followRefused: async () => {},
+      scroll: () => {},
+    },
     // A Studio starting one entry — #1289, #1345. The mock Fleet answers, so
     // what these do here is what every other unstubbed act does: nothing.
     startStudioRun: async () => ({ ok: true }) as Outcome,
