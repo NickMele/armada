@@ -285,6 +285,34 @@ pub struct JobDetail {
     /// [`JobDetail::of`], like `when_blocked`. Since 13.21.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub work_plan: Option<crate::WorkPlan>,
+    /// The Job that replaced this one, where a redispatch minted one.
+    ///
+    /// **The other end of [`JobSummary::redispatched_from`]**, which is the one
+    /// record — read as a predicate rather than a column, so nothing is written
+    /// twice and nothing can disagree. Filled after [`JobDetail::of`], like
+    /// `when_blocked`. Since 16.1.
+    ///
+    /// **Absent is nearly every Job**, one killed and left alone included — and
+    /// one whose replacement has been forgotten, after which nothing anywhere
+    /// records the redispatch.
+    ///
+    /// **The direct successor, never the end of a chain**: a replacement that
+    /// was itself redispatched carries its own.
+    ///
+    /// [`JobSummary::redispatched_from`]: crate::JobSummary::redispatched_from
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replaced_by: Option<ReplacedBy>,
+}
+
+/// The Job that replaced another: what to call it, and what to open.
+///
+/// **`handle` and not `title`.** It is what a person reads on the branch, the
+/// worktree and the pull request, and it carries the Job's number — so one
+/// press and one reading name the same Job.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReplacedBy {
+    pub job_id: JobId,
+    pub handle: String,
 }
 
 /// The review Fleet composed, in the four parts it is made of. No heading
@@ -655,6 +683,7 @@ impl JobDetail {
             confidence: None,
             workflow_source: job.workflow().source().as_wire().to_string(),
             work_plan: None,
+            replaced_by: None,
         }
     }
 }

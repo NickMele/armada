@@ -369,6 +369,16 @@ export type InsideAJobProps = {
    * beside it.
    */
   sheet?: ReactNode;
+  /**
+   * A standing condition about the whole Job, under the header and above
+   * everything else — today, that this Job was replaced.
+   *
+   * **Above the arrangement rather than inside it.** It is not about the run,
+   * the step or the story, and putting it in any of those columns would make
+   * finding it depend on which region a reader happened to be in. Absent draws
+   * nothing and moves nothing: `--space-4` is a flex gap, not a margin.
+   */
+  callout?: ReactNode;
   onCopied?: (value: string) => void;
 };
 
@@ -407,11 +417,13 @@ export function InsideAJob({
   overview,
   unreachable,
   sheet,
+  callout,
   onCopied,
 }: InsideAJobProps) {
   return (
     <div className="armada-screen__detail">
       <JobDetailHeaderActions {...heading} onCopied={onCopied} />
+      {callout}
 
       <div className="armada-inside">
         {/* The run, and the pointers beneath it. Left, at every state. */}

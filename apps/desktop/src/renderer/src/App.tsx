@@ -654,6 +654,9 @@ export function App() {
                 onReadDiff={readDiff}
                 onOpenArtifact={openArtifact}
                 onOpenPullRequest={openPullRequest}
+                // The replacement opens over the board, the way a Studio's Job
+                // node does — the same state, so Escape still returns here.
+                onOpenJob={setOpenJob}
                 onReadCall={readCall}
                 onReadCheckOutput={readCheckOutput}
                 onReadFrame={readFrame}

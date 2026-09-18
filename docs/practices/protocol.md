@@ -1348,6 +1348,29 @@ A name given twice removes that node once. A call naming no node at all is refus
 and the record is what names it, so the file is deleted once the row that named it is gone. A
 refused write leaves every picture where the Note that keeps it can still draw it.
 
+## Protocol 16.1: a job that was replaced names the one that replaced it
+
+`#1439`. `JobDetail.replaced_by`, additive: `{ job_id, handle }` for the Job a redispatch minted to
+replace this one, and absent on nearly every Job. A killed and redispatched Job was a dead end —
+it said killed, and nothing on any surface said the work had carried on somewhere else.
+
+**No new record, and deliberately no second column.** `JobSummary.redispatched_from` already
+crosses and is the one fact; Fleet reads it as a predicate over `jobs` rather than writing the
+forward edge, so the two directions cannot disagree and forgetting a replacement takes the link
+with it. `store::lineage` is the read and `V81` is its index.
+
+**On the detail and not on the summary.** The Board draws a row per Job and already folds a
+lineage into one; a field here is one indexed read on the open of a Job, where a read per row
+would be a query per row on a list that redraws on every event.
+
+**The direct successor, never the end of a chain.** A replacement that was itself redispatched
+carries its own, so a chain is walked by opening Jobs rather than by anything on the wire — and
+there is no walk to loop. Two Jobs naming one predecessor is legal today and answers with the
+newer.
+
+**Additive, so a Fleet ahead of a Bridge sends a field it ignores** and the callout simply does
+not draw, which is what an older Bridge already does with every Job.
+
 ## Open questions
 
 Naming these rather than deciding them, per this document's brief:

@@ -267,6 +267,32 @@ export type JobDetail = {
   review?: JobReview;
   /** Armada's review of the change: confident or not, why, and what needs the person. Since 13.24. */
   confidence?: JobConfidence;
+  /**
+   * The job that replaced this one, where a redispatch minted one. Since 16.1.
+   *
+   * **The other end of `JobSummary.redispatched_from`**, which is the one
+   * record: Fleet reads it as a predicate rather than writing a second column,
+   * so nothing can disagree and forgetting the replacement takes the link.
+   *
+   * **The direct successor, never the end of a chain.** A replacement that was
+   * itself redispatched carries its own, so a chain is walked by opening jobs.
+   *
+   * Absent is nearly every job, one killed and left alone included.
+   */
+  replaced_by?: ReplacedBy;
+};
+
+/**
+ * The job that replaced another: what to call it, and what to open.
+ * `crates/ipc/src/detail.rs`.
+ *
+ * **`handle` and not `title`.** It is what a person reads on the branch and the
+ * pull request and it carries the job's number, so one press and one reading
+ * name the same job.
+ */
+export type ReplacedBy = {
+  job_id: string;
+  handle: string;
 };
 
 /**

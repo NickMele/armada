@@ -363,12 +363,24 @@ impl Queries for FakeDaemon {
         })
     }
 
+    /// **`replaced_by` is read the way Fleet reads it** — every Job's own
+    /// `redispatched_from`, as a predicate — so the fake cannot hold a forward
+    /// link the record does not support.
     async fn get_job(&self, job_id: JobId) -> Result<JobDetail, Refusal> {
         let jobs = self.jobs.lock().expect("not poisoned");
         let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
             return Err(self.no_such_job(&job_id));
         };
-        Ok(shapes::detail(job.clone()))
+        let mut detail = shapes::detail(job.clone());
+        detail.replaced_by = jobs
+            .iter()
+            .rev()
+            .find(|other| other.redispatched_from.as_ref() == Some(&job_id))
+            .map(|found| ipc::ReplacedBy {
+                job_id: found.id.clone(),
+                handle: found.handle.clone(),
+            });
+        Ok(detail)
     }
 
     /// **The refusal is what matters here**: an id that names nothing is a 404,

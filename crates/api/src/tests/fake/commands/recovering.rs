@@ -309,6 +309,9 @@ impl FakeDaemon {
             queued_reason: None,
             resumption: None,
             redispatched_from: Some(failed.id.clone()),
+            // A replacement takes a number of its own, so it takes a handle of
+            // its own — the one thing a person reads to tell the two apart.
+            handle: format!("{minted}-a-redispatched-job"),
             ..failed.clone()
         };
         self.jobs

@@ -25,7 +25,7 @@ use crate::tests::planted::the_drone_it_holds_is_gone;
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 
-async fn call(app: &Router, uri: &str) -> (StatusCode, Vec<u8>) {
+pub(super) async fn call(app: &Router, uri: &str) -> (StatusCode, Vec<u8>) {
     let request = Request::builder()
         .method("POST")
         .uri(uri)

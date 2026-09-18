@@ -201,8 +201,8 @@ pub use detail::{
 };
 pub use detail::{
     Criterion, Currency, Dependency, JobDelivery, JobDetail, JobReview, JobSpend, JudgeInFlight,
-    PullRequestChecks, PullRequestDetail, Refusal, ReviewedBy, Settled, StepDetail, StepFacts,
-    StepPass, Stuck, Verdict,
+    PullRequestChecks, PullRequestDetail, Refusal, ReplacedBy, ReviewedBy, Settled, StepDetail,
+    StepFacts, StepPass, Stuck, Verdict,
 };
 pub use drift::{Declaration, Drift, ManifestDrift, PackageScripts, Unfollowed};
 pub use drones::{DroneDetail, DroneList, DroneSummary};
