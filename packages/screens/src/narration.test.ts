@@ -155,6 +155,7 @@ describe("an edit no window covers draws under the task that declared its path",
   const TREE = "~/Development/armada/.armada/worktrees/01K5/";
   const OVERVIEW = "packages/screens/src/overview.ts";
   const SPEC = "packages/screens/src/overview.test.ts";
+  const LEFT = "packages/screens/src/left-column.ts";
 
   /** T5 is never marked working, so Fleet rightly sends it no window. T1 is. */
   const declaring = (): PlanTask[] => [
@@ -162,11 +163,15 @@ describe("an edit no window covers draws under the task that declared its path",
       id: "T1",
       title: "Give the left column its own reading",
       state: "working",
-      scope: ["packages/screens/src/left-column.ts"],
+      scope: [LEFT],
       working_windows: [{ entered: at(60) }],
     },
     { id: "T5", title: "Show what is running", state: "done", scope: [OVERVIEW, SPEC] },
   ];
+
+  /** Every section in order, by task id — `undefined` is the outside row. */
+  const headings = (narration: ReturnType<typeof read>) =>
+    narration.sections.map((work) => work.task?.id);
 
   /** Every call row of a section, as `[tool, what it named]`. */
   function calls(work: { beats: { rows: { called?: { tool: string; detail: string } }[] }[] }) {
@@ -176,7 +181,7 @@ describe("an edit no window covers draws under the task that declared its path",
       .map((row) => [row.called?.tool, row.called?.detail]);
   }
 
-  it("draws all three edits under it, and leaves the sentence where the clock put it", () => {
+  it("draws all three edits under it and takes the sentence over them with it", () => {
     const turns = [
       said(STEP, at(0), "Now the overview reading."),
       called(STEP, at(1), "a", "Edit", `${TREE}${OVERVIEW} +8 -3`),
@@ -186,17 +191,71 @@ describe("an edit no window covers draws under the task that declared its path",
       called(STEP, at(5), "c", "Edit", `${TREE}${SPEC} +10`),
       answered(STEP, at(6), "c"),
     ];
-    const [outside, t1, t5] = read(turns, planOf(declaring())).sections;
-    expect(t5?.task?.id).toBe("T5");
+    const narration = read(turns, planOf(declaring()));
+    // No outside row at all: the sentence went with its run, so nothing is left
+    // for a heading to stand over.
+    expect(headings(narration)).toEqual(["T1", "T5"]);
+    const [t1, t5] = narration.sections;
+    expect(t5?.beats.map((beat) => beat.said)).toEqual(["Now the overview reading."]);
     expect(calls(t5!)).toEqual([
       ["Edit", OVERVIEW],
       ["Edit", SPEC],
       ["Edit", SPEC],
     ]);
+    // Only `called` turns are counted, so the sentence adds nothing to the
+    // three — and the stretch reaches back over it, at(0) to at(5).
     expect(t5?.calls).toBe(3);
-    expect(calls(outside!)).toEqual([]);
-    expect(outside?.beats.map((beat) => beat.said)).toEqual(["Now the overview reading."]);
+    expect(workSaid(t5!)).toBe("3 calls · 5s");
     expect(t1?.beats).toEqual([]);
+  });
+
+  it("keeps the sentence outside where one Read in its run stayed there", () => {
+    const turns = [
+      said(STEP, at(0), "Read it, then reword it."),
+      called(STEP, at(1), "a", "Read", `${TREE}${OVERVIEW}`),
+      answered(STEP, at(2), "a"),
+      called(STEP, at(3), "b", "Edit", `${TREE}${OVERVIEW} +8 -3`),
+      answered(STEP, at(4), "b"),
+    ];
+    const narration = read(turns, planOf(declaring()));
+    expect(headings(narration)).toEqual([undefined, "T1", "T5"]);
+    const [outside, , t5] = narration.sections;
+    expect(outside?.beats.map((beat) => beat.said)).toEqual(["Read it, then reword it."]);
+    expect(calls(outside!)).toEqual([["Read", OVERVIEW]]);
+    expect(calls(t5!)).toEqual([["Edit", OVERVIEW]]);
+  });
+
+  it("keeps the sentence outside where its run split between two declarations", () => {
+    const turns = [
+      said(STEP, at(0), "Both columns at once."),
+      called(STEP, at(1), "a", "Edit", `${TREE}${LEFT} +3`),
+      answered(STEP, at(2), "a"),
+      called(STEP, at(3), "b", "Edit", `${TREE}${OVERVIEW} +8`),
+      answered(STEP, at(4), "b"),
+    ];
+    const narration = read(turns, planOf(declaring()));
+    expect(headings(narration)).toEqual([undefined, "T1", "T5"]);
+    const [outside, t1, t5] = narration.sections;
+    expect(outside?.beats.map((beat) => beat.said)).toEqual(["Both columns at once."]);
+    expect(calls(outside!)).toEqual([]);
+    expect(calls(t1!)).toEqual([["Edit", LEFT]]);
+    expect(calls(t5!)).toEqual([["Edit", OVERVIEW]]);
+  });
+
+  // The behaviour the owner did not ask to change: a sentence said before the
+  // Drone marked T1 working stays outside, even though every call under it is
+  // T1's. The clock placed it, and a declaration only fills a gap the clock left.
+  it("leaves a sentence outside where a window, not a declaration, placed its calls", () => {
+    const turns = [
+      said(STEP, at(59), "Now the left column."),
+      called(STEP, at(61), "a", "Edit", `${TREE}${LEFT} +3`),
+      answered(STEP, at(62), "a"),
+    ];
+    const narration = read(turns, planOf(declaring()));
+    expect(headings(narration)).toEqual([undefined, "T1", "T5"]);
+    const [outside, t1] = narration.sections;
+    expect(outside?.beats.map((beat) => beat.said)).toEqual(["Now the left column."]);
+    expect(calls(t1!)).toEqual([["Edit", LEFT]]);
   });
 
   it("leaves a Read of the same file outside, because it names no task it was for", () => {

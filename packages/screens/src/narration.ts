@@ -6,7 +6,13 @@
 // being marked `working` has no window, so its own declared files read as
 // changed outside every task. A path written down in `scope` is a declaration
 // and reading it is not guessing; a task's title and its prose are still never
-// matched, and nothing but an Edit or a Write is ever moved by one.
+// matched, and no call but an Edit or a Write is ever moved by one.
+//
+// **A sentence goes with a run a declaration moved whole**, so a reader is not
+// left an `Outside any task` heading over nothing while the edits it introduced
+// draw elsewhere. A window holding the sentence keeps it, even where every call
+// under it then moved: the clock is what placed it, and a declaration only ever
+// fills a gap the clock left.
 import { toolFamily } from "@armada/components";
 import type { PlanTask, Turn, WorkPlan } from "@armada/protocol";
 
@@ -126,6 +132,60 @@ function declaredFor(turn: Turn, tasks: readonly PlanTask[]): string | undefined
   return declaredBy(editOf(saw.detail, saw.truncated).path, tasks);
 }
 
+/** A row's task, and whether a window is what placed it there. */
+type Placing = { id?: string; declared: boolean };
+
+/** Whether a row ends the run under the sentence before it. */
+function breaks(row: LogRow): boolean {
+  return row.kind === "said" && row.actor !== "armada";
+}
+
+/**
+ * The task each row belongs to, by row index.
+ *
+ * **Resolved ahead of the walk because a sentence looks forward.** A sentence
+ * goes with a run of edits a declaration placed, and which task that is cannot
+ * be known until the run has been read — so placement stopped being something
+ * the walk could decide row by row.
+ */
+function placingOf(
+  rows: readonly LogRow[],
+  turnOf: Map<string, Turn>,
+  tasks: readonly PlanTask[],
+): (string | undefined)[] {
+  const own = rows.map<Placing | undefined>((row) => {
+    const turn = turnOf.get(row.id);
+    if (turn === undefined) return undefined;
+    const window = taskAt(turn.ts, tasks);
+    if (window !== undefined) return { id: window, declared: false };
+    const declared = declaredFor(turn, tasks);
+    return declared === undefined ? { declared: false } : { id: declared, declared: true };
+  });
+
+  const placed = own.map((one) => one?.id);
+  for (const [index, row] of rows.entries()) {
+    // **A window still holds a sentence where it holds anything.** A sentence
+    // said before the Drone marked a task working keeps drawing outside even
+    // where every call under it then landed in that task: that is what the
+    // clock says, and the declaration is only filling a gap the clock left.
+    const mine = own[index];
+    if (!breaks(row) || mine === undefined || mine.id !== undefined) continue;
+    let together: string | undefined;
+    let whole = true;
+    for (let after = index + 1; after < rows.length && whole; after += 1) {
+      if (breaks(rows[after] as LogRow)) break;
+      // A row carrying no turn casts no vote: it is one the walk leaves where
+      // the row before it went, so it cannot disagree about anything.
+      const one = own[after];
+      if (one === undefined) continue;
+      whole = one.declared && (together === undefined || one.id === together);
+      together = one.id;
+    }
+    if (whole && together !== undefined) placed[index] = together;
+  }
+  return placed;
+}
+
 /**
  * The step's rows as sentences, under the task each belongs to.
  *
@@ -168,6 +228,7 @@ export function narrationOf(
 
   // Walked in row order, so every row is placed exactly once. A row whose
   // instant will not read stays where the row before it went.
+  const placing = placingOf(rows, turnOf, tasks);
   let placed: TaskWork = outside;
   let beat: Beat | undefined;
   const spans = new Map<TaskWork, { from?: string; to?: string }>();
@@ -175,9 +236,7 @@ export function narrationOf(
     const drawn = index >= from;
     const turn = turnOf.get(row.id);
     if (turn !== undefined) {
-      // A window still wins: a declaration beating one would put files against
-      // a task nobody had started while the Drone was marked working on another.
-      const id = taskAt(turn.ts, tasks) ?? declaredFor(turn, tasks);
+      const id = placing[index];
       const next = id === undefined ? outside : (byTask.get(id) ?? outside);
       if (next !== placed) beat = undefined;
       placed = next;
