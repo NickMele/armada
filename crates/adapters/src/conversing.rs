@@ -21,16 +21,24 @@ use adapter_traits::{
 
 use crate::harness::HeadlessAgent;
 
-/// The permission mode a conversation runs under: **a write to the checkout is
-/// taken as already asked for, and nothing else is.**
+/// The permission mode a conversation runs under: **the person's own settings
+/// decide, and what they do not cover is put to them.**
 ///
-/// The first half is the owner's decision of 17 Sep 2026, which named editing
-/// the checkout by name — `docs/concepts/helm.md`, *Action authority*. The
-/// second half is not a narrower reading of it; it is the half `#1373` says is
-/// unbuilt. A shell line or another server's tool is put to a person in a
-/// terminal, and the dock has nowhere to put it, so it is refused and said
-/// rather than run unasked. Spike 018 measured each mode.
-const AS_ASKED: &str = "acceptEdits";
+/// `default` is what a terminal session runs — the owner's ask of 17 Sep 2026
+/// in his words, *"it should still respect my permission settings"*. His
+/// `allow` rules pass silently, his `deny` rules refuse, the rest reaches
+/// [`asks_a_person`]. It replaces `acceptEdits`, which `#1373` shipped only
+/// because nobody could be asked, so Helm now asks before it edits.
+///
+/// **`auto` was asked for and is not reachable.** Spike 19: the CLI accepts it,
+/// reports `default` on `init`, makes no classifier call and behaves the same.
+const THEIRS_TO_DECIDE: &str = "default";
+
+/// The door's own tool the CLI puts every uncovered call to. **Not shown to the
+/// model**, which spike 15 measured, so it adds nothing Helm can reach for.
+fn asks_a_person() -> String {
+    format!("mcp__{}__{}", ipc::door::SERVER, ipc::door::ASKS_A_PERSON)
+}
 
 /// The built-in tools that change the checkout a conversation runs in.
 ///
@@ -131,9 +139,11 @@ impl Conversing {
 impl HeadlessAgent {
     /// One message's process. The message is not on it — see this module.
     ///
-    /// **What is absent is the point**: no `--strict-mcp-config`, no `--tools`,
-    /// no `--allowedTools`, no `--disallowedTools`. Each withholds something a
-    /// person has in a terminal, and spike 018 measured what.
+    /// **What is absent is half the point**: no `--strict-mcp-config`, no
+    /// `--tools`, no `--allowedTools`, no `--disallowedTools`. Each withholds
+    /// something a person has in a terminal, and spike 018 measured what. The
+    /// other half is `--permission-prompt-tool`, which is how the person
+    /// themselves answers for the rest — spike 019.
     pub fn render_conversation(
         &self,
         conversing: &Conversing,
@@ -148,7 +158,9 @@ impl HeadlessAgent {
             "--model".into(),
             conversing.model.as_str().into(),
             "--permission-mode".into(),
-            AS_ASKED.into(),
+            THEIRS_TO_DECIDE.into(),
+            "--permission-prompt-tool".into(),
+            asks_a_person(),
             // Added to what the person's configuration resolves, rather than in
             // place of it. The file still names one server and nothing can add
             // a second — `crate::mcp`'s guarantee, strict flag or no.

@@ -36,6 +36,17 @@ include!(concat!(env!("OUT_DIR"), "/reachable.rs"));
 /// configuration and an agent's be mistaken for each other.
 pub const SERVER: &str = "armada-fleet";
 
+/// The one tool on this door the CLI calls rather than the model:
+/// `--permission-prompt-tool`, which every call a Helm session's own settings
+/// do not cover is put to. `#1389`.
+///
+/// **Its arguments are the harness's, not this inventory's.** Every other tool
+/// here takes path segments and a `body`; this one takes `tool_name`, `input`
+/// and `tool_use_id`, which is the shape spike 15 measured the CLI sending. The
+/// two places that shape is honoured are [`requested`] and [`tool`], both keyed
+/// on this name.
+pub const ASKS_A_PERSON: &str = "ask_the_person";
+
 /// The MCP revision answered when a client names none. [`crate::mcp`]'s, for
 /// its reason: the methods have been identical across every revision.
 const ASSUMED_REVISION: &str = "2025-06-18";
@@ -298,12 +309,15 @@ fn requested(shape: &Shape, arguments: &Map<String, Value>) -> Result<Call, Stri
         path.push('?');
         path.push_str(&asked.join("&"));
     }
-    let body = match shape.takes_a_body() {
-        false => None,
+    let body = match (shape.takes_a_body(), shape.operation == ASKS_A_PERSON) {
+        (false, _) => None,
+        // The harness sends its three fields at the top level and knows nothing
+        // of this door's `body` convention, so the arguments *are* the body.
+        (true, true) => Some(serde_json::to_string(arguments).map_err(|why| why.to_string())?),
         // **An empty object where nothing was sent**, because every command on
         // this seam decodes a body and a request with none is a 400 an agent
         // cannot act on. A command that takes no fields decodes `{}`.
-        true => Some(match arguments.get("body") {
+        (true, false) => Some(match arguments.get("body") {
             Some(body) => serde_json::to_string(body).map_err(|why| why.to_string())?,
             None => String::from("{}"),
         }),
@@ -475,7 +489,22 @@ fn tool(shape: &Shape) -> Value {
             json!({ "type": "string", "description": describe(name) }),
         );
     }
-    if shape.takes_a_body() {
+    if shape.operation == ASKS_A_PERSON {
+        properties.insert(
+            "tool_name".to_string(),
+            json!({ "type": "string", "description": "The tool being asked about" }),
+        );
+        properties.insert(
+            "input".to_string(),
+            json!({ "type": "object", "description": "That tool's whole input" }),
+        );
+        properties.insert(
+            "tool_use_id".to_string(),
+            json!({ "type": "string", "description": "The harness's id for the call" }),
+        );
+        required.push(Value::String("tool_name".to_string()));
+        required.push(Value::String("input".to_string()));
+    } else if shape.takes_a_body() {
         properties.insert(
             "body".to_string(),
             json!({

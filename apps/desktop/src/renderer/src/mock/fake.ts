@@ -93,6 +93,7 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
     redirectDrone: async () => OK,
     answerQuestion: async () => OK,
     answerCommand: async () => OK,
+    answerHelmCall: async () => OK,
     explainCommand: async (jobId, callId) => refused(path(jobId, `/calls/${callId}/explain`)),
     setWhenBlocked: async () => OK,
     answerJudge: async () => OK,

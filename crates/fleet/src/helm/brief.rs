@@ -49,14 +49,15 @@ review and no undo on what you write there: the ask is the whole of the \
 permission, and a change nobody asked for is one nobody will go looking for. \
 Say in your answer which files you changed.";
 
-const REFUSED: &str = "\
-WHEN A CALL IS REFUSED
+const WAITING: &str = "\
+WHEN A CALL WAITS
 
-A command or a tool from another server may come back saying it requires \
-approval. Nobody can be asked about it here — a person at a terminal would be, \
-and this conversation has nowhere to put the question. Say what you were \
-refused and what you wanted it for, and stop. Do not look for another way to \
-do the same thing.";
+A command, an edit or a tool from another server that this person's own \
+settings do not already allow is put to them, in Armada, and your call waits \
+inside itself until they answer. That wait is the system working. Do not retry \
+it, do not look for another way round it, and do not say it failed. Where they \
+refuse, or where nobody answers, you are told so in the tool's own result: say \
+what you could not do and carry on without it.";
 
 const EACH_TURN: &str = "\
 EACH TURN
@@ -173,7 +174,7 @@ pub fn brief(manifest: &Manifest, authority: Authority, voice: Option<&Voice>) -
         OPENING.to_string(),
         this_repository(manifest),
         THE_CHECKOUT.to_string(),
-        REFUSED.to_string(),
+        WAITING.to_string(),
         EACH_TURN.to_string(),
         WHERE_THEY_ARE.to_string(),
         what_you_may_do(authority),

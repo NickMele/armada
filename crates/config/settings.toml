@@ -477,6 +477,23 @@ notes = """
 Helm acts on Tier 1 Redirect by default per the concept design; this is the switch to disable that per project. Read from `#943`: `Fleet::helm_authority` (`crates/fleet/src/daemon/seams.rs`) answers this rather than the `Authority::Acting` constant it returned before, and both the brief (`crates/fleet/src/helm/brief.rs`) and the agent door's reach (`crates/fleet/src/helm/admitting.rs`, `reach.rs`) follow that one answer. Resolved once at daemon start by the composition root (`HELM_ACTION_AUTHORITY` in `crates/armada/src/serve.rs`), corrected from this row's earlier `Live` — nothing saves an override while Fleet runs, so there is no live path to a changed value yet.
 """
 
+[settings.helm-ask-hold]
+name = "Helm ask hold"
+scope = "Machine"
+default = "5 minutes"
+lifetime = "Daemon start"
+merge_strategy = "n/a — single layer"
+peer_polarity = "n/a — single layer"
+owner = "Helm"
+read_by = "fleet"
+notes = """
+How long one call a Helm session made is held open for a person to answer in the dock before Fleet answers `deny` for the session — `#1389`. Helm runs in the mode a terminal session runs and puts every call the person's own settings do not cover to them; this is how long that wait may last.
+
+**Five, and it is the smallest of three bounds rather than a preference.** A reply's whole process ends at `fleet::helm::hosting::REPLY_BUDGET`, fifteen minutes, so five leaves room for a reply that is asked about more than once; `docs/spikes/015-can-a-person-answer-a-blocked-command.md` measured a stdio permission tool abandoned near thirty minutes, and the door a Helm session holds is stdio; and `docs/spikes/019-is-auto-mode-reachable-for-a-helm-session.md` measured a two-minute hold surviving intact. Beyond that it is a person's patience rather than a process's.
+
+**Silence answers deny, never allow.** Resolved once at daemon start (`HELM_ASK_HOLD` in `crates/armada/src/serve.rs`), and carried as `fleet::helm::HelmAskHold` — a fitting rather than a constant, for `PermissionHold`'s reason: a test can plant a bound it can outlive.
+"""
+
 [settings.helm-budget-soft-warning-threshold]
 name = "Helm budget soft-warning threshold"
 scope = "Machine"
