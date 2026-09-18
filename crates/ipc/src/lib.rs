@@ -96,7 +96,8 @@ mod job;
 /// activity log was designed around and nothing produced.**
 mod journal;
 mod judged;
-/// Kit's MCP servers, and each Manifest's word over one. `#1275`.
+/// Kit's MCP servers and each Manifest's word over one (`#1275`), and the
+/// setup a person already works with, read to be shown (`#1491`).
 mod kit;
 /// Fleet's three changeable limits. **A value out of range does not decode.**
 mod limits;
@@ -252,8 +253,9 @@ pub use journal::{
 };
 pub use judged::{Citation, CitedAt, Cleared, Flagged, Given, Judged, KeptDeliverable};
 pub use kit::{
-    AddKitServer, ForgetKitServer, KitServerRow, KitServers, ServerAddress, SetKitServerReach,
-    SetManifestServerReach,
+    AddKitServer, ForgetKitServer, KitInventory, KitServerRow, KitServers, ServerAddress,
+    SetKitServerReach, SetManifestServerReach, SetupItem, SetupKindRow, SetupUnreadable,
+    WhatWasRead,
 };
 pub use limits::{
     ChecksAtOnce, DiskFloorGib, DronesAtOnce, FleetLimits, LimitValues, MemorySparePercent,

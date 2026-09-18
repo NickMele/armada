@@ -20,6 +20,18 @@ use crate::daemon::{Commands, Queries};
 use crate::scoped::InManifest;
 use crate::served::Served;
 
+/// The setup a person already works with, read from their harness's own home —
+/// `#1491`.
+///
+/// **Machine-wide**, so no Manifest scopes it: what somebody has is theirs and
+/// not a repository's.
+pub(crate) async fn get_kit_inventory<D: Queries>(State(served): State<Served<D>>) -> Response {
+    match served.daemon().get_kit_inventory().await {
+        Ok(inventory) => answer(StatusCode::OK, &inventory, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// Every server in Kit, and what a Drone dispatched against this Manifest
 /// resolves.
 pub(crate) async fn get_kit_servers<D: Queries>(

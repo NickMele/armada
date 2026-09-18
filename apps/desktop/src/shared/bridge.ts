@@ -558,6 +558,9 @@ export const CHANNELS = {
   removeRepositoryAllowedCommand: "bridge:remove-repository-allowed-command",
   // Kit's MCP servers — #1275. Five entries, on the same terms: Fleet names
   // the repository, so the Manifest tier needs no id from here.
+  // The setup a person already has, read to be shown — #1491. Machine-wide
+  // like Kit itself, and a read with nothing under it.
+  readKitInventory: "bridge:read-kit-inventory",
   listKitServers: "bridge:list-kit-servers",
   addKitServer: "bridge:add-kit-server",
   forgetKitServer: "bridge:forget-kit-server",

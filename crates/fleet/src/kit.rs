@@ -138,6 +138,32 @@ where
         }
     }
 
+    /// `get_kit_inventory` — the setup a person already works with, read from
+    /// the harness's own home. `#1491`.
+    ///
+    /// **Off the main thread**: a home directory is somebody else's disk, and
+    /// how many skills are on it is not Fleet's to assume.
+    ///
+    /// **Nothing read here reaches a Drone.** `crate::spawning` writes what
+    /// `servers_for_a_drone` returns and nothing else, and what this answers
+    /// carries no address to write even if it did.
+    pub async fn kit_inventory(&self) -> ipc::KitInventory {
+        let setup = self.setup();
+        let read = tokio::task::spawn_blocking(move || setup.read()).await;
+        match read {
+            Ok(read) => inventory(read),
+            // A panicked read is a bug in an adapter, and the answer a person
+            // gets for it says the home was not read rather than that it holds
+            // nothing.
+            Err(_) => ipc::KitInventory {
+                harness: String::new(),
+                home: String::new(),
+                present: false,
+                kinds: Vec::new(),
+            },
+        }
+    }
+
     /// `add_kit_server` — put a server in Kit, reaching no Drone.
     ///
     /// A name Kit already holds replaces that server's address and leaves both
@@ -253,5 +279,46 @@ where
             why.to_string(),
             self.run_id(),
         ))
+    }
+}
+
+/// The reading, on the wire. **Here and not in `ipc`**, which knows nothing of
+/// the adapter seam and is not going to start.
+fn inventory(read: adapter_traits::Inventory) -> ipc::KitInventory {
+    ipc::KitInventory {
+        harness: read.harness,
+        home: read.home,
+        present: read.present,
+        kinds: read
+            .kinds
+            .into_iter()
+            .map(|row| ipc::SetupKindRow {
+                kind: row.kind.as_wire().to_string(),
+                read: what_was_read(row.what),
+            })
+            .collect(),
+    }
+}
+
+fn what_was_read(what: adapter_traits::WhatWasRead) -> ipc::WhatWasRead {
+    match what {
+        adapter_traits::WhatWasRead::Read { items, unreadable } => ipc::WhatWasRead::Read {
+            items: items
+                .into_iter()
+                .map(|item| ipc::SetupItem {
+                    name: item.name,
+                    says: item.says,
+                    source: item.source,
+                })
+                .collect(),
+            unreadable: unreadable
+                .into_iter()
+                .map(|one| ipc::SetupUnreadable {
+                    source: one.source,
+                    why: one.why,
+                })
+                .collect(),
+        },
+        adapter_traits::WhatWasRead::NotRead { why } => ipc::WhatWasRead::NotRead { why },
     }
 }

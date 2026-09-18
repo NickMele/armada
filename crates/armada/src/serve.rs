@@ -764,6 +764,14 @@ fn assemble(
             port,
         },
         locating: locator,
+        // The setup a person already has, read from their own home to be shown
+        // in Kit — `#1491`. **It reads and cannot write**, and nothing it
+        // returns can reach a Drone: `adapters::mcp` writes a Drone's servers
+        // from `core_model::a_drone_resolves` and from nothing else.
+        setup: Arc::new(adapters::ExistingSetup::over(
+            adapters::Home::at(&home),
+            &home,
+        )),
         port_range,
         run_log_retention: RUN_LOG_RETENTION,
         helm_authority: HELM_ACTION_AUTHORITY,
