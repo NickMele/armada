@@ -46,12 +46,12 @@ fn a_recorded_plan_reads_as_its_approach_and_tasks_in_order() {
         tasks.iter().map(|task| task.title()).collect::<Vec<_>>(),
         ["Stop at the end", "Cover it"]
     );
-    assert_eq!(tasks[0].detail(), "read.rs:41");
+    assert_eq!(tasks[0].note(), "read.rs:41");
 }
 
 #[test]
 fn an_update_names_a_task_and_a_state() {
-    let PlanChange::Updated { task, to } = change(called(
+    let PlanChange::Updated { task, to, .. } = change(called(
         "update_task",
         r#"{"task":"T3","state":"done","reason":""}"#,
     )) else {

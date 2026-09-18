@@ -20,8 +20,8 @@ fn a_plan() -> core_model::WorkPlan {
             change: PlanChange::Recorded {
                 approach: Approach::new("Bound the reader").expect("an approach"),
                 tasks: vec![
-                    NewTask::new("Stop at the end", "read.rs:41").expect("a title"),
-                    NewTask::new("Cover the bound", "").expect("a title"),
+                    NewTask::new("Stop at the end", "read.rs:41", &[], "").expect("a title"),
+                    NewTask::new("Cover the bound", "", &[], "").expect("a title"),
                 ],
             },
             by: by.clone(),
@@ -31,6 +31,7 @@ fn a_plan() -> core_model::WorkPlan {
             change: PlanChange::Updated {
                 task: TaskId::read("T2").expect("an id"),
                 to: TaskUpdate::Dropped(DropReason::new("T1's test covers it").expect("a reason")),
+                shown: None,
             },
             by: PlanAuthor::Person,
             at,
@@ -74,8 +75,8 @@ fn a_task_marked_working_carries_its_windows_and_one_never_marked_carries_none()
         change: PlanChange::Recorded {
             approach: Approach::new("Bound the reader").expect("an approach"),
             tasks: vec![
-                NewTask::new("Stop at the end", "").expect("a title"),
-                NewTask::new("Cover the bound", "").expect("a title"),
+                NewTask::new("Stop at the end", "", &[], "").expect("a title"),
+                NewTask::new("Cover the bound", "", &[], "").expect("a title"),
             ],
         },
         by: PlanAuthor::Person,
@@ -90,6 +91,7 @@ fn a_task_marked_working_carries_its_windows_and_one_never_marked_carries_none()
             change: PlanChange::Updated {
                 task: TaskId::read("T1").expect("an id"),
                 to,
+                shown: None,
             },
             by: PlanAuthor::Person,
             at: Timestamp::from_rfc3339(at),

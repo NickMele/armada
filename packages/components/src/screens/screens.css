@@ -871,6 +871,62 @@
   text-wrap: pretty;
 }
 
+/* What a task says beyond its title: its note, its files, and the evidence
+   expected of it beside the evidence the work showed. `#1421`.
+
+   **One stack, indented under the title rather than beside it.** A task
+   carrying three of these and one carrying none have to read as two rows of
+   the same list, which a second column cannot do — the rows without facts
+   would leave a ragged empty gutter down the whole plan. */
+.armada-inside__plan-task-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.armada-inside__plan-task-note {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+/* The paths wrap as a row of their own so a task touching six files does not
+   push its evidence lines off the bottom of the well. */
+.armada-inside__plan-task-scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.armada-inside__plan-task-path {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+}
+
+/* **Expected and shown carry the same weight**, because which one a reader
+   needs depends on whether the work agreed with the plan, and the drawing
+   cannot know that. */
+.armada-inside__plan-task-evidence {
+  display: flex;
+  gap: var(--space-2);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+.armada-inside__plan-task-evidence-label {
+  color: var(--fg-muted);
+  flex: none;
+}
+
 /* `Drop…`, at the row's trailing edge. Quiet at rest, `.armada-wrow__mark`'s
    own rule: shown on hover and on its own focus only, so the list reads as
    tasks first and controls second, and a keyboard reader still finds it. #897. */

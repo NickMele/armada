@@ -34,9 +34,23 @@ pub struct PlanTask {
     /// `T1`, `T2`, … — stable for the life of the plan, never renumbered.
     pub id: String,
     pub title: String,
-    /// Left out where the task has none, rather than sent empty.
+    /// What the other fields cannot hold: the exact wording, the gotcha. One
+    /// line. Left out where the task has none, rather than sent empty.
     #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub detail: String,
+    pub note: String,
+    /// The repository-relative paths the planner said this task touches, in
+    /// the order given. **Left out where empty**, which is every task recorded
+    /// before a plan carried them. Since 14.21.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scope: Vec<String>,
+    /// What the planner said should prove the task, written with the plan.
+    /// Left out where none was named. Since 14.21.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub expects: String,
+    /// What the work said proved it, written by whoever did it. Read beside
+    /// `expects`: the two disagreeing is the fact worth seeing. Since 14.21.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shown: Option<String>,
     /// A Drone's claim, or a person's. **It gates nothing.**
     pub state: TaskState,
     /// Present on a dropped task and on nothing else.
@@ -93,14 +107,18 @@ impl From<core_model::TaskCounts> for TaskCounts {
 
 /// A person adds a task to a Job's plan. `#897`.
 ///
-/// **`detail` and `after` may both be `""`.** A task with nothing beyond its
-/// title is legal, and `""` for `after` is the end of the list — the same
-/// spelling the `add_task` MCP tool takes.
+/// **Only the title is required.** A task with nothing beyond its title is
+/// legal, and `""` for `after` is the end of the list — the same spelling the
+/// `add_task` MCP tool takes.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AddTask {
     pub title: String,
     #[serde(default)]
-    pub detail: String,
+    pub note: String,
+    #[serde(default)]
+    pub scope: Vec<String>,
+    #[serde(default)]
+    pub expects: String,
     #[serde(default)]
     pub after: String,
 }
@@ -140,7 +158,14 @@ impl From<&core_model::WorkPlan> for WorkPlan {
                 .map(|task| PlanTask {
                     id: task.id().to_string(),
                     title: task.title().to_string(),
-                    detail: task.detail().to_string(),
+                    note: task.note().to_string(),
+                    scope: task
+                        .scope()
+                        .iter()
+                        .map(|path| path.as_str().to_string())
+                        .collect(),
+                    expects: task.expects().to_string(),
+                    shown: task.shown().map(|shown| shown.as_str().to_string()),
                     state: task.state().into(),
                     reason: task.reason().map(str::to_string),
                     working_windows: task
