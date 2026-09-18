@@ -647,13 +647,16 @@
   min-height: var(--h-row-table);
   padding-top: var(--space-2);
   padding-bottom: var(--space-2);
-  /* Two rows, for the title over its handle in one column. The row's own
-     --space-3 is a gutter between columns and would read as a gap between
-     lines, so the rows take the 2px the card's own label-over-value pair takes.
-     The cells that are not the title span both and stay centred against the
-     pair. The table is 8px taller for it, and that is what buys every handle
-     the same x here as in the card. */
-  grid-template-rows: auto auto;
+  /* Two rows, for the title over its handle in one column, and the cells that
+     are not the title span both and stay centred against the pair. The 2px is
+     the row-gap the headline used while it wrapped the handle itself, and the
+     row's own --space-3 would read as a gap between lines rather than columns.
+
+     **`min-content`, not `auto`.** The row's height is settled by the frame's
+     track at --h-row-table, and `auto` rows are compressed into it — the pair
+     lost 4px of its leading and the two lines closed up. Measured: 52px rows
+     either way, so the table is no taller for this. */
+  grid-template-rows: min-content min-content;
   row-gap: calc(var(--space-1) / 2);
   align-content: center;
 }
