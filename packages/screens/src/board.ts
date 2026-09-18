@@ -209,17 +209,13 @@ export const BOARD_SORTS: readonly { id: BoardSort; label: string }[] = [
  * facts. The badge and the actions take no name: a status reads as one without
  * a header, and a column of buttons is not a fact about the Job.
  *
- * **Four, since #1362.** `Dispatched by` is the fourth fact the Board wants,
- * and both things that had stopped it are answered: #1115 put `origin` on the
- * generator's wanted list, so the `ORIGIN` map reaches Bridge, and #1165 put
- * `dispatched_by` on `JobSummary`, so a sub-dispatched row's form has its
- * parent's id to fill the slot with. The comment that named those two gaps
- * outlived them — the column is drawn now, and `originReading` is the one
- * reading behind it and behind the header's own field.
+ * **Four, since #1362.** `Dispatched by` waited on two things that have both
+ * landed: #1115 carried the `ORIGIN` map to Bridge, and #1165 put
+ * `dispatched_by` beside the origin so `sub_dispatched`'s form has its slot
+ * filled. `originReading` is the one reading, shared with the header's field.
  *
- * **Every row has one.** `origin` is `NOT NULL`, so this is a fixed column and
- * not a conditional one like Repository and Tasks: there is no board where the
- * track would be reserved for nothing.
+ * **Fixed, not conditional like Repository and Tasks**: `origin` is `NOT
+ * NULL`, so no board reserves this track for nothing.
  */
 export const BOARD_COLUMNS = ["Workflow", "Progress", "Run time", "Dispatched by"];
 
