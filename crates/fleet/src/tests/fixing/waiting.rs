@@ -24,6 +24,7 @@ use crate::tests::daemon::{
 };
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
+use crate::tests::transcript::reading::{Transcript, A_WRITER_HAS_LONG_ENOUGH};
 
 const NAMES_IT: &str = "/bin/sh -c 'echo FAIL parser::takes_it; exit 1'";
 const NAMES_ANOTHER: &str = "/bin/sh -c 'echo FAIL parser::other; exit 1'";
@@ -112,30 +113,22 @@ async fn asked(fleet: &Arc<Fixture>, job: &JobId) {
     assert!(matches!(answer, FixAnswer::AlreadyClaimed(_)), "{answer:?}");
 }
 
-/// Every peer turn written into this Job's transcript, once there is one. The
-/// file is written off the turn, `tests::peers`' reason, so a read straight
-/// after `tell_peers` can be early.
+/// Every peer turn written into this Job's transcript, once there is one.
 async fn peer_turns(fleet: &Fixture, home: &TempDir, job: &JobId) -> String {
     let record = fleet.load(job).await.expect("the Job");
     let drone = record.assigned_drone().cloned().expect("a Drone on it");
-    let path =
-        crate::transcript::transcript_of(&home.path().to_string_lossy(), &record.handle(), &drone);
-    let read = || {
-        std::fs::read_to_string(&path)
-            .unwrap_or_default()
-            .lines()
-            .filter(|row| row.contains("\"occasion\":\"peers\""))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-    for _ in 0..200 {
-        let told = read();
-        if !told.is_empty() {
-            return told;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-    }
-    read()
+    let said = Transcript::of(home, &record.handle(), &drone)
+        .until(A_WRITER_HAS_LONG_ENOUGH, |said| !peers_in(said).is_empty())
+        .await
+        .unwrap_or_else(|stood| stood);
+    peers_in(&said)
+}
+
+fn peers_in(said: &str) -> String {
+    said.lines()
+        .filter(|row| row.contains("\"occasion\":\"peers\""))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// **The claim of the issue.** A dry run fails printing a claimed test, so the

@@ -4,7 +4,6 @@
 //! `crate::tests::plan_person_told`'s reason, so these read it back.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use core_model::JobId;
 use ipc::mcp::{DeclareScope, LeaveNote};
@@ -18,7 +17,7 @@ use crate::tests::daemon::{fittings, one};
 use crate::tests::peer::Placing;
 use crate::tests::planted::Held;
 use crate::tests::tmp::TempDir;
-use crate::transcript::transcript_of;
+use crate::tests::transcript::reading::{Transcript, A_WRITER_HAS_LONG_ENOUGH};
 
 const HEADING: &str = "OTHER JOBS WRITING WHERE YOU ARE";
 
@@ -68,26 +67,33 @@ async fn declares(fleet: &Fixture, port: u16, paths: &[&str]) {
         .expect("the Drone declares");
 }
 
-/// What Fleet has written into this Job's Drone's transcript so far.
-async fn transcript(fleet: &Fixture, home: &TempDir, job: &JobId) -> String {
+/// This Job's Drone's transcript.
+async fn transcript(fleet: &Fixture, home: &TempDir, job: &JobId) -> Transcript {
     let record = fleet.load(job).await.expect("the Job");
     let drone = record.assigned_drone().expect("a live Drone").clone();
-    let path = transcript_of(&home.path().to_string_lossy(), &record.handle(), &drone);
-    std::fs::read_to_string(path).unwrap_or_default()
+    Transcript::of(home, &record.handle(), &drone)
 }
 
 /// The transcript once it mentions the heading more than `past` times, or as it
-/// stands when the wait runs out. The file is written off the turn, so a read
-/// straight after one can be early.
+/// stands when the wait runs out.
 async fn told_more_than(fleet: &Fixture, home: &TempDir, job: &JobId, past: usize) -> String {
-    for _ in 0..200 {
-        let written = transcript(fleet, home, job).await;
-        if written.matches(HEADING).count() > past {
-            return written;
-        }
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
-    transcript(fleet, home, job).await
+    transcript(fleet, home, job)
+        .await
+        .until(A_WRITER_HAS_LONG_ENOUGH, |written| {
+            written.matches(HEADING).count() > past
+        })
+        .await
+        .unwrap_or_else(|stood| stood)
+}
+
+/// The transcript once it has stopped growing, for the two cases asserting a
+/// Drone was **not** told. Waiting for a turn that must not arrive would wait
+/// out the whole patience on every passing run, and prove nothing more.
+async fn told_nothing_more(fleet: &Fixture, home: &TempDir, job: &JobId) -> String {
+    transcript(fleet, home, job)
+        .await
+        .settled(A_WRITER_HAS_LONG_ENOUGH)
+        .await
 }
 
 #[tokio::test]
@@ -145,7 +151,7 @@ async fn a_new_shared_path_waits_out_the_spacing_and_a_repeated_one_is_not_said(
 
     declares(&fleet, 51204, &["crates/store", "crates/ipc"]).await;
     fleet.turn().await.expect("a turn inside the spacing");
-    let early = told_more_than(&fleet, &home, &reader, once).await;
+    let early = told_nothing_more(&fleet, &home, &reader).await;
     assert_eq!(
         early.matches(HEADING).count(),
         once,
@@ -211,7 +217,7 @@ async fn a_job_writing_elsewhere_hears_nothing_of_a_landing() {
     fleet.landing_announced(&reader).await;
     fleet.turn().await.expect("a turn");
 
-    let heard = told_more_than(&fleet, &home, &writer, 0).await;
+    let heard = told_nothing_more(&fleet, &home, &writer).await;
     assert!(
         !heard.contains(HEADING),
         "nothing it writes was changed: {heard}"

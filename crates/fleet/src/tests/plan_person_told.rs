@@ -17,7 +17,7 @@ use crate::daemon::Fleet;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fittings, worktree_directory};
 use crate::tests::tmp::TempDir;
-use crate::transcript::transcript_of;
+use crate::tests::transcript::reading::{Transcript, A_WRITER_HAS_LONG_ENOUGH};
 
 type Fixture = Fleet<testkit::FakeHarness, testkit::FakeVcs, FakeWorkProduct>;
 
@@ -71,21 +71,17 @@ async fn settled(fleet: &Fixture) {
 
 /// The transcript file's whole text, once it holds at least `how_many` rows.
 async fn rows_once_written(
-    records_root: &str,
+    home: &TempDir,
     handle: &str,
     drone: &core_model::DroneId,
     how_many: usize,
 ) -> String {
-    for _ in 0..400 {
-        let path = transcript_of(records_root, handle, drone);
-        if let Ok(written) = std::fs::read_to_string(&path) {
-            if written.lines().count() >= how_many {
-                return written;
-            }
-        }
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
-    panic!("the transcript never reached {how_many} rows");
+    Transcript::of(home, handle, drone)
+        .until(A_WRITER_HAS_LONG_ENOUGH, |written| {
+            written.lines().count() >= how_many
+        })
+        .await
+        .unwrap_or_else(|stood| panic!("the transcript never reached {how_many} rows: {stood}"))
 }
 
 #[tokio::test]
@@ -105,7 +101,7 @@ async fn a_working_drone_mid_step_is_told_a_persons_add() {
     let record = fleet.load(&job_id).await.expect("the Job");
     let handle = record.handle();
     let drone = record.assigned_drone().expect("a live Drone").clone();
-    let before = rows_once_written(&home.path().to_string_lossy(), &handle, &drone, 1).await;
+    let before = rows_once_written(&home, &handle, &drone, 1).await;
     let before_rows = before.lines().count();
 
     let add = AddTask {
@@ -119,13 +115,7 @@ async fn a_working_drone_mid_step_is_told_a_persons_add() {
         .await
         .expect("a plan with no rule against this add");
 
-    let after = rows_once_written(
-        &home.path().to_string_lossy(),
-        &handle,
-        &drone,
-        before_rows + 1,
-    )
-    .await;
+    let after = rows_once_written(&home, &handle, &drone, before_rows + 1).await;
     let new: String = after
         .lines()
         .skip(before_rows)
@@ -157,7 +147,7 @@ async fn a_working_drone_mid_step_is_told_a_persons_drop() {
     let record = fleet.load(&job_id).await.expect("the Job");
     let handle = record.handle();
     let drone = record.assigned_drone().expect("a live Drone").clone();
-    let before = rows_once_written(&home.path().to_string_lossy(), &handle, &drone, 1).await;
+    let before = rows_once_written(&home, &handle, &drone, 1).await;
     let before_rows = before.lines().count();
 
     let drop = DropTask {
@@ -168,13 +158,7 @@ async fn a_working_drone_mid_step_is_told_a_persons_drop() {
         .await
         .expect("a plan with no rule against this drop");
 
-    let after = rows_once_written(
-        &home.path().to_string_lossy(),
-        &handle,
-        &drone,
-        before_rows + 1,
-    )
-    .await;
+    let after = rows_once_written(&home, &handle, &drone, before_rows + 1).await;
     let new: String = after
         .lines()
         .skip(before_rows)

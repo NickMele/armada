@@ -273,6 +273,58 @@ format-drift contract test, per `testkit`'s doc comment — a fixture's shape
 has to track what the real output format actually looks like, not drift from
 it over time as the format changes upstream.
 
+### A test never reads across a seam its own production code writes on a task
+
+**A test that reads a value across a seam whose write is on a queue or a task
+nobody awaits — and reads it once — is the bug**, and it is not *a test that is
+slow*. On an idle machine the write has always landed by the time the read
+happens. On a machine doing anything else, sometimes it has not, and the test
+reports the absence as the defect. Widening a timeout is a test that fails
+later on a busier machine; the fix each time is to wait for the thing rather
+than for time to pass.
+
+`fleet`'s transcript is that seam. A row is handed to `Recording` on a bounded
+queue and put on disk by a writer task nothing awaits — deliberately, because a
+consumer that could block would make watching a Job change its outcome — so the
+call that produced a turn returns before the file carries it. Three tests read
+it once each, passed on every idle machine, and failed on the merge line. The
+panic for one of them was `[]` and said nothing else.
+
+**Why this is a type and a gate rule, and not this paragraph.**
+`restarting::until_spoken` already waited, correctly, with its reason in a doc
+comment, before either of the next two sites was written. The knowledge was in
+the crate, in a named helper, in the same module tree — and it did not reach
+the next two authors, who each wrote the loop again, the second of them only
+after it had already failed. A paragraph in a practice doc is a weaker version
+of the mechanism that had already failed twice. So what changed is not what is
+written down but **what is available to reach for**:
+
+- `crates/fleet/src/tests/transcript/reading.rs` holds `Transcript`, which has
+  **no read and no accessor for its path**. The only ways to text are `until`,
+  which polls for a predicate and hands back what the file stood at when its
+  patience ran out, and `settled`, which waits the writer out for a case
+  asserting a Drone was *not* told. The one-shot read that was the bug cannot
+  be spelled at a call site — section 2's pattern, rather than a check that
+  rejects it afterwards.
+- `xtask/src/rules_transcripts.rs` refuses the one way round it: naming
+  `transcript_of` again in a test module and reading the path it returns.
+
+**The rule is narrow on purpose.** There are ninety-nine direct file reads
+across the test modules and almost all read fixtures, which are written before
+the test starts and cannot race. A general rule against un-retried reads would
+hit every one of them, need an allowlist, and the allowlist would rot. The
+transcript seam is the one that burned, and it is the one the rule names.
+
+**Building the rule found a fourth site nobody was looking for.** The issue
+named three because three had failed, not because three was the number:
+`dry_run::told_checks` read the same file with no wait at all and had not yet
+been caught. A rule that had to fire on zero is what turned that up, which is
+the argument for having one.
+
+Both files' headers point here. **Do not delete this section to shorten
+them** — a rule whose reason is not findable gets deleted by the next person
+who finds it inconvenient, and the reason is longer than a header may be.
+
 ## 6. The 500/1200 line rule
 
 Warn at 500 lines, fail at 1200 — `xtask` rule three, and the same thresholds
