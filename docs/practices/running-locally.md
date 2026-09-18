@@ -551,12 +551,10 @@ you are standing in, so editing `crates/armada/src/land/` and running
 `scripts/land` again still runs whatever was installed before your edit.
 `scripts/restart` rebuilds and reinstalls it; until you run that (or point
 `ARMADA_LAND_ARMADA` at a binary you built yourself, by its absolute path),
-you are testing the old one. **The shim falls back to `scripts/land_py`,
-kept for one release, whenever the resolved `armada` is missing or does not
-yet know the `land` verb** — the case every agent's installed binary is in
-the moment this file itself reaches `main` — so the line stays open while
-installs catch up; it says so on stderr, naming `scripts/restart`, whenever
-it does.
+you are testing the old one. **An `armada` that does not know the verb is
+refused, exit 9, naming `scripts/restart`** — nothing is queued and nothing
+is merged. A Python implementation stood behind the shim for one release,
+while every installed binary still predated the verb; it is gone.
 
 **A gated turn takes minutes.** It keeps two worktrees under `.armada/land/` —
 one for the candidate, one for `main` itself — resets each to the commit it
