@@ -318,7 +318,7 @@ pub struct JobDetail {
     ///
     /// **The readable half of [`JobSummary::redispatched_from`]**, which is the
     /// one record and carries an id alone. Filled after [`JobDetail::of`], like
-    /// `replaced_by`. Since 16.5. #1474.
+    /// `replaced_by`. Since 16.6. #1474.
     ///
     /// **Absent is two facts, and `redispatched_from` tells them apart.** A Job
     /// no redispatch minted carries neither; one carrying the id and nothing

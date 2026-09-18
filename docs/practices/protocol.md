@@ -1484,7 +1484,7 @@ than per Check — `docs/concepts/runner-adapter.md`. So this field does not gro
 when a shape is added to that schema, and a Bridge rendering it needs to know
 nothing about what any runner can do.
 
-## Protocol 16.5: a redispatched Job names the one it replaced, readably
+## Protocol 16.6: a redispatched Job names the one it replaced, readably
 
 `#1474`. `JobDetail.replaces`, additive — `{ job_id, handle }`, the Job this one
 replaced, beside `replaced_by` and shaped the same.

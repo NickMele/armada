@@ -294,7 +294,7 @@ export type JobDetail = {
    */
   from_studio?: FromStudio;
   /**
-   * The job this one replaced, where a redispatch minted this one. Since 16.5.
+   * The job this one replaced, where a redispatch minted this one. Since 16.6.
    *
    * **The readable half of `JobSummary.redispatched_from`**, which is the one
    * record and carries an id alone. The id still identifies; this is what a
