@@ -20,8 +20,8 @@ async function openStudios(): Promise<void> {
 
 /**
  * The ask's own select, which is the picker this state must not draw. **Named exactly**: Helm's
- * footer draws a second combobox, *Point Helm at a different repository*, which a loose name
- * matches too.
+ * footer draws a second combobox — *Point Helm at a repository*, or *at a different repository*
+ * once Helm is pointed at one — which a loose name matches too.
  */
 const picker = () => page.getByRole("combobox", { name: "Repository", exact: true });
 

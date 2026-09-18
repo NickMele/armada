@@ -14,6 +14,12 @@ const repositories: HelmRepositoryOption[] = [
 /** The switch's own entry while Helm is pointed at nothing — the word the repository asks elsewhere use. */
 const UNPOINTED = "Choose a repository";
 
+/** What the switch is called with Helm pointed at nothing: there is no *different* repository yet. */
+const POINT = "Point Helm at a repository";
+
+/** And once it is pointed at one. */
+const REPOINT = "Point Helm at a different repository";
+
 /**
  * Picking an entry the way a person's mouse does, which is not what
  * `selectOptions` does on its own: **a native `<select>` fires `change` only
@@ -61,9 +67,46 @@ export default meta;
 
 type Story = StoryObj<typeof HelmComposer>;
 
-/** A single repository: no switch to draw, nothing to switch to. */
+/**
+ * A single repository, and Helm pointed at it: no switch to draw, nothing to
+ * switch to. **The switch offered here would be a switch to where Helm already
+ * is**, so the line names the repository instead and the handler goes unused.
+ */
 export const AtRest: Story = {
-  args: { current: repositories[0]!.id, repositories: [repositories[0]!], onStartFresh: fn() },
+  args: { current: repositories[0]!.id, repositories: [repositories[0]!], onSwitch: fn(), onStartFresh: fn() },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole("combobox")).not.toBeInTheDocument();
+    await expect(canvas.getByText(repositories[0]!.label)).toBeInTheDocument();
+  },
+};
+
+/**
+ * Pointed at nothing with exactly one repository set up — the moment the dock
+ * reads *Helm is not pointed at a repository. Pick armada to ask about it.*
+ * and, until now, gave nobody anything to pick with: the count that governs
+ * the control said one repository is nothing to switch between, which is true
+ * only while Helm is pointed at it.
+ *
+ * **The switch is the act that sentence names**, so it is drawn here, standing
+ * at its own entry with that one repository under it to choose.
+ */
+export const UnpointedWithOneRepository: Story = {
+  args: { repositories: [repositories[0]!], onSwitch: fn(), onStartFresh: fn(), disabled: true },
+  play: async ({ args, canvas, userEvent }) => {
+    const switcher = canvas.getByRole("combobox", { name: POINT });
+    // Its own entry, not the one repository: Helm is not pointed at that yet,
+    // and a switch displaying it would say it was.
+    await expect(switcher).toHaveDisplayValue(UNPOINTED);
+    await expect(switcher).not.toHaveDisplayValue(repositories[0]!.label);
+    // Said once, as with two or more: the entry says it and says what to do.
+    await expect(canvas.queryByText("No repository to ask yet")).not.toBeInTheDocument();
+
+    // And the one repository is pickable — which is the whole of why the
+    // control is drawn. `pick` because the browser fires no `change` for an
+    // entry already displayed, and `user-event` fires one regardless.
+    await pick(switcher, repositories[0]!.id, userEvent);
+    await expect(args.onSwitch).toHaveBeenCalledWith(repositories[0]!.id);
+  },
 };
 
 /** On All repositories, the dock's own switch — the rail's pick never moves for it. */
@@ -71,7 +114,7 @@ export const SwitchOnAll: Story = {
   args: { current: repositories[0]!.id, repositories, onSwitch: fn(), onStartFresh: fn() },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    const switcher = canvas.getByRole("combobox");
+    const switcher = canvas.getByRole("combobox", { name: REPOINT });
     // Pointed at one, the switch stands on it and carries nothing else — the
     // unpointed entry is not an option a pointed switch offers.
     await expect(switcher).toHaveDisplayValue(repositories[0]!.label);
@@ -95,7 +138,7 @@ export const SwitchOnAll: Story = {
 export const UnpointedStandsAtItsOwnEntry: Story = {
   args: { repositories, onSwitch: fn(), onStartFresh: fn(), disabled: true },
   play: async ({ args, canvas, userEvent }) => {
-    const switcher = canvas.getByRole("combobox", { name: "Point Helm at a different repository" });
+    const switcher = canvas.getByRole("combobox", { name: POINT });
     await expect(switcher).toHaveDisplayValue(UNPOINTED);
     await expect(switcher).not.toHaveDisplayValue(repositories[0]!.label);
     // Said once: the entry says it and says what to do, so the line does not
@@ -121,9 +164,13 @@ export const StartFreshRefusedWhileReplying: Story = {
   },
 };
 
-/** Nothing is servable yet — no repository has a Manifest for Helm to answer for. */
+/**
+ * Nothing is servable yet — no repository has a Manifest for Helm to answer
+ * for. **The handler is given and the switch is still not drawn**: pointing
+ * Helm at nothing is a reason to offer a repository, not to offer none.
+ */
 export const NothingToAskYet: Story = {
-  args: { disabled: true },
+  args: { repositories: [], onSwitch: fn(), disabled: true },
   play: async ({ args, canvas }) => {
     // No switch is drawn with nothing to point at, so the line is the only
     // place the state can be said, and it says it.
