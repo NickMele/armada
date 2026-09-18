@@ -272,7 +272,10 @@ fn an_edit_to_the_value_already_there_changes_nothing() {
     let same = [
         check(
             "test",
-            CheckEdit::Run("cargo nextest run --workspace --exclude acceptance".to_string()),
+            CheckEdit::Run(
+                "cargo nextest run --workspace --exclude acceptance --test-threads ${width}"
+                    .to_string(),
+            ),
         ),
         check("typecheck", CheckEdit::When(strings(WHEN))),
         command("fmt", CommandEdit::Destructive(false)),

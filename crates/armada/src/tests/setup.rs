@@ -154,8 +154,14 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
         named,
         vec![
             ("build", "cargo build --workspace --locked"),
-            ("test", "cargo nextest run --workspace --exclude acceptance"),
-            ("acceptance", "cargo nextest run -p acceptance"),
+            (
+                "test",
+                "cargo nextest run --workspace --exclude acceptance --test-threads ${width}",
+            ),
+            (
+                "acceptance",
+                "cargo nextest run -p acceptance --test-threads ${width}"
+            ),
             // **One name, not a chain.** A `run` gets no shell, so the `&&`
             // this used to hold was passed to `tsc` as an argument and the
             // Check could never pass. The chain lives in a `package.json`
@@ -164,9 +170,18 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             ("bridge_build", "pnpm -C apps/desktop build"),
             ("storybook", "pnpm -C packages/components build-storybook"),
             // The Bridge's tests, one Check per package since #849.
-            ("desktop_test", "pnpm -C apps/desktop test"),
-            ("screens_test", "pnpm -C packages/screens test"),
-            ("components_test", "pnpm -C packages/components test"),
+            (
+                "desktop_test",
+                "pnpm -C apps/desktop test --maxWorkers=${width}"
+            ),
+            (
+                "screens_test",
+                "pnpm -C packages/screens test --maxWorkers=${width}",
+            ),
+            (
+                "components_test",
+                "pnpm -C packages/components test --maxWorkers=${width}",
+            ),
             // The local merge line's own two suites, which nothing else runs.
             // `hooks_test` is checked below instead of here: its command names
             // the agent harness, and this file is under the gate rule that

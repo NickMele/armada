@@ -25,6 +25,23 @@ base: main
 # repository's past runs (#1062). There is no `order:` key, for the reason a
 # workflow's `steps[]` has none.
 #
+# **`${width}` is how many workers a Check may start**, and every test runner
+# here is handed one rather than left to size itself. Absent the substitution a
+# suite takes the machine: on 17 Sep a Drone's `desktop_test` spawned sixteen
+# headless Chromium workers and took the load average to 73, which made the
+# owner's Bridge and editor unusable while one Job worked. The number is the
+# machine's, already divided by the Jobs that may run at once, and a Check may
+# declare `width:` to take less — never more. Nothing enforces it: these lines
+# are the enforcement, which is why a runner that sizes itself from a config
+# file rather than a flag reads `ARMADA_CHECK_WIDTH` from its environment
+# instead. #1444.
+#
+# **No `--` before the flag.** `pnpm -C <dir> test -- --maxWorkers=4` reaches
+# vitest as `vitest run -- --maxWorkers=4`, and an argument after a bare `--` is
+# a positional rather than an option, so it is read and discarded. Measured
+# 18 Sep on `desktop_test`: unbounded peaked at 20 vitest processes, `--` with
+# `--maxWorkers=4` peaked at 20, and `--maxWorkers=2` without it peaked at 8.
+#
 # **`runs_at: gate` keeps a Check out of a Drone's own run** and nowhere else —
 # the gate still runs it (#849). The two here are the slowest things a Drone
 # asked for: `storybook` at 1m21s–2m42s and the story tests at up to 184s,
@@ -76,13 +93,13 @@ checks:
     # its own, so a red `test` always names a unit test and never a milestone
     # claim breaking. See docs/practices/acceptance-tests.md. `nextest`
     # measured 3x `cargo test`.
-    run: cargo nextest run --workspace --exclude acceptance
+    run: cargo nextest run --workspace --exclude acceptance --test-threads ${width}
     # `--exclude` goes with `--workspace`, and cargo refuses it without one —
     # so the exclusion is restated as `except`, and it is the same exclusion
     # for the same reason: a narrowed run that pulled `acceptance` back in
     # would blur the line `test` and `acceptance` keep between them.
     narrow:
-      run: cargo nextest run
+      run: cargo nextest run --test-threads ${width}
       each: "-p {}"
       under: crates
       except:
@@ -114,7 +131,7 @@ checks:
     # A milestone's own claim, checked on its own so a red `acceptance` names
     # a broken claim and a red `test` never does. See
     # docs/practices/acceptance-tests.md and #1130.
-    run: cargo nextest run -p acceptance
+    run: cargo nextest run -p acceptance --test-threads ${width}
     # No `narrow`: `-p acceptance` already is the narrowest run a change could
     # ask for, unlike `build` and `test` above which narrow to whichever
     # workspace member changed.
@@ -206,7 +223,7 @@ checks:
   desktop_test:
     # Main's own state machines in node, against a `ws` server on a loopback
     # port — nothing else here runs main (#324).
-    run: pnpm -C apps/desktop test
+    run: pnpm -C apps/desktop test --maxWorkers=${width}
     # One test by exact name, which Fleet runs against a checkout of main
     # before a Drone's `draft_fix` drafts anything — same shape as the two
     # Rust one_test lines above, `vitest -t` in place of `nextest -E`. #1203.
@@ -227,7 +244,7 @@ checks:
   screens_test:
     # Pure modules in node, and screens in a browser project, because a screen
     # cannot be storied: `xtask/src/rules_layers.rs` refuses the import.
-    run: pnpm -C packages/screens test
+    run: pnpm -C packages/screens test --maxWorkers=${width}
     # See desktop_test's one_test above. #1203.
     one_test:
       run: pnpm --dir packages/screens exec vitest run -t {}
@@ -246,7 +263,7 @@ checks:
     # Every component story in a real browser through `@storybook/addon-vitest`;
     # a `play` function has its assertions run. Whole screens are tested
     # through `App` on the mock Fleet instead, in `desktop_test`.
-    run: pnpm -C packages/components test
+    run: pnpm -C packages/components test --maxWorkers=${width}
     runs_at: gate
     # See desktop_test's one_test above. The Storybook interaction tests'
     # own names (a story's `name`, not its export) are what a Drone names
