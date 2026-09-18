@@ -1,13 +1,23 @@
 // A step's rows as the Drone narrated them, placed under the plan task it had
 // marked working when each happened. #1185.
 //
-// **Placed by the windows Fleet sends, and by nothing else.** A call is never
-// matched to a task by its path or its words: a Drone that never calls
-// `update_task` leaves no windows, and all of its work is outside any task.
+// **A window places a row. Where no window covers an Edit, the task whose
+// `scope` names the file does** — #1498: a task marked `done` without ever
+// being marked `working` has no window, so its own declared files read as
+// changed outside every task. A path written down in `scope` is a declaration
+// and reading it is not guessing; a task's title and its prose are still never
+// matched, and no call but an Edit or a Write is ever moved by one.
+//
+// **A sentence goes with a run a declaration moved whole**, so a reader is not
+// left an `Outside any task` heading over nothing while the edits it introduced
+// draw elsewhere. A window holding the sentence keeps it, even where every call
+// under it then moved: the clock is what placed it, and a declaration only ever
+// fills a gap the clock left.
+import { toolFamily } from "@armada/components";
 import type { PlanTask, Turn, WorkPlan } from "@armada/protocol";
 
 import { instant, lasting } from "./duration";
-import type { LogRow } from "./story";
+import { editOf, type LogRow } from "./story";
 import { workingOf } from "./working";
 
 /** One sentence the Drone said, and the rows after it up to the next. */
@@ -75,6 +85,130 @@ export function taskAt(ts: string, tasks: readonly PlanTask[]): string | undefin
 }
 
 /**
+ * The task whose `scope` names `path`, by id — what places an edit no window
+ * covers. Nothing here reads the clock, so a window always answers first.
+ *
+ * **Matched at a path segment, not against the diff.** A call names the file
+ * under a worktree and a declaration is repository-relative, and `narrationOf`
+ * is never handed the diff to reconcile the two — `repoPathOf`'s rule, applied
+ * without it. A declared directory holds the files under it, because
+ * `declare_scope` takes both.
+ *
+ * **The more specific declaration wins, and a tie goes to plan order.** An
+ * exact name beats a directory holding it, and a deeper directory beats a
+ * shallower one.
+ */
+export function declaredBy(path: string, tasks: readonly PlanTask[]): string | undefined {
+  let best: { id: string; exact: boolean; length: number } | undefined;
+  for (const task of tasks) {
+    for (const declared of task.scope ?? []) {
+      const named = declared.endsWith("/") ? declared.slice(0, -1) : declared;
+      if (named === "") continue;
+      const exact = path === named || path.endsWith(`/${named}`);
+      const under = path.startsWith(`${named}/`) || path.includes(`/${named}/`);
+      if (!exact && !under) continue;
+      const better =
+        best === undefined ||
+        (exact && !best.exact) ||
+        (exact === best.exact && named.length > best.length);
+      if (better) best = { id: task.id, exact, length: named.length };
+    }
+  }
+  return best?.id;
+}
+
+/**
+ * The task a changing call belongs to by its declared path, or nothing.
+ *
+ * **Only an Edit or a Write moves** — `toolFamily`'s `changing` roster, the
+ * gate `editsIn` reads by. A `Read` or a `Bash` call names no task it was for
+ * and stays where the clock put it.
+ */
+function declaredFor(turn: Turn, tasks: readonly PlanTask[]): string | undefined {
+  const saw = turn.saw;
+  if (saw.event !== "called" || toolFamily(saw.tool) !== "changing" || saw.detail === "") {
+    return undefined;
+  }
+  return declaredBy(editOf(saw.detail, saw.truncated).path, tasks);
+}
+
+/** A row's task, and whether a window is what placed it there. */
+type Placing = { id?: string; declared: boolean };
+
+/** Whether a row ends the run under the sentence before it. */
+function breaks(row: LogRow): boolean {
+  return row.kind === "said" && row.actor !== "armada";
+}
+
+/**
+ * The task each row belongs to, by row index.
+ *
+ * **Resolved ahead of the walk because a sentence looks forward.** A sentence
+ * goes with a run of edits a declaration placed, and which task that is cannot
+ * be known until the run has been read — so placement stopped being something
+ * the walk could decide row by row.
+ */
+function placingOf(
+  rows: readonly LogRow[],
+  turnOf: Map<string, Turn>,
+  tasks: readonly PlanTask[],
+): (string | undefined)[] {
+  /** What the clock, and then the declarations, say about one turn alone. */
+  const placingAt = (turn: Turn): Placing => {
+    const window = taskAt(turn.ts, tasks);
+    if (window !== undefined) return { id: window, declared: false };
+    const declared = declaredFor(turn, tasks);
+    return declared === undefined ? { declared: false } : { id: declared, declared: true };
+  };
+
+  // **A call and its answer are one thing that happened** — `story.ts`'s own
+  // rule for folding the two into one row, and the rule for placing the
+  // failure it does not fold. The clock used to place them together because
+  // their instants are a fraction apart; a declaration moves only the call, so
+  // the answer has to be told where the call went or the row saying what came
+  // back draws under a heading for work that did not happen there.
+  const own: (Placing | undefined)[] = [];
+  const byCall = new Map<string, Placing>();
+  for (const row of rows) {
+    const turn = turnOf.get(row.id);
+    if (turn === undefined) {
+      own.push(undefined);
+      continue;
+    }
+    const saw = turn.saw;
+    // A refused call answers the same way, and carries the same `call`.
+    const answering =
+      saw.event === "answered" || saw.event === "refused" ? byCall.get(saw.call) : undefined;
+    const placing = answering ?? placingAt(turn);
+    if (saw.event === "called") byCall.set(saw.call, placing);
+    own.push(placing);
+  }
+
+  const placed = own.map((one) => one?.id);
+  for (const [index, row] of rows.entries()) {
+    // **A window still holds a sentence where it holds anything.** A sentence
+    // said before the Drone marked a task working keeps drawing outside even
+    // where every call under it then landed in that task: that is what the
+    // clock says, and the declaration is only filling a gap the clock left.
+    const mine = own[index];
+    if (!breaks(row) || mine === undefined || mine.id !== undefined) continue;
+    let together: string | undefined;
+    let whole = true;
+    for (let after = index + 1; after < rows.length && whole; after += 1) {
+      if (breaks(rows[after] as LogRow)) break;
+      // A row carrying no turn casts no vote: it is one the walk leaves where
+      // the row before it went, so it cannot disagree about anything.
+      const one = own[after];
+      if (one === undefined) continue;
+      whole = one.declared && (together === undefined || one.id === together);
+      together = one.id;
+    }
+    if (whole && together !== undefined) placed[index] = together;
+  }
+  return placed;
+}
+
+/**
  * The step's rows as sentences, under the task each belongs to.
  *
  * `mostEntries` bounds what is drawn to that many of the step's own entries,
@@ -116,6 +250,7 @@ export function narrationOf(
 
   // Walked in row order, so every row is placed exactly once. A row whose
   // instant will not read stays where the row before it went.
+  const placing = placingOf(rows, turnOf, tasks);
   let placed: TaskWork = outside;
   let beat: Beat | undefined;
   const spans = new Map<TaskWork, { from?: string; to?: string }>();
@@ -123,7 +258,7 @@ export function narrationOf(
     const drawn = index >= from;
     const turn = turnOf.get(row.id);
     if (turn !== undefined) {
-      const id = taskAt(turn.ts, tasks);
+      const id = placing[index];
       const next = id === undefined ? outside : (byTask.get(id) ?? outside);
       if (next !== placed) beat = undefined;
       placed = next;

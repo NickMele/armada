@@ -105,12 +105,20 @@
    **Two bands, because the handle's own column moved the sum.** The floors as
    drawn now need 1085px on a four-fact row — measured, at the frame, with the
    handle's 132px and its gutter — so the first band starts where they stop
-   fitting rather than at the 900px the run used to clear. Run time and the
-   fourth fact give way there, which is the order the row already had; Progress
-   keeps its step name until the second band, and the handle keeps a column in
-   both. **The handle is not what gives way**: a row is quoted by it, and
-   shrinking every other track to nothing still leaves a four-fact row 71px too
-   wide at 954, so something has to go and it is not the identifier.
+   fitting rather than at the 900px the run used to clear. Progress keeps its
+   step name until the second band, and the handle keeps a column in both.
+   **The handle is not what gives way**: a row is quoted by it, and shrinking
+   every other track to nothing still leaves a four-fact row 71px too wide at
+   954, so something has to go and it is not the identifier.
+
+   **What gives way is the trailing three, whatever the row has.** On the
+   four-fact row this band was written for that is Run time and Dispatched by;
+   on the five- and six-fact rows `columnsFor` can name — Repository on All
+   repositories, Tasks wherever a Job has a plan — it is the last three of
+   those and Run time survives. One rule either way, because the order the
+   Board draws its facts in is already the order it would give them up in.
+   Those two counts gained track lists of their own above this band (#1499),
+   and nothing above 1100px is hidden.
 
    armada-allow-off-contract: a container condition cannot read a custom property — measured, not assumed, same as @media
    1100px is where the drawn floors stop fitting, and the layout breakpoint besides — docs/contracts/design-system.md */

@@ -2,14 +2,16 @@
 // account for. #1187.
 //
 // A task's files are its Edit and Write calls, placed by the working windows
-// (`taskAt`), never matched to a task by words. **Their numbers are edit
-// sizes**: the line counts `edited` in `crates/adapters/src/transcript.rs`
-// writes, not diff lines, so they are labelled as such. A file Bash wrote names
-// no task and goes in the row no task owns.
+// (`taskAt`) and, where no window covers one, by the paths the task wrote down
+// in `scope` (`declaredBy`, #1498) — never matched to a task by its words.
+// **Their numbers are edit sizes**: the line counts `edited` in
+// `crates/adapters/src/transcript.rs` writes, not diff lines, so they are
+// labelled as such. A file Bash wrote names no task and goes in the row no task
+// owns.
 import { toolFamily, type ChangedFile } from "@armada/components";
 import type { PlanTask, Turn } from "@armada/protocol";
 
-import { taskAt } from "./narration";
+import { declaredBy, taskAt } from "./narration";
 import { editOf } from "./story";
 
 /** One call that changed a file. */
@@ -20,7 +22,7 @@ export type Edit = {
   path: string;
   added?: number;
   deleted?: number;
-  /** The task that was being worked when it was made, by id. */
+  /** The task it was made for: the one being worked, or the one that declared the path. */
   task?: string;
 };
 
@@ -41,10 +43,13 @@ export function editsIn(turns: readonly Turn[], tasks: readonly PlanTask[]): Edi
       continue;
     }
     if (saw.detail === "") continue;
-    const task = taskAt(turn.ts, tasks);
+    const edit = editOf(saw.detail, saw.truncated);
+    // A window wins where there is one; a declared path fills the gap one
+    // missing leaves, which is `narrationOf`'s rule for the same call.
+    const task = taskAt(turn.ts, tasks) ?? declaredBy(edit.path, tasks);
     edits.push({
       id: String(turn.seq),
-      ...editOf(saw.detail, saw.truncated),
+      ...edit,
       ...(task === undefined ? {} : { task }),
     });
   }
