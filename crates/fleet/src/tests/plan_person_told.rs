@@ -36,10 +36,10 @@ async fn a_plan_of_four(fleet: &Arc<Fixture>, job: &core_model::JobId) {
             &PlanChange::Recorded {
                 approach: Approach::new("Bound the reader").expect("an approach"),
                 tasks: vec![
-                    NewTask::new("Stop at the end", "").expect("a title"),
-                    NewTask::new("Cover it", "").expect("a title"),
-                    NewTask::new("Check the writer too", "").expect("a title"),
-                    NewTask::new("Note it in the module", "").expect("a title"),
+                    NewTask::new("Stop at the end", "", &[], "").expect("a title"),
+                    NewTask::new("Cover it", "", &[], "").expect("a title"),
+                    NewTask::new("Check the writer too", "", &[], "").expect("a title"),
+                    NewTask::new("Note it in the module", "", &[], "").expect("a title"),
                 ],
             },
             PlanHand::Step(&StepId::new("implement")),
@@ -110,7 +110,9 @@ async fn a_working_drone_mid_step_is_told_a_persons_add() {
 
     let add = AddTask {
         title: "Add a regression test".to_string(),
-        detail: String::new(),
+        note: String::new(),
+        scope: Vec::new(),
+        expects: String::new(),
         after: String::new(),
     };
     Fleet::add_task_by_person(Arc::clone(&fleet), ipc::JobId::from(&job_id), add)
@@ -211,7 +213,9 @@ async fn with_no_live_session_nothing_is_sent_and_nothing_respawns() {
 
     let add = AddTask {
         title: "Add a regression test".to_string(),
-        detail: String::new(),
+        note: String::new(),
+        scope: Vec::new(),
+        expects: String::new(),
         after: String::new(),
     };
     let plan = Fleet::add_task_by_person(Arc::clone(&fleet), ipc::JobId::from(&job_id), add)

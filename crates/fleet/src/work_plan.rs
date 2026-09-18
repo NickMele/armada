@@ -337,7 +337,8 @@ where
         job_id: ipc::JobId,
         add: ipc::AddTask,
     ) -> Result<ipc::WorkPlan, Refusal> {
-        let task = NewTask::new(&add.title, &add.detail)
+        let scope: Vec<&str> = add.scope.iter().map(String::as_str).collect();
+        let task = NewTask::new(&add.title, &add.note, &scope, &add.expects)
             .ok_or_else(|| self.refusal(Adrift::Unnameable))?;
         let after = match add.after.trim() {
             "" => None,
@@ -419,6 +420,9 @@ where
         let change = PlanChange::Updated {
             task,
             to: TaskUpdate::Dropped(reason.clone()),
+            // A person's drop says why in `reason`; nothing proved a task
+            // that is not being done.
+            shown: None,
         };
         let plan = {
             let mut store = self.store().lock().await;

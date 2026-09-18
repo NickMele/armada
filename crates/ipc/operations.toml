@@ -139,6 +139,23 @@ notes = """
 `agent_access` is `No`: a session must not read another session.
 """
 
+[operations.get_helm_debug_info]
+kind = "query"
+transport = "HTTP"
+agent_access = "No"
+description = "One repository's Helm session as one quotable record, taken at a moment"
+notes = """
+**The error treatment's debug payload, one subject over** — `docs/contracts/design-system.md`, *The debug payload*, and `#1367`. It answers the six things that decide why a session answered as it did: the repository, its authority and model; the brief as it was sent; the tools the door offered, by name; the thread, with each turn's cost and turn count; what has crossed since the cursor its last poll named; and the protocol Fleet speaks beside the Fleet process that answered.
+
+**Fields, not text.** Bridge formats them, so one producer writes the artifact and the expanded view renders the same string the clipboard takes — `packages/components/src/errors/ErrorNotice/payload.ts` is the precedent and the reason.
+
+**The thread is bounded and says what it cut**, the way a log tail does, and a long reply is cut with its own length beside it. **`polled` is what the session's own poll was answered**, kept as the door answers it rather than recounted here — a window counted later is not the window a turn read.
+
+**Not a second `observe_helm`.** That one streams a live conversation; this is read once, when a person asks for it.
+
+`agent_access` is `No`, `observe_helm`'s reason and one further: a session reading its own brief and roster would be reading a record kept about it.
+"""
+
 [operations.ask_helm]
 kind = "command"
 transport = "HTTP"

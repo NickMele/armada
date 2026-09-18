@@ -89,6 +89,9 @@ pub struct FakeDaemon {
     pub helm_thread: Mutex<Vec<ipc::HelmMessage>>,
     /// Every permission question the door put to this daemon, in order.
     pub asked_to_run: Mutex<Vec<ipc::AskingToRun>>,
+    /// What a Helm session's last poll was answered, as the door told this
+    /// daemon — what `get_helm_debug_info` reports. `#1367`.
+    pub helm_polled: Mutex<Option<ipc::EventsSince>>,
     /// The peer port a test says a Helm session holds, and what that session
     /// may call. **Fleet's placement is `fleet::peer`'s and tested there**;
     /// this is what the door does with the answer.
@@ -134,6 +137,7 @@ impl FakeDaemon {
             helm: crate::HelmFeed::new(),
             helm_thread: Mutex::new(Vec::new()),
             asked_to_run: Mutex::new(Vec::new()),
+            helm_polled: Mutex::new(None),
             helm_on: Mutex::new(None),
             redirected_by: Mutex::new(Vec::new()),
             proposed_by: Mutex::new(Vec::new()),

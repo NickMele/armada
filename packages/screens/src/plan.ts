@@ -33,6 +33,10 @@ export function planOf(whole: JobDetail | null): PlanRegionRead | undefined {
       title: task.title,
       state: markStateOf(task.state),
       reason: task.reason,
+      note: task.note,
+      scope: task.scope,
+      expects: task.expects,
+      shown: task.shown,
     }));
     return { recorded: true, approach: plan.approach, tasks };
   }

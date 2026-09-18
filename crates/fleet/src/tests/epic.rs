@@ -172,7 +172,7 @@ async fn planning_a_wave(home: &TempDir) -> (Fixture, JobId) {
 fn a_wave_plan() -> PlanChange {
     PlanChange::Recorded {
         approach: Approach::new("Dispatch the one piece the split names").expect("an approach"),
-        tasks: vec![NewTask::new("Port the parser", "").expect("a title")],
+        tasks: vec![NewTask::new("Port the parser", "", &[], "").expect("a title")],
     }
 }
 

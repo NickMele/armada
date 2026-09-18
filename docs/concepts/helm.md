@@ -105,6 +105,16 @@ Rung 3 carries no MCP operation for Helm to reach for, ladder or no. A Job Helm 
 
 **On a Studio, Helm's act is `studio.helm_acted`**, published beside the `studio.changed` every write publishes, naming the Studio, the act and what it added. A person's act on a Studio publishes `studio.changed` alone, so the two are told apart by kind rather than by a field someone has to remember to read. **The record keeps it too**: each node and edge carries `added_by` and a Studio its `named_by`, a person or Helm, so a client that was not connected when Helm acted reads who did what off `get_studio`.
 
+## Reporting a bad answer
+
+**A session is carried as one record, with the same act every error carries.** *Copy debug info*, bound to `c`, one producer formatting exactly what is copied, and the expanded view rendering that same string — `../contracts/design-system.md`, *The debug payload*. On 17 Sep 2026 Helm refused a question and the only way to report it was retyping the conversation by hand, without the brief, the tools, the authority or the events that decided the answer.
+
+**One press copies it, and *Details* beside that opens the same artifact to read.** That is the banner form of the error treatment, and the dock is the standing surface it is for: Helm has just answered badly and the record is wanted now, so the reading is second rather than in the way. The disclosure takes the banner's own word, and the sheet it opens is titled *Session record*. `get_helm_debug_info` answers the repository, its authority and model; the brief as it was sent; the tools the door offered by name; the thread with each turn's cost, its calls and its refusals; what the last poll was answered; and the protocol Fleet speaks beside the Fleet process that answered.
+
+**It says what it holds rather than promising what it does not.** A thread carries the person's own words and Helm's, and the checkout names a folder on their disk; nothing here is a structured field a type bounds, so the sentence under it states that and makes no claim about the rest.
+
+**One artifact taken at a moment, and not a second Observe.** `observe_helm` streams a live conversation to the dock; this is read once, when a person asks for it. A long session is bounded and the record says how many lines it left out, the way a log tail does.
+
 ## Session model
 
 **One conversation per repository, not per topic.** See Placement above for how it is reached and retained. A session per topic would require deciding when a topic has ended — a judgement nobody wants to make mid-investigation — so the boundary is the repository, which already exists, rather than a question.

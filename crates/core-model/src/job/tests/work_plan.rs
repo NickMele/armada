@@ -29,7 +29,7 @@ fn recorded(titles: &[&str]) -> PlanEntry {
             approach: Approach::new("Fix the reader's bound, then cover it").expect("an approach"),
             tasks: titles
                 .iter()
-                .map(|title| NewTask::new(title, "").expect("a title"))
+                .map(|title| NewTask::new(title, "", &[], "").expect("a title"))
                 .collect(),
         },
         by_step("plan"),
@@ -41,6 +41,7 @@ fn updated(id: &str, to: TaskUpdate) -> PlanEntry {
         PlanChange::Updated {
             task: TaskId::read(id).expect("a task id"),
             to,
+            shown: None,
         },
         by_step("implement"),
     )
@@ -124,7 +125,7 @@ fn an_added_task_takes_the_next_id_and_the_place_it_was_put() {
         recorded(&["one", "two"]),
         entry(
             PlanChange::Added {
-                task: NewTask::new("between", "found while reading").expect("a title"),
+                task: NewTask::new("between", "found while reading", &[], "").expect("a title"),
                 after: TaskId::read("T1"),
             },
             PlanAuthor::Person,
@@ -140,7 +141,7 @@ fn an_added_task_takes_the_next_id_and_the_place_it_was_put() {
         ["T1", "T3", "T2"],
         "an id is never reused and never renumbered"
     );
-    assert_eq!(plan.tasks()[1].detail(), "found while reading");
+    assert_eq!(plan.tasks()[1].note(), "found while reading");
 }
 
 #[test]
@@ -159,7 +160,7 @@ fn a_change_the_plan_cannot_take_is_refused_by_name() {
     );
     let misplaced = entry(
         PlanChange::Added {
-            task: NewTask::new("t", "").expect("a title"),
+            task: NewTask::new("t", "", &[], "").expect("a title"),
             after: TaskId::read("T7"),
         },
         by_step("implement"),
@@ -201,7 +202,7 @@ fn a_task_id_reads_only_its_own_spelling() {
     for spelling in ["T0", "t1", "T01", "1", "T", "T1a", ""] {
         assert_eq!(TaskId::read(spelling), None, "{spelling:?}");
     }
-    assert!(NewTask::new("   ", "detail").is_none());
+    assert!(NewTask::new("   ", "detail", &[], "").is_none());
     assert!(Approach::new("").is_none());
 }
 
@@ -312,58 +313,121 @@ fn a_drop_closes_a_window_and_a_recording_forgets_them() {
 }
 
 /// The rendering a later step's Drone and the planning step's own Judge are
-/// both handed. **The detail is the half that carries the paths**, so a
-/// rendering without it is a plan nobody downstream can act on.
+/// both handed. **Every field is in it**, because this is the whole of the
+/// plan the next step sees: one left out is one it re-derives.
 #[test]
-fn a_rendering_hangs_each_tasks_detail_under_its_title() {
-    let detailed = entry(
+fn a_rendering_carries_every_field_a_task_holds() {
+    let recorded = entry(
         PlanChange::Recorded {
             approach: Approach::new("Reword the stat").expect("an approach"),
             tasks: vec![
                 NewTask::new(
                     "Reword the Drones stat itself",
-                    "packages/screens/src/overview.ts",
+                    "the value becomes \"1 running · 2 max\"",
+                    &[
+                        "packages/screens/src/overview.ts",
+                        "packages/screens/src/overview.test.ts",
+                    ],
+                    "overview.test.ts reads \"1 running · 2 max\"",
                 )
                 .expect("a title"),
-                NewTask::new("Cover it", "").expect("a title"),
+                NewTask::new("Cover it", "", &[], "").expect("a title"),
             ],
         },
         by_step("plan"),
     );
-    let plan = WorkPlan::fold(&[detailed])
+    let plan = WorkPlan::fold(&[recorded])
         .expect("a history that replays")
         .expect("a plan");
     assert_eq!(
         plan.rendered(),
         "Approach: Reword the stat\n\nTasks:\
          \n  T1 [open] Reword the Drones stat itself\
-         \n      packages/screens/src/overview.ts\
+         \n      note: the value becomes \"1 running · 2 max\"\
+         \n      files: packages/screens/src/overview.ts packages/screens/src/overview.test.ts\
+         \n      expects: overview.test.ts reads \"1 running · 2 max\"\
          \n  T2 [open] Cover it",
-        "a detail hangs under its title, and a task without one gets no line"
+        "a task with no fields beyond its title gets no lines under it"
     );
 }
 
-/// A dropped task keeps both: the reason stays on the title's line, where a
-/// reader looking for why scans, and the detail stays under it.
+/// What the plan expected and what the work showed are both kept, and read
+/// beside each other. **The work disagreeing with the plan is the useful
+/// answer**, so nothing here reconciles them.
 #[test]
-fn a_dropped_task_renders_its_reason_and_its_detail() {
-    let reason = crate::DropReason::new("already done on main").expect("a reason");
+fn the_evidence_the_work_showed_stands_beside_what_the_plan_expected() {
     let recorded = entry(
         PlanChange::Recorded {
             approach: Approach::new("Reword the stat").expect("an approach"),
-            tasks: vec![
-                NewTask::new("Clear the other spellings", "TheShell.stories.tsx").expect("a title"),
-            ],
+            tasks: vec![NewTask::new("Reword it", "", &[], "overview.test.ts").expect("a title")],
         },
         by_step("plan"),
     );
-    let plan = WorkPlan::fold(&[recorded, updated("T1", TaskUpdate::Dropped(reason))])
-        .expect("a history that replays")
+    let done = entry(
+        PlanChange::Updated {
+            task: TaskId::read("T1").expect("a task id"),
+            to: TaskUpdate::Done,
+            shown: crate::Shown::new("left-column.test.ts:24, not the one planned"),
+        },
+        by_step("implement"),
+    );
+    let plan = WorkPlan::fold(&[recorded, done])
+        .expect("replays")
+        .expect("a plan");
+    let task = &plan.tasks()[0];
+    assert_eq!(task.expects(), "overview.test.ts");
+    assert_eq!(
+        task.shown().map(crate::Shown::as_str),
+        Some("left-column.test.ts:24, not the one planned")
+    );
+    assert!(plan.rendered().contains("expects: overview.test.ts"));
+    assert!(plan
+        .rendered()
+        .contains("shown: left-column.test.ts:24, not the one planned"));
+}
+
+/// An update carrying no evidence leaves what an earlier one recorded, so a
+/// task reopened and finished again does not lose what its first pass showed.
+#[test]
+fn an_update_with_nothing_shown_keeps_what_was_shown_before() {
+    let recorded = entry(
+        PlanChange::Recorded {
+            approach: Approach::new("a").expect("an approach"),
+            tasks: vec![NewTask::new("one", "", &[], "").expect("a title")],
+        },
+        by_step("plan"),
+    );
+    let id = TaskId::read("T1").expect("a task id");
+    let shown = entry(
+        PlanChange::Updated {
+            task: id,
+            to: TaskUpdate::Done,
+            shown: crate::Shown::new("the covering test"),
+        },
+        by_step("implement"),
+    );
+    let reopened = entry(
+        PlanChange::Updated {
+            task: id,
+            to: TaskUpdate::Open,
+            shown: None,
+        },
+        by_step("implement"),
+    );
+    let plan = WorkPlan::fold(&[recorded, shown, reopened])
+        .expect("replays")
         .expect("a plan");
     assert_eq!(
-        plan.rendered(),
-        "Approach: Reword the stat\n\nTasks:\
-         \n  T1 [dropped] Clear the other spellings — dropped: already done on main\
-         \n      TheShell.stories.tsx"
+        plan.tasks()[0].shown().map(crate::Shown::as_str),
+        Some("the covering test")
     );
+}
+
+/// A blank path is dropped rather than stored, so a trailing comma in a tool
+/// call does not become a file the next step is told to open.
+#[test]
+fn a_tasks_scope_keeps_no_blank_paths() {
+    let task = NewTask::new("one", "", &["  ", "crates/ipc/src/lib.rs", ""], "").expect("a title");
+    assert_eq!(task.scope().len(), 1);
+    assert_eq!(task.scope()[0].as_str(), "crates/ipc/src/lib.rs");
 }

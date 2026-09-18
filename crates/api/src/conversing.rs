@@ -1,5 +1,6 @@
-//! A Helm conversation's socket: a channel per conversation, the relay, and the
-//! three routes. `#939`.
+//! A Helm conversation's socket: a channel per conversation, the relay, the
+//! routes that speak into it, and the record it is reported with. `#939`,
+//! `#1367`.
 //!
 //! **`crate::observing`'s shape, one subject over**, and simpler for it: a
 //! conversation outlives every process that answers in it, so its channel is
@@ -164,6 +165,17 @@ pub(crate) async fn observe_helm<D: Conversations>(
 ) -> Response {
     match served.daemon().observe_helm(scope.manifest()).await {
         Ok(observed) => upgrade.on_upgrade(move |socket| relay(socket, observed)),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// The session as one quotable record. `#1367`.
+pub(crate) async fn get_helm_debug_info<D: Conversations>(
+    State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
+) -> Response {
+    match served.daemon().get_helm_debug_info(scope.manifest()).await {
+        Ok(info) => answer(StatusCode::OK, &info, served.run_id()),
         Err(refusal) => refused(refusal),
     }
 }
