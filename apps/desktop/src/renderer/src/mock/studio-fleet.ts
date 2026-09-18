@@ -12,6 +12,7 @@
 // picks is `fleet`'s.
 
 import type {
+  EpicTake,
   Studio,
   StudioCapture,
   StudioEdge,
@@ -412,7 +413,7 @@ export function everyKind(jobId: string): Studio {
     { id: "every-link-bare", kind: "link", address: LONG_ADDRESS, position: place(-1, 0), created_at: MADE },
     { id: "every-issue", kind: "issue", address: "https://example.invalid/armada/issues/1394", number: "1394", title: "An issue, a pull request and an epic are Links with rules bolted on", state: "open", position: place(-1, 1), created_at: MADE },
     { id: "every-pull-request", kind: "pull_request", address: "https://example.invalid/armada/pull/1391", number: "1391", title: "Dispatch an issue from its node, and open the Job it made", state: "merged", said: "where dispatch landed", position: place(-1, 2), created_at: MADE },
-    { id: "every-epic", kind: "epic", address: "https://example.invalid/armada/milestone/17", number: "17", title: "Studio", read_in: { issues: 12, total: 30 }, position: place(-1, 3), created_at: MADE },
+    { id: "every-epic", kind: "epic", address: "https://example.invalid/armada/milestone/17", number: "17", title: "Studio", read_in: { issues: 12, total: 30, took: "open", left_out: 16, kept: 2 }, position: place(-1, 3), created_at: MADE },
     // The one Note here that kept a picture — #1352. The rest draw no plate.
     { id: "every-note", kind: "note", said: "The legend under the step bar is unreadable", capture: pointedAt("every-note"), position: place(1, 0), created_at: MADE },
     { id: "every-note-wide", kind: "note", said: "It wraps at 720 wide", position: place(0, 1), created_at: MADE },
@@ -500,6 +501,52 @@ export function untitled(): Studio {
   };
 }
 
+/**
+ * Every issue the milestone holds. Each one's number, title and state are
+ * fields: the read already answered all three, so nothing is left for a later
+ * fetch — #1394.
+ */
+const A_MILESTONES_ISSUES: Extract<StudioNodeContent, { kind: "issue" }>[] = [
+  { kind: "issue", address: "https://example.invalid/o/r/issues/1293", number: "1293", title: "An issue cannot be read into a Studio", state: "open" },
+  { kind: "issue", address: "https://example.invalid/o/r/issues/1291", number: "1291", title: "Promotion: cluster, defer, write up", state: "closed" },
+  { kind: "issue", address: "https://example.invalid/o/r/issues/1275", number: "1275", title: "Kit manages connections", state: "open" },
+];
+
+/**
+ * An Epic read in, with the answer the person gave — #1405. **Reading it in
+ * again narrows or widens what is here**: it makes what is missing, takes back
+ * the Issue nodes it made that the answer no longer wants, and leaves standing
+ * any that something hangs off, which is the rule Fleet holds.
+ */
+function epicReadIn(studio: Studio, nodeId: string, down: (n: number) => { x: number; y: number }, take: EpicTake): Studio {
+  const wanted = A_MILESTONES_ISSUES.filter((issue) => take === "everything" || issue.state === "open");
+  const addressOf = (node: StudioNode) => ("address" in node ? node.address : "");
+  const mine = studio.nodes.filter(
+    (node) => node.kind === "issue" && studio.edges.some((edge) => edge.kind === "produced" && edge.from === nodeId && edge.to === node.id),
+  );
+  const keeps = (node: StudioNode) => studio.edges.some((edge) => edge.from === node.id || (edge.to === node.id && edge.from !== nodeId));
+  const standing = mine.filter((node) => wanted.some((issue) => issue.address === addressOf(node)) || keeps(node));
+  const gone = mine.filter((node) => !standing.includes(node)).map((node) => node.id);
+  const missing = wanted.filter((issue) => !standing.some((node) => addressOf(node) === issue.address));
+  const narrowed: Studio = {
+    ...studio,
+    nodes: studio.nodes.filter((node) => !gone.includes(node.id)),
+    edges: studio.edges.filter((edge) => !gone.includes(edge.from) && !gone.includes(edge.to)),
+  };
+  const filled = missing.reduce((so_far, issue, n) => made(so_far, issue, [nodeId], down(standing.length + n)), narrowed);
+  const read = {
+    issues: standing.length + missing.length,
+    total: A_MILESTONES_ISSUES.length,
+    took: take,
+    left_out: A_MILESTONES_ISSUES.length - wanted.length,
+    kept: standing.filter((node) => !wanted.some((issue) => issue.address === addressOf(node))).length,
+  };
+  return {
+    ...filled,
+    nodes: filled.nodes.map((node) => (node.id === nodeId && node.kind === "epic" ? { ...node, read_in: read } : node)),
+  };
+}
+
 /** A node the way Fleet writes one, with a `produced` edge from each node that made it. */
 function made(studio: Studio, content: StudioNodeContent, from: readonly string[], position: { x: number; y: number }): Studio {
   const now = tick();
@@ -566,7 +613,7 @@ function promoted(studio: Studio, promotion: StudioPromotion): Studio {
     case "dispatch":
       return made(studio, { kind: "job", job_id: mint("01JOB") }, [promotion.node_id], promotion.position);
     case "read_in":
-      return readIn(studio, promotion.node_id, promotion.position);
+      return readIn(studio, promotion.node_id, promotion.position, promotion.take ?? "everything");
   }
 }
 
@@ -576,26 +623,11 @@ function promoted(studio: Studio, promotion: StudioPromotion): Studio {
  * issue with no scout, and every other source leaves a frozen Finding beside
  * the Notes and the Contradiction its scout asked for.
  */
-function readIn(studio: Studio, nodeId: string, position: { x: number; y: number }): Studio {
+function readIn(studio: Studio, nodeId: string, position: { x: number; y: number }, take: EpicTake): Studio {
   const link = studio.nodes.find((node) => node.id === nodeId);
   if (link === undefined || !("address" in link)) return studio;
   const down = (n: number) => ({ x: position.x, y: position.y + n * 180 });
-  if (link.kind === "epic") {
-    // Each issue's number, title and state are fields: the read already
-    // answered all three, so nothing is left for a later fetch — #1394.
-    const issues: StudioNodeContent[] = [
-      { kind: "issue", address: "https://example.invalid/o/r/issues/1293", number: "1293", title: "An issue cannot be read into a Studio", state: "open" },
-      { kind: "issue", address: "https://example.invalid/o/r/issues/1291", number: "1291", title: "Promotion: cluster, defer, write up", state: "closed" },
-      { kind: "issue", address: "https://example.invalid/o/r/issues/1275", number: "1275", title: "Kit manages connections", state: "open" },
-    ];
-    const filled = issues.reduce((so_far, issue) => made(so_far, issue, [nodeId], down(issues.indexOf(issue))), studio);
-    return {
-      ...filled,
-      nodes: filled.nodes.map((node) =>
-        node.id === nodeId && node.kind === "epic" ? { ...node, read_in: { issues: 3, total: 3 } } : node,
-      ),
-    };
-  }
+  if (link.kind === "epic") return epicReadIn(studio, nodeId, down, take);
   const finding: StudioNodeContent = {
     kind: "finding",
     asked: `Read in ${link.address}`,

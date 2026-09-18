@@ -72,16 +72,34 @@ function forgeState(state: string): string {
 }
 
 /**
- * How much of an Epic is on the Studio. **An Epic that fits says how many it
- * holds**, rather than saying the same number twice — the two-number form is
- * there to say a read was capped, and drawing it always would make a whole
- * milestone read as a partial one.
+ * What an Epic says about itself, as the facts a card draws — #1394, #1405.
+ *
+ * **An Epic that fits says how many it holds**, rather than saying the same
+ * number twice: the two-number form is there to say a read did not take
+ * everything, and drawing it always would make a whole milestone read as a
+ * partial one.
+ *
+ * **Which issues it took is drawn beside the count, and only where it was
+ * recorded.** An Epic read in before 14.20 kept no answer, so it says nothing
+ * about one rather than claiming it took everything.
  */
-function epicRead(read: EpicRead): string {
-  return read.issues === read.total
-    ? `${read.total} issues`
-    : `${read.issues} of ${read.total} issues`;
+function epicRead(read: EpicRead): string[] {
+  const count = read.issues === read.total ? `${read.total} issues` : `${read.issues} of ${read.total} issues`;
+  if (read.took === undefined) return [count];
+  const left = read.left_out === undefined || read.left_out === 0 ? "" : `, ${read.left_out} left out`;
+  const kept = read.kept === undefined || read.kept === 0 ? [] : [`${read.kept} kept, already worked on`];
+  return [count, `${EPIC_TOOK[read.took] ?? read.took}${left}`, ...kept];
 }
+
+/**
+ * What each answer is called where a card draws it. **A word this build does
+ * not know is drawn as itself**, `forgeState`'s rule: a newer Fleet's word said
+ * plainly beats no word at all.
+ */
+const EPIC_TOOK: Readonly<Record<string, string>> = {
+  everything: "Every issue",
+  open: "Open issues only",
+};
 
 /**
  * How many of a Studio's frames are drawn at once — #1352.
@@ -189,7 +207,7 @@ function cardOf(
         kind: "epic",
         address: node.address,
         title: node.said ?? node.title ?? node.address,
-        facts: [`#${node.number}`, ...(node.read_in === undefined ? [] : [epicRead(node.read_in)])],
+        facts: [`#${node.number}`, ...(node.read_in === undefined ? [] : epicRead(node.read_in))],
       };
     case "deferral":
       return { kind: "deferral", state: stateOf(node, "open"), title: node.what };

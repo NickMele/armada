@@ -14,7 +14,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Button, Dialog, Input, Select, Textarea } from "@armada/components";
-import type { Outcome, Studio, StudioNode, StudioPromotion } from "@armada/protocol";
+import type { EpicTake, Outcome, Studio, StudioNode, StudioPromotion } from "@armada/protocol";
 
 import { nodeNamed } from "./studio";
 import { actsOn, aWriteUp, dispatchedAs, placedBeside, selectedNodes } from "./studio-promotion";
@@ -52,6 +52,9 @@ export function useStudioPromotion(props: StudioPromotionProps): StudioPromotion
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [blocks, setBlocks] = useState("");
+  // Which of an Epic's issues to take — #1405. It opens on what the Epic
+  // already took, so pressing Read in again shows the answer it is changing.
+  const [take, setTake] = useState<EpicTake>("open");
   const [sending, setSending] = useState(false);
   const acts = actsOn(studio, selected);
   const picked = selectedNodes(studio, selected);
@@ -67,6 +70,7 @@ export function useStudioPromotion(props: StudioPromotionProps): StudioPromotion
     setTitle(written?.title ?? draft?.title ?? "");
     setBody(written?.body ?? draft?.body ?? link?.said ?? "");
     setBlocks("");
+    if (rung === "read_in") setTake(one?.kind === "epic" ? (one.read_in?.took ?? "open") : "open");
     setFilling(rung);
   }
 
@@ -128,7 +132,9 @@ export function useStudioPromotion(props: StudioPromotionProps): StudioPromotion
       case "dispatch":
         return send({ act: "dispatch", node_id, position });
       case "read_in":
-        return send({ act: "read_in", node_id, position });
+        // **The answer rides on an Epic alone.** Every other kind has one
+        // thing to read and nothing to ask about — #1405.
+        return send({ act: "read_in", node_id, position, ...(one?.kind === "epic" ? { take } : {}) });
       case null:
         return;
     }
@@ -171,9 +177,11 @@ export function useStudioPromotion(props: StudioPromotionProps): StudioPromotion
           title={title}
           body={body}
           blocks={blocks}
+          take={take}
           onTitle={setTitle}
           onBody={setBody}
           onBlocks={setBlocks}
+          onTake={setTake}
         />
       </Dialog>
     ),
@@ -270,14 +278,16 @@ type FillingProps = {
   title: string;
   body: string;
   blocks: string;
+  take: EpicTake;
   onTitle: (title: string) => void;
   onBody: (body: string) => void;
   onBlocks: (blocks: string) => void;
+  onTake: (take: EpicTake) => void;
 };
 
 /** What each rung asks for, and what it says will happen. */
 function Filling(props: FillingProps) {
-  const { filling, studio, one, picked, title, body, blocks } = props;
+  const { filling, studio, one, picked, title, body, blocks, take } = props;
   const named = (node: StudioNode) => nodeNamed(studio, node.id, []);
   switch (filling) {
     case null:
@@ -348,11 +358,25 @@ function Filling(props: FillingProps) {
         </>
       );
     case "read_in":
-      return (
+      // **An epic is the one kind with something to ask.** It holds a set, and
+      // which of that set to take is the person's answer — #1405.
+      return one?.kind === "epic" ? (
+        <>
+          <p>
+            Armada fetches this epic and fills it in as one Issue per issue, with no scout at all. The node stays
+            where it is and keeps its address. Reading it in again with the other answer widens or narrows what is
+            here, and leaves standing anything you have since worked on.
+          </p>
+          <Select label="Take" value={take} onChange={(event) => props.onTake(event.target.value as EpicTake)}>
+            <option value="open">Only what is open</option>
+            <option value="everything">Every issue</option>
+          </Select>
+        </>
+      ) : (
         <p>
           Armada fetches {one === undefined ? "this address" : named(one)} and a scout reads what comes back, off
-          this Studio. The node stays where it is and keeps its address. An epic fills in as one Issue per issue,
-          with no scout at all; an address Armada does not read comes back saying so.
+          this Studio. The node stays where it is and keeps its address; an address Armada does not read comes back
+          saying so.
         </p>
       );
     case "settled":

@@ -433,9 +433,11 @@ test("an issue is read in and an epic fills the board, with each address node le
   expect(studio().edges.filter((edge) => edge.standing === "proposed" && edge.kind === "blocks")).toHaveLength(1);
 
   // An Epic: one Issue per issue, each carrying the filed issue's address, and
-  // the Epic itself saying how many of how many were read in.
+  // the Epic itself saying how many of how many were read in. **It asks what
+  // to take first** — #1405 — and taking every issue is what fills the board.
   await pick(/^Epic: Studio/);
   await acts().getByRole("button", { name: "Read in" }).click();
+  await userEvent.selectOptions(page.getByLabelText("Take", { exact: true }), "everything");
   await asked("Read in").click();
   await expect.element(node(/^Issue: An issue cannot be read into a Studio/)).toBeVisible();
   await expect.element(node(/^Issue: Kit manages connections/)).toBeVisible();
@@ -451,8 +453,58 @@ test("an issue is read in and an epic fills the board, with each address node le
   // Its own address survives, and how much of it landed is two numbers.
   expect(studio().nodes.find((one) => one.id === "legend-milestone")).toMatchObject({
     address: "https://example.invalid/o/r/milestone/17",
-    read_in: { issues: 3, total: 3 },
+    read_in: { issues: 3, total: 3, took: "everything", left_out: 0, kept: 0 },
   });
+});
+
+/**
+ * `#1405`'s definition of done, on Bridge: **reading a milestone in asks
+ * whether to take every issue or only the open ones, pressing the Epic
+ * afterwards changes that answer, and a Note written against a closed issue
+ * survives narrowing.**
+ */
+test("reading an epic in asks what to take, and narrowing leaves what a person worked on", async () => {
+  const fleet = studying();
+  open(fleet.scenario);
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await page.getByRole("button", { name: "The Board's legend", exact: true }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  const studio = () => fleet.studios()[0]!;
+  const epic = () => studio().nodes.find((one) => one.id === "legend-milestone");
+
+  // The offer asks, and opens on the answer a person planning work wants.
+  await pick(/^Epic: Studio/);
+  await acts().getByRole("button", { name: "Read in" }).click();
+  await expect.element(page.getByRole("dialog", { name: "Read this epic in" })).toBeVisible();
+  await expect.element(page.getByLabelText("Take", { exact: true })).toHaveValue("open");
+  await asked("Read in").click();
+  await expect.element(node(/^Issue: An issue cannot be read into a Studio/)).toBeVisible();
+  await expect.poll(() => epic()).toMatchObject({ read_in: { issues: 2, total: 3, took: "open", left_out: 1 } });
+  // The Epic says which state it took and how many it left out.
+  await expect.element(node(/^Epic: Studio/)).toHaveTextContent("Open issues only, 1 left out");
+  expect(studio().nodes.some((one) => one.kind === "issue" && one.number === "1291")).toBe(false);
+
+  // Widening takes the closed one too, and a Note is written against it.
+  await acts().getByRole("button", { name: "Read in" }).click();
+  await userEvent.selectOptions(page.getByLabelText("Take", { exact: true }), "everything");
+  await asked("Read in").click();
+  await expect.element(node(/^Issue: Promotion: cluster, defer, write up/)).toBeVisible();
+  await pick(/^Issue: Promotion: cluster, defer, write up/);
+  await acts().getByRole("button", { name: "Defer" }).click();
+  await userEvent.fill(page.getByLabelText("What is being put off", { exact: true }), "does this still hold?");
+  await asked("Defer").click();
+  await expect.element(node(/^Deferral: does this still hold\?/)).toBeVisible();
+
+  // Narrowing again leaves it standing, and the Epic says it kept one.
+  await pick(/^Epic: Studio/);
+  await acts().getByRole("button", { name: "Read in" }).click();
+  await expect.element(page.getByLabelText("Take", { exact: true })).toHaveValue("everything");
+  await userEvent.selectOptions(page.getByLabelText("Take", { exact: true }), "open");
+  await asked("Read in").click();
+  await expect.poll(() => epic()).toMatchObject({ read_in: { issues: 3, took: "open", left_out: 1, kept: 1 } });
+  await expect.element(node(/^Issue: Promotion: cluster, defer, write up/)).toBeVisible();
+  await expect.element(node(/^Deferral: does this still hold\?/)).toBeVisible();
+  await expect.element(node(/^Epic: Studio/)).toHaveTextContent("1 kept, already worked on");
 });
 
 /**
