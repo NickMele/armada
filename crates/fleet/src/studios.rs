@@ -21,9 +21,9 @@ use std::sync::Arc;
 use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, DeferOnStudio,
     DispatchStudioDraft, EditStudioDraft, EditStudioLink, GroupStudioNodes, HelmStudioAct,
-    ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio,
-    SettleContradiction, StartScout, StartStudioRun, StopScout, StudioDeleted, StudioHelmActed,
-    StudioList, StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
+    ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RemoveStudioNodes,
+    RenameStudio, SettleContradiction, StartScout, StartStudioRun, StopScout, StudioDeleted,
+    StudioHelmActed, StudioList, StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
 };
 use store::{LoadJobError, Store, StudioError};
 
@@ -55,6 +55,8 @@ const NODE_NOT_A_PERSONS: &str = "fleet.studio_node_not_a_persons";
 const FINDING_IS_THE_SCOUTS: &str = "fleet.studio_finding_is_the_scouts";
 /// A Run node added rather than started. A 422.
 const NODE_IS_A_RUN: &str = "fleet.studio_node_is_a_run";
+/// A delete that names no node at all. A 422.
+const NO_NODES_NAMED: &str = "fleet.studio_no_nodes_named";
 /// A rename to nothing. A 422.
 const NAME_BLANK: &str = "fleet.studio_name_blank";
 /// A frame over [`MOST_A_FRAME_MAY_WEIGH`]. A 422.
@@ -595,6 +597,58 @@ where
         .await
     }
 
+    /// Everything a person picked, removed as one write. `#1411`.
+    ///
+    /// **Not [`written`](Self::written).** The frames the Notes going kept are
+    /// read off the Studio before the write and deleted after it, so this
+    /// holds the graph either side of the one transaction rather than handing
+    /// a closure to a helper that keeps neither.
+    ///
+    /// **The store's transaction is the all-or-nothing**, and the files come
+    /// after it: a frame is deleted only once the record has stopped naming
+    /// it, so a write that refused leaves every picture where the node that
+    /// keeps it can still draw it.
+    async fn remove_studio_nodes(
+        &self,
+        studio_id: ipc::StudioId,
+        removing: RemoveStudioNodes,
+        within: Option<ManifestId>,
+    ) -> Result<ipc::Studio, Refusal> {
+        let at = self.now();
+        let id = studio_id.to_domain();
+        let going: Vec<StudioNodeId> = removing
+            .node_ids
+            .iter()
+            .map(|node_id| node_id.to_domain())
+            .collect();
+        if going.is_empty() {
+            return Err(self.studio_unacceptable(
+                NO_NODES_NAMED,
+                "a delete names at least one node, and this one named none".to_string(),
+            ));
+        }
+        let (studio, frames) = {
+            let mut store = self.store().lock().await;
+            let before = self.studio_held(&store, &id, within.as_ref())?;
+            let frames = frames_kept_by(&before, &going);
+            store
+                .remove_studio_nodes(&id, &going, &at)
+                .map_err(|why| self.studio_refusal(why))?;
+            let after = store.studio(&id).map_err(|why| self.studio_refusal(why))?;
+            (ipc::Studio::of(&after), frames)
+        };
+        let dir = self.studio_frames(&id);
+        for filename in frames {
+            // Nothing else reads these, and the node that named this one is
+            // gone. A file that will not go is not worth failing a delete that
+            // already happened.
+            let _ = std::fs::remove_file(dir.join(filename));
+        }
+        self.events()
+            .publish(ipc::Event::StudioChanged(studio.clone()));
+        Ok(studio)
+    }
+
     async fn propose_studio_edge(
         &self,
         studio_id: ipc::StudioId,
@@ -766,4 +820,25 @@ where
         self.draft_dispatched(studio_id, dispatching, by, within)
             .await
     }
+}
+
+/// The file names of every frame the nodes going kept — the pictures that go
+/// with them. `#1411`.
+///
+/// **Read off the record before the write**, because after it there is no node
+/// left to name the file. A Note captured without a frame and every other kind
+/// contribute nothing.
+fn frames_kept_by(graph: &StudioGraph, going: &[StudioNodeId]) -> Vec<String> {
+    graph
+        .nodes
+        .iter()
+        .filter(|node| going.iter().any(|wanted| wanted == node.id()))
+        .filter_map(|node| match node.content() {
+            StudioNodeContent::Note {
+                capture: Some(pointed),
+                ..
+            } => pointed.frame.as_ref().map(|frame| frame.filename.clone()),
+            _ => None,
+        })
+        .collect()
 }

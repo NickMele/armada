@@ -452,3 +452,104 @@ fn a_note_with_no_capture_reads_back_as_one() {
     };
     assert!(capture.is_none(), "nothing was pointed at");
 }
+
+/// `#1411`'s own claim, the half the store answers for: a person picks every
+/// node and one write takes all of them, with the edges on them.
+#[test]
+fn removing_every_node_picked_is_one_write_that_takes_their_edges_with_them() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let studio = a_studio(&mut store, "01STUDIO", "armada", 0);
+    let kept = a_studio(&mut store, "01KEPT", "armada", 0);
+    let picked: Vec<StudioNodeId> = (0..18)
+        .map(|which| {
+            a_note(
+                &mut store,
+                &studio,
+                &format!("01NODE{which:012}"),
+                "one",
+                which,
+            )
+        })
+        .collect();
+    a_note(&mut store, &kept, "01ELSEWHERE0", "another Studio", 0);
+    store
+        .add_studio_edge(&studio, &proposed("01EDGE", &picked[0], &picked[1]), &at(2))
+        .expect("proposed");
+
+    store
+        .remove_studio_nodes(&studio, &picked, &at(3))
+        .expect("removed");
+
+    let left = store.studio(&studio).expect("reads");
+    assert!(left.nodes.is_empty(), "every picked node went");
+    assert!(left.edges.is_empty(), "the edge went with its nodes");
+    assert_eq!(left.studio.touched_at, at(3), "the Studio was touched once");
+    let elsewhere = store.studio(&kept).expect("reads");
+    assert_eq!(elsewhere.nodes.len(), 1, "another Studio is untouched");
+}
+
+/// **All of them or none.** A selection carrying one name this Studio does not
+/// hold refuses, and every node it does hold is still there afterwards — the
+/// half-delete the issue exists against.
+#[test]
+fn a_delete_that_names_a_node_this_studio_does_not_hold_leaves_every_node_in_place() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let studio = a_studio(&mut store, "01STUDIO", "armada", 0);
+    let elsewhere = a_studio(&mut store, "01KEPT", "armada", 0);
+    let first = a_note(&mut store, &studio, "01NOTE1", "one", 0);
+    let second = a_note(&mut store, &studio, "01NOTE2", "two", 100);
+    let third = a_note(&mut store, &studio, "01NOTE3", "three", 200);
+    // A node of another Studio, which is exactly as absent from this one as a
+    // name nothing ever minted.
+    let another = a_note(&mut store, &elsewhere, "01NOTE4", "four", 0);
+    store
+        .add_studio_edge(&studio, &proposed("01EDGE", &first, &second), &at(2))
+        .expect("proposed");
+
+    let refused = store
+        .remove_studio_nodes(
+            &studio,
+            &[first.clone(), another.clone(), third.clone()],
+            &at(3),
+        )
+        .expect_err("one name is not on this Studio");
+    assert!(
+        matches!(&refused, StudioError::NoSuchNode { node_id } if node_id == another.as_str()),
+        "{refused}"
+    );
+
+    let left = store.studio(&studio).expect("reads");
+    assert_eq!(left.nodes.len(), 3, "nothing named before it went");
+    assert_eq!(left.edges.len(), 1, "and no edge went either");
+    assert_eq!(
+        left.studio.touched_at,
+        at(2),
+        "the Studio is where the edge left it: a refused write rolls its touch back too"
+    );
+    assert_eq!(
+        store.studio(&elsewhere).expect("reads").nodes.len(),
+        1,
+        "the other Studio's node was never this call's to take"
+    );
+}
+
+/// The same node named twice is one node, not a refusal on the second pass:
+/// every name is checked before anything is deleted.
+#[test]
+fn a_node_named_twice_in_one_delete_goes_once() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let studio = a_studio(&mut store, "01STUDIO", "armada", 0);
+    let only = a_note(&mut store, &studio, "01NOTE1", "one", 0);
+    let other = a_note(&mut store, &studio, "01NOTE2", "two", 100);
+
+    store
+        .remove_studio_nodes(&studio, &[only.clone(), only.clone()], &at(3))
+        .expect("removed");
+
+    let left = store.studio(&studio).expect("reads");
+    assert_eq!(left.nodes.len(), 1, "the other node stayed");
+    assert_eq!(left.nodes[0].id(), &other);
+}

@@ -234,6 +234,23 @@ pub(crate) async fn remove_studio_node<D: Studios>(
     answered(&served, StatusCode::OK, removed)
 }
 
+pub(crate) async fn remove_studio_nodes<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    bytes: Bytes,
+) -> Response {
+    let removing = match body(&served, "the nodes to remove", &bytes) {
+        Ok(removing) => removing,
+        Err(response) => return response,
+    };
+    let removed = served
+        .daemon()
+        .remove_studio_nodes(StudioId::carried(studio_id), removing, within(scope))
+        .await;
+    answered(&served, StatusCode::OK, removed)
+}
+
 pub(crate) async fn propose_studio_edge<D: Studios>(
     State(served): State<Served<D>>,
     Path(studio_id): Path<String>,

@@ -1265,6 +1265,25 @@ step is running, and what waits is one process inside one tool call. `HelmCallAn
 closed set for the same reason, and a surface matches on it to pick controls, so a fourth value in
 it is a major bump the way `WhenBlocked`'s third was.
 
+## Protocol 14.21: everything picked, deleted as one write
+
+`#1411`. One new route, `POST /studios/:studio_id/remove_nodes`, and one new DTO,
+`RemoveStudioNodes { node_ids }`. `Bridge only`, like the single-node act beside it.
+
+**A new operation rather than a wider `RemoveStudioNode`.** Retyping `node_id` into a list is a
+field retyped, which is a major bump and would break every Bridge already built. Both operations
+stand: `remove_studio_node` is untouched and nothing about what an older peer parses changes.
+
+**All of them or none is the store's transaction, not the caller's care.** Every name is checked
+before anything is deleted, so a selection carrying one name the Studio does not hold refuses with
+every node still on it — including the Studio's own `touched_at`, which rolls back with the rest.
+A name given twice removes that node once. A call naming no node at all is refused as
+`fleet.studio_no_nodes_named` rather than taken as a write that does nothing.
+
+**The frames go after the write, never before it.** A Note's picture is a file beside the records
+and the record is what names it, so the file is deleted once the row that named it is gone. A
+refused write leaves every picture where the Note that keeps it can still draw it.
+
 ## Open questions
 
 Naming these rather than deciding them, per this document's brief:

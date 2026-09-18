@@ -301,10 +301,10 @@ pub use since::{EventTally, EventsSince};
 pub use studio::{
     AddStudioNode, ContradictionSettled, CreateStudio, DecideStudioEdge, DeferOnStudio,
     DispatchStudioDraft, EditStudioDraft, EditStudioLink, EpicRead, ForgeState, GroupStudioNodes,
-    HelmStudioAct, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio,
-    SettleContradiction, StartStudioRun, Studio, StudioDeleted, StudioEdge, StudioHelmActed,
-    StudioList, StudioNode, StudioNodeContent, StudioPosition, StudioRunKept, StudioRunStarted,
-    StudioSummary, WriteUpStudioNode,
+    HelmStudioAct, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RemoveStudioNodes,
+    RenameStudio, SettleContradiction, StartStudioRun, Studio, StudioDeleted, StudioEdge,
+    StudioHelmActed, StudioList, StudioNode, StudioNodeContent, StudioPosition, StudioRunKept,
+    StudioRunStarted, StudioSummary, WriteUpStudioNode,
 };
 pub use turn::{
     BlockKind, CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage,

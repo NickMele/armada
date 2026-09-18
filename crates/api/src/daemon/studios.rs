@@ -15,9 +15,9 @@ use std::sync::Arc;
 use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, DeferOnStudio,
     DispatchStudioDraft, EditStudioDraft, EditStudioLink, GroupStudioNodes, ManifestId,
-    MoveStudioNode, ProposeStudioEdge, ReadInLink, RemoveStudioNode, RenameStudio,
-    SettleContradiction, StartScout, StartStudioRun, StopScout, Studio, StudioDeleted, StudioId,
-    StudioList, StudioNodeId, StudioRunStarted, WriteUpStudioNode,
+    MoveStudioNode, ProposeStudioEdge, ReadInLink, RemoveStudioNode, RemoveStudioNodes,
+    RenameStudio, SettleContradiction, StartScout, StartStudioRun, StopScout, Studio,
+    StudioDeleted, StudioId, StudioList, StudioNodeId, StudioRunStarted, WriteUpStudioNode,
 };
 
 use crate::daemon::{Redirector, Refusal};
@@ -107,6 +107,19 @@ pub trait Studios: Send + Sync + 'static {
         &self,
         studio_id: StudioId,
         removing: RemoveStudioNode,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
+
+    /// `remove_studio_nodes` — everything picked, removed as one write.
+    /// `#1411`.
+    ///
+    /// **All of them or none.** [`Refusal::Unacceptable`] where any name is
+    /// not on this Studio, with nothing removed, and where none is named at
+    /// all.
+    fn remove_studio_nodes(
+        &self,
+        studio_id: StudioId,
+        removing: RemoveStudioNodes,
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
 

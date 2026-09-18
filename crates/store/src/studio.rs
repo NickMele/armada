@@ -415,6 +415,49 @@ impl Store {
         tx.commit().map_err(database("removing a node"))
     }
 
+    /// Remove every node named, and every edge on any of them, in **one**
+    /// transaction. `#1411`.
+    ///
+    /// **All of them or none.** A person who picks eighteen nodes and clears
+    /// them out gets one answer; a loop of eighteen writes could stop at the
+    /// ninth and leave a board only the whiteboard could tell them about.
+    /// Every name is checked before anything is deleted, so a name that is not
+    /// on this Studio refuses with nothing removed — and because the check
+    /// came first, the same name twice deletes once rather than refusing the
+    /// second time.
+    pub fn remove_studio_nodes(
+        &mut self,
+        studio_id: &StudioId,
+        node_ids: &[StudioNodeId],
+        at: &Timestamp,
+    ) -> Result<(), StudioError> {
+        let tx = self.writing()?;
+        touched(&tx, studio_id, at)?;
+        for node_id in node_ids {
+            let there = tx
+                .query_row(
+                    "SELECT 1 FROM studio_nodes WHERE studio_id = ?1 AND id = ?2",
+                    (studio_id.as_str(), node_id.as_str()),
+                    |_| Ok(()),
+                )
+                .optional()
+                .map_err(database("finding a node to remove"))?;
+            if there.is_none() {
+                return Err(StudioError::NoSuchNode {
+                    node_id: node_id.as_str().to_string(),
+                });
+            }
+        }
+        for node_id in node_ids {
+            tx.execute(
+                "DELETE FROM studio_nodes WHERE studio_id = ?1 AND id = ?2",
+                (studio_id.as_str(), node_id.as_str()),
+            )
+            .map_err(database("removing nodes"))?;
+        }
+        tx.commit().map_err(database("removing nodes"))
+    }
+
     /// Keep an edge between two nodes already on this Studio.
     pub fn add_studio_edge(
         &mut self,

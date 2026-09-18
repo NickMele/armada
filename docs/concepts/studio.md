@@ -128,6 +128,12 @@ flowchart LR
 > **Rule.** A node lands where the person is looking, not at the origin.
 > Why: a Studio is laid out by hand, and a node placed off-screen is a node a person has to go and find.
 
+> **Rule.** Deleting what is picked is one write, however many are picked: all of them or none.
+> Why: half a delete is a board a person has to reconcile by reading it, and nothing here undoes one. See #1411.
+
+> **Rule.** A delete counts rather than names, confirms once for the selection, and says before the press what goes that the person did not pick: the edges on the nodes going, including any reaching a node that stays, and the frame a captured Note keeps. A node one of them produced stays where it is, and a Job node's Job is untouched.
+> Why: eighteen titles is a panel taller than the window it is drawn in, and what a person is owed before an act with no undo is its reach rather than its list.
+
 ### Names avoid words Armada already uses
 
 | Node | Not called | Because that word already means |

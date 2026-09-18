@@ -24,6 +24,7 @@ const A_PERSONS: &[&str] = &[
     "capture_studio_note",
     "move_studio_node",
     "remove_studio_node",
+    "remove_studio_nodes",
     "decide_studio_edge",
 ];
 
@@ -492,4 +493,58 @@ async fn a_notes_frame_reads_back_as_a_png_and_a_note_without_one_says_so() {
         "a node that is not there"
     );
     assert!(said.contains("no node of this Studio"), "{said}");
+}
+
+/// `#1411`: a person picks every node and clears the Studio with one call.
+/// **All of them or none** — a selection carrying one name the Studio does not
+/// hold is refused with every node still on it.
+#[tokio::test]
+async fn one_call_removes_every_node_picked_and_a_name_it_does_not_hold_removes_none() {
+    let app = shared(&helm_holding());
+    let (_, created) = call(
+        &app,
+        "POST",
+        "/studios/create",
+        r#"{"name":"Clear it out"}"#,
+    )
+    .await;
+    let id = studio(&created).id;
+    let at = |act: &str| format!("/studios/{}/{act}", id.as_str());
+    for said in ["one", "two", "three"] {
+        let note = format!(r#"{{"kind":"note","said":"{said}","position":{{"x":0,"y":0}}}}"#);
+        call(&app, "POST", &at("add_node"), &note).await;
+    }
+    call(
+        &app,
+        "POST",
+        &at("propose_edge"),
+        r#"{"from":"01NODE0","to":"01NODE1","kind":"same_as"}"#,
+    )
+    .await;
+
+    let (status, refused) = call(
+        &app,
+        "POST",
+        &at("remove_nodes"),
+        r#"{"node_ids":["01NODE0","01NOTHING"]}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
+    let (_, standing) = call(&app, "GET", &format!("/studios/{}", id.as_str()), "").await;
+    assert_eq!(studio(&standing).nodes.len(), 3, "nothing went");
+
+    let (status, empty) = call(&app, "POST", &at("remove_nodes"), r#"{"node_ids":[]}"#).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{empty}");
+
+    let (status, cleared) = call(
+        &app,
+        "POST",
+        &at("remove_nodes"),
+        r#"{"node_ids":["01NODE0","01NODE1","01NODE2"]}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{cleared}");
+    let cleared = studio(&cleared);
+    assert!(cleared.nodes.is_empty(), "the Studio is empty");
+    assert!(cleared.edges.is_empty(), "the edge went with its nodes");
 }

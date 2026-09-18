@@ -401,6 +401,18 @@ pub struct RemoveStudioNode {
     pub node_id: StudioNodeId,
 }
 
+/// `remove_studio_nodes`: everything a person picked, deleted as one write.
+/// `#1411`.
+///
+/// **A list and not a repeated call.** Eighteen calls can stop at the ninth,
+/// and what is left is a board a person has to reconcile by reading it; one
+/// call is all of them or none. Naming no node is refused rather than taken as
+/// a write that does nothing.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoveStudioNodes {
+    pub node_ids: Vec<StudioNodeId>,
+}
+
 /// `propose_studio_edge`. Lands `proposed`, whoever sends it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProposeStudioEdge {

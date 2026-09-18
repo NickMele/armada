@@ -68,8 +68,8 @@ use crate::studios::{
     add_studio_node, ask_scout, capture_studio_note, create_studio, decide_studio_edge,
     defer_on_studio, delete_studio, dispatch_studio_draft, edit_studio_draft, edit_studio_link,
     get_studio, get_studio_frame, group_studio_nodes, list_studios, move_studio_node,
-    propose_studio_edge, read_in_link, remove_studio_node, rename_studio, settle_contradiction,
-    start_scout, start_studio_run, stop_scout, write_up_studio_node,
+    propose_studio_edge, read_in_link, remove_studio_node, remove_studio_nodes, rename_studio,
+    settle_contradiction, start_scout, start_studio_run, stop_scout, write_up_studio_node,
 };
 
 /// The inventory this router is compared against, row by row.
@@ -307,6 +307,10 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route(
             "/studios/:studio_id/remove_node",
             post(remove_studio_node::<D>),
+        )
+        .route(
+            "/studios/:studio_id/remove_nodes",
+            post(remove_studio_nodes::<D>),
         )
         .route(
             "/studios/:studio_id/propose_edge",
