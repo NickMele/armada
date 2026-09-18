@@ -99,7 +99,7 @@ async fn claimed(fleet: &Fixture, working: &JobId) -> JobId {
 
 async fn dry_run(fleet: &Arc<Fixture>, job: &JobId) {
     let _ = fleet
-        .run_checks(job, false)
+        .run_checks(job, ipc::mcp::ChecksAsk::everything(false))
         .await
         .expect("started")
         .finished()

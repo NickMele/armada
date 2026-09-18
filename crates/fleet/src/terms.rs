@@ -252,16 +252,23 @@ impl Checking {
             block.push_str(check.label());
         }
         let whole = match step.mid_step_checks().len() == step.checks().len() {
-            true => "One ask runs the whole list",
-            false => "One ask runs every one of them but those named below",
+            true => "An ask that names no check runs the whole list",
+            false => "An ask that names no check runs every one of them but those named below",
         };
         block.push_str(&format!(
             "\n\nYou can ask for them to be run against your worktree, and you \
              will be told what each one did. A check that fails carries its \
              own output back with the answer — you do not need to run the \
-             command yourself or go looking for a log to read it. {whole} \
-             and you do not choose from it. A build or test command run \
-             directly is not granted; asking is how you get the same answer.",
+             command yourself or go looking for a log to read it. {whole}. \
+             A build or test command run directly is not granted; asking is \
+             how you get the same answer.\n\nYou can also name one check off \
+             the list above, and the files you changed, and get an answer in \
+             seconds rather than minutes. **Asking that way costs you \
+             nothing** — only a run of every check counts against the limit \
+             below, so ask about one check as often as it is useful. Naming \
+             one does not lower the bar you are measured against: every check \
+             is run whole when you submit, whatever you asked for before \
+             then.",
         ));
         if step.checks().iter().any(ResolvedCheck::needs_changed_paths) {
             block.push_str(
@@ -284,8 +291,8 @@ impl Checking {
              everything passes does not finish this part; the checks are run \
              again when you submit, and that run is the one that decides. \
              Submitting is still the only way to report. There is a limit on \
-             how many times one part may ask, and you do not have to ask at \
-             all.",
+             how many times one part may ask for every check at once, and \
+             none on asking about one.",
         );
         Some(Checking(block))
     }

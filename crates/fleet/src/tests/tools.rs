@@ -58,6 +58,22 @@ pub async fn checked_by_the_one(fleet: &Arc<Fixture>) -> Result<CheckReport, Not
     narrowly_checked_by_the_one(fleet, false).await
 }
 
+/// The same, asking for exactly what the case is about. #1456.
+pub async fn asked_by_the_one(
+    fleet: &Arc<Fixture>,
+    ask: ipc::mcp::ChecksAsk,
+) -> Result<CheckReport, NotRun> {
+    let Some(job) = fleet.working_on().await.first().cloned() else {
+        return Err(NotRun::NothingIsWorking);
+    };
+    let underway = fleet.run_checks(&job, ask).await?;
+    Ok(underway
+        .finished()
+        .await
+        .expect("the step did not end while the run was going")
+        .expect("a report"))
+}
+
 /// The same, saying which of the two runs is wanted.
 pub async fn narrowly_checked_by_the_one(
     fleet: &Arc<Fixture>,
@@ -66,7 +82,9 @@ pub async fn narrowly_checked_by_the_one(
     let Some(job) = fleet.working_on().await.first().cloned() else {
         return Err(NotRun::NothingIsWorking);
     };
-    let underway = fleet.run_checks(&job, only_what_changed).await?;
+    let underway = fleet
+        .run_checks(&job, ipc::mcp::ChecksAsk::everything(only_what_changed))
+        .await?;
     Ok(underway
         .finished()
         .await

@@ -25,7 +25,8 @@ use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Footprint, Vcs, WorkProduct, Worktree};
 use core_model::{
-    Attempt, Component, Envelope, FieldValue, Job, JobId, Level, ResolvedCheck, StepId, TaskCounts,
+    Attempt, Component, Envelope, FieldValue, Job, JobId, Level, ResolvedCheck, ResolvedStep,
+    StepId, TaskCounts,
 };
 use ipc::mcp::{CheckRan, CheckReport};
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -78,6 +79,16 @@ pub enum NotRun {
     Unheard,
     /// A narrowed run of a worktree holding no change, refused before anything is spent.
     NothingChanged,
+    /// A Check named that this part does not gate on. **The names it does have
+    /// come back with the refusal**, because a Drone that misremembered one has
+    /// nothing else to correct against. #1456.
+    NoSuchCheck {
+        check: String,
+        declared: Vec<String>,
+    },
+    /// A Check named that this part gates on and that runs only at the gate or
+    /// before handoff, so there is nothing to run now. #849, #1456.
+    CheckRunsLater { check: String },
     /// A reading failed. Refused before anything is spent: every read precedes the mark.
     CouldNotRead { cause: String },
 }
@@ -134,6 +145,22 @@ impl fmt::Display for NotRun {
                  your worktree holds no change yet. Nothing was run and nothing \
                  has been spent — do some of the work and ask again, or ask \
                  with `only_what_changed` false for the run the gate will make",
+            ),
+            NotRun::NoSuchCheck { check, declared } => write!(
+                out,
+                "this part does not gate on a check called `{check}`. It gates \
+                 on: {}. Nothing was run and nothing has been spent",
+                declared
+                    .iter()
+                    .map(|name| format!("`{name}`"))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+            NotRun::CheckRunsLater { check } => write!(
+                out,
+                "`{check}` runs only when you submit, so there is nothing to run \
+                 now. Nothing was spent — ask for one of the checks that run \
+                 before then, or get on with the work"
             ),
             NotRun::CouldNotRead { cause } => write!(
                 out,
@@ -195,6 +222,31 @@ impl ChecksReported {
 /// Which run is in flight, so the task ending one cannot end another.
 pub(crate) static RUNS: AtomicU64 = AtomicU64::new(0);
 
+/// Whether this ask is charged against the step's allowance.
+///
+/// **Naming a Check is what makes it free, and naming files is not.** A run of
+/// every Check narrowed by the diff is still a rehearsal of the whole gate and
+/// costs minutes; one Check is the question a Drone actually has while it
+/// works. A function rather than a method on the ask, because it is Fleet's
+/// policy about its own budget and not a fact about what was asked. #1456.
+fn spends(ask: &ipc::mcp::ChecksAsk) -> bool {
+    ask.check.is_none()
+}
+
+/// The Checks a run is about: the step's mid-step batch, or the one named out
+/// of it. **Order is the step's either way**, which is what the report reads
+/// back in. #849, #1456.
+fn mid_step_named(step: &ResolvedStep, named: Option<&str>) -> Vec<ResolvedCheck> {
+    let checks = step.mid_step_checks();
+    match named {
+        None => checks,
+        Some(name) => checks
+            .into_iter()
+            .filter(|check| check.name() == Some(name))
+            .collect(),
+    }
+}
+
 /// What one dry run is against: read under the slot lock, held while it is not.
 struct Plan {
     record: Job,
@@ -206,6 +258,10 @@ struct Plan {
 /// What the run reads before anything is spent, so a failed read refuses at once.
 struct Readings {
     narrow: bool,
+    /// The one Check this run is about. **`None` is every one the step runs
+    /// mid-step**, which is what a run was before it could be told otherwise.
+    /// #1456.
+    only_check: Option<String>,
     moved: bool,
     touched: Vec<String>,
     ports: BTreeMap<String, u16>,
@@ -233,20 +289,26 @@ where
 {
     /// Start the step's Checks for the Drone, or say why not. **Nothing moves.**
     /// Job, step and Checks come from the caller's own slot and frozen workflow;
-    /// `only_what_changed` narrows what each Check opens (`#504`). **It returns
-    /// once the run has started**, and the report is a later turn.
+    /// the ask says which of them and against what (`#504`, `#1456`). **It
+    /// returns once the run has started**, and the report is a later turn.
     pub async fn run_checks(
         self: &Arc<Self>,
         caller: &JobId,
-        only_what_changed: bool,
+        ask: ipc::mcp::ChecksAsk,
     ) -> Result<ChecksRunning, NotRun> {
-        let plan = self.dry_run_looks(caller).await?;
-        let read = self.dry_run_reads(&plan, only_what_changed).await?;
-        self.dry_run_begins(caller, plan, read).await
+        let plan = self.dry_run_looks(caller, &ask).await?;
+        let read = self.dry_run_reads(&plan, &ask).await?;
+        self.dry_run_begins(caller, plan, read, spends(&ask)).await
     }
 
     /// The slot's refusals, asked when the call arrives and again at the mark.
-    fn dry_run_refused(&self, caller: &JobId, at_work: &Working) -> Option<NotRun> {
+    ///
+    /// **`spends` is what decides whether the allowance is consulted at all.**
+    /// An ask that names one Check answers a question about one suite in
+    /// seconds; charging it what a rehearsal of the whole gate costs is what
+    /// made a Drone hoard all three and run the commands by hand instead.
+    /// #1456.
+    fn dry_run_refused(&self, caller: &JobId, at_work: &Working, spends: bool) -> Option<NotRun> {
         if at_work.session().unheard() {
             return Some(NotRun::Unheard);
         }
@@ -256,12 +318,23 @@ where
         if self.evidence_waiting_for(caller) > 0 {
             return Some(NotRun::AlreadySubmitted);
         }
+        // **An ask that names one Check consults no allowance at all.**
+        // Charging a four-second question what a rehearsal of the whole gate
+        // costs is what made a Drone hoard all three and run the commands by
+        // hand instead. #1456.
+        if !spends {
+            return None;
+        }
         let allowed = self.dry_runs().allowed();
         (at_work.dry_runs() >= allowed).then_some(NotRun::Spent { allowed })
     }
 
     /// Whether there is a run to make, and what it is against.
-    async fn dry_run_looks(&self, caller: &JobId) -> Result<Plan, NotRun> {
+    async fn dry_run_looks(
+        &self,
+        caller: &JobId,
+        ask: &ipc::mcp::ChecksAsk,
+    ) -> Result<Plan, NotRun> {
         let Some(slot) = self.slot_of(caller).await else {
             return Err(NotRun::NothingIsWorking);
         };
@@ -269,7 +342,7 @@ where
         let Some(at_work) = working.as_ref() else {
             return Err(NotRun::NothingIsWorking);
         };
-        if let Some(why) = self.dry_run_refused(caller, at_work) {
+        if let Some(why) = self.dry_run_refused(caller, at_work, spends(ask)) {
             return Err(why);
         }
         let (job, step, worktree) = at_work.standing();
@@ -287,6 +360,29 @@ where
         if declared.mid_step_checks().is_empty() {
             return Err(NotRun::NoneRunMidStep { step });
         }
+        // **Named against the whole declaration, then against the mid-step
+        // half.** The two refusals say different things — a name the part does
+        // not gate on at all, and one it gates on but only when the Drone
+        // submits — and a Drone can act on the second without being told it
+        // misremembered a name.
+        if let Some(named) = &ask.check {
+            let gates_on = |check: &ResolvedCheck| check.name() == Some(named.as_str());
+            if !declared.checks().iter().any(gates_on) {
+                return Err(NotRun::NoSuchCheck {
+                    check: named.clone(),
+                    declared: declared
+                        .checks()
+                        .iter()
+                        .filter_map(|check| check.name().map(str::to_string))
+                        .collect(),
+                });
+            }
+            if !declared.mid_step_checks().iter().any(gates_on) {
+                return Err(NotRun::CheckRunsLater {
+                    check: named.clone(),
+                });
+            }
+        }
         Ok(Plan {
             record,
             step,
@@ -296,14 +392,19 @@ where
     }
 
     /// Every reading the run needs, with no lock held.
-    async fn dry_run_reads(&self, plan: &Plan, narrow: bool) -> Result<Readings, NotRun> {
+    async fn dry_run_reads(
+        &self,
+        plan: &Plan,
+        ask: &ipc::mcp::ChecksAsk,
+    ) -> Result<Readings, NotRun> {
+        let narrow = ask.only_what_changed;
         let unread = |cause: String| NotRun::CouldNotRead { cause };
         let Some(declared) = plan.record.workflow().step(&plan.step) else {
             return Err(NotRun::NoSuchStep {
                 step: plan.step.clone(),
             });
         };
-        let checks = declared.mid_step_checks();
+        let checks = mid_step_named(&declared, ask.check.as_deref());
         // **Read unconditionally, not only where the step declares
         // `diff_nonempty`, and kept whole rather than folded to a bool.**
         // `crate::reuse` needs this same reading beside whatever the run
@@ -325,15 +426,23 @@ where
                 .as_ref()
                 .is_some_and(|before| footprint.differs_from(before));
         // The gate's own skip, from the same reading; a narrowed run reads paths regardless.
-        let touched: Vec<String> =
-            match narrow || checks.iter().any(ResolvedCheck::needs_changed_paths) {
+        // **Paths the Drone named stand in for the diff**, for both the
+        // coverage skip and the narrowing, and are not checked against it: a
+        // Drone asking about a file it has not finished changing is asking a
+        // question it is entitled to an answer to, and the gate reads the diff
+        // for itself regardless. `reuse::KeptDryRun` drops every narrowed
+        // Check, so nothing measured this way reaches a gate as a pass. #1456.
+        let touched: Vec<String> = match ask.files.is_empty() {
+            false => ask.files.clone(),
+            true => match narrow || checks.iter().any(ResolvedCheck::needs_changed_paths) {
                 false => Vec::new(),
                 true => self
                     .work()
                     .changed_files(&plan.worktree)
                     .map_err(|cause| unread(cause.to_string()))?
                     .paths(),
-            };
+            },
+        };
         if narrow && touched.is_empty() {
             return Err(NotRun::NothingChanged);
         }
@@ -358,6 +467,7 @@ where
             .to_string();
         Ok(Readings {
             narrow,
+            only_check: ask.check.clone(),
             moved,
             touched,
             ports: self.port_map(&plan.record).await,
@@ -375,6 +485,7 @@ where
         caller: &JobId,
         plan: Plan,
         read: Readings,
+        spends: bool,
     ) -> Result<ChecksRunning, NotRun> {
         let Some(slot) = self.slot_of(caller).await else {
             return Err(NotRun::NothingIsWorking);
@@ -386,12 +497,12 @@ where
         else {
             return Err(NotRun::NothingIsWorking);
         };
-        if let Some(why) = self.dry_run_refused(caller, at_work) {
+        if let Some(why) = self.dry_run_refused(caller, at_work, spends) {
             return Err(why);
         }
         let run = RUNS.fetch_add(1, Ordering::Relaxed);
         let (going, stop) = Stop::when_dropped_or_one_fails();
-        at_work.checking(self.now(), run, going);
+        at_work.checking(self.now(), run, going, spends);
         let fleet = Arc::clone(self);
         let caller = caller.clone();
         Ok(ChecksRunning(tokio::spawn(async move {
@@ -482,9 +593,10 @@ where
                 plan.step.as_str()
             ));
         };
-        // The gate's batch less what runs only there or before handoff (#849),
-        // so the rows keep the step's own order.
-        let checks = declared.mid_step_checks();
+        // The gate's batch less what runs only there or before handoff (#849)
+        // and less every Check but the one named, so the rows keep the step's
+        // own order either way.
+        let checks = mid_step_named(&declared, read.only_check.as_deref());
         let mut observed = Vec::with_capacity(checks.len());
         let mut printed = Vec::new();
         let mut took = Vec::with_capacity(checks.len());

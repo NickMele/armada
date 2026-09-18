@@ -150,11 +150,14 @@ pub trait Tools: Send + Sync + 'static {
     /// request ended with the connection (#1020). The run is the
     /// implementation's, by `Arc`; refusals are still answered here, at once.
     ///
-    /// `only_what_changed` narrows what each Check reads and never which run.
+    /// The ask says which Checks and against what: `only_what_changed` narrows
+    /// what each one reads, a named Check narrows which of them run, and named
+    /// files stand in for the worktree's diff. **None of the three narrows what
+    /// the gate will do** — it runs every Check whole at submission. #504, #1456.
     fn run_checks(
         self: std::sync::Arc<Self>,
         caller: Caller,
-        only_what_changed: bool,
+        ask: ipc::mcp::ChecksAsk,
     ) -> impl Future<Output = Result<ChecksStarted, NotRecorded>> + Send;
 
     /// `declare_scope` — where the working Drone says its work for this step
