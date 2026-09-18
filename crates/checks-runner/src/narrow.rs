@@ -130,3 +130,46 @@ pub fn one_test(run: &str, test: &str) -> Option<String> {
     }
     Some(run.replace("{}", &quoted(test)))
 }
+
+/// The command a runner's `run_changed` shape makes for these files.
+///
+/// `None` where the template has nowhere to put them, where a path cannot be
+/// one argument, or where no path was given — all three are a runner that has
+/// nothing narrower to say about this change, and the caller runs the Check
+/// whole rather than running something that names no file.
+///
+/// **`{pkg}` is the Check's, `{files}` is the Drone's.** The first is a fact
+/// about where this Check runs and is substituted whether the Check declared
+/// one or not; a template naming it against a Check that declares none has
+/// nothing to put there, and that is the `None` above rather than an empty
+/// argument in the middle of a command.
+pub fn run_changed(template: &str, pkg: Option<&str>, files: &[String]) -> Option<String> {
+    if !template.contains("{files}") {
+        return None;
+    }
+    let mut named: Vec<&str> = files
+        .iter()
+        .map(|path| path.trim())
+        .filter(|path| !path.is_empty())
+        .collect();
+    named.sort_unstable();
+    named.dedup();
+    if named.is_empty() || !named.iter().all(|path| spellable(path)) {
+        return None;
+    }
+    let command = match (template.contains("{pkg}"), pkg) {
+        (true, None) => return None,
+        (true, Some(pkg)) if !spellable(pkg) => {
+            let _ = pkg;
+            return None;
+        }
+        (true, Some(pkg)) => template.replace("{pkg}", &quoted(pkg)),
+        (false, _) => template.to_string(),
+    };
+    let spelled = named
+        .iter()
+        .map(|path| quoted(path))
+        .collect::<Vec<String>>()
+        .join(" ");
+    Some(command.replace("{files}", &spelled))
+}

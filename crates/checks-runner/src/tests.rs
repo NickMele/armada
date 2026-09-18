@@ -511,3 +511,76 @@ mod matched;
 
 /// Which tests a run's own summary names as failing. `src/tests/failing.rs`.
 mod failing;
+
+/// `run_changed`, the shape a runner's description gives a Check that has no
+/// narrowing of its own. #1456.
+mod run_changed {
+    use crate::narrow::run_changed;
+
+    const VITEST: &str = "pnpm --dir {pkg} exec vitest related {files} --run";
+
+    fn paths(of: &[&str]) -> Vec<String> {
+        of.iter().map(|path| path.to_string()).collect()
+    }
+
+    #[test]
+    fn the_package_and_the_files_are_both_put_in() {
+        assert_eq!(
+            run_changed(VITEST, Some("packages/screens"), &paths(&["src/a.ts"])),
+            Some("pnpm --dir packages/screens exec vitest related src/a.ts --run".to_string())
+        );
+    }
+
+    /// Sorted and deduplicated for `narrowed`'s reason: a report that reads
+    /// differently on two identical runs is one nobody can compare.
+    #[test]
+    fn the_files_come_back_sorted_and_deduplicated() {
+        assert_eq!(
+            run_changed(
+                VITEST,
+                Some("p"),
+                &paths(&["src/b.ts", "src/a.ts", "src/b.ts"])
+            ),
+            Some("pnpm --dir p exec vitest related src/a.ts src/b.ts --run".to_string())
+        );
+    }
+
+    #[test]
+    fn a_path_holding_a_space_is_one_argument() {
+        let made =
+            run_changed(VITEST, Some("p"), &paths(&["src/two words.ts"])).expect("it narrows");
+        assert!(made.contains("\"src/two words.ts\""), "{made}");
+    }
+
+    /// Every one of these is the same answer to the caller — the Check runs
+    /// whole — and none of them is a command naming nothing.
+    #[test]
+    fn nothing_to_say_is_none_and_never_a_command_without_files() {
+        assert_eq!(run_changed(VITEST, Some("p"), &[]), None, "no files");
+        assert_eq!(
+            run_changed(VITEST, None, &paths(&["a.ts"])),
+            None,
+            "no package for a template that names one"
+        );
+        assert_eq!(
+            run_changed("pnpm test", Some("p"), &paths(&["a.ts"])),
+            None,
+            "a template with nowhere to put them"
+        );
+        assert_eq!(
+            run_changed(VITEST, Some("p"), &paths(&["src/it's.ts"])),
+            None,
+            "a path the splitter cannot be handed as one argument"
+        );
+    }
+
+    /// A runner rooted at the repository declares no `{pkg}`, and a Check
+    /// driven by it needs none.
+    #[test]
+    fn a_template_naming_no_package_needs_none() {
+        assert_eq!(
+            run_changed("pytest {files}", None, &paths(&["t/a.py"])),
+            Some("pytest t/a.py".to_string())
+        );
+    }
+}

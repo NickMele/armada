@@ -43,6 +43,7 @@ fn named(name: &str, run: &str) -> ResolvedCheck {
         runs_at: core_model::RunsAt::Everywhere,
         places: std::num::NonZeroU32::MIN,
         width: None,
+        runner: None,
     }
 }
 
