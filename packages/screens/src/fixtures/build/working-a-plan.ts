@@ -3,7 +3,7 @@
 // first edit falls inside T1 and the second inside T2, and the narration groups
 // under the task that was marked working at the time. #1185.
 
-import type { WorkPlan } from "@armada/protocol";
+import type { TaskCounts, WorkPlan } from "@armada/protocol";
 import type { JobFixture } from "../fixture";
 import { running } from "./running";
 import { watchedRead } from "./base";
@@ -63,13 +63,38 @@ function asOfNow(fixture: JobFixture): JobFixture {
   ) as JobFixture;
 }
 
-/** `running()` carrying that plan, so the mock can open the Working area whole. */
+/**
+ * The plan's tasks as a Board row counts them, read off the plan itself.
+ *
+ * **Counted rather than written down.** `JobSummary.tasks` and `WorkPlan.tasks`
+ * are the same three tasks said twice — once for a row that redraws from the
+ * counts and once for a screen that reads the plan — and a fixture that typed
+ * the numbers in would be the one place they could disagree.
+ */
+const TASKS_MID_PLAN: TaskCounts = {
+  done: PLAN_MID_TASK.tasks.filter((task) => task.state === "done").length,
+  working: PLAN_MID_TASK.tasks.filter((task) => task.state === "working").length,
+  open: PLAN_MID_TASK.tasks.filter((task) => task.state === "open").length,
+  dropped: PLAN_MID_TASK.tasks.filter((task) => task.state === "dropped").length,
+};
+
+/**
+ * `running()` carrying that plan, so the mock can open the Working area whole.
+ *
+ * **Its row carries the counts, which is what puts a Tasks column on the
+ * Board.** `columnsFor` draws that column where any Job on the board has a
+ * plan, and no fixture set one — so the widest field run the Board can
+ * actually produce existed on nobody's screen, and the row overflowed into
+ * its own action for a week before the owner hit it on a real Job.
+ */
 export function workingAPlan(): JobFixture {
   const fixture = running();
   if (fixture.watched.state !== "read") return fixture;
+  const job = { ...fixture.job, tasks: TASKS_MID_PLAN };
   return asOfNow({
     ...fixture,
+    job,
     name: "running — working the plan's second task of three",
-    watched: watchedRead({ ...fixture.watched.detail, work_plan: PLAN_MID_TASK }),
+    watched: watchedRead({ ...fixture.watched.detail, job, work_plan: PLAN_MID_TASK }),
   });
 }
