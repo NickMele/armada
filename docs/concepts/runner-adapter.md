@@ -158,11 +158,48 @@ filter that matched and passed. Verification has to catch the third outcome
 against a fixture proven to isolate one test, because a live suite makes a
 false pass indistinguishable from a real one.
 
+## Where an adapter comes from
+
+An adapter reaches a repository by one of three routes, and the third feeds the
+first.
+
+| Route | When it applies |
+|---|---|
+| Shipped | Armada carries adapters for the runners it already knows. A repository on one of them is configured by being detected |
+| Learned | No shipped adapter's `detect` matches. The draft-and-verify path above produces a candidate, a person confirms it once, and Fleet keeps it |
+| Published | A learned adapter is sent back to Armada's own repository, and becomes a shipped one by pull request |
+
+**A learned adapter is worth keeping beyond the machine that learned it.** The
+work of drafting one is a model call, a fixture run and a person's attention,
+and every repository on that runner afterwards would repeat all three. Sending
+it back is what makes the second repository on a runner cost nothing.
+
+**Publishing is a submission to the repository Armada itself is developed in**,
+not to a service Armada operates. Nothing has to be hosted, every submission is
+public and reviewable the moment it arrives, and an author needs the account
+they would need to file an issue. What that costs is the lookup: asking whether
+a runner is already known means reading what is in the repository, so it is not
+free the way an indexed registry's answer would be — and a draft-and-verify run
+that a lookup would have avoided is a model call, a fixture run and a person's
+attention.
+
+**The pull request is how a published adapter becomes a shipped one.** Receiving
+one opens a change against Armada rather than adding it to a live set, so an
+adapter everybody gets is reviewed the way every other shipped default is. That
+is also what keeps `detect` honest: an adapter whose detection is too broad
+matches repositories it was never proven against, and the review is where that
+is caught.
+
+A repository may carry an adapter of its own, and it is read ahead of a shipped
+or learned one. That is the answer to a repository running a common runner in an
+uncommon way — it says so locally rather than the shipped adapter growing a case
+for it.
+
 ## Deferred: sharing
 
-No registry, naming scheme, or trust tier is being designed or built now. What
-a future publish layer would need is already true of this schema, so building
-one later does not require reopening it:
+The target is settled above. Nothing about naming, versioning or trust tiers is,
+and what a publish layer would need is already true of this schema, so building
+one does not require reopening it:
 
 - a stable identity and version per adapter — the example above's comment
   is illustrative only, not a decided naming scheme

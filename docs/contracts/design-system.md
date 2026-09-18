@@ -80,6 +80,12 @@ is allowed only as that light, and never where a person reads a state.
    anchor cancels its own default and hands the address to the process that
    owns the shell; a window that loaded a forge would be a window with no rail
    and no way back, which is the frozen surface Bridge exists to escape.
+   **The capture window is not a surface, which is why it may load an
+   address.** It draws no Armada surface inside the page it shows — it is
+   Bridge's chrome around another repository's running app, pinned to that
+   Run's own loopback origin, with no rail to lose and no history to go back
+   through. What it may load, what it refuses and what it never claims is
+   `../practices/capture-window.md`.
 3. **Status colors are never chosen.** They map to the Job state machine
    one to one. Never assign a status color by aesthetic judgment. **Below
    Job level, hue exists only where `tokens/status.css` declares it**,
