@@ -305,6 +305,7 @@
 /* Kit's MCP servers, on their own rail surface. Above the rule below, per
    HeldFlag's note. #1275. */
 @import "./compositions/KitServers/KitServers.css";
+@import "./compositions/KitSetup/KitSetup.css";
 /* One Helm session as one quotable record, on the layer wide enough to read
    it. #1367. */
 @import "./compositions/HelmRecord/HelmRecord.css";

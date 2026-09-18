@@ -58,6 +58,37 @@ export const BRANCH = "fix/settings-split-selectors";
 export const WORKTREE = `.armada/worktrees/${JOB_HANDLE}`;
 export const TITLE = "Split the settings reducer so the selectors can be tested alone";
 export const CREATED_AT = "2026-09-10T14:11:00Z";
+/**
+ * When the first Drone started, fifteen seconds after the Job was created.
+ *
+ * **Every fixture but the two that have never run carries it.** Without it no
+ * row and no header drew a run time at all — the figure was real in the unit
+ * tests and absent everywhere a person could look at it, which is how a
+ * terminal Job's run time went wrong on the Board for as long as it did.
+ */
+export const STARTED_AT = "2026-09-10T14:11:15Z";
+/**
+ * When a terminal Job stopped, ninety seconds before `NOW`.
+ *
+ * **The whole point of it is that it is not `NOW`.** A run time on a Job that
+ * is over has to stop, and a fixture whose end is the clock cannot show the
+ * difference between a Job still going and one that finished.
+ */
+export const ENDED_AT = "2026-09-10T14:29:30Z";
+
+/**
+ * The statuses whose fixtures have never run, so they carry no `started_at`.
+ *
+ * **Named rather than derived.** A Job is `queued` both before its first run
+ * and after a restart, and only the first of those has no run time — the
+ * registry cannot tell them apart and this fixture set can: its `queued` is
+ * "approved, waiting on a free drone". A fixture that wants the other one
+ * passes `started_at` itself.
+ */
+const NEVER_RAN = new Set(["awaiting_approval", "queued"]);
+
+/** The statuses whose fixtures are over, so they carry an `ended_at`. */
+const OVER = new Set(["completed_success", "completed_failed", "killed", "rejected", "superseded"]);
 
 /** The step ids, in workflow order — the one list every builder walks. */
 export const STEP_IDS = ["repro", "root_cause", "fix", "regression_verify", "consumers", "land"];
@@ -175,6 +206,11 @@ export function manifest(): ManifestSummary {
  * The Job row. Every state file calls this with the status it is a moment of
  * — the one field a fixture always overrides — and whatever else the wire
  * would carry alongside it there.
+ *
+ * **When it ran is derived from the status, not repeated per file.** Twenty-
+ * eight fixtures each remembering to set two instants is twenty-eight chances
+ * to disagree about what a killed Job's clock says; the two sets above are the
+ * rule, and a fixture that is an exception overrides them like any other field.
  */
 export function job(status: string, over: Partial<JobSummary> = {}): JobSummary {
   return {
@@ -192,6 +228,8 @@ export function job(status: string, over: Partial<JobSummary> = {}): JobSummary 
     atomic: false,
     model: "sonnet",
     created_at: CREATED_AT,
+    ...(NEVER_RAN.has(status) ? {} : { started_at: STARTED_AT }),
+    ...(OVER.has(status) ? { ended_at: ENDED_AT } : {}),
     branch: BRANCH,
     assigned_drone: DRONE_ID,
     ...over,

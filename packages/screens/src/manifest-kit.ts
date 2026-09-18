@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import type {
   AddKitServer,
+  KitInventory,
   KitServers,
   ManifestReach,
   Outcome,
@@ -18,8 +19,13 @@ import type {
 /** `GET /kit/servers` and the four acts under it, read into the app. */
 export type KitServersRead = { ok: true; kit: KitServers } | { ok: false; outcome: Outcome };
 
+/** `GET /kit/inventory`, read into the app. #1491. */
+export type KitInventoryRead = { ok: true; setup: KitInventory } | { ok: false; outcome: Outcome };
+
 /** What the Manifest surface asks of the host for Kit. */
 export type KitSlice = {
+  /** The setup a person already has, read to be shown. Machine-wide. #1491. */
+  onReadKitInventory: () => Promise<KitInventoryRead>;
   onListKitServers: () => Promise<KitServersRead>;
   onAddKitServer: (adding: AddKitServer) => Promise<KitServersRead>;
   onForgetKitServer: (name: string) => Promise<KitServersRead>;
@@ -59,6 +65,7 @@ export function addressReads(address: ServerAddress): string {
  * one answer on this page nobody should be given by accident.
  */
 export function useKit(slice: KitSlice): {
+  setup: KitInventory | undefined;
   kit: KitServers | undefined;
   refused: Outcome | null;
   onAdd: (adding: AddKitServer) => void;
@@ -67,6 +74,7 @@ export function useKit(slice: KitSlice): {
   onManifestReach: (name: string, reach: ManifestReach | null) => void;
 } {
   const [kit, setKit] = useState<KitServers | undefined>(undefined);
+  const [setup, setSetup] = useState<KitInventory | undefined>(undefined);
   const [refused, setRefused] = useState<Outcome | null>(null);
 
   const took = (read: KitServersRead): void => {
@@ -85,10 +93,16 @@ export function useKit(slice: KitSlice): {
     void slice.onListKitServers().then((read) => {
       if (read.ok) setKit(read.kit);
     });
+    // Read fresh on opening rather than kept: a person who installs a skill and
+    // comes back expects to see it, and nothing in the app is told when they do.
+    void slice.onReadKitInventory().then((read) => {
+      if (read.ok) setSetup(read.setup);
+    });
     // Once, on opening. Every act below folds its own answer.
   }, []);
 
   return {
+    setup,
     kit,
     refused,
     onAdd: (adding) => void slice.onAddKitServer(adding).then(took),

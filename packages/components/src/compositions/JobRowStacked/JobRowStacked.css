@@ -74,7 +74,21 @@
      column never fills reads as a value that failed to load, and Origin has
      words but no carriage to Bridge yet. **The handle's track is in both and
      counted in neither**: it is the row's own, not a fact the caller named, and
-     `JobSummary` carries a handle on every Job. */
+     `JobSummary` carries a handle on every Job.
+
+     **Five and six, because `columnsFor` can name six and this stopped at
+     four.** `BOARD_COLUMNS` is four facts on its own, Repository joins it on
+     All repositories and Tasks joins it wherever a Job has a plan — and a list
+     at `data-columns="5"` or `"6"` fell through to the four-track default, so
+     the fifth fact took the slack track and the sixth took the action's. The
+     owner found it on a killed Job: `TA…` clipped under `Redispatch as a new
+     job`, a column header with its cell printed behind a button. A variant per
+     count is what the pair above already committed to; this finishes the set
+     rather than making the tracks dynamic.
+
+     Repository takes the provenance width — both are one short name — and
+     Tasks takes the progress width, because it draws the same bar-and-figure
+     pair Progress does and was clipping to its own bar without it. */
   --armada-job-row-tracks-3:
     minmax(var(--armada-track-badge), max-content)
     minmax(var(--armada-track-id), auto)
@@ -90,6 +104,27 @@
     minmax(var(--armada-track-progress), auto)
     minmax(var(--armada-track-time), auto)
     minmax(var(--armada-track-provenance), auto)
+    minmax(0, 1fr)
+    max-content;
+  --armada-job-row-tracks-5:
+    minmax(var(--armada-track-badge), max-content)
+    minmax(var(--armada-track-id), auto)
+    minmax(var(--armada-track-origin), auto)
+    minmax(var(--armada-track-progress), auto)
+    minmax(var(--armada-track-time), auto)
+    minmax(var(--armada-track-provenance), auto)
+    minmax(var(--armada-track-provenance), auto)
+    minmax(0, 1fr)
+    max-content;
+  --armada-job-row-tracks-6:
+    minmax(var(--armada-track-badge), max-content)
+    minmax(var(--armada-track-id), auto)
+    minmax(var(--armada-track-origin), auto)
+    minmax(var(--armada-track-progress), auto)
+    minmax(var(--armada-track-time), auto)
+    minmax(var(--armada-track-provenance), auto)
+    minmax(var(--armada-track-provenance), auto)
+    minmax(var(--armada-track-progress), auto)
     minmax(0, 1fr)
     max-content;
   --armada-job-row-tracks: var(--armada-job-row-tracks-4);
@@ -625,6 +660,29 @@
     minmax(var(--armada-track-bar), auto)
     minmax(min-content, auto)
     minmax(0, auto)
+    max-content;
+  /* Five and six, for the reason the card's pair gained them: `columnsFor`
+     names Repository on All repositories and Tasks wherever a Job has a plan,
+     and anything past four fell through to the four-track default and printed
+     its last cell in the action's column. */
+  --armada-job-table-tracks-5:
+    max-content
+    minmax(30%, 1fr)
+    minmax(var(--space-3), auto)
+    minmax(var(--armada-track-bar), auto)
+    minmax(min-content, auto)
+    minmax(0, auto)
+    minmax(0, auto)
+    max-content;
+  --armada-job-table-tracks-6:
+    max-content
+    minmax(30%, 1fr)
+    minmax(var(--space-3), auto)
+    minmax(var(--armada-track-bar), auto)
+    minmax(min-content, auto)
+    minmax(0, auto)
+    minmax(0, auto)
+    minmax(var(--armada-track-bar), auto)
     max-content;
   --armada-job-table-tracks: var(--armada-job-table-tracks-4);
 }

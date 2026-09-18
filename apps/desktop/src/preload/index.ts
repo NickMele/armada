@@ -38,7 +38,7 @@ import type {
 } from "@armada/screens/src/editing";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
-import type { KitServersRead } from "@armada/screens/src/manifest-kit";
+import type { KitInventoryRead, KitServersRead } from "@armada/screens/src/manifest-kit";
 import type { AddKitServer, ManifestReach, ReachesDrones } from "@armada/protocol";
 import type { LocateAnswer } from "@armada/screens/src/locate-reads";
 import type { ComposingRead } from "@armada/screens/src/composing-reads";
@@ -394,6 +394,7 @@ const api: BridgeApi = {
   removeRepositoryAllowedCommand: (run: string): Promise<RepositoryAllowedCommandsRead> =>
     ipcRenderer.invoke(CHANNELS.removeRepositoryAllowedCommand, run),
 
+  readKitInventory: (): Promise<KitInventoryRead> => ipcRenderer.invoke(CHANNELS.readKitInventory),
   listKitServers: (): Promise<KitServersRead> => ipcRenderer.invoke(CHANNELS.listKitServers),
   addKitServer: (adding: AddKitServer): Promise<KitServersRead> =>
     ipcRenderer.invoke(CHANNELS.addKitServer, adding),

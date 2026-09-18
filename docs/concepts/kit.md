@@ -24,11 +24,38 @@ The machine's AI tool set and defaults, and everything in `../contracts/configur
 
 Resources, budget, timing, interface and notification routing are **not** here — those are [Machine](machine.md). Setting up your *first project* is also out of scope — that's Manifest's Init, chained together in the broader First-Run Onboarding journey (not yet designed).
 
-## Kit's home
+## Kit's two homes
 
-**Kit lives at `~/.armada`, and Workflows are the first thing read from it.** Fleet makes the folder, with `workflows/` inside it, when it starts. A definition in `~/.armada/workflows/` replaces the one Armada carries with the same `workflow_id` in every repository on this machine, and a repository's own `.armada/workflows/` replaces both — [Workflow](workflow.md) holds the rule. #425.
+**Kit has two homes and says which is which, decided with the owner on 18 Sep.**
 
-**A folder a person can see and sync**, apart from the store, the runtime file and [Machine](machine.md)'s settings: Kit travels and the Machine does not. Everything else this page lists arrives in the same home under #41, and nothing else is read from it yet.
+| Home | Whose | What Armada does with it |
+| --- | --- | --- |
+| The harness's own — `~/.claude` for the first adapter | The person's. It is what every other tool they use reads | **Reads it**, to show it. Writes only what they edit in Kit, and not yet |
+| `~/.armada` | Armada's own | Makes it, reads it, writes it. Workflows today, and anything with no counterpart in a harness |
+
+**Neither is authoritative over the other's idea of anything**, which is what makes two homes survivable where the issue that raised this feared they would not be. Nothing in `~/.armada` overrides a skill; nothing in the harness's home names a Workflow. A row Kit draws is labelled with the home it came from, so a person can always tell what they are looking at and where to go to change it.
+
+**One home was the alternative and was refused.** Putting everything in the harness's home would mean Armada writing into a directory it does not own for things that are Armada's alone rather than only for a person's own edits. Putting everything in `~/.armada` would mean copying a setup that already exists — the drift the owner refused when he decided write-back, because two copies drift the moment either is touched and nobody can then say which a Drone ran against.
+
+**Workflows are the first thing read from `~/.armada`.** Fleet makes the folder, with `workflows/` inside it, when it starts. A definition in `~/.armada/workflows/` replaces the one Armada carries with the same `workflow_id` in every repository on this machine, and a repository's own `.armada/workflows/` replaces both — [Workflow](workflow.md) holds the rule. #425.
+
+**A folder a person can see and sync**, apart from the store, the runtime file and [Machine](machine.md)'s settings: Kit travels and the Machine does not. Everything else this page lists arrives in one of the two homes under #41.
+
+## What a person already has, read to be shown
+
+**Armada reads the harness's own home to show what is in it** — `#1491`. Somebody arrives with a way of working already built: skills they wrote, plugins they installed, a global file saying how they want an agent to behave, servers they connected. Kit opened on *Nothing in your Kit yet* with all of it one directory away, and **see** was the verb the build was missing.
+
+**An adapter per harness**, decided with the owner on 18 Sep. Which folder, which file and how one harness spells a skill are `crates/adapters`' to know, and a second harness is a second adapter with nothing above it moving. `get_kit_inventory` is the read and `adapter_traits::HarnessSetup` is the seam.
+
+**Six kinds of the eight are read**: Skills, Plugins, Agent file, Sub agents, Commands and the servers a person connected. The allowlist and the models list answer *not read yet, and why* — a rule drawn out of its two tiers reads as a grant, and both tiers are #41. **A kind is never drawn as empty when nothing looked**, which is the defect this read exists to end rather than repeat one row along.
+
+**Reading is not granting, and no part of it is a control.** What is read carries a name, the thing's own words for itself and where it came from. A server a person connected carries **the program's own file name, or the host it is at** — the owner's decision, 18 Sep: enough to tell two servers apart and to spot one pointing somewhere wrong. What follows either is where a key sits and is never carried: no argument list, no query string, no userinfo, no environment. So what is on the screen could not start the server it names, and a server connected outside Armada is visible here while reaching no Drone — adding one to Kit and then allowing it are the two acts they were. That is `../scope.md`'s one confinement, kept where an import would have broken it.
+
+**The adapter cannot hold a credential rather than being careful not to draw one.** A program is kept as its file name and a URL as its host, by a reader that allocates only that much; the argument list and the environment are read into a type that keeps nothing at all. A `Vec<String>` of arguments a screen happened not to draw is the thing this shape exists to avoid.
+
+**A file that will not read is named, with its reason, under the kind it belongs to.** It costs that kind and nothing else, and nothing offers to repair it: the reader has no write to reach for.
+
+**Write-back is decided and not built.** Kit writes to the harness's home rather than keeping a copy — one setup, Armada a window onto it — because two copies drift the moment either is touched and nobody can then say which a Drone ran against. The cost is that Armada would be writing into a directory it does not own, holding work a person depends on outside Armada entirely, so the read landed first and carries no write at all. #41.
 
 **A Kit definition that does not fit a repository is left out there, and named.** One that will not parse, names a Check that repository does not declare, or shares its id with another Kit file, is set aside — two sharing an id are both left out, and named together. Fleet starts anyway and says at start which definition was left out, why, and whose runs instead: *Kit's `bug` was left out, because …; Armada's `bug` is used instead.* One bad Kit file never stops Fleet for every repository. The owner's decision. One the repository replaces is never resolved against it. A repository's own definitions stay strict, because the repository declared them.
 
@@ -61,7 +88,7 @@ The original four groups split across the two concepts: AI Behavior and the tool
 
 **A scout gets none of them.** [Scout](scout.md) starts with no server at all, and the sources it reads are fetched by Fleet rather than opened by the agent — so "a scout's connections" is a different question from this one, and nothing here widens a scout.
 
-**Helm's set is still the person's own, resolved by the CLI** — `#1373`, and Kit replaces none of it yet. Nothing in Armada reads `~/.claude`; Helm simply launches without the flag a Drone launches with.
+**Helm's set is still the person's own, resolved by the CLI** — `#1373`, and Kit replaces none of it yet. Helm simply launches without the flag a Drone launches with.
 
 **Known cost: allowlist rot.** Two-tier inheritance keeps changes scoped, but upkeep is ongoing as new tools are needed. No automated solution exists; worth monitoring rather than solving now.
 

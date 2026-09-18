@@ -252,6 +252,15 @@ pub trait Queries: Send + Sync + 'static {
         manifest_id: Option<ManifestId>,
     ) -> impl Future<Output = Result<ipc::RepositoryAllowedCommands, Refusal>> + Send;
 
+    /// `get_kit_inventory` — the setup a person already works with, read from
+    /// their agent harness's own home. `#1491`.
+    ///
+    /// **Every kind is answered**, including the ones nothing reads yet: a kind
+    /// left out is drawn as empty, and an empty Kit beside a full home
+    /// directory is what this read exists to stop. The only `Refusal` is a
+    /// fault — a home that is not there is an answer.
+    fn get_kit_inventory(&self) -> impl Future<Output = Result<ipc::KitInventory, Refusal>> + Send;
+
     /// `get_kit_servers` — every MCP server in Kit, Kit's own default for
     /// each, this Manifest's word over it, and whether a Drone dispatched here
     /// resolves it. `#1275`.

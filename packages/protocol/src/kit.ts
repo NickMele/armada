@@ -74,3 +74,67 @@ export type SetManifestServerReach = {
   name: string;
   reach: ManifestReach | null;
 };
+
+// The setup a person already works with, read from their agent harness's own
+// home and shown by kind. Since protocol 17.2. `crates/ipc/src/kit.rs`, #1491.
+//
+// **No credential on any of it.** A connected server crosses as the program's
+// own file name or the host it is at, and never as what follows either — no
+// argument list, no query string, no userinfo, no environment. What crosses
+// could not start the server it names, and allowing one stays its own act on a
+// kit row a person added themselves.
+
+/** One thing a person already has. */
+export type SetupItem = {
+  name: string;
+  /** Its own words for itself — or, for a connected server, what it is at. */
+  says?: string;
+  /** Where it came from, as a person would type it. */
+  source: string;
+};
+
+/** Something of the right shape in the right place that would not read. */
+export type SetupUnreadable = {
+  source: string;
+  why: string;
+};
+
+/**
+ * What became of one kind. **Tagged**, so an empty list is *you have none of
+ * these* and never *nothing looked*.
+ */
+export type WhatWasRead =
+  | { what: "read"; items: SetupItem[]; unreadable: SetupUnreadable[] }
+  | { what: "not_read"; why: string };
+
+/** Armada's word for one kind of thing, never a harness's. */
+export type SetupKind =
+  | "skills"
+  | "plugins"
+  | "agent_file"
+  | "sub_agents"
+  | "commands"
+  | "mcp_servers"
+  | "allowlist"
+  | "models";
+
+/** One kind, and what became of it. */
+export type SetupKindRow = {
+  kind: SetupKind;
+  read: WhatWasRead;
+};
+
+/** `get_kit_inventory`'s answer. */
+export type KitInventory = {
+  /**
+   * The harness, in its own name. **Drawn, never matched on** — it arrives as
+   * data an adapter produced, which is what lets a second harness draw here
+   * without this file changing.
+   */
+  harness: string;
+  home: string;
+  /** Whether that home is there at all. */
+  present: boolean;
+  /** Every kind, in a fixed order, including the ones nothing reads yet. */
+  kinds: SetupKindRow[];
+};

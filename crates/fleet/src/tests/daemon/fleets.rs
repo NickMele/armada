@@ -79,6 +79,12 @@ pub fn fitted_over<V>(
         work,
         clock: Arc::new(Ticking::from_nine()),
         mint: Arc::new(Counted::from_one()),
+        // The real reader, pointed at the fixture's own home. A fixture that
+        // read the machine's would report whoever ran the tests.
+        setup: Arc::new(adapters::ExistingSetup::over(
+            adapters::Home::at(home.path()),
+            &root,
+        )),
         starting_in: Some(StartingIn {
             root: root.clone(),
             // Same value as `root` in this fixture; `crate::tests::records`

@@ -52,7 +52,7 @@ import type {
 } from "@armada/screens/src/editing";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
-import type { KitServersRead } from "@armada/screens/src/manifest-kit";
+import type { KitInventoryRead, KitServersRead } from "@armada/screens/src/manifest-kit";
 import type { AddKitServer, ManifestReach, ReachesDrones } from "@armada/protocol";
 import type { LocateAnswer } from "@armada/screens/src/locate-reads";
 import type { ComposingRead } from "@armada/screens/src/composing-reads";
@@ -616,6 +616,12 @@ export type BridgeApi = {
    * Manifest word over it, and whether a Drone dispatched here resolves it —
    * #1275. Every act below answers with the same whole list.
    */
+  /**
+   * The setup a person already works with, read from their agent harness's own
+   * home — #1491. **A read and nothing more**: nothing it answers with reaches
+   * a Drone, and nothing on this seam can make it.
+   */
+  readKitInventory: () => Promise<KitInventoryRead>;
   listKitServers: () => Promise<KitServersRead>;
   /** Put one in Kit. **It reaches no Drone** until one of the two reaches below says so. */
   addKitServer: (adding: AddKitServer) => Promise<KitServersRead>;

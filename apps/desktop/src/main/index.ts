@@ -827,6 +827,9 @@ void app.whenReady().then(() => {
   );
   // Kit's MCP servers — #1275. Kit itself is machine-wide; the picked
   // repository is what scopes the Manifest tier, so none of these names one.
+  ipcMain.handle(CHANNELS.readKitInventory, (event) =>
+    connection?.kitFor(windowIdOf(event)).inventory(),
+  );
   ipcMain.handle(CHANNELS.listKitServers, (event) => connection?.kitFor(windowIdOf(event)).list());
   ipcMain.handle(CHANNELS.addKitServer, (event, adding: AddKitServer) =>
     connection?.kitFor(windowIdOf(event)).add(adding),

@@ -137,6 +137,11 @@ pub struct Fittings<H, V, W> {
     pub host: Host,
     /// Reading a folder a person adds. See [`crate::repositories::Locating`].
     pub locating: Arc<dyn crate::repositories::Locating>,
+    /// Reading the setup a person already has, to show it. **A seam for
+    /// `machine`'s reason, and one more**: the shipped answer reads a real home
+    /// directory, and a fixture that used it would report whoever ran the
+    /// tests. `#1491`.
+    pub setup: Arc<dyn adapter_traits::HarnessSetup + Send + Sync>,
     /// The range a Job's port span is claimed from. `settings.port-range-base`,
     /// `settings.port-range-ceiling` (`crate::ports::detect_ceiling` supplies
     /// the composition root's default) and `settings.port-block-granule`.
@@ -317,6 +322,7 @@ where
                 None => crate::repositories::Repositories::none(),
             }),
             locating: fittings.locating,
+            setup: fittings.setup,
             host: Local {
                 path: fittings.host.path,
                 home: fittings.host.home,

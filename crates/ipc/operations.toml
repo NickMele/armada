@@ -1384,6 +1384,23 @@ The second tier. `reach` is `extended`, `restricted`, or `null` — and **`null`
 Refused with a 409 where Kit holds no server of that name.
 """
 
+[operations.get_kit_inventory]
+kind = "query"
+transport = "HTTP"
+agent_access = "No"
+description = "The setup a person already works with, read from their agent harness's own home and shown by kind"
+notes = """
+`#1491`. Somebody arrives with a way of working already built — skills they wrote, plugins they installed, a global file saying how they want an agent to behave, servers they connected — and until now Kit read none of it and opened on *Nothing in your Kit yet*. This is the read. One adapter per harness answers it, and which folder, which file and how that harness spells a skill stay inside `crates/adapters`.
+
+**Every kind is answered, including the ones nothing reads yet.** A kind left out would be drawn as empty, and an empty row beside a full home directory is the report this route exists to stop. `allowlist` and `models` come back `not_read` with why, which is `#41`.
+
+**Reading is not granting, and the answer carries no way to change that.** A row is a name, the item's own words for itself and where it came from. A connected server carries the program's own file name or the host it is at — enough to tell two apart and to see one pointing somewhere wrong — and **never what comes after either**: no argument list, no query string, no userinfo, no environment. So what crosses could not start the server it names, and a server a person connected outside Armada is visible while reaching no Drone: `add_kit_server` and then `set_kit_server_reach` are the two separate acts, exactly as they were. v1 passed neither guarantee and its Drone came up holding the operator's seven connected servers, ninety-five tools and the accounts behind them.
+
+**A file that will not parse is named rather than skipped**, under the kind it belongs to, and costs that kind alone. Nothing is written: the read has no write to reach for.
+
+Machine-wide, so no Manifest scopes it. `agent_access` is `No`, `get_kit_servers`' reason — what a person has is theirs to see, and a tool that let an agent read the set is a step toward one that changes it.
+"""
+
 [operations.approve_dispatch]
 kind = "command"
 transport = "HTTP"
