@@ -63,6 +63,7 @@ export * from "./held";
 export * from "./keys";
 export * from "./lineage";
 export * from "./manifest-file";
+export * from "./manifest-kit";
 export * from "./manifest-form";
 export * from "./verify";
 export * from "./notes";

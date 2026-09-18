@@ -33,6 +33,7 @@ import { Questions } from "./questions";
 import { RehearsalConnection } from "./rehearsal";
 import { ManifestFileCommands } from "./editing";
 import { PlanEdits } from "./plan-edits";
+import { KitCommands } from "./kit";
 import { RepositoryAllowsCommands } from "./repository-allows";
 import { RepositoryReads } from "./repositories";
 import { Picked, PickedByWindow } from "./picked";
@@ -91,7 +92,12 @@ export class FleetConnection {
    */
   private readonly windowFacades = new Map<
     number,
-    { editing: ManifestFileCommands; repositoryAllows: RepositoryAllowsCommands; overview: OverviewReads }
+    {
+      editing: ManifestFileCommands;
+      repositoryAllows: RepositoryAllowsCommands;
+      kit: KitCommands;
+      overview: OverviewReads;
+    }
   >();
   /** A person's own add or drop of a task — see `plan-edits.ts`. */
   readonly planEdits: PlanEdits;
@@ -281,6 +287,11 @@ export class FleetConnection {
     return this.facadesFor(windowId).repositoryAllows;
   }
 
+  /** This window's own Kit acts — see `windowFacades`. #1275. */
+  kitFor(windowId: number): KitCommands {
+    return this.facadesFor(windowId).kit;
+  }
+
   /** This window's own Overview reads — see `windowFacades`. */
   overviewFor(windowId: number): OverviewReads {
     return this.facadesFor(windowId).overview;
@@ -288,7 +299,12 @@ export class FleetConnection {
 
   private facadesFor(
     windowId: number,
-  ): { editing: ManifestFileCommands; repositoryAllows: RepositoryAllowsCommands; overview: OverviewReads } {
+  ): {
+    editing: ManifestFileCommands;
+    repositoryAllows: RepositoryAllowsCommands;
+    kit: KitCommands;
+    overview: OverviewReads;
+  } {
     let found = this.windowFacades.get(windowId);
     if (found === undefined) {
       const picked = this.repositories.pickedByWindow.of(windowId);
@@ -296,6 +312,7 @@ export class FleetConnection {
       found = {
         editing: new ManifestFileCommands(port, picked, (at) => this.repositories.readHoldings(at)),
         repositoryAllows: new RepositoryAllowsCommands(port, picked),
+        kit: new KitCommands(port, picked),
         overview: new OverviewReads({
           publish: (change) => this.wiring.publishToWindow(windowId, change),
           picked,

@@ -36,6 +36,8 @@ import type {
 } from "@armada/screens/src/editing";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
+import type { KitServersRead } from "@armada/screens/src/manifest-kit";
+import type { AddKitServer, ManifestReach, ReachesDrones } from "@armada/protocol";
 import type { LocateAnswer } from "@armada/screens/src/locate-reads";
 import type { ComposingRead } from "@armada/screens/src/composing-reads";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
@@ -389,6 +391,16 @@ const api: BridgeApi = {
 
   removeRepositoryAllowedCommand: (run: string): Promise<RepositoryAllowedCommandsRead> =>
     ipcRenderer.invoke(CHANNELS.removeRepositoryAllowedCommand, run),
+
+  listKitServers: (): Promise<KitServersRead> => ipcRenderer.invoke(CHANNELS.listKitServers),
+  addKitServer: (adding: AddKitServer): Promise<KitServersRead> =>
+    ipcRenderer.invoke(CHANNELS.addKitServer, adding),
+  forgetKitServer: (name: string): Promise<KitServersRead> =>
+    ipcRenderer.invoke(CHANNELS.forgetKitServer, name),
+  setKitServerReach: (name: string, drones: ReachesDrones): Promise<KitServersRead> =>
+    ipcRenderer.invoke(CHANNELS.setKitServerReach, name, drones),
+  setManifestServerReach: (name: string, reach: ManifestReach | null): Promise<KitServersRead> =>
+    ipcRenderer.invoke(CHANNELS.setManifestServerReach, name, reach),
 
   // Start a declared server, for this Job's worktree or, with no Job, the
   // main checkout — the capability the Manifest surface shares, which is why

@@ -31,6 +31,7 @@ import { useEffect, useState } from "react";
 
 import type { BridgeState } from "../../shared/bridge";
 import type { EditManifest, SaveManifestFile } from "@armada/protocol";
+import type { AddKitServer, ManifestReach, ReachesDrones } from "@armada/protocol";
 import type {
   AddTask,
   Artifact,
@@ -180,6 +181,14 @@ export const writeManifestProposal = (body: WriteManifestProposal) => window.arm
 export const listRepositoryAllowedCommands = () => window.armada.listRepositoryAllowedCommands();
 export const removeRepositoryAllowedCommand = (run: string) =>
   window.armada.removeRepositoryAllowedCommand(run);
+/** Kit's MCP servers, and the two tiers of reach over each — #1275. */
+export const listKitServers = () => window.armada.listKitServers();
+export const addKitServer = (adding: AddKitServer) => window.armada.addKitServer(adding);
+export const forgetKitServer = (name: string) => window.armada.forgetKitServer(name);
+export const setKitServerReach = (name: string, drones: ReachesDrones) =>
+  window.armada.setKitServerReach(name, drones);
+export const setManifestServerReach = (name: string, reach: ManifestReach | null) =>
+  window.armada.setManifestServerReach(name, reach);
 export const startServer = (name: string, jobId?: string) => window.armada.startServer(name, jobId);
 export const stopServer = (serverId: string) => window.armada.stopServer(serverId);
 export const openServerLink = (serverId: string, url: string) =>

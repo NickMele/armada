@@ -54,6 +54,7 @@ import {
   Alert,
   Button,
   DriftPanel,
+  KitServers,
   ManifestFile,
   ManifestForm,
   RunPage,
@@ -66,11 +67,12 @@ import { said } from "./copy";
 import { NOTHING_SERVED, servesNothing } from "./locate-reads";
 import { useManifestRuns, type ManifestSlice } from "./checkout-runs";
 import { useRepositoryAllows, type RepositoryAllowsSlice } from "./manifest-allows";
+import { addressReads, addressTyped, useKit, type KitSlice } from "./manifest-kit";
 import type { ManifestEditing } from "./manifest-file";
 import type { ManifestForming } from "./manifest-form";
 import { driftPanelOf, verifyPanelOf } from "./verify";
 
-export type ManifestProps = ManifestSlice & RepositoryAllowsSlice & {
+export type ManifestProps = ManifestSlice & RepositoryAllowsSlice & KitSlice & {
   /**
    * The entry the command palette picked, or `null`.
    *
@@ -146,9 +148,11 @@ export function Manifest(props: ManifestProps) {
   const viewNote =
     props.settingUp || onlySetup
       ? null
-      : rootless || editing.view === "run"
-        ? "Run one Check or Command against this checkout, as it is on disk. Nothing here is a verdict."
-        : "Edit this repository's Manifest. Save writes the file to disk and stops, without staging or committing it.";
+      : editing.view === "servers"
+        ? "The MCP servers a Drone dispatched against this repository is handed. Nothing else reaches one."
+        : rootless || editing.view === "run"
+          ? "Run one Check or Command against this checkout, as it is on disk. Nothing here is a verdict."
+          : "Edit this repository's Manifest. Save writes the file to disk and stops, without staging or committing it.";
   const selected = props.settingUp || onlySetup ? "setup" : rootless ? "run" : editing.view;
   return (
     <div className="armada-screen__stack">
@@ -187,13 +191,15 @@ export function Manifest(props: ManifestProps) {
                 { id: "run", label: "Checks and Commands" },
                 { id: "form", label: "Edit" },
                 { id: "file", label: editing.named },
+                { id: "servers", label: "Servers" },
               ]),
           ...(props.setup === undefined ? [] : [{ id: "setup", label: "Set up workspaces" }]),
         ]}
         value={selected}
         onChange={(id) => {
           props.onSettingUp?.(id === "setup");
-          if (id !== "setup") editing.onView(id === "file" || id === "form" ? id : "run");
+          if (id !== "setup")
+            editing.onView(id === "file" || id === "form" || id === "servers" ? id : "run");
         }}
       />
       {/* The view and the note that says what it is for, faded in together on a
@@ -206,6 +212,8 @@ export function Manifest(props: ManifestProps) {
           props.setup
         ) : rootless ? (
           <RunPage {...slot} />
+        ) : editing.view === "servers" ? (
+          <ServersView {...props} />
         ) : editing.view === "file" ? (
           <FileView file={editing.file} />
         ) : editing.view === "form" ? (
@@ -215,6 +223,39 @@ export function Manifest(props: ManifestProps) {
         )}
       </TabPanel>
     </div>
+  );
+}
+
+/**
+ * Kit's servers, and what a Drone dispatched here resolves — #1275.
+ *
+ * **Its own read, like the always-allow list**, so a Manifest that would not
+ * parse still leaves the servers readable: what a Drone is handed comes off
+ * Fleet's own tables and not off `armada.yml`.
+ */
+function ServersView(props: ManifestProps) {
+  const kit = useKit(props);
+  return (
+    <KitServers
+      servers={kit.kit?.servers.map((server) => ({
+        name: server.name,
+        address: addressReads(server.address),
+        kind: server.address.transport,
+        reachesByDefault: server.drones === "yes",
+        here: server.manifest,
+        resolves: server.resolves,
+      }))}
+      refused={kit.refused === null ? undefined : said(kit.refused)}
+      onAdd={({ name, kind, address }) => {
+        const typed = addressTyped(kind, address);
+        // Fleet refuses the same shapes and says why. What is refused here is
+        // an empty field, which has nothing to send and nothing to say.
+        if (typed !== null) kit.onAdd({ name, address: typed });
+      }}
+      onForget={kit.onForget}
+      onKitReach={(name, reaches) => kit.onKitReach(name, reaches ? "yes" : "no")}
+      onHereReach={kit.onManifestReach}
+    />
   );
 }
 

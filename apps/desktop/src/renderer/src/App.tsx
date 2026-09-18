@@ -82,6 +82,11 @@ import {
   writeManifestProposal,
   listRepositoryAllowedCommands,
   removeRepositoryAllowedCommand,
+  listKitServers,
+  addKitServer,
+  forgetKitServer,
+  setKitServerReach,
+  setManifestServerReach,
   listRuns,
   listCheckoutRuns,
   undoRun,
@@ -835,6 +840,11 @@ export function App() {
                 onGetRunDiff={getCheckoutRunDiff}
                 onListRepositoryAllowedCommands={listRepositoryAllowedCommands}
                 onRemoveRepositoryAllowedCommand={removeRepositoryAllowedCommand}
+                onListKitServers={listKitServers}
+                onAddKitServer={addKitServer}
+                onForgetKitServer={forgetKitServer}
+                onSetKitServerReach={setKitServerReach}
+                onSetManifestServerReach={setManifestServerReach}
                 // The one call this surface shares with a Job's own sheet:
                 // `start_server` has taken an optional Job since it landed,
                 // and no Job means the main checkout.
