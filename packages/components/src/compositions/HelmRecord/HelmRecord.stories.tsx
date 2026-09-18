@@ -124,6 +124,57 @@ export const Unreadable: Story = {
   },
 };
 
+/** The three failure paths, in the sentences `helm::unanswered` writes for them. */
+const unanswered: HelmDebugInfo = {
+  ...record,
+  thread: [
+    { at: "2026-09-17T14:29:40.000Z", line: "asked", text: { text: "which test is it" } },
+    {
+      at: "2026-09-17T14:44:41.000Z",
+      line: "unanswered",
+      why: "no reply came within 900 seconds, so the session was ended",
+    },
+    {
+      at: "2026-09-17T14:45:02.000Z",
+      line: "unanswered",
+      why: "the session never started: the model provider refused this key (exit status: 1)",
+    },
+    {
+      at: "2026-09-17T14:45:20.000Z",
+      line: "unanswered",
+      why: "the conversation's stored session could not be reached: database is locked",
+    },
+  ],
+  cut: 0,
+};
+
+/**
+ * Every way a reply fails, as the record draws it. **Fleet's sentence and
+ * nothing in front of it** — this line carried `no reply came: ` until the
+ * reply budget's own sentence started with the same words and a person read it
+ * twice. `crates/fleet/src/helm/unanswered.rs` owns the copy, and
+ * `crates/fleet/src/tests/helm_unanswered.rs` pins these three strings on
+ * Fleet's side; `helm-thread.test.ts` asserts the thread's reading of the same
+ * three.
+ */
+export const Unanswered: Story = {
+  args: { open: true, record: unanswered },
+  play: async ({ canvas }) => {
+    const written = helmRecord(unanswered);
+    await expect(canvas.getByText(/armada helm session/).textContent).toBe(written);
+    await expect(written).toMatch(/14:44:41 {2}fleet +no reply came within 900 seconds, so the session was ended\n/);
+    await expect(written).toMatch(
+      /14:45:02 {2}fleet +the session never started: the model provider refused this key \(exit status: 1\)\n/,
+    );
+    await expect(written).toMatch(
+      /14:45:20 {2}fleet +the conversation's stored session could not be reached: database is locked\n/,
+    );
+    // The lead-in this line used to add, and the doubling it produced.
+    await expect(written).not.toContain("no reply came: ");
+    await expect(written.match(/no reply came/g)).toHaveLength(1);
+  },
+};
+
 /** Nothing has been said yet: the record still names what bounds the answers. */
 export const NothingSaidYet: Story = {
   args: { open: true, record: { ...record, thread: [], cut: 0, session: undefined, servers: undefined, polled: undefined } },

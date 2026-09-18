@@ -15,10 +15,13 @@ mod reach;
 mod recording;
 mod serving;
 mod thread;
+pub(crate) mod unanswered;
 
 pub use asking::{Asks, HelmAskHold, NotAnswerable, Said};
 pub use brief::{brief, Brief, Voice};
 pub use conversation::{ConversationKey, Conversations};
+#[cfg(test)]
+pub(crate) use hosting::REPLY_BUDGET;
 pub use hosting::{Carried, Carry, Carrying, Heard, Hosting, ProcessHost};
 pub use permitting::SHIPPED_ASK_HOLD;
 pub use reach::{may, Authority};
