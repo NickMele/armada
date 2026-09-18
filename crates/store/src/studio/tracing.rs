@@ -1,23 +1,17 @@
 //! The way back from a Job to the Studio that dispatched it. `#1362`.
 //!
-//! **Derived, from the edge that already records it.** Dispatch draws an
-//! accepted `produced` edge from the Issue draft to the Job node it made, and
-//! read the other way round that edge answers *which Studio produced this
-//! Job* — so there is no forward column to be written twice, to disagree with
-//! the edge, or to outlive the Studio it names. `crate::lineage`'s argument.
+//! **Derived, from the edge that already records it.** The `produced` edge
+//! from the Issue draft to the Job node, read backwards — so no forward column
+//! can be written twice, disagree with it, or outlive what it names.
+//! `crate::lineage`'s argument.
 //!
 //! **Nothing is the ordinary answer, and a truthful one.** Nodes cascade with
 //! their Studio, so a deleted Studio takes the edge and this goes quiet;
-//! `jobs.origin` is what still says the Job came off a Studio, and the two
-//! together are how Job detail says *that Studio is no longer there* rather
-//! than offering a control that opens nothing.
+//! `jobs.origin` still says the Job came off one, which is how Job detail says
+//! *that Studio is no longer there* rather than drawing a dead control.
 //!
-//! No foreign key and no index, [`super`]'s own rule: one read per Job opened.
-//!
-//! **Not [`super::carrying_on`], which asks a different question.** That one
-//! finds every Studio a Job's node stands on and where, so a redispatch can be
-//! laid out beside it; this one finds the Studio that *produced* the Job, by
-//! its name, and returns one.
+//! Not [`super::carrying_on`]: that finds every Studio a Job's node stands on,
+//! for a layout; this finds the one that produced it, by name.
 
 use core_model::{JobId, StudioId, StudioName, StudioNodeId, Ulid};
 use rusqlite::OptionalExtension;

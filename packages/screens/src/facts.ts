@@ -36,9 +36,7 @@
 //
 // **Repository leads and provenance closes the line, since #1115** — the
 // mock's own order, and the registry `Row.tsx` names the gap in. Since #1439
-// that tail is two: who dispatched this job, then which job it replaced. A
-// Studio that is gone adds a third — one still there is reachable, so it goes
-// under *Where things are*.
+// that tail is two: who dispatched this job, then which job it replaced.
 
 import type { JobDetailField } from "@armada/components";
 
