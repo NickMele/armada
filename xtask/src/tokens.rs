@@ -256,6 +256,10 @@ pub const THEME: &[(&str, Slot)] = &[
         "--touch-floor",
         Slot::CssOnly("the narrowest touch client drawn; no window to bound"),
     ),
+    (
+        "--window-fold-left",
+        Slot::CssOnly("the window width the left column folds under, read by Shell.tsx"),
+    ),
     // The collapse points, in the namespace Tailwind reads for responsive
     // variants. A component that spells `narrow:` resolves from here, which is
     // what stops it writing an `@media` that cannot read a custom property —
