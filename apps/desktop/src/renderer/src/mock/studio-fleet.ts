@@ -132,6 +132,10 @@ function legend(): Studio {
       // spell one.
       { id: "legend-issue", kind: "issue", address: "https://example.invalid/o/r/issues/1293", number: "1293", title: "Read in: GitHub, web pages, sessions, Helm threads", state: "open", position: { x: 0, y: 600 }, created_at: at },
       { id: "legend-milestone", kind: "epic", address: "https://example.invalid/o/r/milestone/17", number: "17", title: "Studio", position: { x: 0, y: 1400 }, created_at: at },
+      // The pull request the legend's last change landed in, and a page that
+      // is still a Link: an address no adapter recognised — #1394.
+      { id: "legend-pull", kind: "pull_request", address: "https://example.invalid/o/r/pull/1391", number: "1391", title: "Dispatch an issue from its node, and open the Job it made", state: "merged", said: "where dispatch landed", position: { x: 340, y: 600 }, created_at: at },
+      { id: "legend-page", kind: "link", address: "https://react.dev/reference/react/useId", said: "why the ids collide", position: { x: 680, y: 600 }, created_at: at },
     ],
     edges: [
       { id: "legend-e1", from: "legend-note", to: "legend-finding", kind: "produced", standing: "accepted", created_at: at },
