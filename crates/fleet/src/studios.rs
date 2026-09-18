@@ -76,6 +76,24 @@ pub(crate) fn author(by: Redirector) -> StudioAuthor {
     }
 }
 
+/// What a pasted address turned out to name — an Issue, a Pull request or an
+/// Epic — and the content untouched where nothing recognised it. `#1394`.
+///
+/// **A person pastes a Link and Fleet writes what it is.** Bridge sends a Link
+/// because Bridge cannot read an address: which host is the forge is
+/// `crates/adapters`' to know and the gate refuses its name in TypeScript. So
+/// the one act stays *paste an address*, and the seam carries no kind an
+/// address did not earn.
+///
+/// **The line a person typed is carried over**, because they typed it about
+/// this address whatever it turned out to be.
+pub(crate) fn recognised(content: StudioNodeContent) -> StudioNodeContent {
+    let StudioNodeContent::Link { address, said, .. } = &content else {
+        return content;
+    };
+    adapters::forge_node(address, said.clone()).unwrap_or(content)
+}
+
 /// A stored Studio row that does not read back. A 500.
 const STUDIO_UNREADABLE: &str = "fleet.studio_unreadable";
 
@@ -476,7 +494,7 @@ where
         let at = self.now();
         let node = StudioNode::added(
             StudioNodeId::carried(self.mint().ulid()),
-            content,
+            recognised(content),
             add.position.to_domain(),
             at.clone(),
             author(by),

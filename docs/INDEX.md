@@ -180,6 +180,11 @@ approximations.
 - [`spikes/019-is-auto-mode-reachable-for-a-helm-session.md`](spikes/019-is-auto-mode-reachable-for-a-helm-session.md)
   — what a session resolves once `--strict-mcp-config` comes off, what each
   permission mode lets it call, and what a refusal leaves in the stream.
+- [`spikes/019-what-raises-the-resize-loop-notice-on-a-studio.md`](spikes/019-what-raises-the-resize-loop-notice-on-a-studio.md)
+  — why a whiteboard card that resizes with its own words raises Chromium's
+  `ResizeObserver` loop notice where Armada's own observers never do, what the
+  card's box was measured at before and after, and what on the board was ruled
+  out.
 
 Raw transcripts sit beside each record. A negative result is a result and stays.
 

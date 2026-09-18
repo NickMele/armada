@@ -110,18 +110,32 @@ impl StudioNode {
         }
     }
 
-    /// The Link, with the line a person wrote beside its address — `#1378`.
+    /// The node, with the line a person wrote beside its address — `#1378`.
     ///
     /// **The address is not touched.** A Link never stops being its address,
     /// so this writes one field and reads the other back off the node; a blank
     /// line clears it, which is how somebody takes back what they typed.
+    ///
+    /// **Every kind that keeps an address takes one**, which is the four of
+    /// `#1394`: an Issue, a Pull request and an Epic are what a Link's address
+    /// turned out to name, and the line beside it is the person's either way.
     pub fn relabelled(&self, said: Option<String>) -> Result<Rewritten, NotRewritable> {
-        match self.content() {
-            StudioNodeContent::Link { address, .. } => {
-                self.holding(StudioNodeContent::link(address.clone(), said), self.state())
-            }
-            content => Err(NotRewritable {
-                kind: content.kind(),
+        match self.content().with_said(said) {
+            Some(content) => self.holding(content, self.state()),
+            None => Err(NotRewritable {
+                kind: self.kind(),
+                state: self.state(),
+            }),
+        }
+    }
+
+    /// The node, with what the forge says written into it — `#1394`. Refused
+    /// on every kind that says nothing about a forge.
+    pub fn resolved(&self, facts: &super::ForgeFacts) -> Result<Rewritten, NotRewritable> {
+        match self.content().resolved(facts) {
+            Some(content) => self.holding(content, self.state()),
+            None => Err(NotRewritable {
+                kind: self.kind(),
                 state: self.state(),
             }),
         }

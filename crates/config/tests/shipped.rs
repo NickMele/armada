@@ -268,17 +268,12 @@ fn this_repositorys_own_manifest_loads_and_states_its_patience() {
 ///
 /// Asserted off the file, and against the steps' vocabulary as well as for the
 /// requester's: a line that restates `Plan the wave -> Dispatch the wave` is
-/// the defect at greater length. Only `epic` is asserted — a definition that
-/// declares nothing is legal, and the others do not yet.
+/// the defect at greater length. `code_review` is asserted beside it since
+/// `#1379`, for the same reason and against its own steps' words; a definition
+/// that declares nothing is still legal, and the other six do not yet.
 #[test]
 fn the_epic_says_it_is_for_a_milestone_in_a_requesters_words() {
-    let path = root().join(".armada/workflows/epic.json");
-    let text = std::fs::read_to_string(&path).expect("a readable definition");
-    let def = config::WorkflowDef::parse(&path, &text, &roster())
-        .unwrap_or_else(|why| panic!("{} is refused:\n{why}", path.display()));
-    let what_for = def
-        .for_requests()
-        .expect("epic says what requests it is for");
+    let what_for = says_what_it_is_for("epic.json");
     assert!(what_for.contains("milestone"), "{what_for}");
     for steps_word in ["wave", "roll up", "dispatch"] {
         assert!(
@@ -286,4 +281,69 @@ fn the_epic_says_it_is_for_a_milestone_in_a_requesters_words() {
             "`{steps_word}` is the steps' word, not a requester's: {what_for}"
         );
     }
+}
+
+/// **A pull request arrives as a link and nothing else, so `code_review` has
+/// to say it is the one for a link to one.** `#1379`.
+///
+/// A Studio dispatches a Link naming a pull request as its address, and Fleet
+/// resolves no text behind one — `adapters::IssueLookup` reads an issue link
+/// and no other shape — so the proposer is choosing off a URL and eight step
+/// lists. `Read the diff -> Assess -> Deliver the review` is this workflow's
+/// own vocabulary and says nothing about whether a request is this kind of
+/// work, which is exactly what `#424` measured about `epic` above.
+#[test]
+fn code_review_says_it_is_for_a_pull_request_in_a_requesters_words() {
+    let what_for = says_what_it_is_for("code-review.json");
+    assert!(what_for.contains("pull request"), "{what_for}");
+    for steps_word in ["diff", "assess", "deliver"] {
+        assert!(
+            !what_for.to_lowercase().contains(steps_word),
+            "`{steps_word}` is the steps' word, not a requester's: {what_for}"
+        );
+    }
+}
+
+/// The `for_requests` line one shipped definition declares, off the file.
+fn says_what_it_is_for(file: &str) -> String {
+    let path = root().join(".armada/workflows").join(file);
+    let text = std::fs::read_to_string(&path).expect("a readable definition");
+    let def = config::WorkflowDef::parse(&path, &text, &roster())
+        .unwrap_or_else(|why| panic!("{} is refused:\n{why}", path.display()));
+    def.for_requests()
+        .unwrap_or_else(|| panic!("{file} says what requests it is for"))
+        .to_string()
+}
+
+/// **What the proposer is handed for each of the three addresses a Studio
+/// dispatches**, off the shipped catalogue rather than a fixture — `#1379`.
+///
+/// It measures everything up to the model call and nothing past it: which
+/// workflow is chosen is a model's answer, and this file spawns none. What it
+/// holds is the half that was wrong before — that the catalogue offers a line
+/// a person asking about a pull request or a milestone would have used, and
+/// that the other six offer nothing to be matched on by accident.
+#[test]
+fn a_forge_link_is_offered_a_line_written_in_the_words_somebody_asking_would_use() {
+    let declared: Vec<(String, Option<String>)> = shipped()
+        .into_iter()
+        .map(|(path, text)| {
+            let def = config::WorkflowDef::parse(&path, &text, &roster())
+                .unwrap_or_else(|why| panic!("{} is refused:\n{why}", path.display()));
+            (
+                def.id().as_str().to_string(),
+                def.for_requests().map(str::to_string),
+            )
+        })
+        .collect();
+    let saying: Vec<&str> = declared
+        .iter()
+        .filter(|(_, line)| line.is_some())
+        .map(|(id, _)| id.as_str())
+        .collect();
+    assert_eq!(
+        saying,
+        ["code_review", "epic"],
+        "exactly the two a bare forge link has to reach say what they are for"
+    );
 }

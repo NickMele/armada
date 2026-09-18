@@ -53,6 +53,85 @@ async fn a_studio(fleet: &Fixture) -> Studio {
         .expect("created in the repository Fleet starts in")
 }
 
+/// `#1394`: **a Link already on a Studio becomes the kind its address names,
+/// the first time a Fleet that knows the kinds opens the file.**
+///
+/// The owner has Studios with Links on them now. Left alone, one whose address
+/// names an issue would draw as a Link and offer no Dispatch while the very
+/// same address pasted today is an Issue — one address, two behaviours. The
+/// row is written here the way a build before this one wrote it, through the
+/// store, so what is measured is his file rather than one Fleet just made.
+#[tokio::test]
+async fn a_link_already_on_a_studio_becomes_the_kind_its_address_names() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home);
+    let studio = a_studio(&fleet).await;
+    let at = fleet.now();
+    let was = |id: &str, address: &str| {
+        core_model::StudioNode::added(
+            core_model::StudioNodeId::carried(fleet.mint().ulid()),
+            core_model::StudioNodeContent::link(address.to_string(), Some(id.to_string())),
+            core_model::StudioPosition { x: 40, y: 80 },
+            at.clone(),
+            core_model::StudioAuthor::Person,
+        )
+    };
+    let issue = format!("https://{}o/r/issues/1394", adapters::FORGE_HOST);
+    {
+        let mut store = fleet.store().lock().await;
+        for (said, address) in [
+            ("where the kinds landed", issue.as_str()),
+            ("the proposal board", "https://example.invalid/a-board"),
+        ] {
+            store
+                .add_studio_node(&studio.id.to_domain(), &was(said, address), None, &at)
+                .expect("a Link as a build before this one wrote one");
+        }
+    }
+
+    assert_eq!(fleet.links_recognised().await, 1, "the board is not one");
+    let read = fleet
+        .get_studio(studio.id.clone(), None)
+        .await
+        .expect("reads");
+    let kinds: Vec<_> = read
+        .nodes
+        .iter()
+        .map(|node| match &node.content {
+            StudioNodeContent::Issue { number, said, .. } => {
+                ("issue", number.clone(), said.clone().unwrap_or_default())
+            }
+            StudioNodeContent::Link { address, said, .. } => {
+                ("link", address.clone(), said.clone().unwrap_or_default())
+            }
+            other => panic!("nothing else was written: {other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            (
+                "issue",
+                "1394".to_string(),
+                "where the kinds landed".to_string()
+            ),
+            (
+                "link",
+                "https://example.invalid/a-board".to_string(),
+                "the proposal board".to_string()
+            ),
+        ],
+        "the issue moved with the person's line intact; the board did not move"
+    );
+    assert_eq!(
+        read.nodes[0].position,
+        StudioPosition { x: 40, y: 80 },
+        "where it was left"
+    );
+    // It converges, which is why it runs on every boot rather than once.
+    assert_eq!(fleet.links_recognised().await, 0);
+}
+
 /// `#1285`'s own claim, through Fleet: two Notes, a proposed Same as edge and a
 /// moved node read back identically after Fleet is assembled again.
 #[tokio::test]

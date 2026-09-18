@@ -38,6 +38,13 @@ fn content_of(kind: core_model::StudioNodeKind) -> core_model::StudioNodeContent
             said: Some(text()),
             named: None,
         },
+        // **Built through the domain's own constructor**, which is the only
+        // way to reach one of the three — `#1394`. Nothing in this crate
+        // spells their fields, and nothing here reads an address.
+        K::Issue | K::PullRequest | K::Epic => {
+            core_model::StudioNodeContent::on_the_forge(kind, text(), "7".to_string(), Some(text()))
+                .expect("one of the three forge kinds")
+        }
         K::Deferral => C::Deferral { what: text() },
         K::Outline => C::Outline { body: text() },
         K::IssueDraft => C::IssueDraft {
@@ -238,4 +245,81 @@ fn a_finding_carries_what_its_scout_read_and_leaves_out_what_it_never_recorded()
     assert!(json.contains(r#""ended":{"outcome":"stopped"}"#), "{json}");
     let back: StudioNodeContent = decode("content", json.as_bytes()).expect("round-trips");
     assert_eq!(back.to_domain(), content);
+}
+
+/// `#1394`: **the three forge kinds cross the wire with their own fields**,
+/// and a Link crosses with an address and nothing said about it. Bridge offers
+/// Dispatch off the kind and never off the address, because an address's forge
+/// is not a thing Bridge may know.
+#[test]
+fn a_forge_node_carries_its_number_its_title_and_where_it_stands() {
+    let node = |content: core_model::StudioNodeContent| {
+        let graph = StudioGraph {
+            nodes: vec![core_model::StudioNode::added(
+                StudioNodeId::carried(Ulid::carried("01NODE")),
+                content,
+                core_model::StudioPosition { x: 0, y: 0 },
+                Timestamp::from_rfc3339("2026-09-17T09:00:00.000Z".to_string()),
+                core_model::StudioAuthor::Person,
+            )],
+            edges: Vec::new(),
+            ..a_graph()
+        };
+        encode(&Studio::of(&graph)).expect("plain data")
+    };
+    let made = |kind| {
+        core_model::StudioNodeContent::on_the_forge(
+            kind,
+            "https://forge.invalid/o/r/issues/1394".to_string(),
+            "1394".to_string(),
+            None,
+        )
+        .expect("one of the three forge kinds")
+    };
+
+    let pasted = node(made(core_model::StudioNodeKind::Issue));
+    assert!(pasted.contains(r#""kind":"issue""#), "{pasted}");
+    assert!(pasted.contains(r#""number":"1394""#), "{pasted}");
+    // Left out rather than sent as null — the wire's rule for every optional
+    // field, and here it is also the whole of *nothing has read this in yet*.
+    assert!(!pasted.contains("title"), "{pasted}");
+    assert!(!pasted.contains(r#""state""#), "{pasted}");
+
+    let read_in = node(
+        made(core_model::StudioNodeKind::PullRequest)
+            .resolved(&core_model::ForgeFacts {
+                title: Some(String::from("Dispatch a pull request")),
+                state: Some(core_model::ForgeState::Merged),
+                read_in: None,
+            })
+            .expect("a Pull request takes both"),
+    );
+    assert!(read_in.contains(r#""kind":"pull_request""#), "{read_in}");
+    assert!(read_in.contains(r#""state":"merged""#), "{read_in}");
+
+    let epic = node(
+        made(core_model::StudioNodeKind::Epic)
+            .resolved(&core_model::ForgeFacts {
+                title: Some(String::from("Studio")),
+                state: None,
+                read_in: Some(core_model::EpicRead {
+                    issues: 12,
+                    total: 30,
+                }),
+            })
+            .expect("an Epic takes a count"),
+    );
+    assert!(
+        epic.contains(r#""read_in":{"issues":12,"total":30}"#),
+        "{epic}"
+    );
+    // An Epic holds no state at all: where it stands is the sum of its issues.
+    assert!(!epic.contains(r#""state""#), "{epic}");
+
+    let board = node(core_model::StudioNodeContent::link(
+        "https://example.invalid/a-board".to_string(),
+        None,
+    ));
+    assert!(board.contains(r#""kind":"link""#), "{board}");
+    assert!(!board.contains("number"), "{board}");
 }

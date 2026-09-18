@@ -58,11 +58,14 @@ flowchart LR
 | Finding | What a scout learned, and everything it read | Proposed, Gathering, Frozen | None |
 | Contradiction | Two sources that disagree, and its outcome | Reported, then its outcome | None |
 | Sketch | A diagram or mockup, as structured content | Frozen | None |
-| Link | A board, document, issue, page or session, kept as its address, a line of the person's own, and what the source calls itself where a read-in learned one | None | None |
+| Link | A board, document, page or session — an address no adapter recognised — kept with a line of the person's own, and what the source calls itself where a read-in learned one | None | None |
+| Issue | An issue on a forge: its address, its number, a line of the person's own, and its title and state where it has been read in | None | None |
+| Pull request | A pull request on a forge, with an Issue's fields. Its state also holds *merged* | None | None |
+| Epic | What a forge calls a set of issues under one address, with its title and how many of its issues are on this Studio | None | None |
 | Deferral | Something a person put off, against what it blocks | Open, Answered | None |
 | Outline | An ordered reading of the nodes feeding it | Draft, Frozen | None |
 | Issue draft | An issue's title and body, never filed by Armada | Draft | None |
-| Job | A dispatched [Job](job.md) | Job statuses | Job colours |
+| Job | A dispatched [Job](job.md), as a reference to it | Job statuses | Job colours |
 
 | State | Means |
 |---|---|
@@ -72,6 +75,12 @@ flowchart LR
 
 > **Rule.** Run and Job nodes are the only nodes that take status colour, and each Run state aliases a Job status in `packages/tokens/src/status.css`.
 > Why: a run reads the same on a Studio, on the Manifest surface and on a Job's run sheet. See [Run and edit a Manifest](../journeys/run-and-edit-a-manifest.md).
+
+> **Rule.** A Job node holds a reference to its Job and no copy of its status. It reads that status off the same rows the [Job Board](job-board.md) reads, so a Studio left open and come back to says what the Job is doing now.
+> Why: a Studio is kept until somebody deletes it and a Job moves all day. A status written onto a node would be right once.
+
+> **Rule.** A Job node opens its Job, the way a Board row does. The press is an act on the selected node rather than on the card, because the whiteboard is a drag surface.
+> Why: reviewing and deciding happens on Job detail and nowhere else, so a Job on a Studio that could only be looked at would be a dead end. The way back is `#1362`.
 
 > **Rule.** Every working node pulses. See `../contracts/design-system.md`, Motion.
 
@@ -89,16 +98,28 @@ flowchart LR
 > **Rule.** A Run node is made by starting a run from the Studio, and by no other act.
 > Why: what a node says about a run is read off the run, so a node added by hand could carry a result no run ever had.
 
-> **Rule.** A person adds a Note, a Link and a Sketch by hand, and no other kind. Every other kind is made by the act that earns it.
+> **Rule.** A person adds a Note, an address and a Sketch by hand, and no other kind. Every other kind is made by the act that earns it.
 > Why: a Finding comes from a scout, a Run from a run, a Cluster or a Deferral from promotion, an Issue draft from writing up, a Job from dispatch. One of those added by hand would carry a claim nothing stands behind. Decided with the owner, #1364.
+
+> **Rule.** An address is pasted, and never named as a kind. What arrives is an address; what it becomes is the adapter's answer.
+> Why: nobody may say *this is an Issue* — the address earns the kind or it does not. See #1394.
 
 > **Rule.** A Note typed by hand is fixed the moment it is made, as a captured one is.
 > Why: nothing writes a node's content afterwards, and the rule that makes a Note a record does not depend on how it arrived.
 
-> **Rule.** A Link keeps a line of the person's own beside its address, taken when they paste it and theirs to change afterwards. The node draws that line, with the address under it.
-> Why: a Studio holding several Links reads as a list of URLs otherwise, saying nothing about why any of them was kept.
+> **Rule.** A pasted address is the kind it names, and an adapter decides which. An issue's address makes an Issue, a pull request's a Pull request, and the address of a set of issues an Epic. Everything else stays a Link.
+> Why: what a node is belongs in its kind, not in a field read at render time — otherwise the fields each kind needs have nowhere to live and every new source of work adds a branch in one place. **A kind is a concept, never a vendor**: an Issue is an Issue whoever serves it, and a second forge is a second adapter rather than a fourth kind. See #1394.
 
-> **Rule.** A Link never stops being its address. Whatever is typed beside it is additional, and a Link with no line is drawn by its address.
+> **Rule.** A Studio holds an address's number as a field, and its title and state only once something has read it in.
+> Why: a number is on the address and costs nothing; a title and a state are the forge's to answer, and a fetch inside the paste would make pasting an address slow and able to fail.
+
+> **Rule.** An Issue, a Pull request and an Epic are Armada's record of somebody else's thing, and hold no state of Armada's own. Where one stands on its forge is a field.
+> Why: a state on this page is a lifecycle Armada moves a node through. Nothing here moves an issue.
+
+> **Rule.** A node with an address keeps a line of the person's own beside it, taken when they paste it and theirs to change afterwards. The node draws that line, with the address under it.
+> Why: a Studio holding several addresses reads as a list of URLs otherwise, saying nothing about why any of them was kept.
+
+> **Rule.** A node with an address never stops being its address. Whatever is typed beside it is additional, and one with no line is drawn by its address.
 > Why: the address is what a scout reads in. See #1378.
 
 > **Rule.** Pasting an address offers what to do with it — read it in, or keep the link — and says what reading it in would produce. Where reading in is not built, the offer says so rather than drawing the choice dead.
@@ -112,6 +133,7 @@ flowchart LR
 | Node | Not called | Because that word already means |
 |---|---|---|
 | Note | Observation | The one flagged inference Helm may add to an answer |
+| Epic | Milestone | A forge's own word for one of several shapes, and a vendor's where the node is a concept |
 | Link | Source | Verification source, in the Design System's hedging rule |
 | Deferral | Question | A Drone's question on the dock, and an open question in `docs/` |
 | Outline | Plan | A Job's own [Plan](plan.md) |
@@ -172,25 +194,25 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 | Rung | From | To | Who acts |
 |---|---|---|---|
 | Run | Any node, or nothing | Run | A person, or Helm on their ask |
-| Read in | A Link | Notes, Clusters, Contradictions, proposed edges — or a Link per issue, from a milestone | A scout, on a person's ask. A milestone, Fleet alone |
+| Read in | A Link, an Issue, a Pull request or an Epic | Notes, Clusters, Contradictions, proposed edges — or an Issue per issue, from an Epic | A scout, on a person's ask. An Epic, Fleet alone |
 | Capture | A person using an app | Note | The person |
 | Ask | Any node | Finding | A scout, on a person's ask |
 | Cluster | Notes | Cluster | A person accepts |
 | Outline | The nodes feeding it | Outline | A person orders |
 | Defer | Anything raised on a node | Deferral | A person, only |
 | Write up | Note, Cluster, Contradiction or Outline | Issue draft | A person, or Helm on their ask |
-| Dispatch | Issue draft | Job | The dispatch gate |
+| Dispatch | Issue draft, Issue, Pull request or Epic | Job | The dispatch gate |
 
-> **Rule.** A Link read in keeps its address, and everything that came back hangs off it by `Produced` edges.
+> **Rule.** A node read in keeps its address, and everything that came back hangs off it by `Produced` edges.
 > Why: the address is what a Job is dispatched from, and a Link rewritten by what was read in it would be a record of the reading rather than of the source.
 
-> **Rule.** A milestone reads in as one Link per issue, each carrying that issue's own address, and makes no Issue draft.
-> Why: an Issue draft is Armada's own unfiled text. An issue already on the forge is a Link, and dispatching from it is the address's job.
+> **Rule.** An Epic reads in as one Issue per issue, each carrying that issue's own address, number, title and state, and makes no Issue draft.
+> Why: an Issue draft is Armada's own unfiled text. An issue already on a forge is an Issue node, and dispatching from it is the address's job. The read already answers all three fields, so nothing is left for a later fetch.
 
-> **Rule.** A milestone read-in is bounded, and the milestone's own Link says how many of how many were read in.
+> **Rule.** An Epic read-in is bounded, and the Epic itself says how many of how many were read in.
 > Why: a Studio is laid out by hand, and a hundred nodes landing at once is a board nobody can arrange — but a bound nothing says is a board claiming to be a milestone.
 
-> **Rule.** A milestone takes no scout and leaves no Finding.
+> **Rule.** An Epic takes no scout and leaves no Finding.
 > Why: nothing was learned; a list was copied. A model asked to echo one back is cost spent on a transcription, and a Finding that cost nothing and read nothing says nothing.
 
 > **Rule.** A read-in whose answer is not the shape asked for makes no node, and its Finding still says what the scout said.
@@ -200,6 +222,21 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 
 > **Rule.** A Job dispatches from an Issue draft's text, through the [Job proposer](job-proposer.md). Filing the issue on GitHub is optional and a person's own act.
 > Why: nothing reaches outside Armada on a Studio's behalf. See [Scout](scout.md).
+
+> **Rule.** An Issue, a Pull request and an Epic dispatch their address, through the same gate, and nothing is filed because what the address names already exists. A Link dispatches nothing.
+> Why: an Issue draft is Armada's own unfiled text and these three are things somebody already has, and the proposer takes such a link as a request. A Link is an address nothing recognised, so there is nothing filed to dispatch against.
+
+> **Rule.** The address is the whole request and nothing beside it names a workflow.
+> Why: an issue is a change to make, a pull request is work already written that wants a judgement, and an Epic is a wave to split — three asks, and which workflow each runs under is the [Job proposer](job-proposer.md)'s own decision off the request and each definition's `for_requests` line. A surface that picked one would be deciding what that page makes the proposer's.
+
+> **Rule.** An Epic both reads in and dispatches, and the two are not rivals.
+> Why: reading one in puts its issues on the board to work through one at a time; dispatching one asks for the whole wave at once. A person picks which they meant.
+
+> **Rule.** What an address names is decided once, by `crates/adapters`, when the node is made — and no surface works it out.
+> Why: which host is the forge is that crate's to know, and a second reading of an address would be a second answer the day the first changes. An address is fixed at paste, so nothing kept off it can go stale. See `../practices/protocol.md`, Protocol 14.18.
+
+> **Rule.** A Link already on a Studio whose address an adapter recognises becomes the kind it names, keeping its id, its position, its edges and the line beside it.
+> Why: the same address pasted twice would otherwise be two nodes with two behaviours, which is the defect this replaced. See #1394.
 
 > **Rule.** An Issue draft carries its title and body whole to the proposer, in that order, and nothing between the two summarises, trims or re-fetches it.
 > Why: a write-up is made from the nodes feeding it, and a lossy hop would hand a [Drone](drone.md) something other than what the person read.
@@ -261,3 +298,4 @@ A Contradiction ends in one of four ways, and a person picks which.
 | A relation drawn by anything but the Studio or a person's acceptance | Only a person accepts a relation |
 | A promotion that writes outside Armada | Scouts read and never write |
 | A node name on a lexicon *Never* list | Names avoid words Armada already uses |
+| A kind offering Dispatch that is not an Issue draft, an Issue, a Pull request or an Epic | Dispatch belongs to what is already filed, and to Armada's own unfiled text |

@@ -1202,7 +1202,54 @@ that edits a file, so the path is known; a shell line may also have written some
 in the stream says whether it did. Those calls stay on the conversation's own socket, where they
 already were.
 
-## Protocol 14.18: a person answers a call Helm was refused
+## Protocol 14.17: what a Link's address names on the forge
+
+`StudioNodeContent::Link` gains `forge`, optional: `issue`, `pull_request` or `milestone`, and
+absent where the address names nothing on the forge. `#1379`.
+
+**Read off the address by Fleet on every Studio it sends, and never kept on the record.** Which
+host is the forge is `crates/adapters`' to know — `verify-foundations` refuses the vendor's name
+anywhere else, Bridge and `crates/ipc` included — so a rule about issue links could not be written
+in TypeScript at all. This field is how Bridge knows to offer Dispatch on a Link naming an issue
+without reading one.
+
+`dispatch_studio_draft` takes such a Link as well as an Issue draft, and sends the address as the
+request. **No shape moves on that route**: the request already carried `node_id` and `position`,
+the gate is the same gate, and the Job node lands with a `produced` edge from the node it came
+from either way. A Link naming anything else is refused as `fleet.studio_not_a_draft`, the code
+that route already had.
+
+**Additive on both counts.** An older Bridge reads a Link with no `forge` as the Link it always
+read, and an older Fleet is refused by the skew rule as it always was.
+
+**Superseded at 14.18**, which makes what an address names the node's own kind and drops this
+field.
+
+## Protocol 14.18: an Issue, a Pull request and an Epic are node kinds
+
+`StudioNodeContent` gains `issue`, `pull_request` and `epic`, and `Link` loses `forge`. `#1394`.
+
+Each of the three carries `address`, `number` and `said`, and a `title` absent until the node is
+read in. An Issue and a Pull request carry `state` — `open`, `closed` or `merged` — and an Epic
+carries `read_in`, `{ issues, total }`, how many of its issues are on the Studio of how many it
+holds. Every field but `address` and `number` is optional and left out rather than sent as null.
+
+**The kind is the concept and the adapter decides it.** `adapters::forge_node` reads an address
+once, when the node is made, and answers with the node's content. Nothing reads an address again:
+`Studio::of` no longer takes a classifier, and `dispatch_studio_draft` offers the three by kind.
+A Link is what no adapter recognised — a board, a page, a document, a session — and dispatches
+nothing.
+
+**`add_studio_node` still takes a Link, and Fleet writes what it is.** Bridge cannot read an
+address, so the seam carries the paste and not the kind; `StudioNodeByHand` is unchanged.
+
+**Additive by 14.7's reading, which added `finding` the same way.** `forge` goes with nothing that
+carries one: a Link whose address names something on the forge is converted on the boot that
+applies store V79, so no message an older Bridge parses stops parsing the same way. An older
+Bridge meeting one of the three leaves it off the whiteboard rather than failing, which is
+`whiteboardEdges`' rule for an unknown edge and is what `cardOf` gained here.
+
+## Protocol 14.19: a person answers a call Helm was refused
 
 `#1389`. Two new event kinds, three new routes and a DTO family, all additive. `helm.asking_to_run`
 carries `HelmAskingToRun { waiting: HelmCallInFlight }` when a Helm session reaches for something
@@ -1217,9 +1264,6 @@ written into `armada.yml` on the Job's branch — and a Helm call has none: noth
 step is running, and what waits is one process inside one tool call. `HelmCallAnswer` is its own
 closed set for the same reason, and a surface matches on it to pick controls, so a fourth value in
 it is a major bump the way `WhenBlocked`'s third was.
-
-**14.17 is left for `#1373`**, which took 14.16 on its own branch while `#1378` took 14.16 on
-`main`. Whichever of the two lands second moves to 14.17; this one stacks above both.
 
 ## Open questions
 

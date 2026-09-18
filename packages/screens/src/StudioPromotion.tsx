@@ -61,9 +61,9 @@ export function useStudioPromotion(props: StudioPromotionProps): StudioPromotion
   function fill(rung: Filling): void {
     const written = rung === "write_up" && one !== undefined ? aWriteUp(studio, one) : null;
     const draft = rung === "edit" && one?.kind === "issue_draft" ? one : null;
-    // A Link's line opens on what is already there, so editing it is a change
-    // to what a person wrote rather than typing it again — #1378.
-    const link = rung === "line" && one?.kind === "link" ? one : null;
+    // The line opens on what is already there, so editing it is a change to
+    // what a person wrote rather than typing it again — #1378.
+    const link = rung === "line" && one !== undefined && "said" in one ? one : null;
     setTitle(written?.title ?? draft?.title ?? "");
     setBody(written?.body ?? draft?.body ?? link?.said ?? "");
     setBlocks("");
@@ -157,7 +157,7 @@ export function useStudioPromotion(props: StudioPromotionProps): StudioPromotion
       <Dialog
         open={filling !== null}
         tone="neutral"
-        title={filling === null ? "" : ASKED[filling]}
+        title={filling === null ? "" : asked(filling, one)}
         confirmLabel={filling === null ? "" : CONFIRMS[filling]}
         confirmDisabled={sending || !said(filling, title, body)}
         onCancel={() => setFilling(null)}
@@ -188,6 +188,35 @@ function Act({ label, onPress }: { label: string; onPress: () => void }) {
   );
 }
 
+/**
+ * What the dialog is called. **Dispatch names what it was pressed on**, because
+ * a draft sends words a person wrote and the other three send something already
+ * on a forge, and those are different things to be about to do — #1379, #1394.
+ */
+function asked(filling: Filling, one: StudioNode | undefined): string {
+  if (filling === "dispatch" && one !== undefined && one.kind in ON_A_FORGE) {
+    return `Dispatch this ${ON_A_FORGE[one.kind]}`;
+  }
+  if (filling === "read_in" && one !== undefined) return `Read this ${aKind(one)} in`;
+  if (filling === "line" && one !== undefined) return "Say why you kept this";
+  return ASKED[filling];
+}
+
+/**
+ * What each of the three is called where the dialog names it. **Read off the
+ * kind and never off the address**, which is a thing this side may not read.
+ */
+const ON_A_FORGE: Readonly<Record<string, string>> = {
+  issue: "issue",
+  pull_request: "pull request",
+  epic: "epic",
+};
+
+/** What a node with an address is called in a sentence. */
+function aKind(node: StudioNode): string {
+  return ON_A_FORGE[node.kind] ?? "Link";
+}
+
 /** What each rung's dialog is called, in sentence case, naming what happens. */
 const ASKED: Readonly<Record<Filling, string>> = {
   cluster: "Accept these Notes as one Cluster",
@@ -199,7 +228,7 @@ const ASKED: Readonly<Record<Filling, string>> = {
   settled: "End this as Not a problem",
   resolved: "Resolve this here",
   dispatch: "Dispatch this Issue draft",
-  read_in: "Read this Link in",
+  read_in: "Read this in",
 };
 
 /** The action, keeping its name through the flow. */
@@ -313,7 +342,7 @@ function Filling(props: FillingProps) {
         <>
           <p>
             The card reads this line, with the address under it. The address does not change, and clearing the
-            line leaves the Link as its address alone.
+            line leaves the node as its address alone.
           </p>
           <Textarea label="Your line" rows={3} value={body} onChange={(event) => props.onBody(event.target.value)} />
         </>
@@ -322,8 +351,8 @@ function Filling(props: FillingProps) {
       return (
         <p>
           Armada fetches {one === undefined ? "this address" : named(one)} and a scout reads what comes back, off
-          this Studio. The Link stays where it is and keeps its address. A milestone fills in as one Link per
-          issue, with no scout at all; an address Armada does not read comes back saying so.
+          this Studio. The node stays where it is and keeps its address. An epic fills in as one Issue per issue,
+          with no scout at all; an address Armada does not read comes back saying so.
         </p>
       );
     case "settled":
@@ -341,12 +370,18 @@ function Filling(props: FillingProps) {
       return (
         <>
           <p>
-            This text goes to the Job proposer, whole. Every Job it becomes waits at the dispatch gate, and appears
-            here as a Job node.
+            {one !== undefined && one.kind in ON_A_FORGE
+              ? // Nothing is filed: what the node names is already on the forge, and what goes to
+                // the proposer is its address. **Which workflow is the proposer's** — an issue, a
+                // pull request and an epic are three different asks, and the sentence says so
+                // rather than naming a workflow nobody chose — #1379, #1394.
+                `This address goes to the Job proposer, and it reads the ${ON_A_FORGE[one.kind]}. Nothing is filed: it already exists. Which workflow the work runs under is the proposer's answer.`
+              : "This text goes to the Job proposer, whole."}{" "}
+            Every Job it becomes waits at the dispatch gate, and appears here as a Job node.
           </p>
           <Textarea
             label="What is sent"
-            rows={8}
+            rows={one !== undefined && one.kind in ON_A_FORGE ? 2 : 8}
             readOnly
             value={one === undefined ? "" : (dispatchedAs(one) ?? "")}
           />
