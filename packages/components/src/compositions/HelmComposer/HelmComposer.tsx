@@ -1,8 +1,9 @@
-import type { FormEvent } from "react";
+import type { FormEvent, KeyboardEvent } from "react";
 import { AttachmentChip } from "../../primitives/AttachmentChip/AttachmentChip";
 import { Button } from "../../primitives/Button/Button";
 import { Select } from "../../primitives/Select/Select";
 import { Textarea } from "../../primitives/Textarea/Textarea";
+import { SendKbd, sendsOn } from "../../send-message";
 
 /** One repository the switch may point Helm at — id is the Manifest id. */
 export type HelmRepositoryOption = { id: string; label: string };
@@ -59,11 +60,20 @@ export function HelmComposer({
   disabled = false,
 }: HelmComposerProps) {
   const blank = value.trim() === "";
+  const available = !blank && !disabled;
   const label = repositories.find((one) => one.id === current)?.label;
 
   function submit(event: FormEvent): void {
     event.preventDefault();
-    if (!blank && !disabled) onSend();
+    if (available) onSend();
+  }
+
+  // ⌘Enter asks exactly what Send asks — the drone message box's binding, one
+  // treatment. Plain Enter is still a new line: an ask is prose too.
+  function keyed(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (!sendsOn(event)) return;
+    event.preventDefault();
+    if (available) onSend();
   }
 
   return (
@@ -107,6 +117,7 @@ export function HelmComposer({
           rows={3}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onKeyDown={keyed}
           disabled={disabled}
           placeholder="Ask Helm about this repository"
           // Reopening the dock remounts this field — #1094 — and that is the
@@ -118,6 +129,7 @@ export function HelmComposer({
             tint is HelmComposer.css's, over a secondary. */}
         <Button type="submit" variant="secondary" ground="card" size="sm" disabled={disabled || blank}>
           Send
+          <SendKbd available={available} />
         </Button>
       </div>
       {/* Where the person is stays under the field, not inside it: it is a

@@ -1,6 +1,7 @@
-import type { FormEvent } from "react";
+import type { FormEvent, KeyboardEvent } from "react";
 import { Button } from "../../primitives/Button/Button";
 import { Textarea } from "../../primitives/Textarea/Textarea";
+import { SendKbd, sendsOn } from "../../send-message";
 
 /**
  * The message box fixed under an activity log — #1154. Sending it is a
@@ -44,10 +45,19 @@ export function DroneMessageBox({
   placeholder = "Message the drone",
 }: DroneMessageBoxProps) {
   const blank = value.trim() === "";
+  const available = !blank && !disabled;
 
   function submit(event: FormEvent): void {
     event.preventDefault();
-    if (!blank && !disabled) onSend();
+    if (available) onSend();
+  }
+
+  // ⌘Enter sends exactly what Send sends, down to sending nothing from a blank
+  // or disabled box. Plain Enter falls through to the field as a new line.
+  function keyed(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (!sendsOn(event)) return;
+    event.preventDefault();
+    if (available) onSend();
   }
 
   return (
@@ -79,6 +89,7 @@ export function DroneMessageBox({
           rows={3}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onKeyDown={keyed}
           disabled={disabled}
           placeholder={placeholder}
         />
@@ -93,6 +104,7 @@ export function DroneMessageBox({
           disabled={disabled || blank}
         >
           Send
+          <SendKbd available={available} />
         </Button>
       </div>
     </form>

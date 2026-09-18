@@ -127,6 +127,18 @@ destructive = false
 confirms = false
 notes = "One row for a pair, because the two are one act with a direction. `chevron-left` is not registered and `chevron-right` is reserved to expand and collapse, so neither half has a glyph to take."
 
+[actions.send_message]
+kind = "Action"
+tier = "Global"
+verb = "Send"
+icon = ""
+icon_absent = "undecided"
+shortcut = "⌘Enter"
+scope = "anywhere"
+destructive = false
+confirms = false
+notes = "The owner's note of 18 Sep 2026: hold Cmd over a message box and the Send button shows the key that sends it. Global, because it is modifier-based and the two boxes that answer it — the drone message box at the foot of a step's activity, and Helm's composer — sit on detail and on every surface respectively; `anywhere` is where a composer can hold focus, not a claim that the key fires with nothing focused. Plain Enter stays a new line in both, which is what makes the modifier necessary: a note to a drone is prose. The palette draws this row and cannot press it, the same as Report and the Studio's three — `apps/desktop/src/renderer/src/palette.ts` says so. No glyph: `send` is the registry's paper plane and means Dispatch, `message-square` is Helm's own, `corner-up-right` is Redirect's, and reusing any of them would give one silhouette two meanings. Three fields already bound ⌘Enter with nothing in here to read — `StudioAddNode`, `StudioCapture` and the annotation layer's own note field — which is the drift this row closes; none of the three was rewired by the change that added it."
+
 [actions.close]
 kind = "Action"
 tier = "Global"
