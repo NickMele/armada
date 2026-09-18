@@ -87,7 +87,7 @@ const JOB_APART: i64 = 200;
 
 /// The origin a Job dispatched from a Studio carries: **where from, and who
 /// pressed it**. `crates/core-model/domain/enum-verbs.toml` renders these as
-/// *From a Studio, dispatched by you* and *From a Studio, drafted in Helm* —
+/// *From a Studio, by you* and *From a Studio, via Helm* —
 /// one value carrying both clauses, because one column answers one question
 /// and the row has to keep answering both. `#1362`.
 ///
