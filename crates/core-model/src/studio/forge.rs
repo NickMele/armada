@@ -14,19 +14,39 @@
 
 use alloc::string::String;
 
-use super::{trimmed, ForgeState, StudioNode, StudioNodeContent, StudioNodeKind};
+use super::{
+    trimmed, EpicTake, ForgeState, StudioNode, StudioNodeContent, StudioNodeKind, StudioPosition,
+};
 
-/// How much of an Epic is on the Studio, as reading it in left it. `#1394`.
+/// How much of an Epic is on the Studio, as reading it in left it. `#1394`,
+/// `#1405`.
 ///
-/// **Two numbers rather than a sentence.** A read-in is bounded, so an Epic
-/// that fits says how many it holds and one that did not says how many of how
-/// many — and that is a fact a surface can draw rather than a line it parses.
+/// **Numbers rather than a sentence.** A read-in is bounded and answers an ask
+/// about which issues to take, so an Epic that fits says how many it holds and
+/// one that did not says how many of how many — and each is a fact a surface
+/// can draw rather than a line it parses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EpicRead {
-    /// How many of its issues are on this Studio.
+    /// How many of its issues are on this Studio, the ones a narrowing left
+    /// standing included.
     pub issues: u64,
     /// How many it holds in all, whether or not they fit.
     pub total: u64,
+    /// Which of its issues the last read took. **`None` on an Epic read in
+    /// before `#1405`**, whose answer nothing recorded — absent rather than
+    /// guessed, because a count written as a choice nobody made is a claim.
+    pub took: Option<EpicTake>,
+    /// How many of its issues [`took`](EpicRead::took) left out. `0` where it
+    /// took everything.
+    pub left_out: u64,
+    /// How many nodes a narrowing left standing because a person had worked on
+    /// them. **Counted, so the Epic says the board is wider than what it
+    /// took** — a person's own work is not the read-in's to remove.
+    pub kept: u64,
+    /// Where the read-in laid its issues out, which is what makes a node
+    /// somebody dragged readable as one. `None` on an Epic read in before
+    /// `#1405`, where nothing recorded it.
+    pub laid_out_from: Option<StudioPosition>,
 }
 
 /// What the forge says about what an address names, as a read-in learned it.
