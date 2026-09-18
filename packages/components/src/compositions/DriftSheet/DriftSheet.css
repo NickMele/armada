@@ -1,0 +1,19 @@
+/* Drift's reading on a trailing sheet. The layer and its header are `Sheet`;
+   the panel inside is `DriftPanel`, untouched — `glass.css` already takes its
+   glass away inside a Sheet. What lives here is the gutter between the two. */
+
+/* The file in the subtitle. Mono, because it is a path the system reported. */
+.armada-drift-sheet__file {
+  font-family: var(--font-mono);
+}
+
+/* The body carries its own padding, per `bleed` — `JobHoldsSheet.css`'s
+   gutter, for its reason: the panel sets its own inset and the sheet's default
+   body padding on top of it doubles the inset without adding a boundary. */
+.armada-drift-sheet__body {
+  padding: var(--space-4);
+}
+
+.armada-sheet[data-floor] .armada-drift-sheet__body {
+  padding: var(--space-3);
+}

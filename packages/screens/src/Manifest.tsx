@@ -36,12 +36,18 @@
 // tree is the path around verification that v1 proved becomes the default
 // path. The transcript is keepable; the judgement is not.
 //
-// # Drift and Verify, as two panels above the runner
+// # Drift and Verify, as two acts on the tab row
 //
 // Journey 9's *Verify* answers two questions: drift, whether the file is still
 // true, read on opening at no cost; and Verify, whether it still works, which
-// runs setup and every Check behind its own button. **Two panels, never one**,
-// and both report without offering a fix. `verify.ts` reads them.
+// runs setup and every Check behind its own button. **Two readings, never
+// one**, and both report without offering a fix. `verify.ts` reads them.
+//
+// **Resident panels until #1383**, where the two took 45% of an 817px window
+// for a reading that usually says nothing changed and an act nobody had pressed
+// — and the Checks this page exists to run started at y=430. Each is a layer
+// now, opened from its own control on the tab row, and the control carries the
+// reading's own headline so a drifted file still says so on the surface.
 //
 // # What the forms do not carry yet
 //
@@ -53,13 +59,13 @@ import type { ManifestDriftRead, Outcome } from "@armada/protocol";
 import {
   Alert,
   Button,
-  DriftPanel,
+  DriftSheet,
   ManifestFile,
   ManifestForm,
   RunPage,
   TabPanel,
   Tabs,
-  VerifyPanel,
+  VerifySheet,
 } from "@armada/components";
 
 import { said } from "./copy";
@@ -68,7 +74,7 @@ import { useManifestRuns, type ManifestSlice } from "./checkout-runs";
 import { useRepositoryAllows, type RepositoryAllowsSlice } from "./manifest-allows";
 import type { ManifestEditing } from "./manifest-file";
 import type { ManifestForming } from "./manifest-form";
-import { driftPanelOf, verifyPanelOf } from "./verify";
+import { driftGoneOf, driftPanelOf, verifyPanelOf, verifySaidOf, type VerifyInputs } from "./verify";
 
 export type ManifestProps = ManifestSlice & RepositoryAllowsSlice & {
   /**
@@ -119,7 +125,10 @@ export function Manifest(props: ManifestProps) {
   const onlySetup = props.setUp === false && props.setup !== undefined && !workspaced;
   const [dismissedVerify, setDismissedVerify] = useState<string | null>(null);
   const [verifyRefused, setVerifyRefused] = useState<string | null>(null);
-  const verify = verifyPanelOf({
+  // Which reading is open, and never both: one layer at a time is the rule
+  // every sheet in Bridge keeps, and these two are kept apart besides.
+  const [reading, setReading] = useState<"drift" | "verify" | null>(null);
+  const verifying: VerifyInputs = {
     sheet: props.sheet,
     now: props.now,
     dismissed: dismissedVerify,
@@ -130,7 +139,10 @@ export function Manifest(props: ManifestProps) {
     },
     onStopRun: (runId) => void props.onStopRun(runId),
     onDismiss: setDismissedVerify,
-  });
+  };
+  const verify = verifyPanelOf(verifying);
+  const verifySaid = verifySaidOf(verifying);
+  const gone = driftGoneOf(props.drift);
 
   // A Fleet serving nothing is where a fresh install starts, not a Manifest that would not read.
   if (props.sheet.state === "failed" && servesNothing(props.sheet.outcome)) {
@@ -150,8 +162,11 @@ export function Manifest(props: ManifestProps) {
         ? "Run one Check or Command against this checkout, as it is on disk. Nothing here is a verdict."
         : "Edit this repository's Manifest. Save writes the file to disk and stops, without staging or committing it.";
   const selected = props.settingUp || onlySetup ? "setup" : rootless ? "run" : editing.view;
+  // Whether the two readings are offered. A repository with no root file
+  // declares no Checks and no setup, so there is nothing for either to read.
+  const reads = selected === "run" && !rootless && !onlySetup;
   return (
-    <div className="armada-screen__stack">
+    <div className="armada-screen__stack armada-screen__layered">
       {/* Above every view, so a freeze left on is seen wherever the page opens. */}
       {props.form.state !== "open" || !props.form.frozen || onlySetup || rootless ? null : (
         <Alert
@@ -176,26 +191,47 @@ export function Manifest(props: ManifestProps) {
         </Alert>
       )}
       {/* Above both views, so the file stays reachable when the run sheet is
-          what would not read. */}
-      <Tabs
-        items={[
-          ...(onlySetup
-            ? []
-            : rootless
-              ? [{ id: "run", label: "Checks and Commands" }]
-              : [
-                { id: "run", label: "Checks and Commands" },
-                { id: "form", label: "Edit" },
-                { id: "file", label: editing.named },
-              ]),
-          ...(props.setup === undefined ? [] : [{ id: "setup", label: "Set up workspaces" }]),
-        ]}
-        value={selected}
-        onChange={(id) => {
-          props.onSettingUp?.(id === "setup");
-          if (id !== "setup") editing.onView(id === "file" || id === "form" ? id : "run");
-        }}
-      />
+          what would not read. The two readings sit at the row's trailing edge
+          rather than under it, so they cost the Checks below no height at all
+          — #1383. They are the run view's: drift is about lines this list
+          draws, and Verify runs them. */}
+      <div className="armada-screen__tabs">
+        <Tabs
+          items={[
+            ...(onlySetup
+              ? []
+              : rootless
+                ? [{ id: "run", label: "Checks and Commands" }]
+                : [
+                  { id: "run", label: "Checks and Commands" },
+                  { id: "form", label: "Edit" },
+                  { id: "file", label: editing.named },
+                ]),
+            ...(props.setup === undefined ? [] : [{ id: "setup", label: "Set up workspaces" }]),
+          ]}
+          value={selected}
+          onChange={(id) => {
+            props.onSettingUp?.(id === "setup");
+            if (id !== "setup") editing.onView(id === "file" || id === "form" ? id : "run");
+          }}
+        />
+        {!reads ? null : (
+          <div className="armada-screen__tabs-acts">
+            <Button variant="ghost" size="sm" onClick={() => setReading("drift")}>
+              Drift
+              {gone === undefined || gone === 0 ? null : (
+                <span className="armada-screen__drifted">{`${gone} gone`}</span>
+              )}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setReading("verify")}>
+              Verify
+              {verifySaid === undefined ? null : (
+                <span className="armada-screen__act-said">{verifySaid}</span>
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
       {/* The view and the note that says what it is for, faded in together on a
           switch. Keyed on the selected tab, so a sheet re-reading under the
           same view does not fade. A stack of its own, so the wrapper lays its
@@ -211,9 +247,23 @@ export function Manifest(props: ManifestProps) {
         ) : editing.view === "form" ? (
           <FormView form={props.form} named={editing.named} onFile={() => editing.onView("file")} />
         ) : (
-          <RunView {...props} slot={slot} verify={verify} />
+          <RunView {...props} slot={slot} />
         )}
       </TabPanel>
+      {/* Both layers, mounted once at the stack rather than inside the view, so
+          closing one does not depend on which tab is up. */}
+      <DriftSheet
+        open={reading === "drift"}
+        file={editing.named}
+        {...driftPanelOf(props.drift)}
+        onClose={() => setReading(null)}
+      />
+      <VerifySheet
+        open={reading === "verify"}
+        file={editing.named}
+        {...verify}
+        onClose={() => setReading(null)}
+      />
     </div>
   );
 }
@@ -221,32 +271,20 @@ export function Manifest(props: ManifestProps) {
 function RunView({
   sheet,
   slot,
-  drift,
-  verify,
   ...props
-}: ManifestProps & {
-  slot: ReturnType<typeof useManifestRuns>;
-  verify: ReturnType<typeof verifyPanelOf>;
-}) {
-  // Drift and the always-allow list each on their own read, so a sheet that
-  // would not read still leaves both standing.
+}: ManifestProps & { slot: ReturnType<typeof useManifestRuns> }) {
+  // The always-allow list on its own read, so a sheet that would not read
+  // still leaves it standing.
   const allows = useRepositoryAllows(props);
-  return (
-    <>
-      <DriftPanel {...driftPanelOf(drift)} />
-      <SheetView sheet={sheet} slot={slot} verify={verify} allows={allows} />
-    </>
-  );
+  return <SheetView sheet={sheet} slot={slot} allows={allows} />;
 }
 
 function SheetView({
   sheet,
   slot,
-  verify,
   allows,
 }: Pick<ManifestProps, "sheet"> & {
   slot: ReturnType<typeof useManifestRuns>;
-  verify: ReturnType<typeof verifyPanelOf>;
   allows: ReturnType<typeof useRepositoryAllows>;
 }) {
   if (sheet.state === "failed") {
@@ -263,12 +301,7 @@ function SheetView({
   if (sheet.state !== "read") {
     return <p className="text-fg-muted">Reading this repository's Manifest.</p>;
   }
-  return (
-    <>
-      <VerifyPanel {...verify} />
-      <RunPage {...slot} alwaysAllowed={allows.rows} onRemoveAlwaysAllowed={allows.onRemove} />
-    </>
-  );
+  return <RunPage {...slot} alwaysAllowed={allows.rows} onRemoveAlwaysAllowed={allows.onRemove} />;
 }
 
 function FileView({ file }: { file: ManifestEditing["file"] }) {

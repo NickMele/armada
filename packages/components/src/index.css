@@ -302,6 +302,8 @@
 @import "./compositions/StudioName/StudioName.css";
 @import "./compositions/StudioAddNode/StudioAddNode.css";
 @import "./compositions/StudioPicked/StudioPicked.css";
+@import "./compositions/DriftSheet/DriftSheet.css";
+@import "./compositions/VerifySheet/VerifySheet.css";
 
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */

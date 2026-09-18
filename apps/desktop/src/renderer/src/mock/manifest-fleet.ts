@@ -268,6 +268,8 @@ export type Manifesting = {
   setUp?: boolean;
   onEdits?: (body: EditManifest) => void;
   onStartRun?: (body: StartCheckoutRun) => void;
+  /** Pressed Verify. Opening its reading must not reach this — #1383. */
+  onStartVerify?: () => void;
 };
 
 /** A connected Fleet serving this repository, picked, with its Manifest as the options say. */
@@ -353,6 +355,10 @@ function behaviour(fleet: FleetHandle, options: Manifesting): Partial<BridgeApi>
       options.diff === undefined ? { ok: false, outcome: { ok: false, why: "not_connected" } } : { ok: true, diff: options.diff },
     startCheckoutRun: async (body): Promise<Outcome> => {
       options.onStartRun?.(body);
+      return { ok: true };
+    },
+    startCheckoutVerify: async (): Promise<Outcome> => {
+      options.onStartVerify?.();
       return { ok: true };
     },
   };

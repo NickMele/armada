@@ -1,10 +1,14 @@
-// The Manifest surface's two panels for Journey 9's *Verify* — drift, read on
+// The Manifest surface's two readings for Journey 9's *Verify* — drift, read on
 // opening, and Verify, pressed — built from what Fleet serves.
 //
 // **Two readings, kept apart.** Drift comes off `GET /manifest/drift` and says
 // whether the file is still true; Verify comes off the run sheet's `verify` and
 // says whether it still works. Neither is folded into the other here, for the
 // journey's reason: one panel with two verdict groups reads as an audit.
+//
+// **Each is a layer with an act on the surface since #1383**, not a resident
+// panel. The two `…SaidOf` functions below are what those acts carry, so the
+// surface still says a file drifted without spending 196px saying it did not.
 
 import type { DriftPanelProps, DriftPanelRow, VerifyPanelProps, VerifyPanelStep } from "@armada/components";
 import type {
@@ -44,6 +48,18 @@ function driftRowOf(line: Declaration, at: number): DriftPanelRow {
   };
 }
 
+/**
+ * How many lines name something the checkout no longer has — what the Drift act
+ * carries beside its label.
+ *
+ * **Absent until the read answers.** A zero before the answer would say the
+ * file is still true when nothing has looked yet.
+ */
+export function driftGoneOf(read: ManifestDriftRead): number | undefined {
+  if (read.state !== "read") return undefined;
+  return read.drift.declarations.filter((line) => line.drift.verdict === "gone").length;
+}
+
 /** What the Verify panel needs of the surface. */
 export type VerifyInputs = {
   sheet: CheckoutRunSheetRead;
@@ -64,11 +80,35 @@ export type VerifyInputs = {
  * a run a person started holds the checkout's one slot, and a Verify already
  * underway holds it between steps too.
  */
+/**
+ * The Verify this file's reading is about, where the checkout holds one for it.
+ * **The checkout holds one Verify**, so another file's is not this one's.
+ */
+function verifyHeldOf(inputs: Pick<VerifyInputs, "sheet" | "workspace">): CheckoutVerify | undefined {
+  const held = inputs.sheet.state === "read" ? inputs.sheet.sheet.verify : undefined;
+  return held !== undefined && fileOf(held.workspace) === fileOf(inputs.workspace) ? held : undefined;
+}
+
+/**
+ * What the Verify act carries beside its label — `running`, or how the last one
+ * ended, short. The full line of counts stays the panel's.
+ *
+ * **Absent where there is nothing to open onto**: no Verify since Fleet
+ * started, or one a person put away. The act then reads as the plain word, and
+ * the button inside the layer is what starts the next run.
+ */
+export function verifySaidOf(inputs: VerifyInputs): string | undefined {
+  const verify = verifyHeldOf(inputs);
+  if (verify === undefined || verify.id === inputs.dismissed) return undefined;
+  if (verify.ended_at === undefined) return "running";
+  const ran = verify.steps.filter((step) => step.state === "ran").length;
+  return `ran ${ran} of ${verify.steps.length}`;
+}
+
 export function verifyPanelOf(inputs: VerifyInputs): VerifyPanelProps {
   const data = inputs.sheet.state === "read" ? inputs.sheet.sheet : undefined;
-  // The checkout holds one Verify: another file's is not drawn here, and holds the slot until it ends.
   const held = data?.verify;
-  const verify = held !== undefined && fileOf(held.workspace) === fileOf(inputs.workspace) ? held : undefined;
+  const verify = verifyHeldOf(inputs);
   const other = held !== undefined && verify === undefined && held.ended_at === undefined ? held : undefined;
   const underway = verify !== undefined && verify.ended_at === undefined;
   const shown = verify !== undefined && verify.id !== inputs.dismissed ? verify : undefined;
