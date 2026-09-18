@@ -34,11 +34,11 @@
 //
 // **And under `--window-fold-left` with Helm's dock beside the content, all
 // three are off screen** — `useTight` below. Navigation is still reached by
-// ⌘1–⌘8 and from the palette; Stats and Fleet are not reachable at all in that
-// band, so Fleet's liveness is unread until the window grows, the dock is
-// closed, or the window narrows past `--layout-breakpoint` and the rail's own
-// dot comes back. That is the cost the owner took on 17 Sep 2026 rather than
-// cut the dock's drag ceiling or fold the dock to its sheet earlier.
+// ⌘1–⌘8 and from the palette; Fleet's liveness is the title row's own dot for
+// as long as the fold lasts (#1437), carrying its state and no figures; Stats
+// is not reachable at all in that band. That is the cost the owner took on
+// 17 Sep 2026 rather than cut the dock's drag ceiling or fold the dock to its
+// sheet earlier.
 //
 // # The picker and Dispatch live in the title row, not here
 //
