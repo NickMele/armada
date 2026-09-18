@@ -700,3 +700,36 @@ fn each_plan_grant_puts_only_its_own_tools_on_the_list() {
     }
     assert!(!following.contains("record_plan"), "{following}");
 }
+
+/// **The two questions came apart in `#1420`.** A comma is the allowlist's own
+/// syntax and says nothing about the command; a push is a push whether or not
+/// anything is written down.
+#[test]
+fn a_command_that_cannot_be_written_as_a_rule_may_still_be_run() {
+    let harness = HeadlessAgent::at("/usr/local/bin/agent");
+    let reads = "sed -n '1,140' crates/ipc/operations.toml";
+    assert!(
+        matches!(
+            harness.grantable(reads),
+            Err(HarnessRefused::CommandNotExpressibleAsARule { .. })
+        ),
+        "no standing rule can be written for it",
+    );
+    assert!(harness.runnable(reads).is_ok(), "and it only reads a file");
+}
+
+#[test]
+fn what_a_drone_may_never_do_is_refused_by_both() {
+    let harness = HeadlessAgent::at("/usr/local/bin/agent");
+    for run in [
+        "git push origin HEAD",
+        "git commit -m x",
+        "git -C /tmp status",
+    ] {
+        assert!(harness.grantable(run).is_err(), "`{run}` as a rule");
+        assert!(
+            harness.runnable(run).is_err(),
+            "`{run}` on one call — a per-call allow is not a way round the git denial",
+        );
+    }
+}
