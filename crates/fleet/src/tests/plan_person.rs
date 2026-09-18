@@ -55,10 +55,10 @@ async fn a_plan_of_four(
             &PlanChange::Recorded {
                 approach: Approach::new("Bound the reader").expect("an approach"),
                 tasks: vec![
-                    NewTask::new("Stop at the end", "").expect("a title"),
-                    NewTask::new("Cover it", "").expect("a title"),
-                    NewTask::new("Check the writer too", "").expect("a title"),
-                    NewTask::new("Note it in the module", "").expect("a title"),
+                    NewTask::new("Stop at the end", "", &[], "").expect("a title"),
+                    NewTask::new("Cover it", "", &[], "").expect("a title"),
+                    NewTask::new("Check the writer too", "", &[], "").expect("a title"),
+                    NewTask::new("Note it in the module", "", &[], "").expect("a title"),
                 ],
             },
             PlanHand::Step(&StepId::new("implement")),
@@ -81,7 +81,9 @@ async fn adding_to_a_job_with_no_plan_is_refused_by_name() {
 
     let add = AddTask {
         title: "Add a regression test".to_string(),
-        detail: String::new(),
+        note: String::new(),
+        scope: Vec::new(),
+        expects: String::new(),
         after: String::new(),
     };
     let refusal = Fleet::add_task_by_person(Arc::clone(&fleet), job_id, add)
@@ -132,7 +134,9 @@ async fn adding_after_a_task_the_plan_does_not_hold_is_refused_by_name() {
 
     let add = AddTask {
         title: "Add a regression test".to_string(),
-        detail: String::new(),
+        note: String::new(),
+        scope: Vec::new(),
+        expects: String::new(),
         after: "T9".to_string(),
     };
     let refusal = Fleet::add_task_by_person(Arc::clone(&fleet), job_id, add)
@@ -159,6 +163,7 @@ async fn dropping_a_done_task_is_refused_by_name_and_a_dropped_one_is_too() {
                 &PlanChange::Updated {
                     task: TaskId::read("T1").expect("an id"),
                     to: TaskUpdate::Done,
+                    shown: None,
                 },
                 PlanHand::Step(&StepId::new("implement")),
                 &Timestamp::from_rfc3339("2026-09-13T10:00:01.000Z"),
@@ -172,6 +177,7 @@ async fn dropping_a_done_task_is_refused_by_name_and_a_dropped_one_is_too() {
                     to: TaskUpdate::Dropped(
                         core_model::DropReason::new("superseded").expect("a reason"),
                     ),
+                    shown: None,
                 },
                 PlanHand::Step(&StepId::new("implement")),
                 &Timestamp::from_rfc3339("2026-09-13T10:00:02.000Z"),
@@ -207,7 +213,9 @@ async fn a_blank_title_or_reason_is_refused() {
 
     let blank_title = AddTask {
         title: "   ".to_string(),
-        detail: String::new(),
+        note: String::new(),
+        scope: Vec::new(),
+        expects: String::new(),
         after: String::new(),
     };
     Fleet::add_task_by_person(Arc::clone(&fleet), job_id.clone(), blank_title)
@@ -236,7 +244,9 @@ async fn a_kept_change_records_the_person_and_publishes_the_event() {
 
     let add = AddTask {
         title: "Add a regression test".to_string(),
-        detail: String::new(),
+        note: String::new(),
+        scope: Vec::new(),
+        expects: String::new(),
         after: String::new(),
     };
     let plan = Fleet::add_task_by_person(Arc::clone(&fleet), job_id.clone(), add)

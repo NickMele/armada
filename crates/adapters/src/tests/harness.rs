@@ -362,6 +362,25 @@ fn a_command_is_grantable_exactly_when_it_would_render() {
     ));
 }
 
+/// **Two readers, one sentence.** A Manifest author meets this at render; a
+/// Drone meets it mid-run, where it ran the command itself and cannot edit the
+/// Manifest. Naming one of them strands the other.
+#[test]
+fn the_unwritable_rule_refusal_tells_its_reader_what_to_do_instead() {
+    let refused = HeadlessAgent::at("/usr/local/bin/agent")
+        .grantable("sed -n '1,140' operations.toml")
+        .expect_err("a comma cannot be written as a rule")
+        .to_string();
+    assert!(
+        refused.contains("Run it without that character"),
+        "a Drone is left with nothing to do: {refused}"
+    );
+    assert!(
+        !refused.contains("declared command"),
+        "the Drone did not declare it: {refused}"
+    );
+}
+
 #[test]
 fn a_declared_command_that_would_push_is_refused_by_name() {
     for run in [

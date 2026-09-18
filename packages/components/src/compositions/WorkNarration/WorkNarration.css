@@ -61,11 +61,29 @@ span.armada-narration__fold {
 }
 
 /* A task's title wraps rather than gives way to its counts: it is what the
-   heading is for. */
+   heading is for.
+
+   **`break-word`, not `anywhere`.** `CheckRuns.css` already carries this
+   argument for its identifier column and it applies here word for word: the
+   two wrap the same way and size differently, because `anywhere` lets a word
+   count for nothing when the browser works out how narrow the heading may be.
+   With the counts beside it refusing to shrink, that floor of zero is what
+   took `Extract selectColumnOrder into its own module` down to one letter a
+   line on a 1280px window with Helm's dock open — measured, mock
+   `job/workingAPlan`, step panel 192px. `break-word` keeps the longest word
+   as the title's floor, so the heading can run out of room but never break a
+   word down its own column.
+
+   **And `min-width` has to go with it**, measured rather than assumed: a flex
+   item's automatic minimum size is what carries that floor, and the
+   `min-width: 0` here was throwing it away — `break-word` still broke the
+   word, because the box was already narrower than the word. Absent, the
+   automatic minimum is `min-content`, which under `break-word` is the longest
+   word. The `min-width: 0` on the wrappers above stays: they have no words of
+   their own, and it is what keeps one long title from widening the panel. */
 .armada-narration__title {
   flex: 1 1 auto;
-  min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .armada-narration__head {
@@ -80,8 +98,14 @@ span.armada-narration__fold {
   white-space: nowrap;
 }
 
+/* The counts give way before the title does — `Chapter.css`'s own rule for
+   the same pair, which this had inverted. `flex: none` here meant the counts
+   held `1 call · 36s · 1 file` whole while the title was squeezed to nothing
+   beside them; shrinking lets the ellipsis this already declares actually
+   fire, and a count that ellipsises is still a count you can widen the window
+   to read. */
 .armada-narration__head > .armada-narration__meta {
-  flex: none;
+  flex: 0 1 auto;
 }
 
 /* The sentences inside a task sit one step in from its heading. */
@@ -107,10 +131,12 @@ span.armada-narration__fold {
   color: var(--fg-subtle);
 }
 
-/* Wraps rather than truncates: the sentence is the thing being read. */
+/* Wraps rather than truncates: the sentence is the thing being read.
+   `break-word` and no `min-width` for the reason on `__title` above — the
+   timestamp beside it is `flex: none`, so between them the sentence had no
+   floor at all and `thinking` came out one letter a line. */
 .armada-narration__words {
-  min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 /* The line under a sentence that opens its calls. */

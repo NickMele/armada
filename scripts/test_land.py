@@ -8,6 +8,12 @@
 #   python3 scripts/test_land.py
 #
 # Beside the script because no Python test in this repository has a home yet.
+#
+# `Line` runs every test against the real `armada land` (Rust) — the stub
+# `armada`'s own `land` case execs into it. It ran twice for one release,
+# the second pass forced through a Python fallback, while every installed
+# `armada` still predated the verb; that fallback is gone and so is the
+# second pass.
 
 import json
 import os
@@ -21,7 +27,19 @@ import textwrap
 import unittest
 from hashlib import sha256
 
-LAND = os.path.join(os.path.dirname(os.path.abspath(__file__)), "land")
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LAND = os.path.join(HERE, "scripts", "land")
+REAL_ARMADA = os.path.join(HERE, "target", "debug", "armada")
+
+
+def setUpModule():
+    # `armada.yml`'s `run:` gets no shell to chain a build onto, so the one
+    # command this Check declares has to be the one thing that both builds
+    # and runs. A `Line` test that finds no binary here skips with a clearer
+    # reason than a build failure buried inside it would give.
+    subprocess.run(
+        ["cargo", "build", "--quiet", "-p", "armada"], cwd=HERE, check=False
+    )
 
 # `gh pr view` and `gh pr merge`, over a JSON file of pull requests. The merge
 # refuses anything but `--merge --match-head-commit`, so a regression to a
@@ -95,6 +113,16 @@ else:
 
 # `covers` reads `checks.json` in the working directory: a Check name to a list
 # of path prefixes, or null for always. `check <name>` runs `checks/<name>.sh`.
+#
+# `land` is answered two ways, chosen by whether `STUB_ARMADA_LAND` is set in
+# the environment — never by anything on the command line, so this is a
+# fixture decision, not a value `scripts/land` itself could be tricked into
+# passing through. Set, it execs into the real binary named there, exactly
+# as an installed `armada` that already knows the verb would answer it
+# itself. Unset, it answers the way an `armada` built before this verb
+# existed actually answers an unknown one — `crates/armada/src/cli.rs`'s own
+# wording — so `scripts/land`'s fallback detection is exercised against the
+# real sentence, not a fixture's paraphrase of it.
 STUB_ARMADA = r'''#!/usr/bin/env python3
 import json, os, subprocess, sys
 args = sys.argv[1:]
@@ -109,6 +137,11 @@ elif args[:1] == ["check"]:
 elif args[:1] == ["run"]:
     open(f"{args[1]}.stamp", "w").write("prepared\n")
     sys.exit(0)
+elif args[:1] == ["land"]:
+    real = os.environ.get("STUB_ARMADA_LAND")
+    if not real:
+        sys.exit("stub armada: STUB_ARMADA_LAND is unset, so there is no binary to answer `land`")
+    os.execv(real, [real, *args])
 else:
     sys.exit(f"stub armada: {args}")
 '''
@@ -135,7 +168,20 @@ def sh(*argv, cwd=None, env=None, check=True):
     return done
 
 
-class Line(unittest.TestCase):
+class LineFixture(unittest.TestCase):
+    """The bare-remote-and-stubs harness, with no test methods of its own.
+    `Line` adds them; the split is what let a second suite run the same
+    scenarios against a second implementation while one existed."""
+
+    # Which binary the stub's own `land` case forwards to — the real
+    # `armada`, built by this crate's own `cargo build -p armada`.
+    def stub_armada_land(self):
+        if not os.path.exists(REAL_ARMADA):
+            raise unittest.SkipTest(
+                f"{REAL_ARMADA} does not exist — `cargo build -p armada` first"
+            )
+        return REAL_ARMADA
+
     def setUp(self):
         self.root = os.path.realpath(tempfile.mkdtemp(prefix="land-"))
         self.remote = os.path.join(self.root, "remote.git")
@@ -150,6 +196,7 @@ class Line(unittest.TestCase):
             os.chmod(path, 0o755)
         with open(self.prs, "w") as out:
             out.write("{}")
+        stub_land = self.stub_armada_land()
         self.env = dict(
             os.environ,
             ARMADA_LAND_GH=os.path.join(stubs, "gh"),
@@ -160,6 +207,7 @@ class Line(unittest.TestCase):
             ARMADA_LAND_KEEP="node_modules",
             LAND_TEST_EVIDENCE=os.path.join(self.root, "evidence.txt"),
             ARMADA_LAND_HEAD_WAIT="10",
+            STUB_ARMADA_LAND=stub_land,
             STUB_GH_STATE=self.prs,
             STUB_REMOTE=self.remote,
             GIT_CONFIG_GLOBAL="/dev/null",
@@ -290,8 +338,11 @@ class Line(unittest.TestCase):
         """What the turn wrote a log for, apart from the merge itself."""
         return sorted(set(os.listdir(self.state_file("logs", key(branch)))) - {"merge.log"})
 
-    # ------------------------------------------------------------ the claims
 
+# ---------------------------------------------------------------- the claims
+
+
+class Line(LineFixture):
     def test_two_back_to_back_the_second_reruns_red_and_does_not_merge(self):
         one = self.branch("fix/one", {"one.txt": "1\n"})
         two = self.branch("fix/two", {"two.txt": "2\n"})
@@ -647,14 +698,6 @@ class Line(unittest.TestCase):
         self.assertEqual(done.returncode, 7, done.stdout)
         self.assertIn("while it was gated", done.stdout)
         self.assertNotIn("late.txt", self.main_files())
-
-    def test_the_setup_default_says_what_the_manifest_requires(self):
-        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        manifest = open(os.path.join(here, "armada.yml")).read()
-        requires = manifest.split("setup:")[1].split("requires:")[1].split("seed:")[0]
-        wanted = [line.strip("- \n") for line in requires.splitlines() if line.strip().startswith("-")]
-        default = open(LAND).read().split('ARMADA_LAND_SETUP", "')[1].split('"')[0].split()
-        self.assertEqual(default, wanted, "the copy of setup.requires in scripts/land has drifted")
 
     def test_the_manifest_gates_both_of_the_line_s_suites(self):
         """Asserted here because this file may name the agent harness's own

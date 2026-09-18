@@ -22,9 +22,9 @@ pub const UPDATE_TASK_TOOL: &str = "update_task";
 
 pub const RECORD_PLAN_FIELDS: &[&str] = &["approach", "tasks"];
 /// The fields of one entry of `record_plan`'s `tasks`.
-pub const TASK_FIELDS: &[&str] = &["title", "detail"];
-pub const ADD_TASK_FIELDS: &[&str] = &["title", "detail", "after"];
-pub const UPDATE_TASK_FIELDS: &[&str] = &["task", "state", "reason"];
+pub const TASK_FIELDS: &[&str] = &["title", "note", "scope", "expects"];
+pub const ADD_TASK_FIELDS: &[&str] = &["title", "note", "scope", "expects", "after"];
+pub const UPDATE_TASK_FIELDS: &[&str] = &["task", "state", "reason", "shown"];
 
 /// One call of a plan tool, read as the change it asks for.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -38,6 +38,7 @@ pub struct PlanCall {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PlanArgument {
     NotATaskList,
+    NotAPathList,
     NotATaskId { field: &'static str, named: String },
     NotAnUpdate(NotAnUpdate),
 }
@@ -47,7 +48,11 @@ impl fmt::Display for PlanArgument {
         match self {
             PlanArgument::NotATaskList => out.write_str(
                 "`tasks` is not a list of tasks. Each entry is an object with `title`, \
-                 one line saying what the task is, and `detail`, which may be \"\"",
+                 `note`, `scope` and `expects`",
+            ),
+            PlanArgument::NotAPathList => out.write_str(
+                "`scope` is not a list of repository-relative paths. Send [] where the \
+                 task's files are not known yet, rather than naming them in `note`",
             ),
             PlanArgument::NotATaskId { field, named } => write!(
                 out,
@@ -109,8 +114,35 @@ fn recorded(arguments: &Map<String, Value>) -> Result<PlanChange, NotAnArgument>
 }
 
 fn task(arguments: &Map<String, Value>) -> Result<NewTask, NotAnArgument> {
-    NewTask::new(&filled(arguments, "title")?, &text(arguments, "detail")?)
-        .ok_or(NotAnArgument::Blank { field: "title" })
+    let scope = paths(arguments)?;
+    let scope: Vec<&str> = scope.iter().map(String::as_str).collect();
+    NewTask::new(
+        &filled(arguments, "title")?,
+        &text(arguments, "note")?,
+        &scope,
+        &text(arguments, "expects")?,
+    )
+    .ok_or(NotAnArgument::Blank { field: "title" })
+}
+
+/// `scope`, as the list of strings it has to be. **An entry that is not a
+/// string refuses the call** rather than being dropped: a path silently lost
+/// here is a file the next step is never told about.
+fn paths(arguments: &Map<String, Value>) -> Result<Vec<String>, NotAnArgument> {
+    let listed = arguments
+        .get("scope")
+        .ok_or(NotAnArgument::Missing { field: "scope" })?
+        .as_array()
+        .ok_or(NotAnArgument::Planning(PlanArgument::NotAPathList))?;
+    listed
+        .iter()
+        .map(|entry| {
+            entry
+                .as_str()
+                .map(String::from)
+                .ok_or(NotAnArgument::Planning(PlanArgument::NotAPathList))
+        })
+        .collect()
 }
 
 /// `after` is required and may be empty, which is the end of the list.
@@ -129,7 +161,8 @@ fn updated(arguments: &Map<String, Value>) -> Result<PlanChange, NotAnArgument> 
     let task = task_id("task", &text(arguments, "task")?)?;
     let to = TaskUpdate::read(&text(arguments, "state")?, &text(arguments, "reason")?)
         .map_err(|why| NotAnArgument::Planning(PlanArgument::NotAnUpdate(why)))?;
-    Ok(PlanChange::Updated { task, to })
+    let shown = core_model::Shown::new(&text(arguments, "shown")?);
+    Ok(PlanChange::Updated { task, to, shown })
 }
 
 fn task_id(field: &'static str, named: &str) -> Result<TaskId, NotAnArgument> {
@@ -170,12 +203,30 @@ pub(super) fn record_plan_tool() -> Value {
                                 "type": "string",
                                 "description": "One line saying what the task is.",
                             },
-                            "detail": {
+                            "note": {
                                 "type": "string",
-                                "description": "Where or how, if a line is not enough. \"\" if not.",
+                                "description": "One line for what the other fields cannot \
+                                    hold -- the exact new wording, a gotcha you found. \
+                                    Not the files, which are `scope`. \"\" if there is none.",
+                            },
+                            "scope": {
+                                "type": "array",
+                                "items": { "type": "string" },
+                                "description": "The repository-relative paths this task \
+                                    touches. The part that does this task is given them and \
+                                    starts from them instead of searching for them again. \
+                                    [] where you genuinely do not know yet.",
+                            },
+                            "expects": {
+                                "type": "string",
+                                "description": "What should prove this task is done: a \
+                                    named test, a rendered string, a command and its exit \
+                                    code. Whoever does the task records what actually \
+                                    proved it, and the two are read side by side. \"\" if \
+                                    you cannot say yet.",
                             },
                         },
-                        "required": ["title", "detail"],
+                        "required": ["title", "note", "scope", "expects"],
                         "additionalProperties": false,
                     },
                     "description": "The tasks, in the order they will be done.",
@@ -198,16 +249,27 @@ pub(super) fn add_task_tool() -> Value {
             "type": "object",
             "properties": {
                 "title": { "type": "string", "description": "One line saying what the task is." },
-                "detail": {
+                "note": {
                     "type": "string",
-                    "description": "Where or how, if a line is not enough. \"\" if not.",
+                    "description": "One line for what the other fields cannot hold. \"\" if none.",
+                },
+                "scope": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "The repository-relative paths this task touches. [] if \
+                        you do not know yet.",
+                },
+                "expects": {
+                    "type": "string",
+                    "description": "What should prove this task is done. \"\" if you cannot \
+                        say yet.",
                 },
                 "after": {
                     "type": "string",
                     "description": "The id of the task it comes after, such as T2. \"\" for the end.",
                 },
             },
-            "required": ["title", "detail", "after"],
+            "required": ["title", "note", "scope", "expects", "after"],
             "additionalProperties": false,
         },
     })
@@ -236,8 +298,15 @@ pub(super) fn update_task_tool() -> Value {
                     "type": "string",
                     "description": "Why the task is dropped. Required for dropped, \"\" otherwise.",
                 },
+                "shown": {
+                    "type": "string",
+                    "description": "What actually proved this task, when you mark it done \
+                        -- the test that covers it, the string it now renders. It is \
+                        read beside what the plan expected, and saying something different \
+                        from the plan is the useful answer, not a wrong one. \"\" otherwise.",
+                },
             },
-            "required": ["task", "state", "reason"],
+            "required": ["task", "state", "reason", "shown"],
             "additionalProperties": false,
         },
     })

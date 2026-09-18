@@ -20,7 +20,7 @@ use core::num::NonZeroU32;
 
 use crate::envelope::Timestamp;
 use crate::job::attempt::Attempt;
-use crate::job::ids::StepId;
+use crate::job::ids::{RepoPath, StepId};
 
 /// A task's stable name within one plan: `T1`, `T2`, … in the order minted.
 ///
@@ -162,21 +162,37 @@ impl TaskUpdate {
     }
 }
 
-/// A task as it is asked for: a one-line title that says something, and a
-/// detail that may be empty.
+/// A task as it is asked for.
+///
+/// **Four fields, and the note is the only free text.** `scope` and `expects`
+/// hold what a planning step used to bury in prose, where the step after it
+/// could not act on either: the paths and the artifact that should prove the
+/// task. The note is what neither of those can hold — the exact new wording, a
+/// gotcha found while planning — and it is one line, deliberately.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NewTask {
     title: String,
-    detail: String,
+    note: String,
+    scope: Vec<RepoPath>,
+    expects: String,
 }
 
 impl NewTask {
-    /// `None` where the title is blank.
-    pub fn new(title: &str, detail: &str) -> Option<NewTask> {
+    /// `None` where the title is blank. Every other field may be empty: a task
+    /// whose paths are not yet known is a task, and refusing one would push
+    /// the planner back into writing them into the note.
+    pub fn new(title: &str, note: &str, scope: &[&str], expects: &str) -> Option<NewTask> {
         let title = title.trim();
         (!title.is_empty()).then(|| NewTask {
             title: String::from(title),
-            detail: String::from(detail.trim()),
+            note: String::from(note.trim()),
+            scope: scope
+                .iter()
+                .map(|path| path.trim())
+                .filter(|path| !path.is_empty())
+                .map(RepoPath::new)
+                .collect(),
+            expects: String::from(expects.trim()),
         })
     }
 
@@ -184,8 +200,36 @@ impl NewTask {
         &self.title
     }
 
-    pub fn detail(&self) -> &str {
-        &self.detail
+    /// What the other three fields cannot hold. May be empty.
+    pub fn note(&self) -> &str {
+        &self.note
+    }
+
+    /// The repository-relative paths this task touches, in the order given.
+    pub fn scope(&self) -> &[RepoPath] {
+        &self.scope
+    }
+
+    /// What the planner says should prove the task. May be empty.
+    pub fn expects(&self) -> &str {
+        &self.expects
+    }
+}
+
+/// What the work itself says proved a task. **Never blank**, for
+/// [`DropReason`]'s reason: an empty one is a caller believing it said
+/// something.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Shown(String);
+
+impl Shown {
+    pub fn new(text: &str) -> Option<Shown> {
+        let text = text.trim();
+        (!text.is_empty()).then(|| Shown(String::from(text)))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 }
 
@@ -225,9 +269,14 @@ pub enum PlanChange {
         task: NewTask,
         after: Option<TaskId>,
     },
+    /// **`shown` is the other end of `expects`.** The planner wrote what ought
+    /// to prove the task; this is what did, written by whoever worked it.
+    /// `None` leaves whatever an earlier update recorded, so marking a task
+    /// `open` and `done` again does not erase it.
     Updated {
         task: TaskId,
         to: TaskUpdate,
+        shown: Option<Shown>,
     },
 }
 
@@ -291,6 +340,7 @@ pub struct PlanTask {
     id: TaskId,
     task: NewTask,
     state: TaskUpdate,
+    shown: Option<Shown>,
     windows: Vec<WorkingWindow>,
 }
 
@@ -303,8 +353,24 @@ impl PlanTask {
         self.task.title()
     }
 
-    pub fn detail(&self) -> &str {
-        self.task.detail()
+    /// What the other fields cannot hold. Empty where the task has none.
+    pub fn note(&self) -> &str {
+        self.task.note()
+    }
+
+    /// The paths the planner said this task touches.
+    pub fn scope(&self) -> &[RepoPath] {
+        self.task.scope()
+    }
+
+    /// What the planner said should prove it. Empty where none was named.
+    pub fn expects(&self) -> &str {
+        self.task.expects()
+    }
+
+    /// What the work said proved it, where an update carried one.
+    pub fn shown(&self) -> Option<&Shown> {
+        self.shown.as_ref()
     }
 
     pub fn state(&self) -> TaskState {
@@ -373,6 +439,7 @@ impl WorkPlan {
                         id: TaskId(NonZeroU32::MIN.saturating_add(n - 1)),
                         task: task.clone(),
                         state: TaskUpdate::Open,
+                        shown: None,
                         windows: Vec::new(),
                     })
                     .collect(),
@@ -396,11 +463,12 @@ impl WorkPlan {
                         id: TaskId(NonZeroU32::MIN.saturating_add(next)),
                         task: task.clone(),
                         state: TaskUpdate::Open,
+                        shown: None,
                         windows: Vec::new(),
                     },
                 );
             }
-            PlanChange::Updated { task, to } => {
+            PlanChange::Updated { task, to, shown } => {
                 let at = plan
                     .position(*task)
                     .ok_or(PlanRefused::NoSuchTask { named: *task })?;
@@ -425,6 +493,11 @@ impl WorkPlan {
                     _ => {}
                 }
                 task.state = to.clone();
+                // Kept rather than replaced, so reopening a task and finishing
+                // it again does not lose what the first pass showed.
+                if shown.is_some() {
+                    task.shown = shown.clone();
+                }
             }
         }
         Ok(plan)
@@ -470,7 +543,7 @@ impl WorkPlan {
     }
 
     /// The plan as it stands, in words: the approach, then each task with its
-    /// id, title, state and — for a dropped one — the reason.
+    /// id, title, state, detail and — for a dropped one — the reason.
     ///
     /// **Fleet's own reading of its own record, and never the Drone's.**
     /// `record_plan`, `add_task` and `update_task` are the only three calls a
@@ -478,6 +551,11 @@ impl WorkPlan {
     /// account of a turn. `#895` is where a step's Judge is handed this — its
     /// own, where its product is a plan, and a later step's through
     /// `reference_docs`.
+    ///
+    /// **Every field a task carries is rendered.** The step after a planning
+    /// one reads this and nothing else of the plan, so a field left out of it
+    /// is a field the next Drone re-derives — which is what a title-only
+    /// rendering cost, before `scope` and `expects` were fields at all.
     pub fn rendered(&self) -> String {
         let mut out = String::new();
         let _ = writeln!(out, "Approach: {}", self.approach.as_str());
@@ -493,6 +571,23 @@ impl WorkPlan {
             );
             if let Some(reason) = task.reason() {
                 let _ = write!(out, " — dropped: {reason}");
+            }
+            // Hung under the title and labelled, so a task carrying three of
+            // them cannot read as three tasks.
+            if !task.note().is_empty() {
+                let _ = write!(out, "\n      note: {}", task.note());
+            }
+            if !task.scope().is_empty() {
+                let _ = write!(out, "\n      files:");
+                for path in task.scope() {
+                    let _ = write!(out, " {}", path.as_str());
+                }
+            }
+            if !task.expects().is_empty() {
+                let _ = write!(out, "\n      expects: {}", task.expects());
+            }
+            if let Some(shown) = task.shown() {
+                let _ = write!(out, "\n      shown: {}", shown.as_str());
             }
         }
         out

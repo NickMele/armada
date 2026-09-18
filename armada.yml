@@ -274,15 +274,20 @@ checks:
     # `scripts/land` against a throwaway repository with a local bare remote and
     # stub `gh` and `armada`. A failure means the line would merge, refuse or
     # stall differently from what `docs/capabilities/merge-line.md` says — read
-    # the named test, not the exit code. It needs `git` and `python3` and
-    # nothing else: no network, no build, no Fleet. Around a minute, spent
-    # almost entirely in git and in waiting for a background runner.
+    # the named test, not the exit code. They run against the real
+    # `armada land`, which `test_land.py` builds itself first, since a
+    # Check's `run:` has no shell to chain that onto the suite. A couple of
+    # minutes, most of it that build.
     #
-    # `armada.yml` is named because one test reads this file: the copy of
-    # `setup.requires` inside `scripts/land` has to keep step with the one below.
+    # `armada.yml` is named because a test reads this file: the Checks this
+    # suite asserts are gated are declared here.
     run: python3 scripts/test_land.py
     when:
       - "scripts/**"
+      - "crates/armada/src/land/**"
+      - "crates/adapter-traits/src/delivery.rs"
+      - "crates/adapters/src/delivery.rs"
+      - "crates/adapters/src/landing.rs"
       - "armada.yml"
 
   hooks_test:

@@ -280,7 +280,7 @@ fn a_refusal_that_cites_nothing_is_not_a_refusal() {
 fn a_refusal_quoting_words_the_call_was_never_shown_is_not_a_refusal() {
     let workflow = workflow();
     let note = scope_note();
-    let brief = brief_measured_against(&workflow, &[Reference::to("scope", &note)]);
+    let brief = brief_measured_against(&workflow, &[Reference::to("plan", &note)]);
     // The real note is in front of it, and the quotation is not in the note.
     assert!(brief
         .question()
@@ -310,7 +310,7 @@ fn a_refusal_quoting_words_the_call_was_never_shown_is_not_a_refusal() {
 fn a_refusal_quoting_what_it_was_actually_shown_still_refuses() {
     let workflow = workflow();
     let note = scope_note();
-    let judged = brief_measured_against(&workflow, &[Reference::to("scope", &note)])
+    let judged = brief_measured_against(&workflow, &[Reference::to("plan", &note)])
         .read(
             "verdict: not_met\n\
              expected: what the note called \"wired through the routes and the daemon\"\n\
@@ -334,7 +334,7 @@ fn a_refusal_quoting_what_it_was_actually_shown_still_refuses() {
         .collect();
     assert_eq!(
         regions,
-        vec!["reference:scope", "diff"],
+        vec!["reference:plan", "diff"],
         "each quotation is placed in the part of the brief that holds it, in \
          the order the refusal wrote them"
     );
@@ -371,7 +371,7 @@ fn a_refusal_quoting_its_own_wording_rather_than_a_source_still_refuses() {
          serving.rs and fall through to the catch-all 500 handler\"\n\
          consequence: a client is told Armada broke when it declined",
     ] {
-        let judged = brief_measured_against(&workflow, &[Reference::to("scope", &note)])
+        let judged = brief_measured_against(&workflow, &[Reference::to("plan", &note)])
             .read(answer)
             .expect("a refusal in the Judge's own words");
         assert_eq!(judged.verdict, JudgeVerdict::NotMet, "{answer}");

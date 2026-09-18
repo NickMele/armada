@@ -447,7 +447,7 @@ fn the_tautological_test_question_tells_a_written_assertion_from_a_carried_one()
 /// else in this file.
 #[test]
 fn a_gaming_check_naming_no_pattern_does_not_fire_and_costs_nothing() {
-    let silent = GamingCheck::declared(EvidenceRef::parse("scope.evidence"), Vec::new());
+    let silent = GamingCheck::declared(EvidenceRef::parse("plan.evidence"), Vec::new());
     assert!(!silent.fires());
     assert_eq!(silent.calls(), 0);
 

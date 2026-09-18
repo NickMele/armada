@@ -35,15 +35,15 @@ use bench::plan::{
 };
 
 const FOUR_TASKS: &str = r#"{"approach":"Stop the reader at the end, then cover the bound",
-    "tasks":[{"title":"Stop read_to before end","detail":"crates/store/src/read.rs:41"},
-             {"title":"Cover the last row","detail":""},
-             {"title":"Check the writer's bound","detail":""},
-             {"title":"Note the bound in the module","detail":""}]}"#;
+    "tasks":[{"title":"Stop read_to before end","note":"","scope":["crates/store/src/read.rs"],"expects":"a test for the last row"},
+             {"title":"Cover the last row","note":"","scope":[],"expects":""},
+             {"title":"Check the writer's bound","note":"","scope":[],"expects":""},
+             {"title":"Note the bound in the module","note":"","scope":[],"expects":""}]}"#;
 
 const THREE_TASKS: &str = r#"{"approach":"Stop the reader at the end, then cover the bound",
-    "tasks":[{"title":"Stop read_to before end","detail":"crates/store/src/read.rs:41"},
-             {"title":"Cover the last row","detail":""},
-             {"title":"Check the writer's bound","detail":""}]}"#;
+    "tasks":[{"title":"Stop read_to before end","note":"","scope":["crates/store/src/read.rs"],"expects":"a test for the last row"},
+             {"title":"Cover the last row","note":"","scope":[],"expects":""},
+             {"title":"Check the writer's bound","note":"","scope":[],"expects":""}]}"#;
 
 /// #894's row: **the plan step is asked for a plan, and every brief after it
 /// carries THE PLAN as Fleet holds it — with every task's id and state —
@@ -55,14 +55,17 @@ fn the_implement_brief_carries_the_plan_fleet_holds_with_every_tasks_state() {
     let mut planned = Planned::created("fix the reader's bound");
     planned.kept(called("record_plan", THREE_TASKS), PLAN, 1);
     planned.kept(
-        called("update_task", r#"{"task":"T1","state":"done","reason":""}"#),
+        called(
+            "update_task",
+            r#"{"task":"T1","state":"done","reason":"","shown":""}"#,
+        ),
         IMPLEMENT,
         1,
     );
     let plan = planned.kept(
         called(
             "update_task",
-            r#"{"task":"T2","state":"working","reason":""}"#,
+            r#"{"task":"T2","state":"working","reason":"","shown":""}"#,
         ),
         IMPLEMENT,
         1,
@@ -184,7 +187,10 @@ fn a_step_that_records_and_follows_the_plan_sees_it_on_a_retry() {
     let mut planned = Planned::created_with("undo the change", revert_shaped_workflow());
     planned.kept(called("record_plan", THREE_TASKS), REVERT_SHAPED, 1);
     let plan = planned.kept(
-        called("update_task", r#"{"task":"T1","state":"done","reason":""}"#),
+        called(
+            "update_task",
+            r#"{"task":"T1","state":"done","reason":"","shown":""}"#,
+        ),
         REVERT_SHAPED,
         1,
     );
@@ -260,7 +266,13 @@ fn a_plan_steps_drone_records_four_tasks_and_the_plan_reaches_the_wire() {
             ("T4", "open")
         ]
     );
-    assert_eq!(plan.tasks[0].detail, "crates/store/src/read.rs:41");
+    assert_eq!(plan.tasks[0].scope, ["crates/store/src/read.rs"]);
+    assert_eq!(plan.tasks[0].expects, "a test for the last row");
+    assert!(plan.tasks[0].note.is_empty());
+    assert!(
+        plan.tasks[1].scope.is_empty(),
+        "a task naming no paths sends none, rather than an empty entry"
+    );
     assert!(
         matches!(&plan.recorded_by, ChangedBy::Step { step_id, attempt: 1 } if step_id.as_str() == PLAN),
         "the plan says which run of which step recorded it"
@@ -303,10 +315,10 @@ fn implement_completes_two_tasks_and_drops_one_with_a_reason() {
     let mut planned = Planned::created("fix the reader's bound");
     planned.kept(called("record_plan", FOUR_TASKS), PLAN, 1);
     for arguments in [
-        r#"{"task":"T1","state":"working","reason":""}"#,
-        r#"{"task":"T1","state":"done","reason":""}"#,
-        r#"{"task":"T2","state":"done","reason":""}"#,
-        r#"{"task":"T3","state":"dropped","reason":"the writer's bound was never inclusive"}"#,
+        r#"{"task":"T1","state":"working","reason":"","shown":""}"#,
+        r#"{"task":"T1","state":"done","reason":"","shown":""}"#,
+        r#"{"task":"T2","state":"done","reason":"","shown":""}"#,
+        r#"{"task":"T3","state":"dropped","reason":"the writer's bound was never inclusive","shown":""}"#,
     ] {
         planned.kept(called("update_task", arguments), IMPLEMENT, 1);
     }
@@ -335,11 +347,11 @@ fn implement_completes_two_tasks_and_drops_one_with_a_reason() {
     assert_eq!(plan.tasks[3].state.as_wire(), "open");
 
     // A done task may be reopened; a dropped one stays dropped, and says so.
-    let reopened = r#"{"task":"T1","state":"working","reason":""}"#;
+    let reopened = r#"{"task":"T1","state":"working","reason":"","shown":""}"#;
     assert!(planned
         .judged(called("update_task", reopened), IMPLEMENT, 1)
         .is_ok());
-    let undropped = r#"{"task":"T3","state":"open","reason":""}"#;
+    let undropped = r#"{"task":"T3","state":"open","reason":"","shown":""}"#;
     assert_eq!(
         planned.judged(called("update_task", undropped), IMPLEMENT, 1),
         Err(core_model::PlanRefused::StaysDropped {
@@ -367,7 +379,7 @@ fn a_drop_with_no_reason_is_refused_by_name_and_changes_nothing() {
 
     let (why, sent) = refused(
         "update_task",
-        r#"{"task":"T2","state":"dropped","reason":""}"#,
+        r#"{"task":"T2","state":"dropped","reason":"","shown":""}"#,
     );
     assert_eq!(
         why,
@@ -385,7 +397,8 @@ fn a_drop_with_no_reason_is_refused_by_name_and_changes_nothing() {
 #[test]
 fn a_plan_steps_retry_replaces_the_plan_and_a_following_steps_retry_keeps_its_states() {
     let mut planned = Planned::created("fix the reader's bound");
-    let first_try = r#"{"approach":"A first try","tasks":[{"title":"One","detail":""}]}"#;
+    let first_try =
+        r#"{"approach":"A first try","tasks":[{"title":"One","note":"","scope":[],"expects":""}]}"#;
     planned.kept(called("record_plan", first_try), PLAN, 1);
     planned.kept(called("record_plan", FOUR_TASKS), PLAN, 2);
     let plan = received_detail(&planned.detail())
@@ -397,9 +410,9 @@ fn a_plan_steps_retry_replaces_the_plan_and_a_following_steps_retry_keeps_its_st
         ChangedBy::Step { attempt: 2, .. }
     ));
 
-    let done = r#"{"task":"T1","state":"done","reason":""}"#;
+    let done = r#"{"task":"T1","state":"done","reason":"","shown":""}"#;
     planned.kept(called("update_task", done), IMPLEMENT, 1);
-    let working = r#"{"task":"T2","state":"working","reason":""}"#;
+    let working = r#"{"task":"T2","state":"working","reason":"","shown":""}"#;
     planned.kept(called("update_task", working), IMPLEMENT, 2);
     let tasks = received_row(&planned.row()).tasks.expect("counted");
     assert_eq!((tasks.done, tasks.working, tasks.open), (1, 1, 2));
@@ -416,14 +429,17 @@ async fn implements_judge_reads_the_plan_fleet_holds_not_the_drones_words_about_
     let mut planned = Planned::created("fix the reader's bound");
     planned.kept(called("record_plan", FOUR_TASKS), PLAN, 1);
     planned.kept(
-        called("update_task", r#"{"task":"T1","state":"done","reason":""}"#),
+        called(
+            "update_task",
+            r#"{"task":"T1","state":"done","reason":"","shown":""}"#,
+        ),
         IMPLEMENT,
         1,
     );
     let plan = planned.kept(
         called(
             "update_task",
-            r#"{"task":"T3","state":"dropped","reason":"the writer's bound was never inclusive"}"#,
+            r#"{"task":"T3","state":"dropped","reason":"the writer's bound was never inclusive","shown":""}"#,
         ),
         IMPLEMENT,
         1,
@@ -463,7 +479,7 @@ fn a_person_adds_a_fifth_task_and_the_working_drone_is_told() {
     let plan = planned.kept(called("record_plan", FOUR_TASKS), PLAN, 1);
     assert_eq!(plan.tasks().len(), 4, "four tasks recorded");
 
-    let task = core_model::NewTask::new("Add a regression test for the bound", "")
+    let task = core_model::NewTask::new("Add a regression test for the bound", "", &[], "")
         .expect("a title makes a task");
     let entry = core_model::PlanEntry {
         change: core_model::PlanChange::Added {
@@ -521,6 +537,7 @@ fn a_person_drops_a_task_with_a_reason_and_it_shows_struck_through() {
                 core_model::DropReason::new("the writer's bound was never inclusive")
                     .expect("a reason"),
             ),
+            shown: None,
         },
         by: core_model::PlanAuthor::Person,
         at: core_model::Timestamp::from_rfc3339("2026-09-13T10:00:06.000Z"),

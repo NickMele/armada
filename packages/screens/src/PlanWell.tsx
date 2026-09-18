@@ -5,7 +5,7 @@
 // Split out of `InsideAJob.tsx` for `Redirect.tsx`'s own reason — one file
 // per control that owns a dialog or a field — now that the well owns two.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Button,
   Clamped,
@@ -131,6 +131,56 @@ function AddTaskControl({
  * is a short act on the row it is about, and a modal over a list a person is
  * still reading would hide the very row the reason is about.
  */
+/**
+ * What a task says beyond its title: its note, the files it touches, and the
+ * evidence expected of it beside the evidence the work showed.
+ *
+ * **Expected and shown are drawn as two lines, never reconciled into one.**
+ * The planner names an artifact before the work starts and whoever does the
+ * work finds out what actually proved it; the pair disagreeing is the fact a
+ * reader is here for, and a single line showing only one of them hides it.
+ *
+ * Quiet at `--text-2xs` and `--fg-subtle`, the reason line's own weight: a
+ * task's title is what a person scans, and these are what they stop on.
+ */
+function TaskFacts({ task }: { task: PlanTaskRow }): ReactNode {
+  const scope = task.scope ?? [];
+  const has =
+    (task.note ?? "") !== "" ||
+    scope.length > 0 ||
+    (task.expects ?? "") !== "" ||
+    (task.shown ?? "") !== "";
+  if (!has) return null;
+  return (
+    <span className="armada-inside__plan-task-facts">
+      {(task.note ?? "") === "" ? null : (
+        <span className="armada-inside__plan-task-note">{task.note}</span>
+      )}
+      {scope.length === 0 ? null : (
+        <span className="armada-inside__plan-task-scope">
+          {scope.map((path) => (
+            <code key={path} className="armada-inside__plan-task-path">
+              {path}
+            </code>
+          ))}
+        </span>
+      )}
+      {(task.expects ?? "") === "" ? null : (
+        <span className="armada-inside__plan-task-evidence">
+          <span className="armada-inside__plan-task-evidence-label">Expects</span>
+          {task.expects}
+        </span>
+      )}
+      {(task.shown ?? "") === "" ? null : (
+        <span className="armada-inside__plan-task-evidence">
+          <span className="armada-inside__plan-task-evidence-label">Shown</span>
+          {task.shown}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function TaskRow({
   task,
   onDropTask,
@@ -198,6 +248,7 @@ function TaskRow({
         {task.state === "dropped" && task.reason !== undefined ? (
           <span className="armada-inside__plan-task-reason">{task.reason}</span>
         ) : null}
+        <TaskFacts task={task} />
         {open ? (
           <span className="armada-inside__plan-task-drop-form">
             <Input

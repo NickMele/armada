@@ -617,7 +617,7 @@ async fn a_plan_call_is_taken_and_answers_with_a_receipt() {
     let answered = call(
         &app,
         r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"update_task",
-           "arguments":{"task":"T1","state":"done","reason":""}}}"#,
+           "arguments":{"task":"T1","state":"done","reason":"","shown":"the covering test"}}}"#,
     )
     .await;
     assert_eq!(answered.status, StatusCode::OK);

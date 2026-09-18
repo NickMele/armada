@@ -142,6 +142,80 @@ pub(crate) fn merge(in_repo: &str, pull_request: &str) -> Result<Merged, NotMerg
     }
 }
 
+/// Merge a pull request, pinned to the commit it was gated on. `#1315`.
+///
+/// **The same read-then-write as [`merge`], with the pin carried into both
+/// halves.** The state is read fresh — including `headRefOid` — so a branch
+/// that moved on the remote between the gate's push and this call is caught
+/// here rather than merging a commit nobody gated: `--match-head-commit`
+/// alone would only make the forge refuse the write, and this refuses before
+/// asking the forge to try.
+pub(crate) fn merge_pinned(
+    in_repo: &str,
+    pull_request: &str,
+    expected_head: &str,
+) -> Result<Merged, NotMerged> {
+    let Some(standing) = asked(
+        in_repo,
+        pull_request,
+        "state,mergeable,mergeStateStatus,headRefOid",
+        "[.state, .mergeable, .mergeStateStatus, .headRefOid] | @tsv",
+    ) else {
+        return Err(NotMerged::NoTool {
+            said: format!("`{FORGE} pr view {pull_request}` would not answer"),
+        });
+    };
+    let Some([state, mergeable, status, head]) = fields::<4>(&standing) else {
+        return Err(NotMerged::Refused {
+            said: format!("`{FORGE}` answered `{standing}`, which has no reading here"),
+        });
+    };
+    match state {
+        "MERGED" => return Ok(Merged::AlreadyMerged),
+        "OPEN" => {}
+        other => {
+            return Err(NotMerged::NotOpen {
+                said: format!("the forge says it is {other}"),
+            })
+        }
+    }
+    if head != expected_head {
+        return Err(NotMerged::Refused {
+            said: format!(
+                "the pull request's head is {head}, not the {expected_head} this was gated against"
+            ),
+        });
+    }
+    if mergeable == "CONFLICTING" {
+        return Err(NotMerged::Conflicted {
+            said: String::from("the forge cannot merge this branch into its base as it stands"),
+        });
+    }
+    let run = match run_in(
+        in_repo,
+        FORGE,
+        &[
+            "pr",
+            "merge",
+            pull_request,
+            "--merge",
+            "--match-head-commit",
+            expected_head,
+        ],
+    ) {
+        Ok(run) => run,
+        Err(why) => {
+            return Err(NotMerged::NoTool {
+                said: format!("`{FORGE}` would not run: {why}"),
+            })
+        }
+    };
+    match run.status.success() {
+        true => Ok(Merged::Taken),
+        false => Err(why_not(status, said(&run))),
+    }
+}
+
 /// Which kind of refusal a failed merge was, from the forge's own state word.
 ///
 /// **Three words have a reading and everything else is the sentence.** The

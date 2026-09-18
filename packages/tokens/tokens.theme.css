@@ -151,6 +151,8 @@
   --spacing-max: var(--sidebar-max);
   --spacing-rail: var(--sidebar-rail);
   --spacing-run-column: var(--w-run-column);
+  --spacing-run-column-min: var(--w-run-column-min);
+  --spacing-step-panel-min: var(--w-step-panel-min);
   --spacing-dock: var(--w-dock);
   --spacing-dock-min: var(--w-dock-min);
   --spacing-work-min: var(--w-work-min);
