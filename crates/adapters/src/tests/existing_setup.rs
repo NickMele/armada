@@ -294,3 +294,19 @@ fn nothing_above_the_home_is_readable_through_it() {
     );
     assert!(home.entries("../..").is_err());
 }
+
+/// A server named for the program it runs says it once. Measured on the
+/// owner's machine: his `gitnexus` server runs a binary called `gitnexus`, and
+/// the row read `gitnexus gitnexus`.
+#[test]
+fn a_server_named_for_its_own_program_does_not_say_it_twice() {
+    let read = items(
+        &[(
+            ".claude.json",
+            r#"{"mcpServers":{"gitnexus":{"command":"/opt/bin/gitnexus"}}}"#,
+        )],
+        SetupKind::McpServers,
+    );
+    assert_eq!(read[0].name, "gitnexus");
+    assert_eq!(read[0].says, None);
+}

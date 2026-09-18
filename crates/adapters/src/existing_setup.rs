@@ -262,9 +262,13 @@ impl<F: SetupFiles> ExistingSetup<F> {
                 match ipc::decode::<UserConfig>("connected servers", &bytes) {
                     Ok(config) => {
                         for (name, server) in config.mcp_servers {
+                            // A server named for the program it runs says it
+                            // once: `gitnexus gitnexus` is a row that reads as
+                            // a rendering fault, measured on the owner's own.
+                            let shown = server.shown();
                             items.push(SetupItem {
+                                says: (shown != name).then_some(shown),
                                 name,
-                                says: Some(server.shown()),
                                 source: self.at(CONNECTED),
                             });
                         }
