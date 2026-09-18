@@ -538,10 +538,13 @@ combination nothing checked. `armada check hooks_test` proves the hook, and
 needs nothing built.
 
 **What it needs:** a clean tree, the branch pushed, an open pull request against
-`main`, `gh` signed in, and an `armada` on `PATH` that has the `covers` verb.
-Until a build carrying it is installed, point `ARMADA_LAND_ARMADA` at that
-binary by its **absolute** path — the gate runs in a worktree of its own, so a
-relative one is refused.
+`main`, `gh` signed in, and an `armada` on `PATH` — `scripts/land` is a shim
+that execs into `armada land`, so this is no longer optional the way it was
+when the script carried the whole implementation. `ARMADA_LAND_ARMADA` is a
+second, separate thing: what a *gated turn* shells out to for `covers`,
+`check` and `run`, which defaults to whatever is on `PATH` too but may point
+elsewhere by its **absolute** path — the gate runs in a worktree of its own,
+so a relative one is refused.
 
 **A gated turn takes minutes.** It keeps two worktrees under `.armada/land/` —
 one for the candidate, one for `main` itself — resets each to the commit it
