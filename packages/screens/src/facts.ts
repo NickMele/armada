@@ -9,7 +9,7 @@
 // # Readings, and the run is only readings now
 //
 // How long the Job has been going, what became of its pull request, who sent
-// it and what it replaced. **The repository and the branch left in #1481**,
+// it and what it replaced. **The repository and the branch left in #1484**,
 // and the argument is that they were already on the screen: *Where things are*
 // draws both, one column down, each behind its own glyph and its own label. A
 // value drawn twice is two values that can disagree, and the second copy was
@@ -58,7 +58,7 @@ import { LANDED, elapsedOf } from "./Row";
  * The run, in the order the drawing runs it: what is holding this Job, what
  * became of its pull request, how long it has been going, and where it came
  * from. **Every one of them a reading** — nothing here is a value a person
- * came to fetch, and #1481 is where the two that were left.
+ * came to fetch, and #1484 is where the two that were left.
  *
  * Run time is read off the row's own fields rather than off the detail. Both
  * carry them and cannot disagree — the detail is built from the same record —
@@ -254,7 +254,7 @@ function freezeFact(job: JobSummary): JobDetailField[] {
  * `Elapsed 10h 29m` on a Job that had been dead since the morning, because the
  * figure was measured against the clock rather than against the instant the
  * Job stopped. `elapsedOf` is where that is decided now, for the Board row and
- * for this line both — #1481 fixed the same defect in the same subtraction.
+ * for this line both — #1484 fixed the same defect in the same subtraction.
  *
  * **Run time, not Elapsed.** Elapsed names a stopwatch and says nothing about
  * what it is timing, and half of what this figure had to say was that it had
@@ -271,7 +271,7 @@ function runTimeFact(job: JobSummary, now: number): JobDetailField[] {
 // # The money spellings, which outlived the fact that needed them
 //
 // `spent` and `money` were written for the header's own `Spend`, and that fact
-// went to Pulse in #1481 while four other surfaces — the settings panel, a
+// went to Pulse in #1484 while four other surfaces — the settings panel, a
 // Helm thread, a cap warning and a verdict — had already come here for the
 // spelling. They stay because that is what they are now: one way to write a
 // figure Fleet reports in millionths, kept in one place so two screens cannot

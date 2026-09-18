@@ -910,7 +910,7 @@ line of facts beneath.
 
 > **Rule.** No screen carries a breadcrumb trail.
 > Why: Navigation is already the answer to where you are. Job detail carried a
-> two-segment one — `Overview ›` and then the Job — and #1481 took it out: the
+> two-segment one — `Overview ›` and then the Job — and #1484 took it out: the
 > first segment named the screen Bridge opens on whichever screen you actually
 > came from, and it was never wired, so it read as a way back and was not one.
 

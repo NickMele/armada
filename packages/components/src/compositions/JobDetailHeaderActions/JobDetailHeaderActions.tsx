@@ -2,7 +2,7 @@
 // current step names *which* step is working where this badge only names the
 // Job's state — so the rail carries the pulse and this badge does not.
 //
-// **The title is the title, since #1481.** It was the last segment of a
+// **The title is the title, since #1484.** It was the last segment of a
 // two-segment trail — `Overview ›` and then the Job — and the first segment
 // was never wired to anything: every caller passed `from` and none passed
 // `onLeave`, so it drew as grey text that looked like a way back and was not.
