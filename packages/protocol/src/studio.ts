@@ -91,11 +91,27 @@ export type StudioNodeContent =
 /** Where something on a forge stands. Since 14.18, #1394. */
 export type ForgeState = "open" | "closed" | "merged";
 
+/** Which of an Epic's issues a read-in takes. Since 14.20, #1405. */
+export type EpicTake = "everything" | "open";
+
 /**
  * How much of an Epic is on the Studio: how many of its issues are here, of
  * how many it holds. Absent until it is read in. Since 14.18, #1394.
+ *
+ * `took` is which of its issues the last read took, `left_out` how many that
+ * answer left out, and `kept` how many nodes it left standing because a person
+ * had worked on them. `took` is absent on an Epic read in before 14.20, whose
+ * answer nothing recorded. `laid_out_from` is the corner of the block its
+ * issues are in, which is Fleet's own bookkeeping. Since 14.20, #1405.
  */
-export type EpicRead = { issues: number; total: number };
+export type EpicRead = {
+  issues: number;
+  total: number;
+  took?: EpicTake;
+  left_out?: number;
+  kept?: number;
+  laid_out_from?: StudioPosition;
+};
 
 /**
  * What a Run node kept of its run once retention swept it: the result, and the
@@ -355,11 +371,18 @@ export type StopScout = { node_id: string };
  * one Link per issue. Since 14.16, #1293.
  *
  * `position` is where the first node it makes lands; the rest are laid out
- * from there.
+ * from there — except on an Epic already read in, which keeps the corner of
+ * its own block.
+ *
+ * `take` is which of an Epic's issues to take, and is asked on an Epic alone:
+ * every other kind has one thing to read and nothing to ask about. Reading an
+ * Epic in again with the other answer widens or narrows what is on the board.
+ * Since 14.20, #1405.
  */
 export type ReadInLink = {
   node_id: string;
   position: StudioPosition;
+  take?: EpicTake;
 };
 
 /**
@@ -430,9 +453,10 @@ export type StudioPromotion =
   | { act: "dispatch"; node_id: string; position: StudioPosition }
   /**
    * `POST /studios/:studio_id/read_in`. The Link stays, and what came back
-   * hangs off it. Since 14.16, #1293.
+   * hangs off it. `take` is asked on an Epic alone. Since 14.16, #1293;
+   * `take` since 14.20, #1405.
    */
-  | { act: "read_in"; node_id: string; position: StudioPosition };
+  | { act: "read_in"; node_id: string; position: StudioPosition; take?: EpicTake };
 
 /** Every act `StudioPromotion` spells, so main can refuse one it does not know. */
 export const STUDIO_PROMOTIONS = [

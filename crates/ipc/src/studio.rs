@@ -217,11 +217,37 @@ pub enum ForgeState {
     Merged,
 }
 
+/// Which of an Epic's issues a read-in takes — `core_model::EpicTake`, one for
+/// one. `#1405`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EpicTake {
+    /// Every issue the Epic holds, whatever state it is in.
+    Everything,
+    /// Only what the forge says is open.
+    Open,
+}
+
 /// How much of an Epic is on the Studio — `core_model::EpicRead`, one for one.
+/// `#1405`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EpicRead {
     pub issues: u64,
     pub total: u64,
+    /// Absent on an Epic read in before `#1405`, whose answer nothing recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub took: Option<EpicTake>,
+    /// How many of its issues the answer left out.
+    #[serde(default)]
+    pub left_out: u64,
+    /// How many nodes the read left standing because a person had worked on
+    /// them.
+    #[serde(default)]
+    pub kept: u64,
+    /// Where the read-in laid its issues out. Absent on an Epic read in before
+    /// `#1405`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub laid_out_from: Option<StudioPosition>,
 }
 
 /// What a Run node kept of its run, once retention swept the run away —
@@ -637,11 +663,33 @@ impl ForgeState {
     }
 }
 
+impl From<core_model::EpicTake> for EpicTake {
+    fn from(take: core_model::EpicTake) -> EpicTake {
+        match take {
+            core_model::EpicTake::Everything => EpicTake::Everything,
+            core_model::EpicTake::Open => EpicTake::Open,
+        }
+    }
+}
+
+impl EpicTake {
+    pub fn to_domain(self) -> core_model::EpicTake {
+        match self {
+            EpicTake::Everything => core_model::EpicTake::Everything,
+            EpicTake::Open => core_model::EpicTake::Open,
+        }
+    }
+}
+
 impl From<core_model::EpicRead> for EpicRead {
     fn from(read: core_model::EpicRead) -> EpicRead {
         EpicRead {
             issues: read.issues,
             total: read.total,
+            took: read.took.map(EpicTake::from),
+            left_out: read.left_out,
+            kept: read.kept,
+            laid_out_from: read.laid_out_from.map(StudioPosition::from),
         }
     }
 }
@@ -651,6 +699,10 @@ impl EpicRead {
         core_model::EpicRead {
             issues: self.issues,
             total: self.total,
+            took: self.took.map(EpicTake::to_domain),
+            left_out: self.left_out,
+            kept: self.kept,
+            laid_out_from: self.laid_out_from.map(StudioPosition::to_domain),
         }
     }
 }

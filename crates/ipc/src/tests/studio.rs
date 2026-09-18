@@ -305,12 +305,22 @@ fn a_forge_node_carries_its_number_its_title_and_where_it_stands() {
                 read_in: Some(core_model::EpicRead {
                     issues: 12,
                     total: 30,
+                    took: Some(core_model::EpicTake::Open),
+                    left_out: 18,
+                    kept: 2,
+                    laid_out_from: Some(core_model::StudioPosition { x: 400, y: 0 }),
                 }),
             })
             .expect("an Epic takes a count"),
     );
+    // **Which issues it took, what that left out and what it kept beside the
+    // count** — `#1405`, and the corner its block was laid out from.
     assert!(
-        epic.contains(r#""read_in":{"issues":12,"total":30}"#),
+        epic.contains(r#""read_in":{"issues":12,"total":30,"took":"open","left_out":18,"kept":2"#),
+        "{epic}"
+    );
+    assert!(
+        epic.contains(r#""laid_out_from":{"x":400,"y":0}"#),
         "{epic}"
     );
     // An Epic holds no state at all: where it stands is the sum of its issues.
