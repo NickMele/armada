@@ -38,10 +38,11 @@ test("the dock opens on a conversation, both voices in it and the answer that ne
   // And the failure the record's controls exist for — a second ask with
   // nothing behind it. Without this the split button stands in no moment.
   // Fleet's own sentence, whole and unframed on both surfaces — the thread's
-  // "No reply came. " and the record's "no reply came: " are gone.
-  await expect
-    .element(page.getByText("Helm's door would not be configured: Permission denied (os error 13)"))
-    .toBeVisible();
+  // "No reply came. " and the record's "no reply came: " are gone. Read off
+  // the row's whole text, because a substring match reads the same either way.
+  const failed = page.getByText("Helm's door would not be configured: Permission denied (os error 13)");
+  await expect.element(failed).toBeVisible();
+  expect(failed.element().textContent).toBe("Helm's door would not be configured: Permission denied (os error 13)");
 });
 
 test("pointed at a repository, the composer takes a message", async () => {
