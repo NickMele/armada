@@ -53,8 +53,9 @@ const WENT_QUIET = "Helm's door would not be configured: Permission denied (os e
 
 /**
  * The conversation, as `helmArrived` would have folded it off the socket: an
- * ask, the reply and its cost, a second ask, and no answer to it. **The failed
- * answer is the point** — the record's *Copy debug info* and *Details* exist
+ * ask, the reply and its cost, a second ask, the session it could not resume,
+ * and no answer to it. **The failed answer is the point** — the record's
+ * *Copy debug info* and *Details* exist
  * for a bad answer somebody wants to carry to whoever could fix it (#1367), and
  * a conversation where nothing went wrong never shows them in their own moment.
  *
@@ -91,7 +92,14 @@ const CONVERSATION: HelmThreadItem[] = [
     ts: "2026-09-10T14:33:48.000Z",
     text: "which test is it, and does it fail on main too",
   },
-  { kind: "unanswered", id: "5", ts: "2026-09-10T14:33:50.000Z", why: WENT_QUIET },
+  // **Bridge's own line, directly above Fleet's.** The second ask could not
+  // resume the stored session, so a new one was started and that one's door
+  // would not come up. It is here because the two lines a thread writes for
+  // itself — this one Bridge words, the next one Fleet does — were not
+  // drawable together in any scenario, and a split between them is only
+  // visible where they sit in one column.
+  { kind: "fresh", id: "5", ts: "2026-09-10T14:33:49.000Z", because: "session_not_found" },
+  { kind: "unanswered", id: "6", ts: "2026-09-10T14:33:50.000Z", why: WENT_QUIET },
 ];
 
 /**
@@ -134,6 +142,7 @@ const RECORD: HelmDebugInfo = {
       line: "asked",
       text: { text: "which test is it, and does it fail on main too" },
     },
+    { at: "2026-09-10T14:33:49.000Z", line: "fresh" },
     { at: "2026-09-10T14:33:50.000Z", line: "unanswered", why: WENT_QUIET },
   ],
   cut: 0,

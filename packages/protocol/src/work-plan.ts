@@ -58,8 +58,10 @@ export type PlanTask = {
 
 /**
  * From the change that marked a task `working` to the change that moved it
- * out. **A turn belongs to the task whose window holds its instant**, never to
- * one whose words match its path. `left` is absent while it is still working.
+ * out. **A turn belongs to the task whose window holds its instant** — and an
+ * Edit no window holds, to the task whose `scope` names the file (`#1498`).
+ * Never to one whose words match its path. `left` is absent while it is still
+ * working.
  */
 export type WorkingWindow = {
   entered: string;
