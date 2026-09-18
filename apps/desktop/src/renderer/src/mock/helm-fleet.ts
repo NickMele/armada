@@ -43,14 +43,11 @@ const ANSWER = [
  * sharpest thing a person can press *Copy debug info* about, since `door` is a
  * field of the record itself.
  *
- * **Two nearer failures were tried and are not this.** The reply-budget
- * timeout says "no reply came within 900 seconds…", and both surfaces that
- * draw a `why` put their own lead-in in front of it — the thread's "No reply
- * came." and the record's "no reply came: " — so it reads doubled in two
- * places; that is Fleet's string to fix and this scenario should not be what
- * makes it look deliberate. The agent CLI failing to launch names the CLI,
- * which the vendor-literal rule refuses outside `crates/adapters` — a fixture
- * is not an adapter.
+ * **A nearer failure was tried and is not this.** The agent CLI failing to
+ * launch names the CLI, which the vendor-literal rule refuses outside
+ * `crates/adapters` — a fixture is not an adapter. The reply-budget timeout
+ * would now draw as well as this one does: neither surface frames a `why` any
+ * more, which is what `crates/fleet/src/helm/unanswered.rs` settled.
  */
 const WENT_QUIET = "Helm's door would not be configured: Permission denied (os error 13)";
 

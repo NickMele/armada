@@ -25,6 +25,8 @@ use crate::detach::Detached;
 use crate::drone::{environment, HostPaths};
 use crate::session::Turn;
 
+use super::unanswered;
+
 /// One message, as a host is asked to carry it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Carry {
@@ -109,7 +111,7 @@ impl Drop for Listed<'_> {
 /// module doc names. This bounds one reply's own length instead, which is a
 /// different question and, like the model above, has no settings row of its
 /// own to read.
-const REPLY_BUDGET: Duration = Duration::from_secs(15 * 60);
+pub(crate) const REPLY_BUDGET: Duration = Duration::from_secs(15 * 60);
 
 /// The agent's door as a repository's `.mcp.json` names it —
 /// `crates/armada/src/mcp.rs`. **Spelled twice**, because `fleet` cannot name
@@ -155,6 +157,14 @@ impl ProcessHost {
         }
     }
 
+    /// The same host under a shorter budget, so a test can watch one run out
+    /// rather than wait [`REPLY_BUDGET`] for it.
+    #[cfg(test)]
+    pub(crate) fn answering_within(mut self, budget: Duration) -> ProcessHost {
+        self.budget = budget;
+        self
+    }
+
     /// The CLI on the Drone's `PATH`, with the Drone's environment, and the
     /// door's file beside the Drone's own.
     ///
@@ -182,7 +192,9 @@ impl ProcessHost {
     }
 
     fn launch(&self, carry: &Carry) -> Result<Launch, Carried> {
-        let failed = |why: String| Carried::Failed { why };
+        let failed = |why: String| Carried::Failed {
+            why: unanswered::no_session_started(why),
+        };
         let model = Model::named(&self.model).map_err(|why| failed(why.said()))?;
         let door = McpConfig::only_these(&self.door.to_string_lossy())
             .map_err(|why| failed(why.said()))?;
@@ -209,7 +221,7 @@ impl ProcessHost {
     async fn carried(&self, carry: Carry, heard: &dyn Heard) -> Carried {
         let failed = |why: String| Carried::Failed { why };
         if let Err(why) = adapters::publish_the_agents_door(&self.door, DOOR_PROGRAM, DOOR_ARGS) {
-            return failed(format!("Helm's door would not be configured: {why}"));
+            return failed(unanswered::door_unconfigured(why));
         }
         let launch = match self.launch(&carry) {
             Ok(launch) => launch,
@@ -221,18 +233,18 @@ impl ProcessHost {
             .spawn()
         {
             Ok(child) => child,
-            Err(why) => return failed(format!("{} would not start: {why}", launch.program())),
+            Err(why) => return failed(unanswered::would_not_start(launch.program(), why)),
         };
         let pid = child.id();
         let _listed = Listed::while_running(&self.running, pid);
         let (Some(mut input), Some(output), Some(mut complaints)) =
             (child.stdin.take(), child.stdout.take(), child.stderr.take())
         else {
-            return failed("the session was gone before Fleet could hold on to it".into());
+            return failed(unanswered::lost_before_held());
         };
         let turn = match ipc::encode(&Turn::first(&carry.turn)) {
             Ok(turn) => turn + "\n",
-            Err(why) => return failed(why.to_string()),
+            Err(why) => return failed(unanswered::message_not_encoded(why)),
         };
         // A session that exits before reading is the unknown-id case, and its
         // own stdout says so, so a broken pipe is read past rather than raised.
@@ -240,7 +252,7 @@ impl ProcessHost {
         drop(input);
         if let Err(why) = written.as_ref() {
             if why.kind() != std::io::ErrorKind::BrokenPipe {
-                return failed(format!("the message could not be written: {why}"));
+                return failed(unanswered::message_not_written(why));
             }
         }
         let complained = tokio::spawn(async move {
@@ -277,17 +289,14 @@ impl ProcessHost {
                     crate::group::end_the_group(group);
                 }
                 let _ = child.wait().await;
-                failed(format!(
-                    "no reply came within {} seconds, so the session was ended",
-                    self.budget.as_secs()
-                ))
+                failed(unanswered::nothing_came_back(self.budget))
             }
             Ok((Some(session), _)) => Carried::Answered { session },
             Ok((None, _)) if carry.resuming.is_some() => Carried::NoSuchSession,
             Ok((None, status)) => {
                 let complaint = complained.await.unwrap_or_default();
                 let exited = status.map(|status| status.to_string()).unwrap_or_default();
-                failed(format!("the session never started ({exited}): {complaint}"))
+                failed(unanswered::never_started(&exited, &complaint))
             }
         }
     }

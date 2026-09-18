@@ -20,7 +20,7 @@ use ipc::{
 
 use super::conversation::{Conversation, ConversationKey};
 use super::hosting::{Carried, Carry, Heard};
-use super::{brief, recording, Authority};
+use super::{brief, recording, unanswered, Authority};
 use crate::clock::Clock;
 use crate::daemon::Fleet;
 use crate::repositories::Served;
@@ -200,7 +200,7 @@ where
     fn helm_fault(&self, why: impl std::fmt::Display) -> Refusal {
         Refusal::Fault(WireError::raised(
             HELM_SESSION_UNREADABLE,
-            format!("the conversation's stored session: {why}"),
+            unanswered::stored_session_unreachable(why),
             self.run_id(),
         ))
     }
@@ -268,7 +268,7 @@ where
             .lock()
             .await
             .helm_session(key.as_str())
-            .map_err(|why| format!("the conversation's session would not read: {why}"))?;
+            .map_err(unanswered::session_would_not_read)?;
         let host = self.helm().host();
         let authority = self.helm_authority();
         let mut carried = host
@@ -282,7 +282,7 @@ where
                 .lock()
                 .await
                 .forget_helm_session(key.as_str())
-                .map_err(|why| format!("the lost session would not be forgotten: {why}"))?;
+                .map_err(unanswered::lost_session_not_forgotten)?;
             heard.conversation.thread.say(HelmMessage::Fresh(HelmFresh {
                 ts: Instant::from(&self.now()),
                 because: Freshness::SessionNotFound,
@@ -297,10 +297,8 @@ where
                 .lock()
                 .await
                 .keep_helm_session(key.as_str(), &session, &self.now())
-                .map_err(|why| {
-                    format!("Helm answered, and its session would not be kept for next time: {why}")
-                }),
-            Carried::NoSuchSession => Err("the agent had no session to resume".to_string()),
+                .map_err(unanswered::session_not_kept),
+            Carried::NoSuchSession => Err(unanswered::no_session_to_resume()),
             Carried::Failed { why } => Err(why),
         }
     }

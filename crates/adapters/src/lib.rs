@@ -47,6 +47,8 @@ mod commit;
 mod conversing;
 mod delivery;
 mod error;
+/// The setup a person already has, read to be shown. `#1491`.
+mod existing_setup;
 mod filing;
 mod git_guard;
 mod harness;
@@ -82,6 +84,7 @@ pub use conversing::{
     CHANGES_THE_CHECKOUT,
 };
 pub use error::{CommitWorkError, CreateWorktreeError, ReadWorkProductError};
+pub use existing_setup::{ExistingSetup, Home};
 pub use harness::{
     ask_tool, checks_tool, dispatch_tool, evidence_server, evidence_tool, fix_tool, note_tool,
     permission_tool, scope_tool, server_tool, widen_tool, HarnessRefused, HeadlessAgent,

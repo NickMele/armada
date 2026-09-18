@@ -172,6 +172,7 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
     listRepositoryAllowedCommands: async () => refused("/manifest/allowed-commands"),
     removeRepositoryAllowedCommand: async () => refused("/manifest/allowed-commands"),
 
+    readKitInventory: async () => refused("/kit/inventory"),
     listKitServers: async () => refused("/kit/servers"),
     addKitServer: async () => refused("/kit/servers"),
     forgetKitServer: async () => refused("/kit/servers"),

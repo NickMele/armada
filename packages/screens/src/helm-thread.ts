@@ -89,7 +89,10 @@ export function helmRowsOf(items: readonly HelmThreadItem[]): HelmFoldedRow[] {
     }
     if (item.kind === "unanswered") {
       flush();
-      rows.push({ id: item.id, at: clock(item.ts), actor: "helm", message: `No reply came. ${item.why}` });
+      // Fleet's sentence whole and unframed. A lead-in here was a second
+      // producer of one sentence, and the reply-budget timeout said the same
+      // thing twice; `crates/fleet/src/helm/unanswered.rs` owns it now.
+      rows.push({ id: item.id, at: clock(item.ts), actor: "helm", message: item.why });
       continue;
     }
     // item.kind === "row"
