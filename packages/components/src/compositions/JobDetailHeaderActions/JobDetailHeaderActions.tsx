@@ -80,6 +80,22 @@ export type JobDetailField = {
    */
   href?: string;
   /**
+   * The Job this fact names, for a fact that points *inside* Armada.
+   *
+   * **`href`'s twin, and not `href`.** A fact pointing outward carries an
+   * address, draws as an anchor and leaves the app through `onFollowed`; this
+   * one carries an id, draws as a button and stays. Spelling an in-app
+   * destination as an address would make `onFollowed` answer two questions,
+   * and a caller that reads its argument as a forge address would open the
+   * wrong thing.
+   *
+   * Drawn in `--accent` the same way, because the affordance is the same:
+   * press the value and land on what it names. **Without `onOpenJob` it draws
+   * as plain text** — no control where there is nowhere to go, the rule the
+   * replaced-job callout already keeps.
+   */
+  opensJob?: string;
+  /**
    * The words after the value, where the fact reads as a sentence around it —
    * `All 4 of 4 steps advanced`. Sans, and never part of the mono run.
    */
@@ -132,6 +148,12 @@ export type JobDetailHeaderActionsProps = {
    * the app means.
    */
   onFollowed?: (href: string) => void;
+  /**
+   * A fact with an `opensJob` was pressed. **The host navigates, not this** —
+   * the same division `onFollowed` keeps, one screen in rather than one app
+   * out.
+   */
+  onOpenJob?: (jobId: string) => void;
 };
 
 export function JobDetailHeaderActions({
@@ -144,6 +166,7 @@ export function JobDetailHeaderActions({
   actions,
   onCopied,
   onFollowed,
+  onOpenJob,
   from,
   onLeave,
 }: JobDetailHeaderActionsProps) {
@@ -227,7 +250,18 @@ export function JobDetailHeaderActions({
                     {field.value !== undefined ? " " : null}
                   </>
                 ) : null}
-                {field.value === undefined ? null : field.href !== undefined ? (
+                {field.value === undefined ? null : field.opensJob !== undefined &&
+                  onOpenJob !== undefined ? (
+                  <button
+                    type="button"
+                    className="armada-job-head__value"
+                    data-mono={field.mono || undefined}
+                    data-opens=""
+                    onClick={() => onOpenJob(field.opensJob as string)}
+                  >
+                    {field.value}
+                  </button>
+                ) : field.href !== undefined ? (
                   <a
                     className="armada-job-head__value"
                     data-mono={field.mono || undefined}

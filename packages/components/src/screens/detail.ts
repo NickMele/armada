@@ -33,6 +33,14 @@ export type JobDetailHeading = {
    */
   onFollowed?: (href: string) => void;
   /**
+   * A fact carrying an `opensJob` was pressed, with the Job id it names.
+   *
+   * Rides on the heading for `onFollowed`'s reason, and is the inward half of
+   * the same pair: one fact in this block points at another Job, and where
+   * that press lands is one decision made in one place.
+   */
+  onOpenJob?: (jobId: string) => void;
+  /**
    * The trail's first segment — the screen this Job was opened from,
    * `Overview`. Absent draws no trail: the badge and the title alone, for a
    * caller that has not said where "back" goes.

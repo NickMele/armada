@@ -546,6 +546,8 @@ Three fields, three readers, and none of them substitutes for another.
 
 `redispatched_from` is the whole record of a redispatch, and it is written once — on the replacement, at creation. Read as a column it says which Job this one replaced. Read as a predicate it says which Job replaced *that* one, which is what a person who lands on the Job that was killed needs and had no way to get: Job detail carries it as `replaced_by`, names the Job that took the work on, and opens it in one press. #1439.
 
+**The id is the record, and the name is a read.** The column holds a ULID, which names nothing a person has seen — so Job detail follows it to the predecessor's own row and carries the number and title back as `replaces`, the way `replaced_by` already carries its successor's. Both ends read a name on open, neither stores one, and `core_model` composes the one handle both directions draw. #1474.
+
 **One fact, never two columns.** A stored forward link is a second write that can disagree with the first, and it outlives what it points at — a replacement that has been forgotten would leave the original naming a Job nobody holds. Deriving the reverse means the answer cannot outlive its own row: forgetting the replacement takes the link, and the Job goes back to reading as one that merely stopped, which by then is all anything knows. Giving a replacement's worktree back keeps its record, so it keeps the link.
 
 **The direct successor, never the end of the chain.** A replacement that is itself redispatched answers the same question for itself, so a chain of five is read a hop at a time by the five Jobs on it. Nothing walks it, which is why nothing can loop.

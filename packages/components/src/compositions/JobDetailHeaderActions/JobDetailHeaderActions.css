@@ -143,8 +143,11 @@ button.armada-job-head__back:hover {
   flex: none;
 }
 
-/* A fact that points outside Armada draws in --accent, which the design
-   contract gives to links, and underlines only on hover. Accent at rest rather
+/* A fact that points somewhere draws in --accent, which the design contract
+   gives to links, and underlines only on hover. One treatment for both kinds:
+   an anchor where the fact points outside Armada, a button where it points at
+   another Job — the affordance a person reads is the same, so the drawing is.
+   Accent at rest rather
    than on hover alone, unlike the copy affordance above: copying is discovered
    because every mono value in the run does it, and a link that looked like
    plain text until the pointer reached it would be a thing nobody knows is
@@ -158,6 +161,14 @@ button.armada-job-head__back:hover {
   cursor: pointer;
   text-decoration: none;
   transition: color var(--duration-fast) var(--ease);
+}
+
+/* The button form sits on the run's baseline and takes its type, so a fact
+   that opens a Job draws as one more reading rather than as a control. */
+button.armada-job-head__value {
+  font: inherit;
+  padding: 0;
+  vertical-align: baseline;
 }
 
 .armada-job-head__value[data-opens]:hover {
