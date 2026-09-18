@@ -28,6 +28,7 @@ const NOT_FOLLOWING: FollowedLog = { state: "none" };
 import { useFrames } from "./frames";
 import { openArtifact } from "./opening";
 import { planOf } from "./plan";
+import { declaredAgainstTouched, editsIn, filesByTask } from "./task-files";
 import { DIFF_CHAPTER, LOG_CHAPTER, useDetailKeys } from "./detail-keys";
 import { named } from "./run-labels";
 import { useAtFloor } from "@armada/shell";
@@ -638,6 +639,23 @@ function OneJob({
   // Read once: `plan` gates both the region and its own eyebrow act, and a
   // second call would be a second, possibly different, reading of `whole`.
   const plan = planOf(whole);
+  // `#1432`. What the open task said it would touch against what it did, from
+  // the Job's own turns rather than the step's — a task's files include what
+  // it wrote on an earlier run, `grouped.tsx`'s rule for the same reading.
+  // Built here because the inputs are this screen's: `Sheets` holds neither.
+  const taskTouched =
+    onSheet.which !== "task" || whole?.work_plan === undefined
+      ? undefined
+      : declaredAgainstTouched(
+          whole.work_plan.tasks.find((task) => task.id === onSheet.taskId)?.scope ?? [],
+          filesByTask(
+            editsIn(turns, whole.work_plan.tasks),
+            // The patch where it has been read. A task's own edits name their
+            // paths either way; the diff is what turns a call's path into the
+            // repository's, so without it the paths are the calls' own.
+            recorded.diff.state === "read" ? (recorded.diff.work?.files ?? []) : [],
+          ).get(onSheet.taskId) ?? [],
+        );
 
   return (
     <InsideAJob
@@ -801,6 +819,7 @@ function OneJob({
             now={now}
             checkId={openCheckId}
             {...(onSheet.which === "task" ? { taskId: onSheet.taskId } : {})}
+            {...(taskTouched === undefined ? {} : { taskTouched })}
             planTasks={plan?.recorded === true ? plan.tasks : undefined}
             outputs={outputs}
             following={following}

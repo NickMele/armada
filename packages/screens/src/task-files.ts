@@ -125,6 +125,38 @@ export function unownedOf(edits: readonly Edit[], diff: readonly ChangedFile[]):
 }
 
 /** What a task's file numbers are. */
+/** One path a task named, and whether its work reached it. */
+export type DeclaredFile = { path: string; touched: boolean };
+
+/**
+ * What a task said it would touch, against what it did.
+ *
+ * **A declared path may be a directory**, and a file under it counts against
+ * it — `declare_scope` takes both, and one real Job declared `crates/ipc`
+ * and edited `crates/ipc/operations.toml`. This is `verification::InScope`'s
+ * rule, read on Bridge's side of the same question.
+ *
+ * **Neither half is an error.** A declared path nothing touched is often a
+ * planner being thorough, and a touched path nobody declared is often the work
+ * finding the real seam — `crates/fleet/src/scope.rs` refuses to fail a step
+ * for either, and a task has less standing than a step, not more.
+ */
+export function declaredAgainstTouched(
+  declared: readonly string[],
+  touched: readonly TaskFile[],
+): { declared: DeclaredFile[]; unplanned: string[] } {
+  const paths = touched.map((file) => file.path);
+  const under = (path: string, named: string): boolean =>
+    path === named || path.startsWith(named.endsWith("/") ? named : `${named}/`);
+  return {
+    declared: declared.map((named) => ({
+      path: named,
+      touched: paths.some((path) => under(path, named)),
+    })),
+    unplanned: paths.filter((path) => !declared.some((named) => under(path, named))),
+  };
+}
+
 export const EDIT_SIZES = "sizes of its edits, not the diff";
 
 /** What the numbers in the row no task owns are. */
