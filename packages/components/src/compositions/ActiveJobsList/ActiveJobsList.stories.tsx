@@ -476,8 +476,11 @@ async function everyRowReads(canvasElement: HTMLElement) {
     // Eight ems of title is a phrase, where the title used to keep a letter or two.
     await expect(title.getBoundingClientRect().width).toBeGreaterThanOrEqual(parseFloat(getComputedStyle(title).fontSize) * 8);
     await expect(handle.scrollWidth).toBeLessThanOrEqual(handle.clientWidth);
-    await expect(handle.getBoundingClientRect().right).toBeLessThanOrEqual(headline.right);
-    await expect(handle.getBoundingClientRect().bottom).toBeLessThanOrEqual(headline.bottom);
+    // The handle is under the title in the title's own column, not beside it:
+    // beside, each one started wherever its title ended.
+    await expect(handle.getBoundingClientRect().right).toBeLessThanOrEqual(frame.right);
+    await expect(handle.getBoundingClientRect().left).toBeCloseTo(headline.left, 0);
+    await expect(handle.getBoundingClientRect().top).toBeGreaterThanOrEqual(headline.bottom);
   }
 }
 
