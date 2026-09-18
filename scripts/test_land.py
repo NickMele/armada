@@ -8,6 +8,15 @@
 #   python3 scripts/test_land.py
 #
 # Beside the script because no Python test in this repository has a home yet.
+#
+# `Line` runs every test against the real `armada land` (Rust) — the stub
+# `armada`'s own `land` case execs into it. `LineViaFallback` runs the same
+# 37 tests again with that forwarding switched off, so the stub's `land`
+# case answers "not one of armada's verbs" instead and `scripts/land` falls
+# back to `scripts/land_py`, exactly as it does against a real installed
+# `armada` that predates this verb. `LineAcrossImplementations` is the
+# narrower proof that the two share their on-disk state: one implementation
+# preflights or lands what the other queued or gated.
 
 import json
 import os
@@ -21,7 +30,20 @@ import textwrap
 import unittest
 from hashlib import sha256
 
-LAND = os.path.join(os.path.dirname(os.path.abspath(__file__)), "land")
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LAND = os.path.join(HERE, "scripts", "land")
+LAND_PY = os.path.join(HERE, "scripts", "land_py")
+REAL_ARMADA = os.path.join(HERE, "target", "debug", "armada")
+
+
+def setUpModule():
+    # `armada.yml`'s `run:` gets no shell to chain a build onto, so the one
+    # command this Check declares has to be the one thing that both builds
+    # and runs. A `Line` test that finds no binary here skips with a clearer
+    # reason than a build failure buried inside it would give.
+    subprocess.run(
+        ["cargo", "build", "--quiet", "-p", "armada"], cwd=HERE, check=False
+    )
 
 # `gh pr view` and `gh pr merge`, over a JSON file of pull requests. The merge
 # refuses anything but `--merge --match-head-commit`, so a regression to a
@@ -95,6 +117,16 @@ else:
 
 # `covers` reads `checks.json` in the working directory: a Check name to a list
 # of path prefixes, or null for always. `check <name>` runs `checks/<name>.sh`.
+#
+# `land` is answered two ways, chosen by whether `STUB_ARMADA_LAND` is set in
+# the environment — never by anything on the command line, so this is a
+# fixture decision, not a value `scripts/land` itself could be tricked into
+# passing through. Set, it execs into the real binary named there, exactly
+# as an installed `armada` that already knows the verb would answer it
+# itself. Unset, it answers the way an `armada` built before this verb
+# existed actually answers an unknown one — `crates/armada/src/cli.rs`'s own
+# wording — so `scripts/land`'s fallback detection is exercised against the
+# real sentence, not a fixture's paraphrase of it.
 STUB_ARMADA = r'''#!/usr/bin/env python3
 import json, os, subprocess, sys
 args = sys.argv[1:]
@@ -109,6 +141,14 @@ elif args[:1] == ["check"]:
 elif args[:1] == ["run"]:
     open(f"{args[1]}.stamp", "w").write("prepared\n")
     sys.exit(0)
+elif args[:1] == ["land"]:
+    real = os.environ.get("STUB_ARMADA_LAND")
+    if not real:
+        sys.exit(
+            "`land` is not one of armada's verbs — they are `serve`, `check`, "
+            "`run`, `covers`, `clean`, `mcp`"
+        )
+    os.execv(real, [real, *args])
 else:
     sys.exit(f"stub armada: {args}")
 '''
@@ -135,7 +175,24 @@ def sh(*argv, cwd=None, env=None, check=True):
     return done
 
 
-class Line(unittest.TestCase):
+class LineFixture(unittest.TestCase):
+    """The bare-remote-and-stubs harness, with no test methods of its own —
+    `Line` adds the 37, `LineAcrossImplementations` adds three narrower
+    ones, and neither inherits the other's so the same scenario is never
+    silently run twice under one implementation."""
+
+    # Which binary the stub's own `land` case forwards to — the real
+    # `armada`, built by this crate's own `cargo build -p armada`.
+    # `LineViaFallback` overrides this to answer `None`, which is the one
+    # difference between the two: every other fixture, every other test
+    # method, and every other env var stays exactly as it is here.
+    def stub_armada_land(self):
+        if not os.path.exists(REAL_ARMADA):
+            raise unittest.SkipTest(
+                f"{REAL_ARMADA} does not exist — `cargo build -p armada` first"
+            )
+        return REAL_ARMADA
+
     def setUp(self):
         self.root = os.path.realpath(tempfile.mkdtemp(prefix="land-"))
         self.remote = os.path.join(self.root, "remote.git")
@@ -150,6 +207,7 @@ class Line(unittest.TestCase):
             os.chmod(path, 0o755)
         with open(self.prs, "w") as out:
             out.write("{}")
+        stub_land = self.stub_armada_land()
         self.env = dict(
             os.environ,
             ARMADA_LAND_GH=os.path.join(stubs, "gh"),
@@ -160,6 +218,7 @@ class Line(unittest.TestCase):
             ARMADA_LAND_KEEP="node_modules",
             LAND_TEST_EVIDENCE=os.path.join(self.root, "evidence.txt"),
             ARMADA_LAND_HEAD_WAIT="10",
+            **({"STUB_ARMADA_LAND": stub_land} if stub_land else {}),
             STUB_GH_STATE=self.prs,
             STUB_REMOTE=self.remote,
             GIT_CONFIG_GLOBAL="/dev/null",
@@ -290,8 +349,11 @@ class Line(unittest.TestCase):
         """What the turn wrote a log for, apart from the merge itself."""
         return sorted(set(os.listdir(self.state_file("logs", key(branch)))) - {"merge.log"})
 
-    # ------------------------------------------------------------ the claims
 
+# ---------------------------------------------------------------- the claims
+
+
+class Line(LineFixture):
     def test_two_back_to_back_the_second_reruns_red_and_does_not_merge(self):
         one = self.branch("fix/one", {"one.txt": "1\n"})
         two = self.branch("fix/two", {"two.txt": "2\n"})
@@ -649,12 +711,15 @@ class Line(unittest.TestCase):
         self.assertNotIn("late.txt", self.main_files())
 
     def test_the_setup_default_says_what_the_manifest_requires(self):
-        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        manifest = open(os.path.join(here, "armada.yml")).read()
+        # `scripts/land` is a shim and declares no default of its own now;
+        # `scripts/land_py` still does, for real, as the fallback it is —
+        # and `crates/armada/src/land/env.rs` has its own copy of this same
+        # assertion for the Rust default.
+        manifest = open(os.path.join(HERE, "armada.yml")).read()
         requires = manifest.split("setup:")[1].split("requires:")[1].split("seed:")[0]
         wanted = [line.strip("- \n") for line in requires.splitlines() if line.strip().startswith("-")]
-        default = open(LAND).read().split('ARMADA_LAND_SETUP", "')[1].split('"')[0].split()
-        self.assertEqual(default, wanted, "the copy of setup.requires in scripts/land has drifted")
+        default = open(LAND_PY).read().split('ARMADA_LAND_SETUP", "')[1].split('"')[0].split()
+        self.assertEqual(default, wanted, "the copy of setup.requires in scripts/land_py has drifted")
 
     def test_the_manifest_gates_both_of_the_line_s_suites(self):
         """Asserted here because this file may name the agent harness's own
@@ -904,6 +969,123 @@ class Line(unittest.TestCase):
         done = self.land(where, "preflight", check=False)
         self.assertEqual(done.returncode, 1)
         self.assertIn("stray.txt", done.stderr)
+
+
+class LineViaFallback(Line):
+    """Every one of `Line`'s 37 tests again, with the stub's `land` case
+    refusing to forward — so `scripts/land` falls back to `scripts/land_py`
+    for every one of them, the way it does against a real installed
+    `armada` that predates this verb. Nothing else about the fixtures
+    changes: same stub `gh`, same `checks.json`, same env vars."""
+
+    def stub_armada_land(self):
+        return None
+
+
+class LineAcrossImplementations(LineFixture):
+    """An agent may queue a branch under one implementation and have it
+    gated by the other while installs are mixed — a preflight stamp, a
+    queue entry, or an outcome one implementation wrote has to be exactly
+    what the other reads. `stub_armada_land` is switched mid-test, which
+    only ever changes what `land`'s own `land` case in the *next* call
+    forwards to; every state file on disk is read fresh each time."""
+
+    def setUp(self):
+        super().setUp()
+        # `Line.setUp` already required and set the real binary; this class
+        # additionally needs `scripts/land_py` runnable directly, which it
+        # always is — no build step of its own.
+
+    def as_rust(self):
+        self.env["STUB_ARMADA_LAND"] = REAL_ARMADA
+
+    def as_fallback(self):
+        self.env.pop("STUB_ARMADA_LAND", None)
+
+    def test_preflighted_under_rust_lands_under_the_fallback(self):
+        where = self.branch("fix/mixed-a", {"x.txt": "1\n"})
+        self.as_rust()
+        self.land(where, "preflight")
+        stamp_path = self.state_file("stamps", key("fix/mixed-a") + ".json")
+        self.assertTrue(os.path.exists(stamp_path), "the key the fallback reads is the key Rust wrote")
+
+        self.as_fallback()
+        self.land(where)
+        done = self.settle(where, "fix/mixed-a")
+        self.assertEqual(done.returncode, 0, done.stdout)
+
+        # The outcome the fallback's runner wrote is read the same way by
+        # either implementation's `--status`.
+        self.as_rust()
+        self.assertEqual(self.land(where, "--status", "fix/mixed-a", check=False).returncode, 0)
+        self.as_fallback()
+        self.assertEqual(self.land(where, "--status", "fix/mixed-a", check=False).returncode, 0)
+
+    def test_preflighted_under_the_fallback_lands_under_rust(self):
+        where = self.branch("fix/mixed-b", {"x.txt": "1\n"})
+        self.as_fallback()
+        self.land(where, "preflight")
+        stamp_path = self.state_file("stamps", key("fix/mixed-b") + ".json")
+        self.assertTrue(os.path.exists(stamp_path), "the key Rust reads is the key the fallback wrote")
+
+        self.as_rust()
+        self.land(where)
+        done = self.settle(where, "fix/mixed-b")
+        self.assertEqual(done.returncode, 0, done.stdout)
+
+        self.as_fallback()
+        self.assertEqual(self.land(where, "--status", "fix/mixed-b", check=False).returncode, 0)
+        self.as_rust()
+        self.assertEqual(self.land(where, "--status", "fix/mixed-b", check=False).returncode, 0)
+
+    def test_the_foundations_and_checks_caches_are_shared_across_implementations(self):
+        # All three cut before any of them land, matching
+        # `Line.test_a_check_already_red_on_main_is_not_the_branchs_fault`:
+        # each has to still be behind once `broken` lands, so its own turn
+        # sees `main` moved and reruns the Check `broken` just carried
+        # into it — including `once_more`, cut here rather than after
+        # `broken`/`after` settle, or its own turn would see `main`
+        # unmoved and rerun nothing.
+        original_head = self.main_head()
+        broken = self.branch("fix/mixed-breaks-on-main", {"checks/test.sh": "exit 1\n"})
+        after = self.branch("fix/mixed-after-a-red-main", {"after.txt": "1\n"})
+        once_more = self.branch("fix/mixed-once-more", {"once-more.txt": "1\n"})
+
+        self.as_rust()
+        self.land(broken, "preflight")
+        self.land(broken)
+        self.assertEqual(self.settle(broken, "fix/mixed-breaks-on-main").returncode, 0)
+
+        cached_foundations = self.state_file("foundations", original_head + ".txt")
+        self.assertTrue(os.path.exists(cached_foundations), "Rust's turn cached main's own foundations run")
+
+        self.as_fallback()
+        self.land(after, "preflight")
+        self.land(after)
+        done = self.settle(after, "fix/mixed-after-a-red-main")
+        self.assertEqual(done.returncode, 7, done.stdout)
+        self.assertIn("already fails on main", done.stdout)
+        # Read as the same cache, not recomputed: the fallback's own
+        # `base_foundations` only ever writes this file when the cached one
+        # is not already a report, and it still holds Rust's report.
+        self.assertTrue(open(cached_foundations).read().startswith("report\n"))
+
+        # `after`'s own turn (the fallback) is what wrote the on-main
+        # verdict for `test` against the post-`broken` base — `once_more`,
+        # cut from the same point and landed under Rust, has to read that
+        # same verdict rather than recompute it.
+        checks_cache = self.state_file("checks", self.main_head() + ".json")
+        self.assertTrue(os.path.exists(checks_cache), "the fallback's turn cached the on-main verdict")
+        known = load(checks_cache)
+        self.assertIn("test", known)
+
+        self.as_rust()
+        self.land(once_more, "preflight")
+        self.land(once_more)
+        done = self.settle(once_more, "fix/mixed-once-more")
+        self.assertEqual(done.returncode, 7, done.stdout)
+        self.assertIn("already fails on main", done.stdout)
+        self.assertEqual(load(checks_cache), known, "Rust's turn read the cache rather than rewriting it")
 
 
 if __name__ == "__main__":
