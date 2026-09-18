@@ -4,6 +4,7 @@ import { Button } from "../../primitives/Button/Button";
 import { Select } from "../../primitives/Select/Select";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 import { SendKbd, sendsOn } from "../../send-message";
+import { COPY_DEBUG_INFO } from "../../errors/ErrorNotice/payload";
 
 /** One repository the switch may point Helm at — id is the Manifest id. */
 export type HelmRepositoryOption = { id: string; label: string };
@@ -31,6 +32,20 @@ export type HelmComposerProps = {
   /** The dock's own switch, on All repositories. The rail's pick never moves for it. */
   onSwitch?: (manifestId: string) => void;
   onStartFresh?: () => void;
+  /**
+   * Puts the session record on the clipboard in one press — `#1367`. **The
+   * banner form of the error treatment**: the dock is a standing surface, and
+   * the moment this exists for is a bad answer somebody wants to carry now.
+   * Absent draws no control.
+   */
+  onCopyRecord?: () => void;
+  /**
+   * Opens the same record to read. **The banner's *Details*, in that word**:
+   * it sits beside *Copy debug info* exactly where a banner's does, and the
+   * dock has no width for a longer name beside two other controls — the sheet
+   * it opens is titled *Session record*. Absent draws no control.
+   */
+  onOpenRecord?: () => void;
   /** Refused while a reply is being written — Fleet's own rule, not a guess drawn here. */
   startFreshDisabled?: boolean;
   /** The open Job, while its chip stands. Absent off a Job, or once its `×` has been pressed. */
@@ -57,6 +72,8 @@ export function HelmComposer({
   repositories = [],
   onSwitch,
   onStartFresh,
+  onCopyRecord,
+  onOpenRecord,
   startFreshDisabled = false,
   chip,
   onRemoveChip,
@@ -143,6 +160,16 @@ export function HelmComposer({
               </option>
             ))}
           </Select>
+        )}
+        {onCopyRecord === undefined ? null : (
+          <Button variant="ghost" size="sm" onClick={onCopyRecord}>
+            {COPY_DEBUG_INFO}
+          </Button>
+        )}
+        {onOpenRecord === undefined ? null : (
+          <Button variant="ghost" size="sm" onClick={onOpenRecord}>
+            Details
+          </Button>
         )}
         {onStartFresh === undefined ? null : (
           <Button variant="ghost" size="sm" onClick={onStartFresh} disabled={startFreshDisabled}>

@@ -15,7 +15,7 @@
 
 import { identifying, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState, PickedView } from "../shared/bridge";
-import type { Connection, HelmContext, JobSummary, Outcome } from "@armada/protocol";
+import type { Connection, HelmContext, HelmDebugRead, JobSummary, Outcome } from "@armada/protocol";
 import type { CallRead, CheckOutputRead, FrameRead } from "@armada/protocol";
 import type { ComposingRead } from "@armada/screens/src/composing-reads";
 import { applyArrival, readCapacity, reread } from "./arrivals";
@@ -380,6 +380,11 @@ export class FleetConnection {
   /** Say something to Helm, about whichever repository it currently answers for. */
   askHelm(text: string, context?: HelmContext): Promise<Outcome> {
     return this.helm.askHelm(text, context);
+  }
+
+  /** The Helm session Bridge is pointed at, as one quotable record — #1367. */
+  helmDebugInfo(): Promise<HelmDebugRead> {
+    return this.helm.debugInfo();
   }
 
   /** Forget Helm's stored session and the thread. Refused while a reply is being written. */

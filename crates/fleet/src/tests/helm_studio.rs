@@ -69,6 +69,10 @@ impl Hosting for StandIn {
         }) as Pin<Box<dyn Future<Output = _> + Send>>
     }
 
+    fn model(&self) -> String {
+        String::from("a-model")
+    }
+
     fn running(&self) -> Vec<u32> {
         vec![SESSION]
     }

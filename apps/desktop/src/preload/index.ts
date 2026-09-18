@@ -19,7 +19,7 @@ import type {
   StagedAttachment,
 } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
-import type { HelmContext } from "@armada/protocol";
+import type { HelmContext, HelmDebugRead } from "@armada/protocol";
 import type { StudioCapture, StudioNodeByHand, StudioPosition, StudioPromotion } from "@armada/protocol";
 import type { StudioAnswer } from "@armada/screens/src/studio-reads";
 import type { AddTask, DropTask } from "@armada/protocol";
@@ -606,6 +606,7 @@ const api: BridgeApi = {
 
   askHelm: (text: string, context?: HelmContext): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.askHelm, text, context),
+  helmDebugInfo: (): Promise<HelmDebugRead> => ipcRenderer.invoke(CHANNELS.helmDebugInfo),
   startHelmFresh: (): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.startHelmFresh),
   pointHelm: (manifestId: string): Promise<void> => ipcRenderer.invoke(CHANNELS.pointHelm, manifestId),
 

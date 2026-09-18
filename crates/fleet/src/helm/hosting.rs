@@ -63,6 +63,11 @@ pub trait Hosting: Send + Sync + 'static {
     /// the agent refused leaves no row behind it.
     fn carry<'a>(&'a self, carry: Carry, heard: &'a dyn Heard) -> Carrying<'a>;
 
+    /// The model each message's process is started with. **The host's own
+    /// fact**: nothing above it decides the model, and a record that named
+    /// the one Armada asked for would be naming a guess (`#1367`).
+    fn model(&self) -> String;
+
     /// The process each message is being answered in right now, by pid.
     ///
     /// **What places a Helm session at the agent's door** (`#941`): its relay is
@@ -291,6 +296,10 @@ impl ProcessHost {
 impl Hosting for ProcessHost {
     fn carry<'a>(&'a self, carry: Carry, heard: &'a dyn Heard) -> Carrying<'a> {
         Box::pin(self.carried(carry, heard))
+    }
+
+    fn model(&self) -> String {
+        self.model.clone()
     }
 
     fn running(&self) -> Vec<u32> {
