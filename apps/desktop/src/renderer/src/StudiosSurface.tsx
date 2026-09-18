@@ -3,9 +3,15 @@
 //
 // **A Studio belongs to one repository**, so on All repositories the surface asks for one first,
 // the Manifest surface's own ask, and a repository with no Manifest keeps none.
+//
+// **A question nobody can answer is not asked.** The ask lists only a repository that has a
+// Manifest, so where none of them does it draws a picker with nothing pickable in it. That state
+// says what is true instead, and points at the Manifest surface, which is where a repository is
+// picked and set up.
 
 import { useEffect } from "react";
 import type { RepositorySummary } from "@armada/protocol";
+import { BoardEmptyState, Button } from "@armada/components";
 import { AskRepository, Studios, type OpenStudio } from "@armada/screens";
 import { Boundary } from "@armada/shell";
 
@@ -32,6 +38,12 @@ export type StudiosSurfaceProps = {
   /** All repositories, where Fleet serves any. */
   all: boolean;
   onPick: (root: string) => void;
+  /**
+   * The way out of All repositories with nothing set up: the Manifest surface,
+   * whose own ask picks a repository and opens Setup on one with no Manifest.
+   * The route is Bridge's existing one, not a second one cut from here.
+   */
+  onSetUp: () => void;
   open: OpenStudio | null;
   onOpenChange: (open: OpenStudio | null) => void;
   selectedNode: string | null;
@@ -56,6 +68,26 @@ export function StudiosSurface(props: StudiosSurfaceProps) {
   }, [openId]);
 
   if (all) {
+    // Nothing to pick from, so nothing is asked: one line saying what is true, and the one act
+    // that changes it. No card and no glyph — `docs/contracts/design-system.md` on empty states.
+    if (!repositories.some((one) => one.manifest !== undefined)) {
+      return (
+        <BoardEmptyState
+          quiet
+          // **Not "No repository has a Manifest yet"**, though that is the same fact: Helm's dock
+          // opens a sentence beginning those six words on the same screen, and two lines a hand's
+          // width apart reading alike is a surface a person has to disentangle.
+          lead="No repository is set up yet, so none of them keeps Studios."
+          action={
+            <Button variant="primary" onClick={props.onSetUp}>
+              Set up a repository
+            </Button>
+          }
+        >
+          A Studio is kept against a repository's Manifest. Set one up, and its Studios open here.
+        </BoardEmptyState>
+      );
+    }
     return (
       <AskRepository
         repositories={repositories}

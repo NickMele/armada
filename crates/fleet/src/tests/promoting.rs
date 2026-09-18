@@ -328,10 +328,18 @@ async fn a_job_dispatched_from_a_draft_stands_at_the_gate_with_the_drafts_own_wo
     );
 }
 
-/// `#1379`: **an issue already on the forge is dispatched from its Link, and
+/// `#1379`: **anything already on the forge is dispatched from its Link, and
 /// the address is the whole request.** Nothing is filed and nothing is
-/// fetched on the way — the issue exists, and the Job proposer has taken a
-/// ticket link as a request since it shipped.
+/// summarised on the way — it exists, and the Job proposer has taken a ticket
+/// link as a request since it shipped.
+///
+/// **Which workflow each runs under is not here and must not be.** An issue,
+/// a pull request and a milestone are three asks, and
+/// `docs/concepts/job-proposer.md` makes choosing between them the proposer's
+/// own decision off the request and each definition's `for_requests` line —
+/// which `crates/config/tests/shipped.rs` holds and
+/// `tests::proposing` measures. What this asserts is that all three cross
+/// whole and unchanged.
 #[tokio::test]
 async fn a_link_naming_an_issue_dispatches_its_address_and_the_job_node_hangs_off_it() {
     let home = TempDir::new();
@@ -408,6 +416,113 @@ async fn a_link_naming_an_issue_dispatches_its_address_and_the_job_node_hangs_of
         address,
         "the address is the request, whole and on its own"
     );
+}
+
+/// **A pull request and a milestone dispatch the same way an issue does**, and
+/// a Link naming nothing on the forge still dispatches nothing — `#1379`.
+///
+/// One test over both, because what is being held is one rule: the request is
+/// the address, whichever of the three it is, and nothing here names a
+/// workflow.
+#[tokio::test]
+async fn a_pull_request_and_a_milestone_each_dispatch_their_own_address() {
+    let home = TempDir::new();
+    let fleet = std::sync::Arc::new(a_fleet_that_proposes(&home));
+    let studio = a_studio(&fleet).await;
+    let host = adapters::FORGE_HOST;
+
+    for (n, address) in [
+        format!("https://{host}o/r/pull/1391"),
+        format!("https://{host}o/r/milestone/17"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let link = added(
+            &fleet,
+            &studio,
+            StudioNodeContent::Link {
+                address: address.clone(),
+                said: None,
+                named: None,
+                forge: None,
+            },
+        )
+        .await;
+        let dispatched = std::sync::Arc::clone(&fleet)
+            .dispatch_studio_draft(
+                studio.id.clone(),
+                DispatchStudioDraft {
+                    node_id: link.clone(),
+                    position: at(480, 240 * n as i64),
+                },
+                Redirector::Person,
+                None,
+            )
+            .await
+            .unwrap_or_else(|why| panic!("`{address}` dispatches: {why:?}"));
+        let job = of_kind(&dispatched, StudioNodeKind::Job)
+            .last()
+            .expect("a Job node")
+            .id
+            .clone();
+        assert_eq!(
+            made_by(&dispatched, &job),
+            [&link],
+            "the Job points back at the Link it was dispatched from"
+        );
+    }
+
+    let listed = api::Queries::list_jobs(fleet.as_ref(), None)
+        .await
+        .expect("the Board reads");
+    let mut briefed: Vec<String> = Vec::new();
+    for row in &listed.jobs {
+        let detail = api::Queries::get_job(fleet.as_ref(), row.id.clone())
+            .await
+            .expect("the Job it dispatched");
+        assert_eq!(
+            row.status.as_wire(),
+            "awaiting_approval",
+            "the dispatch gate is the same gate, whichever kind it was"
+        );
+        briefed.push(detail.facts.expect("the brief the Link became"));
+    }
+    briefed.sort();
+    assert_eq!(
+        briefed,
+        [
+            format!("https://{host}o/r/milestone/17"),
+            format!("https://{host}o/r/pull/1391"),
+        ],
+        "each Job's brief is its own address, whole and on its own"
+    );
+
+    // A Link naming nothing on the forge still has nothing to dispatch against.
+    let board = added(
+        &fleet,
+        &studio,
+        StudioNodeContent::Link {
+            address: "https://example.invalid/a-board".to_string(),
+            said: None,
+            named: None,
+            forge: None,
+        },
+    )
+    .await;
+    let refused = std::sync::Arc::clone(&fleet)
+        .dispatch_studio_draft(
+            studio.id.clone(),
+            DispatchStudioDraft {
+                node_id: board,
+                position: at(480, 720),
+            },
+            Redirector::Person,
+            None,
+        )
+        .await
+        .expect_err("a board names nothing filed");
+    assert_eq!(code(&refused), "fleet.studio_not_a_draft");
 }
 
 /// **Helm dispatching on a person's ask draws as Helm's.** The same draft, the
@@ -756,6 +871,6 @@ async fn each_rung_refuses_the_kinds_it_is_not_for() {
             None,
         )
         .await
-        .expect_err("a Link to a board names no issue to dispatch against");
+        .expect_err("a Link to a board names nothing on the forge to dispatch against");
     assert_eq!(code(&refused), "fleet.studio_not_a_draft");
 }

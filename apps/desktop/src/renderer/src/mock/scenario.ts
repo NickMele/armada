@@ -237,6 +237,29 @@ const EVERY_STATE_ROWS: JobFixture[] = BUILT.map(([name, fixture], at) =>
   asRow(fixture, at + 1, name, EVERY_STATE_TITLES[name]),
 );
 
+/**
+ * A second folder added by path and never set up, so that `NOTHING_SET_UP`
+ * holds more than one — the surfaces that ask for a repository ask because
+ * there are several, and one of them alone would not say so.
+ */
+const NOTES: RepositorySummary = {
+  root: "/Users/user/notes",
+  records_root: "/Users/user/Library/Application Support/Armada/records/notes",
+};
+
+/**
+ * Repositories served, and not one of them with a Manifest. **The moment every
+ * surface that needs a Manifest has nothing to offer**: the rail is on All
+ * repositories, the ask lists only what is set up, and nothing is. Studios is
+ * where it was found.
+ */
+const NOTHING_SET_UP: Scenario = {
+  name: "nothing-set-up",
+  says: "Two repositories served, neither set up",
+  state: connected([], [], [SCRATCH, NOTES]),
+  reads: {},
+};
+
 /** A Fleet that is not running: no runtime file, so nothing was ever connected. */
 const NOT_RUNNING: Scenario = {
   name: "fleet-not-running",
@@ -296,6 +319,7 @@ export const SCENARIOS: readonly Scenario[] = [
     studios: [everyKind(EVERY_STATE_ROWS[0]!.job.id), untitled()],
   },
   NOT_RUNNING,
+  NOTHING_SET_UP,
   {
     name: "first-launch",
     says: "Fleet running and serving no repository",

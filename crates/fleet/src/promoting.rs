@@ -47,26 +47,22 @@ const NOT_A_CONTRADICTION: &str = "fleet.studio_not_a_contradiction";
 /// The request a node dispatches as, and `None` on a node that dispatches
 /// nothing — `#1379`.
 ///
-/// **An Issue draft sends its own words and a Link sends its address.** The
-/// first is text nobody has filed, which is why it is carried whole; the
-/// second names an issue that already exists, and the [Job
-/// proposer](../../../docs/concepts/job-proposer.md) has taken a ticket link
-/// as a request since it shipped, so there is nothing to summarise or fetch on
-/// the way.
+/// **An Issue draft sends its own words and a Link sends its address**, whole
+/// either way: the first is text nobody has filed, and the second names
+/// something already on the forge, which the Job proposer has taken as a
+/// request since it shipped.
 ///
-/// **A pull request is not dispatched**, and neither is a milestone: what a
-/// milestone holds is read in as a Link per issue, and each of those is
-/// dispatched on its own.
+/// **All three forge kinds, and nothing here picks a workflow.** An issue is a
+/// change to make, a pull request is work already written that wants a
+/// judgement, a milestone is a wave to split; which workflow each runs under
+/// is the proposer's answer off the request and each definition's
+/// `for_requests` line. See `docs/concepts/job-proposer.md`.
 fn dispatched_as(content: &StudioNodeContent) -> Option<String> {
     if let Some(request) = content.dispatched_as() {
         return Some(request);
     }
     let address = content.address()?;
-    matches!(
-        adapters::forge_named(address),
-        Some(ipc::StudioLinkForge::Issue)
-    )
-    .then(|| String::from(address))
+    adapters::forge_named(address).map(|_| String::from(address))
 }
 /// A Contradiction ended twice. A 409.
 const CONTRADICTION_SETTLED: &str = "fleet.studio_contradiction_settled";
@@ -493,13 +489,13 @@ where
                     // refusal names the address rather than saying *a link is
                     // not dispatched*, which is untrue of the next one.
                     Some(address) => format!(
-                        "`{address}` names no issue on this repository's forge, so there is \
+                        "`{address}` names nothing on this repository's forge, so there is \
                          nothing filed to dispatch against. Write the work up as an Issue \
                          draft and dispatch that"
                     ),
                     None => format!(
                         "a {} is not dispatched: an Issue draft is, and so is a Link naming \
-                         an issue on this repository's forge",
+                         an issue, a pull request or a milestone on this repository's forge",
                         draft.kind().as_wire()
                     ),
                 },

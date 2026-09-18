@@ -25,8 +25,8 @@ export type StudioActs = {
   /** One Link: the line beside its address is a person's to change. #1378. */
   editLink: boolean;
   /**
-   * One Issue draft, or one Link whose address Fleet said names an issue: its
-   * text or its address goes through the Job proposer — #1379.
+   * One Issue draft, or one Link whose address Fleet said names something on
+   * the forge: its text or its address goes through the Job proposer — #1379.
    */
   dispatch: boolean;
   /** One Contradiction that has not ended yet. */
@@ -149,17 +149,19 @@ export function aWriteUp(studio: Studio, node: StudioNode): { title: string; bod
  *
  * **An Issue draft sends its own words and a Link sends its address** — the
  * draft's title, a blank line, its body, which is `crates/core-model`'s own
- * shape; and for a Link, the address alone, because the issue it names is
- * already filed and the Job proposer takes a ticket link as a request (#1379).
+ * shape; and for a Link, the address alone, because what it names is already
+ * filed and the Job proposer takes a ticket link as a request (#1379).
  *
- * **What an address names is read off `forge` and never off the address.**
- * Which host is the forge is `crates/adapters`' to know and the gate refuses
- * its name here, so a rule about issue links written in this file could not be
- * written at all — and would drift from Fleet's the day either moved. A Link
- * to a milestone, a board or a page is offered no Dispatch: a milestone is
- * read in, and the rest name nothing to dispatch against.
+ * **All three forge kinds dispatch, and none of them names a workflow.** Which
+ * workflow each runs under is the proposer's answer off the request and each
+ * definition's `for_requests` line, not this file's.
  */
 export function dispatchedAs(node: StudioNode): string | null {
   if (node.kind === "issue_draft") return `${node.title}\n\n${node.body}`;
-  return node.kind === "link" && node.forge === "issue" ? node.address : null;
+  // **Read off `forge` and never off the address.** Which host is the forge is
+  // `crates/adapters`' to know and the gate refuses its name here, so a rule
+  // about forge links written in this file could not be written at all — and
+  // would drift from Fleet's the day either moved. A Link to a board, a page
+  // or a session names nothing filed and is offered no Dispatch.
+  return node.kind === "link" && node.forge !== undefined ? node.address : null;
 }
