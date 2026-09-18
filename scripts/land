@@ -11,28 +11,30 @@
 # `covers`/`check`/`run` calls, so there is exactly one knob for "which
 # armada", never two that could disagree.
 #
-# **Falls back to `scripts/land_py`, the kept Python implementation, when
-# the resolved binary is missing or does not yet know the `land` verb — and
-# only for those two reasons.** A real outcome from `armada land` (a red
-# gate, a conflict, anything the verb itself means to report) passes
-# straight through with its own exit code; it is never retried under
-# Python. This exists because every agent's *installed* `armada` predates
-# this verb the moment this file reaches `main`, and the fix for that,
-# `scripts/restart`, cannot itself go through the merge path — so falling
-# back is what keeps the line open in the meantime, and this prints one
-# line to stderr naming `scripts/restart` whenever it does.
-#
-# `scripts/land_py`'s own header says why it is still here and when it goes.
+# **An `armada` that does not know the verb is refused, and says how to fix
+# it.** It held a Python implementation to fall back on for one release, while
+# every agent's installed binary still predated the verb; the owner's machine
+# is installed and that copy is gone. `scripts/restart` is what an install
+# needs, and it is what the refusal names.
 
 import os
 import subprocess
 import sys
 
-FALLBACK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "land_py")
-
 
 def resolved_armada() -> str:
-    return os.environ.get("ARMADA_LAND_ARMADA") or "armada"
+    """The `armada` to run, refusing the same relative path the verb itself
+    refuses (`crates/armada/src/land/env.rs`) — a shim that ran it would
+    resolve it against its own working directory rather than the caller's,
+    and answer for a binary nobody named."""
+    named = os.environ.get("ARMADA_LAND_ARMADA")
+    if named and "/" in named and not os.path.isabs(named):
+        sys.exit(
+            f"ARMADA_LAND_ARMADA is `{named}`, a relative path. Name it by an "
+            "absolute path: a turn runs in a worktree of its own, where a "
+            "relative one means a different file or none."
+        )
+    return named or "armada"
 
 
 def unavailable(result) -> bool:
@@ -61,13 +63,14 @@ def main() -> int:
 
     if unavailable(result):
         print(
-            f"land: `{binary} land` is not available yet (missing, or built "
-            "before this verb existed) — falling back to scripts/land_py. "
-            "Run `scripts/restart` to pick up the installed `armada` and "
-            "stop seeing this line.",
+            f"land: `{binary} land` is not available yet — this `armada` is "
+            "missing, or was built before the verb existed. Run "
+            "`scripts/restart` to install the current one, or point "
+            "`ARMADA_LAND_ARMADA` at an absolute path to a build that has it. "
+            "Nothing was queued and nothing was merged.",
             file=sys.stderr,
         )
-        os.execv(sys.executable, [sys.executable, FALLBACK, *args])
+        return 9
 
     return relay(result)
 
