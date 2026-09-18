@@ -470,7 +470,7 @@ impl WorkPlan {
     }
 
     /// The plan as it stands, in words: the approach, then each task with its
-    /// id, title, state and — for a dropped one — the reason.
+    /// id, title, state, detail and — for a dropped one — the reason.
     ///
     /// **Fleet's own reading of its own record, and never the Drone's.**
     /// `record_plan`, `add_task` and `update_task` are the only three calls a
@@ -478,6 +478,10 @@ impl WorkPlan {
     /// account of a turn. `#895` is where a step's Judge is handed this — its
     /// own, where its product is a plan, and a later step's through
     /// `reference_docs`.
+    ///
+    /// **The detail is rendered, and for a long time it was not** — the paths
+    /// a planning step writes down live there, so a title-only rendering
+    /// handed the next step a plan with every file name cut out of it.
     pub fn rendered(&self) -> String {
         let mut out = String::new();
         let _ = writeln!(out, "Approach: {}", self.approach.as_str());
@@ -493,6 +497,11 @@ impl WorkPlan {
             );
             if let Some(reason) = task.reason() {
                 let _ = write!(out, " — dropped: {reason}");
+            }
+            // Hung under its title rather than run on after it, so a detail of
+            // several sentences cannot read as the next task in the list.
+            if !task.detail().is_empty() {
+                let _ = write!(out, "\n      {}", task.detail());
             }
         }
         out

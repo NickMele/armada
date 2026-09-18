@@ -440,12 +440,18 @@ impl fmt::Display for HarnessRefused {
             HarnessRefused::CommandEmpty => {
                 out.write_str("a declared command is empty, so nothing can be allowed for it")
             }
+            // **Said to two readers, so it names no Manifest.** A Manifest
+            // author meets this at render, where the fix is to declare a
+            // script; a Drone meets the same sentence mid-run through
+            // `fleet::permitting`, where editing the Manifest is not a thing
+            // it can do and "the declared command" is not what it ran.
             HarnessRefused::CommandNotExpressibleAsARule { run, found } => write!(
                 out,
-                "the declared command `{run}` holds `{found}`, which the tool \
-                 allowlist uses for its own syntax — a rule built from it would \
-                 allow nothing and the Drone would be denied without being told. \
-                 Move the command into a script and declare the script"
+                "the command `{run}` holds `{found}`, which the tool allowlist \
+                 uses for its own syntax — a rule built from it would allow \
+                 nothing and the Drone would be denied without being told. Run \
+                 it without that character, as separate calls, or move it into \
+                 a script this repository declares"
             ),
             HarnessRefused::CommandWouldPush { run } => write!(
                 out,
