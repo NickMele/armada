@@ -157,11 +157,14 @@ flowchart LR
 
 > **Rule.** Studio capture works on Bridge, under its own binding in the shipped app.
 
-> **Rule.** Capture on another repository's web app happens in a window of its own, opened from a server Run and pinned to that Run's own loopback origin. Bridge's window loads nothing but itself and that does not change. The window is not built, #1294.
+> **Rule.** Capture on another repository's web app happens in a window of its own, opened from a serving Run and pinned to that Run's own loopback origin. Bridge's window loads nothing but itself and that does not change. #1294.
 > Why: what that window may load, what the layer injected into the page may touch and send back, and what is refused outright are settled in `../practices/capture-window.md`.
 
 > **Rule.** The development annotation layer stays beside Studio capture, unchanged: ⌥⌘A under `pnpm dev`, a file under `.armada/annotations/`, Send to Fleet, and `/annotations`.
 > Why: it is how a person annotates Bridge while building it. See `../practices/running-locally.md`, Annotating Bridge.
+
+> **Rule.** A Note captured there records the Run and the origin it was pinned to, beside everything a Note captured on Bridge records.
+> Why: a Studio holds Notes from Bridge and from several servers at once, and a Note that does not say which is a Note about an unnamed page. `StudioCapture.served`, protocol 16.5.
 
 > **Rule.** A Note's frame is a file beside the Studio's records, and the Note names it. A frame over 4 MiB is refused.
 > Why: an image in the content column is read back on every graph read and rides every `studio.changed`, for the life of a Studio nothing expires.
