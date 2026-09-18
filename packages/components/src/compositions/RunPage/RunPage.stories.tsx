@@ -146,6 +146,79 @@ export const WithAnAlwaysAllowedCommand: Story = {
   },
 };
 
+/**
+ * **The list carrying what a person scans by** — #1383, where the owner's word
+ * for it was flat. Each row can say that its own line no longer names anything
+ * in the checkout, how it last ran here, and that running it writes.
+ *
+ * Every fact is one the surface already holds: drift is the read it takes on
+ * opening and the runs are what *Earlier runs* is drawn from. Whether the gate
+ * runs a Check a Drone skips, and the paths that decide whether it applies at
+ * all, are not on the wire — #1437.
+ */
+export const RowsCarryingWhatTheyAreWorth: Story = {
+  name: "Rows carrying what they are worth",
+  args: {
+    ...EDITED,
+    groups: GROUPS.map((group) =>
+      group.kind !== "checks"
+        ? group
+        : {
+            ...group,
+            entries: group.entries.map((entry) =>
+              entry.id === "check:bridge_test"
+                ? { ...entry, drifted: true }
+                : entry.id === "check:typecheck"
+                  ? {
+                      ...entry,
+                      last: {
+                        result: "exit 2",
+                        whole: "exit 2 (expects 0)",
+                        outcome: "failed" as const,
+                        at: "14:11",
+                      },
+                    }
+                  : entry.id === "check:build"
+                    ? {
+                        ...entry,
+                        last: {
+                          result: "exit 0",
+                          whole: "exit 0 (expects 0)",
+                          outcome: "passed" as const,
+                          at: "14:09",
+                        },
+                      }
+                    : entry,
+            ),
+          },
+    ),
+    onSelect: fn(),
+    onRun: fn(),
+  },
+  /**
+   * **Every fact is on the row it is about, and on no other.** The three facts
+   * are joined to rows by three different readings, so a row picking up its
+   * neighbour's is the failure worth pressing — and `gone` on a Check that is
+   * still current is the one that reads as true.
+   */
+  play: async ({ canvas }) => {
+    const drifted = canvas.getByRole("button", { name: /^bridge_test/ });
+    await expect(drifted).toHaveTextContent("gone");
+    await expect(canvas.getByRole("button", { name: /^build/ })).not.toHaveTextContent("gone");
+    // The code is short on the row; what it expected is in the title, because
+    // `exit 2 (expects 0)` and a clock do not fit a 240px rail.
+    const failed = canvas.getByRole("button", { name: /^typecheck/ });
+    await expect(failed).toHaveTextContent("exit 2");
+    await expect(failed.querySelector(".armada-chip")).toHaveAttribute(
+      "title",
+      "exit 2 (expects 0)",
+    );
+    // A row that has never run here says nothing rather than exit 0.
+    await expect(canvas.getByRole("button", { name: /^bridge_build/ })).not.toHaveTextContent("exit");
+    await expect(canvas.getByRole("button", { name: /^fmt/ })).toHaveTextContent("writes");
+  },
+};
+
 /** Read, and this repository has always-allowed nothing yet. */
 export const NothingAlwaysAllowed: Story = {
   args: { ...EDITED, groups: GROUPS, onSelect: fn(), onRun: fn(), alwaysAllowed: [] },

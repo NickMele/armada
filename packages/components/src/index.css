@@ -309,6 +309,8 @@
    it. #1367. */
 @import "./compositions/HelmRecord/HelmRecord.css";
 @import "./compositions/PlanTaskSheet/PlanTaskSheet.css";
+@import "./compositions/DriftSheet/DriftSheet.css";
+@import "./compositions/VerifySheet/VerifySheet.css";
 
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */

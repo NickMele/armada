@@ -18,7 +18,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ConsoleOutputProps,
-  RunPageEntry,
   RunPageGroup,
   RunPagePastRun,
   RunPageProps,
@@ -33,14 +32,14 @@ import type {
   CheckoutRunSheet,
   CheckoutRunSheetRead,
   Followed,
+  ManifestDriftRead,
   Outcome,
-  RunEntry,
   RunOutputRead,
-  ServerEntry,
   ServerState,
   StartCheckoutRun,
 } from "@armada/protocol";
 import { checkoutChangedOf, checkoutRunDiffReadingOf } from "./checkout-run-diff";
+import { entryOf, serverEntryOf, type CheckoutSeen } from "./checkout-rows";
 import {
   checkoutEntryOf,
   checkoutResultRunOf,
@@ -55,8 +54,9 @@ export { checkoutResultRunOf, runningEntryOf };
 import { absoluteOf, clockOf, span } from "./duration";
 import { openServerLink } from "./opening";
 import { CHECK_PREFIX, COMMAND_PREFIX, isServerEntry, nameOf, runOutcomeOf } from "./rehearsal";
-import { saying, SERVER_PREFIX, SETUP_PREFIX } from "./rehearsal";
+import { saying, SETUP_PREFIX } from "./rehearsal";
 import { seedSaid } from "./seed";
+import { driftGoneOf } from "./verify";
 
 /** What the Manifest surface asks of the host. One prop, `rehearsal`'s precedent. */
 export type ManifestSlice = {
@@ -86,12 +86,16 @@ export type ManifestSlice = {
  * Commands is a fact about the file; a group that vanished would read as a
  * surface that failed to list them.
  */
-export function checkoutGroupsOf(sheet: CheckoutRunSheet, rootless = false): RunPageGroup[] {
+export function checkoutGroupsOf(
+  sheet: CheckoutRunSheet,
+  rootless = false,
+  seen?: CheckoutSeen,
+): RunPageGroup[] {
   const commands: RunPageGroup = {
     kind: "commands",
     label: "Commands",
     entries: [
-      ...sheet.commands.map((e) => entryOf(COMMAND_PREFIX, e)),
+      ...sheet.commands.map((e) => entryOf(COMMAND_PREFIX, e, seen)),
       ...(sheet.workspaces ?? []).flatMap((one) => one.commands.map((e) => workspaceEntryOf(one.dir, e))),
       ...(sheet.servers ?? []).map(serverEntryOf),
     ],
@@ -99,41 +103,10 @@ export function checkoutGroupsOf(sheet: CheckoutRunSheet, rootless = false): Run
   // No root file declares Setup or Checks, so empty groups would claim one did.
   if (rootless) return [commands];
   return [
-    { kind: "setup", label: "Setup", ...saying(seedSaid(sheet.seed)), entries: sheet.setup.map((e) => entryOf(SETUP_PREFIX, e)) },
-    { kind: "checks", label: "Checks", entries: sheet.checks.map((e) => entryOf(CHECK_PREFIX, e)) },
+    { kind: "setup", label: "Setup", ...saying(seedSaid(sheet.seed)), entries: sheet.setup.map((e) => entryOf(SETUP_PREFIX, e, seen)) },
+    { kind: "checks", label: "Checks", entries: sheet.checks.map((e) => entryOf(CHECK_PREFIX, e, seen)) },
     commands,
   ];
-}
-
-
-/**
- * One row. **`narrow_run` is never read**, and that is not an oversight: Fleet
- * builds this sheet against no changed paths, so the field is absent by
- * construction — and drawing a scope control off a field that can only ever be
- * absent would be a control that means nothing here.
- */
-function entryOf(prefix: string, entry: RunEntry): RunPageEntry {
-  return {
-    id: `${prefix}${entry.name}`,
-    name: entry.name,
-    run: entry.run,
-    note: noteOf(entry.requires),
-    ...(entry.destructive ? { destructive: true } : {}),
-  };
-}
-
-function serverEntryOf(entry: ServerEntry): RunPageEntry {
-  return {
-    id: `${SERVER_PREFIX}${entry.name}`,
-    name: entry.name,
-    run: entry.serve,
-    note: entry.run === undefined ? undefined : `Runs ${entry.run} first.`,
-    ...(entry.destructive ? { destructive: true } : {}),
-  };
-}
-
-function noteOf(requires: readonly string[]): string | undefined {
-  return requires.length === 0 ? undefined : `Runs ${requires.join(", ")} first.`;
 }
 
 /** The instance Fleet holds for a server entry id — never the entry id itself. */
@@ -262,6 +235,8 @@ export function useManifestRuns(
     onSaid: (sentence: string) => void;
     /** No root Manifest: only the workspaces' Commands are listed. */
     rootless?: boolean;
+    /** `GET /manifest/drift`, so a row can say its own line went. */
+    drift: ManifestDriftRead;
   },
 ): RunPageProps {
   const {
@@ -341,7 +316,11 @@ export function useManifestRuns(
     if (runningId === undefined) refreshRuns();
   }, [runningId]);
 
-  const groups = data === undefined ? [] : checkoutGroupsOf(data, slice.rootless === true);
+  // What each row carries beyond its declaration. Both readings are already
+  // here: drift is held open by the app for this surface, and the runs are the
+  // list *Earlier runs* draws from.
+  const carried = { gone: driftGoneOf(slice.drift), runs };
+  const groups = data === undefined ? [] : checkoutGroupsOf(data, slice.rootless === true, carried);
   // **Nothing picked and a run in flight reads as the running entry picked.**
   // Opening the surface onto a run already underway drew its output under
   // "Pick a Check or a Command" with no row lit — the page describing the run
@@ -467,7 +446,6 @@ export function useManifestRuns(
     });
   }
 }
-
 
 /** An ended server. A stop somebody pressed is not "on its own", and no code is not `exit 0`. */
 export function exitedOf(instance: ServerState): RunPageServerStatus {

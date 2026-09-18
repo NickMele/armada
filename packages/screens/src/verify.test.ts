@@ -3,8 +3,14 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { CheckoutRunRecord, CheckoutRunSheet, CheckoutVerify } from "@armada/protocol";
-import { driftPanelOf, endedOf, verifyPanelOf, type VerifyInputs } from "./verify";
+import type {
+  CheckoutRunSheet,
+  CheckoutRunRecord,
+  CheckoutVerify,
+  Declaration,
+  ManifestDriftRead,
+} from "@armada/protocol";
+import { driftGoneOf, driftPanelOf, endedOf, verifyPanelOf, verifySaidOf, type VerifyInputs } from "./verify";
 
 const SHEET: CheckoutRunSheet = { setup: [], checks: [], commands: [] };
 
@@ -154,5 +160,57 @@ describe("verify of a workspace's own file", () => {
     expect(panel.unavailable).toBe("Verify is running armada.yml in this checkout. This file can be verified once it ends.");
     expect(panel.steps).toBeUndefined();
     expect(panel.onStop).toBeUndefined();
+  });
+});
+
+describe("what the two acts on the tab row carry", () => {
+  const line = (name: string, verdict: "gone" | "current"): Declaration => ({
+    section: "checks",
+    name,
+    key: "run",
+    run: `pnpm ${name}`,
+    drift: verdict === "gone" ? { verdict, missing: ["package.json: scripts.x"] } : { verdict, checked: 1 },
+    unfollowed: [],
+  });
+  const read = (declarations: Declaration[]): ManifestDriftRead => ({
+    state: "read",
+    drift: { path: "/r/armada.yml", checkout: "/r", declarations },
+  });
+
+  it("says nothing has gone before the read answers, rather than nothing is gone", () => {
+    expect(driftGoneOf({ state: "reading" }).size).toBe(0);
+    expect(driftGoneOf({ state: "none" }).size).toBe(0);
+  });
+
+  it("names the entries whose own line went, and only those", () => {
+    expect([...driftGoneOf(read([line("test", "gone"), line("fmt", "current")]))]).toEqual(["test"]);
+  });
+
+  it("says nothing about a Verify nobody has run in this checkout", () => {
+    expect(verifySaidOf(inputs(SHEET))).toBeUndefined();
+  });
+
+  it("says a Verify is out while it is, so pressing is not how you find out", () => {
+    const verify: CheckoutVerify = {
+      id: "01V",
+      started_at: "2026-09-12T14:00:00Z",
+      steps: [{ group: "checks", name: "build", run: "cargo build", state: "running", run_id: "r1" }],
+    };
+    expect(verifySaidOf(inputs({ ...SHEET, verify }))).toBe("running");
+  });
+
+  it("counts what an ended Verify ran, short, and forgets one a person put away", () => {
+    const verify: CheckoutVerify = {
+      id: "01V",
+      started_at: "2026-09-12T14:00:00Z",
+      ended_at: "2026-09-12T14:01:00Z",
+      steps: [
+        { group: "checks", name: "build", run: "cargo build", state: "ran", record: record("build", 0) },
+        { group: "checks", name: "test", run: "cargo test", state: "not_run", why: "setup `bootstrap` exited 1" },
+      ],
+    };
+    expect(verifySaidOf(inputs({ ...SHEET, verify }))).toBe("ran 1 of 2");
+    // Put away, the act has nothing to open onto and says so by saying nothing.
+    expect(verifySaidOf(inputs({ ...SHEET, verify }, { dismissed: "01V" }))).toBeUndefined();
   });
 });

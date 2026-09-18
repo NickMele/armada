@@ -1,0 +1,16 @@
+/* Verify's run on a trailing sheet. The layer and its header are `Sheet`; the
+   panel inside is `VerifyPanel`, untouched. What lives here is the gutter. */
+
+/* The file in the subtitle. Mono, because it is a path the system reported. */
+.armada-verify-sheet__file {
+  font-family: var(--font-mono);
+}
+
+/* `DriftSheet.css`'s gutter, for its reason. */
+.armada-verify-sheet__body {
+  padding: var(--space-4);
+}
+
+.armada-sheet[data-floor] .armada-verify-sheet__body {
+  padding: var(--space-3);
+}

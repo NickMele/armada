@@ -19,8 +19,14 @@ export type DoctorLine = {
 
 export type FleetPanelProps = {
   state: FleetState;
-  /** "Running", "Not running", "Unreachable", "Reading" — the panel already says "Fleet". */
-  label: ReactNode;
+  /**
+   * "Running", "Not running", "Unreachable", "Reading" — the panel already says "Fleet".
+   *
+   * **A string, not a node**, since #1437: the title bar's folded dot reads
+   * this same word for its accessible name and its tooltip, and neither can
+   * take a node. One word, two readers, no second vocabulary.
+   */
+  label: string;
   /**
    * `pid`, `port`, `protocol`, `up` — the facts the runtime file and the
    * connection carry, one row each, labels left and values justified to the
@@ -43,7 +49,13 @@ export type FleetPanelProps = {
   narrow?: boolean;
 };
 
-const DOT_TONE: Record<FleetState, "success" | "escalated" | "warn" | "muted"> = {
+/**
+ * Which tone each Fleet state's dot takes. **The one mapping**, exported
+ * because the title bar draws the same dot while the left column is folded
+ * (#1437) and a second table there could disagree with this one on the day
+ * either moved. Status colour is mapped, never chosen — `iconography.md`.
+ */
+export const FLEET_DOT_TONE: Record<FleetState, "success" | "escalated" | "warn" | "muted"> = {
   running: "success",
   "not-running": "escalated",
   unreachable: "warn",
@@ -52,10 +64,10 @@ const DOT_TONE: Record<FleetState, "success" | "escalated" | "warn" | "muted"> =
 
 export function FleetPanel({ state, label, rows, detail, doctor, open, onOpenChange, narrow }: FleetPanelProps) {
   return (
-    <Panel label="Fleet" open={open} onOpenChange={onOpenChange} narrow={narrow} dotTone={DOT_TONE[state]}>
+    <Panel label="Fleet" open={open} onOpenChange={onOpenChange} narrow={narrow} dotTone={FLEET_DOT_TONE[state]}>
       <div className="armada-fleet-panel">
         <div className="armada-fleet-panel__state">
-          <span className="armada-fleet-panel__dot" data-tone={DOT_TONE[state]} aria-hidden />
+          <span className="armada-fleet-panel__dot" data-tone={FLEET_DOT_TONE[state]} aria-hidden />
           {label}
         </div>
         {rows === undefined || rows.length === 0 ? null : <FigureList figures={rows} column="fit" />}
