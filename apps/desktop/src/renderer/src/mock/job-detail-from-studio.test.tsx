@@ -61,7 +61,7 @@ function dispatchedFromAStudio(options?: { still?: boolean }): Scenario {
 
 test("the header says where the job came from and who pressed, in one sentence", async () => {
   mount(dispatchedFromAStudio());
-  await expect.element(page.getByText("From a Studio, dispatched by you").first()).toBeVisible();
+  await expect.element(page.getByText("From a Studio, by you").first()).toBeVisible();
 });
 
 test("Where things are names the Studio, beside the worktree", async () => {

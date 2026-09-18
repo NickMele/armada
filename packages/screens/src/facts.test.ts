@@ -226,10 +226,10 @@ describe("who dispatched it", () => {
   // it: one column answers two questions and neither reading may be dropped.
   it("says where from and who pressed, for a job dispatched off a Studio", () => {
     expect(factsOf(job({ origin: "studio_dispatched" }), null, now).at(-1)).toEqual({
-      value: "From a Studio, dispatched by you",
+      value: "From a Studio, by you",
     });
     expect(factsOf(job({ origin: "studio_helm_drafted" }), null, now).at(-1)).toEqual({
-      value: "From a Studio, drafted in Helm",
+      value: "From a Studio, via Helm",
     });
   });
 });
@@ -252,13 +252,13 @@ describe("a Studio that has been deleted", () => {
       from_studio: { studio_id: "01STUDIO", node_id: "01JOBNODE" },
     };
     expect(factsOf(offAStudio, whole, now).at(-1)).toEqual({
-      value: "From a Studio, dispatched by you",
+      value: "From a Studio, by you",
     });
   });
 
   it("claims nothing before the read lands", () => {
     expect(factsOf(offAStudio, null, now).at(-1)).toEqual({
-      value: "From a Studio, dispatched by you",
+      value: "From a Studio, by you",
     });
   });
 

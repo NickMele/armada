@@ -219,8 +219,8 @@ export const ORIGIN: Readonly<Record<string, Rendering | undefined>> = {
   "workflow_triggered": { verb: "Workflow-triggered", icon: null, badgeStatus: null, statusToken: null, hint: null },
   "sub_dispatched": { verb: "Sub-dispatched by {dispatched_by.job_id}", icon: null, badgeStatus: null, statusToken: null, hint: null },
   "drone_drafted": { verb: "Drafted by a Drone", icon: null, badgeStatus: null, statusToken: null, hint: null },
-  "studio_dispatched": { verb: "From a Studio, dispatched by you", icon: null, badgeStatus: null, statusToken: null, hint: null },
-  "studio_helm_drafted": { verb: "From a Studio, drafted in Helm", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "studio_dispatched": { verb: "From a Studio, by you", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "studio_helm_drafted": { verb: "From a Studio, via Helm", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
 /**

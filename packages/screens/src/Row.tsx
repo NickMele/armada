@@ -62,8 +62,8 @@
 // `ORIGIN` map reaches Bridge; #1165 put `dispatched_by` on `JobSummary`, so
 // `sub_dispatched`'s form — `Sub-dispatched by {dispatched_by.job_id}` — has
 // the parent's id to fill its slot with. What made it worth drawing was a
-// value a person acts on: a Job off a Studio reads `From a Studio, dispatched
-// by you`, and the way back to that Studio is on the detail.
+// value a person acts on: a Job off a Studio reads `From a Studio, by you`,
+// and the way back to that Studio is on the detail.
 //
 // **One reading, in `origin.ts`.** The header's own field draws the same
 // sentence, and two spellings of it is the drift that file prevents.
