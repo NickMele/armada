@@ -67,6 +67,12 @@ test("Kit's default and this repository's word are read side by side", async () 
 test("All repositories asks for one rather than drawing a tier that answers for nobody", async () => {
   await kit({ kitServers: KIT_SERVERS, picked: false });
   await expect.element(page.getByText(/Pick a repository to see what its Drones are handed/)).toBeVisible();
+
+  // **The ask takes the servers' place and not the screen.** What a person
+  // already has is this machine's, so it answers with no repository picked —
+  // #1491. The second tier is the only half that needs one.
+  await expect.element(page.getByText("What you already have")).toBeVisible();
+  await expect.element(page.getByText("humanizer", { exact: true })).toBeVisible();
 });
 
 /**

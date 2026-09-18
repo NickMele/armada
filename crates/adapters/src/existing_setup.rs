@@ -312,12 +312,12 @@ impl<F: SetupFiles> HarnessSetup for ExistingSetup<F> {
 /// out of its two tiers reads as a grant, and which tier a row belongs to is
 /// `#41`'s question.
 const NO_ALLOWLIST: &str =
-    "not read yet: a rule drawn out of its two tiers reads as a grant, and the tiers are #41";
+    "a rule drawn out of its two tiers reads as a grant, and both tiers are #41";
 
 /// Which models a Drone may use is resolved by `config` against a Manifest, and
 /// a second list read off a harness would be a second answer to that.
 const NO_MODELS: &str =
-    "not read yet: which models a Job may use is resolved against a Manifest, and that is #41";
+    "which models a Job may use is resolved against a Manifest, and that is #41";
 
 /// The front matter a skill, a sub agent or a command carries.
 #[derive(Deserialize)]

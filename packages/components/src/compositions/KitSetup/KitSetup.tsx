@@ -120,13 +120,13 @@ export function KitSetup({ setup }: KitSetupProps) {
       )}
 
       {setup.kinds.map((kind) => (
-        <Kind key={kind.kind} {...kind} />
+        <Kind key={kind.kind} home={setup.home} {...kind} />
       ))}
     </section>
   );
 }
 
-function Kind({ kind, read }: KitSetupKind) {
+function Kind({ kind, read, home }: KitSetupKind & { home: string }) {
   const counted = read.what === "read" ? read.items.length : undefined;
   return (
     <div className="armada-kit-setup__kind">
@@ -141,7 +141,7 @@ function Kind({ kind, read }: KitSetupKind) {
         /* Named as not read, never drawn as empty. */
         <p className="armada-kit-setup__not-read">Not read yet — {read.why}</p>
       ) : (
-        <Items kind={kind} items={read.items} unreadable={read.unreadable} />
+        <Items kind={kind} home={home} items={read.items} unreadable={read.unreadable} />
       )}
     </div>
   );
@@ -151,12 +151,22 @@ function Note({ children }: { children?: ReactNode }) {
   return children === undefined ? null : <p className="armada-kit-setup__note">{children}</p>;
 }
 
+/**
+ * A path under the home, with the home taken off: it is written once at the
+ * top, and repeating it on every row pushes the thing itself off the line.
+ */
+function under(source: string, home: string): string {
+  return source.startsWith(`${home}/`) ? source.slice(home.length + 1) : source;
+}
+
 function Items({
   kind,
+  home,
   items,
   unreadable,
 }: {
   kind: KitSetupKindWord;
+  home: string;
   items: KitSetupItem[];
   unreadable: KitSetupUnreadable[];
 }) {
@@ -170,9 +180,15 @@ function Items({
             <li className="armada-kit-setup__item" key={`${item.source}/${item.name}`}>
               <span className="armada-kit-setup__item-name">{item.name}</span>
               {item.says === undefined ? null : (
-                <span className="armada-kit-setup__item-says">{item.says}</span>
+                /* One line, and the whole of it on hover: twenty-one rows each
+                   three lines deep is a list nobody reads to the end of. */
+                <span className="armada-kit-setup__item-says" title={item.says}>
+                  {item.says}
+                </span>
               )}
-              <span className="armada-kit-setup__item-source">{item.source}</span>
+              <span className="armada-kit-setup__item-source" title={item.source}>
+                {under(item.source, home)}
+              </span>
             </li>
           ))}
         </ul>
@@ -183,7 +199,9 @@ function Items({
         <ul className="armada-kit-setup__unreadable">
           {unreadable.map((one) => (
             <li key={one.source}>
-              <span className="armada-kit-setup__item-name">{one.source}</span>
+              <span className="armada-kit-setup__item-name" title={one.source}>
+                {under(one.source, home)}
+              </span>
               <span className="armada-kit-setup__item-says">would not read: {one.why}</span>
             </li>
           ))}

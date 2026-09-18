@@ -987,25 +987,30 @@ export function App() {
               now={now}
               onCopied={setCopied}
             />
-          ) : kitting && all ? (
-            <AskRepository
-              repositories={repositories}
-              title="Pick a repository to see what its Drones are handed"
-              next="Kit is this machine's, and the same set everywhere. Which servers a Drone gets is a repository's own word over it, so Kit is read against one."
-              onPick={pick}
-            />
           ) : kitting ? (
             /* What a person already has, and then Kit's servers with both
-               tiers and what a Drone dispatched here resolves. #1275, #1491. */
+               tiers and what a Drone dispatched here resolves. #1275, #1491.
+
+               On All repositories the ask takes the servers' place and the
+               reading stays: what somebody already has is this machine's and
+               answers for every repository, so it needs no pick. */
             <Boundary region="Kit" {...guarded}>
               <Kit
                 // Another repository is another second tier. The machine-wide
                 // half is the same; what it resolves to is not.
                 key={state.repository ?? ""}
                 repository={
-                  pickedRepository === null
-                    ? "this repository"
+                  all || pickedRepository === null
+                    ? null
                     : repositoryLabel(pickedRepository, repositories)
+                }
+                ask={
+                  <AskRepository
+                    repositories={repositories}
+                    title="Pick a repository to see what its Drones are handed"
+                    next="Kit is this machine's, and the same set everywhere. Which servers a Drone gets is a repository's own word over it, so Kit is read against one."
+                    onPick={pick}
+                  />
                 }
                 onReadKitInventory={readKitInventory}
                 onListKitServers={listKitServers}

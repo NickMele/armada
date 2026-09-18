@@ -86,7 +86,7 @@ const FULL: KitSetupRead = {
     },
     {
       kind: "allowlist",
-      read: { what: "not_read", why: "a rule drawn out of its two tiers reads as a grant, and the tiers are #41" },
+      read: { what: "not_read", why: "a rule drawn out of its two tiers reads as a grant, and both tiers are #41" },
     },
     {
       kind: "models",

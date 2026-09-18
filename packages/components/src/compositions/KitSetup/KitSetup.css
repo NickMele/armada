@@ -95,12 +95,11 @@
   min-width: 0;
 }
 
-/* One line each where there is room, wrapping rather than truncating: a
-   description a person wrote is the reason they would recognise the row. */
+/* One row, one line. A person's own set runs to twenty rows and more, and a
+   row three lines deep turns the count at the top into the only thing read. */
 .armada-kit-setup__item,
 .armada-kit-setup__unreadable > li {
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-2);
   min-width: 0;
@@ -109,22 +108,44 @@
 }
 
 .armada-kit-setup__item-name {
+  flex: 0 0 auto;
   color: var(--fg-default);
   font-weight: var(--weight-medium);
-  overflow-wrap: anywhere;
 }
 
+/* The description carries the line's slack and is cut with an ellipsis; the
+   whole of it is on the row's own `title`. */
 .armada-kit-setup__item-says {
-  flex: 1 1 20ch;
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--fg-muted);
-  text-wrap: pretty;
 }
 
-/* Where it came from, kept quiet: it is provenance rather than the row. */
+/* Where it came from, kept quiet and under the home the head names: it is
+   provenance rather than the row.
+
+   It shrinks and is cut, and never widens the row: a synced skill's folder
+   carries the id of the set it arrived in, and a row that grew to fit one ran
+   off the panel. The whole path is on its own `title`. */
 .armada-kit-setup__item-source {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 34ch;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--fg-subtle);
-  overflow-wrap: anywhere;
+}
+
+/* The name is the row, so it shrinks last and only past a readable measure. */
+.armada-kit-setup__item-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
