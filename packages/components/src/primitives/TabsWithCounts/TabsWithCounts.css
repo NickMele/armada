@@ -29,7 +29,11 @@
   padding: var(--armada-tab-inset);
   border: var(--border-width) solid var(--border-default);
   border-radius: var(--radius-md);
-  background: var(--bg-sunken);
+  /* One surface step from its ground, which is Button's rule for a filled
+     control. --bg-sunken is 18 values below --bg-overlay and cut a hole in the
+     activity log's header; on the canvas the two differ by 7 either side of
+     --bg-base, so one value serves both grounds. */
+  background: var(--bg-raised);
 }
 
 .armada-tabs-counts__tab {

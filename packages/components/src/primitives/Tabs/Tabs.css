@@ -1,5 +1,5 @@
 /* Tabs. Sections of one object, drawn as the contract's Tabs section draws
- * them: a --bg-sunken track edged --border-default at --radius-md, tabs
+ * them: a --bg-raised track edged --border-default at --radius-md, tabs
  * --h-control-sm tall with --space-3 horizontal padding, and the chosen one
  * filled --accent-muted at --radius-sm.
  *
@@ -42,7 +42,11 @@
   padding: var(--armada-tab-inset);
   border: var(--border-width) solid var(--border-default);
   border-radius: var(--radius-md);
-  background: var(--bg-sunken);
+  /* One surface step from its ground, which is Button's rule for a filled
+     control. --bg-sunken is 18 values below --bg-overlay and cut a hole in the
+     activity log's header; on the canvas the two differ by 7 either side of
+     --bg-base, so one value serves both grounds. */
+  background: var(--bg-raised);
 }
 
 .armada-tabs__tab {
