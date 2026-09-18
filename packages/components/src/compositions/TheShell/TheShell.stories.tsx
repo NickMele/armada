@@ -84,10 +84,36 @@ export const Shell: Story = {
 /**
  * The 48px icon rail, below the layout breakpoint — where the dock has taken
  * itself off screen and the column has room to stand at its narrowest.
+ *
+ * What a rendering cannot show: that the title row's Fleet dot and the rail's
+ * own are both there and both say which state. #1438 drew the row's dot only
+ * where this component was told the column had gone, so at this width there
+ * was none — and the rail's dot was an `aria-hidden` mark inside a region
+ * named "Fleet", so the state was reachable by neither. The owner settled both
+ * on 18 Sep 2026.
  */
 export const CollapsedRail: Story = {
   args: { ...shell, collapsed: true },
   render: Shell.render,
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole("img", { name: `Fleet — ${shell.fleet.label}` })).toHaveLength(2);
+    await expect(canvas.getByRole("region", { name: "Stats" })).toBeInTheDocument();
+  },
+};
+
+/**
+ * Expanded, and the title row's dot is still there — one of it, because the
+ * panel says the state in words rather than taking a name of its own. This is
+ * the width #1438 drew no dot at, and the one the owner looked at when he said
+ * to keep it drawn always.
+ */
+export const FleetDotAtEveryWidth: Story = {
+  args: shell,
+  render: Shell.render,
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole("img", { name: `Fleet — ${shell.fleet.label}` })).toHaveLength(1);
+    await expect(canvas.getByText("pid")).toBeVisible();
+  },
 };
 
 /**
@@ -268,6 +294,7 @@ export const LeftColumnCollapsedBesideTheDock: Story = {
     await expect(canvas.getByRole("navigation")).toBeInTheDocument();
     await expect(canvas.getByRole("button", { name: /Job Board/ })).toBeInTheDocument();
     await expect(canvas.getByLabelText("Helm")).toBeInTheDocument();
+    await expect(canvas.getAllByRole("img", { name: `Fleet — ${shell.fleet.label}` })).toHaveLength(2);
   },
 };
 

@@ -151,14 +151,17 @@ const FLEET_SAID: { state: FleetState; label: string }[] = [
 ];
 
 /**
- * What a rendering cannot show: that the dot is unconditional. #1438 mounted
- * it on a prop the shell set from the window's width, so the row a person saw
- * at 1512px had no dot at all and the row at 1150px did; the owner rejected
- * both that and removing the dot, and chose it drawn always on 18 Sep 2026.
+ * The dot is unconditional. #1438 mounted it on a prop the shell set from the
+ * window's width, so the row a person saw at 1512px had no dot at all and the
+ * row at 1150px did; the owner rejected that and rejected removing the dot,
+ * and chose it drawn always on 18 Sep 2026.
  *
- * Asserted on the two arrangements that used to decide it — the dock open
- * beside the content, which is `Full`, and the dock closed with Helm's own
- * button in the row. Neither can take the dot away, because nothing can.
+ * The two arrangements that used to decide it: the dock open beside the
+ * content, which is `Full`, and the dock closed with Helm's own button in the
+ * row. **No `play`, because there is nothing here for one to catch** — the
+ * condition was never in this component but in what `TheShell` passed it, so
+ * the assertion lives in `The shell`'s own stories and in
+ * `job-detail-width.test.tsx`, which drives a real window across the widths.
  */
 export const FleetIsDrawnWhateverElseTheRowCarries: Story = {
   args: Full.args,
@@ -168,9 +171,6 @@ export const FleetIsDrawnWhateverElseTheRowCarries: Story = {
       <TitleBar {...args} helm={{ questions: 3, binding: "⌘J", onOpen: () => {} }} />
     </>
   ),
-  play: async ({ canvas }) => {
-    await expect(canvas.getAllByRole("img", { name: /^Fleet — / })).toHaveLength(2);
-  },
 };
 
 /**
