@@ -81,11 +81,9 @@ export function factsOf(job: JobSummary, whole: JobWhole | null, now: number): J
  * of the callout on the job it replaced. `#1439`, `#1474`.
  *
  * **The handle, and pressable.** It drew `job.redispatched_from`, a raw ULID:
- * the one fact on the screen about where this job came from was the one fact
- * a person could neither read nor use. `replaces` is that id looked up.
- *
- * **One edge and no walk.** `foldLineages` counts a chain; this names the
- * direct predecessor and leaves the climb to the reader.
+ * the one fact about where this job came from was the one a person could
+ * neither read nor use. `replaces` is that id looked up. `foldLineages`
+ * counts a chain; this names the direct predecessor and leaves the climb.
  *
  * **A forgotten predecessor is named, not left silent** — `studioGoneFact`'s
  * rule exactly: saying so is what keeps a dead end from reading as a job
