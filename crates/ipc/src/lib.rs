@@ -300,11 +300,11 @@ pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet, SpecPic
 pub use since::{EventTally, EventsSince};
 pub use studio::{
     AddStudioNode, ContradictionSettled, CreateStudio, DecideStudioEdge, DeferOnStudio,
-    DispatchStudioDraft, EditStudioDraft, EditStudioLink, EpicRead, ForgeState, GroupStudioNodes,
-    HelmStudioAct, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio,
-    SettleContradiction, StartStudioRun, Studio, StudioDeleted, StudioEdge, StudioHelmActed,
-    StudioList, StudioNode, StudioNodeContent, StudioPosition, StudioRunKept, StudioRunStarted,
-    StudioSummary, WriteUpStudioNode,
+    DispatchStudioDraft, EditStudioDraft, EditStudioLink, EpicRead, EpicTake, ForgeState,
+    GroupStudioNodes, HelmStudioAct, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode,
+    RenameStudio, SettleContradiction, StartStudioRun, Studio, StudioDeleted, StudioEdge,
+    StudioHelmActed, StudioList, StudioNode, StudioNodeContent, StudioPosition, StudioRunKept,
+    StudioRunStarted, StudioSummary, WriteUpStudioNode,
 };
 pub use turn::{
     BlockKind, CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage,

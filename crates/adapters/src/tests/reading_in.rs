@@ -218,11 +218,62 @@ fn a_milestone_is_two_calls_and_reads_back_bounded_with_its_total() {
     let read = milestone_read(&printed, "17");
     assert_eq!(read.title, "Studio");
     assert_eq!(read.total, 137);
-    assert_eq!(read.issues.len(), MOST_ISSUES, "bounded");
+    assert_eq!(
+        read.issues.len(),
+        MOST_ISSUES + 20,
+        "every line the fetch printed: the bound lands on what the answer took"
+    );
     assert_eq!(read.issues[0].address, "https://x/issues/0");
     assert_eq!(read.issues[0].number, "0");
     assert_eq!(read.issues[0].title, "Something");
     assert_eq!(read.issues[0].state, Some(core_model::ForgeState::Open));
+    assert_eq!(
+        read.taking(core_model::EpicTake::Everything).issues.len(),
+        MOST_ISSUES,
+        "bounded"
+    );
+}
+
+/// **The bound lands after the answer, never before it** — `#1405`. A milestone
+/// read front-first and then filtered would take fifty issues and show
+/// whichever of them happened to be open, so "only what is open" would be a
+/// bound on the wrong set.
+#[test]
+fn only_what_is_open_is_bounded_on_the_open_issues_and_says_what_it_left_out() {
+    let mut printed = String::from(
+        "Overview	200
+",
+    );
+    // Every closed issue first, which is the order that used to lose them all.
+    for n in 0..80 {
+        printed.push_str(&format!(
+            "https://x/issues/{n}	{n}	Shipped	closed
+"
+        ));
+    }
+    for n in 80..80 + MOST_ISSUES + 10 {
+        printed.push_str(&format!(
+            "https://x/issues/{n}	{n}	To do	open
+"
+        ));
+    }
+    let read = milestone_read(&printed, "17");
+    let taken = read.taking(core_model::EpicTake::Open);
+    assert_eq!(taken.issues.len(), MOST_ISSUES, "fifty open ones");
+    assert!(taken
+        .issues
+        .iter()
+        .all(|issue| issue.state == Some(core_model::ForgeState::Open)));
+    assert_eq!(taken.left_out, 80, "the closed ones, said and not silent");
+
+    let every = read.taking(core_model::EpicTake::Everything);
+    assert_eq!(every.issues.len(), MOST_ISSUES);
+    assert_eq!(every.left_out, 0);
+    assert_eq!(
+        every.issues[0].state,
+        Some(core_model::ForgeState::Closed),
+        "taking everything takes the forge's own order"
+    );
 }
 
 /// **Headings and text, and no markup.** A script's body is dropped whole

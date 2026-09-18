@@ -12,6 +12,8 @@
 //! **A milestone takes no scout.** It is a list, and a model asked to echo one
 //! back is cost spent on a transcription; Fleet mints a Link per issue itself.
 
+mod epic;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,7 +21,7 @@ use adapter_traits::{AgentHarness, Delivery, LookupCall, Vcs, WorkProduct};
 use adapters::{Fetch, MilestoneRead, Source};
 use api::{Redirector, Refusal};
 use core_model::{
-    FrozenFinding, ScoutSource, ScoutSourceKind, StudioAuthor, StudioEdge, StudioEdgeId,
+    EpicTake, FrozenFinding, ScoutSource, ScoutSourceKind, StudioAuthor, StudioEdge, StudioEdgeId,
     StudioFinding, StudioId, StudioNode, StudioNodeContent, StudioNodeId, StudioPosition,
     StudioRelation,
 };
@@ -44,10 +46,10 @@ const UNREADABLE: &str = "fleet.studio_source_unreadable";
 const MOST_CHARACTERS: usize = 120_000;
 
 /// How far apart nodes a read-in made are placed, in canvas units.
-const ACROSS: i64 = 340;
-const DOWN: i64 = 180;
+pub(crate) const ACROSS: i64 = 340;
+pub(crate) const DOWN: i64 = 180;
 /// How many nodes a read-in puts in one column before starting another.
-const DOWN_A_COLUMN: i64 = 6;
+pub(crate) const DOWN_A_COLUMN: i64 = 6;
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -91,8 +93,21 @@ where
         match &source {
             Source::Milestone { number, .. } => {
                 let read = adapters::milestone_read(&printed, number);
-                self.milestone_read_in(&studio_id, &source_node, read, read_in.position, by, within)
-                    .await
+                // **Every issue where nothing asked** — an older Bridge, and
+                // what reading one in used to do. `#1405`.
+                let take = read_in
+                    .take
+                    .map_or(EpicTake::Everything, ipc::EpicTake::to_domain);
+                self.milestone_read_in(
+                    &studio_id,
+                    &source_node,
+                    read,
+                    take,
+                    read_in.position,
+                    by,
+                    within,
+                )
+                .await
             }
             _ => {
                 self.scout_reading_in(
@@ -111,54 +126,65 @@ where
         }
     }
 
-    /// An Epic: one Issue node per issue, straight from what the forge
-    /// printed. **No scout and no Finding** — nothing was learned, a list was
-    /// copied, and the node that would say what it cost would be saying nought.
+    /// An Epic: one Issue node per issue the answer takes, straight from what
+    /// the forge printed. **No scout and no Finding** — nothing was learned, a
+    /// list was copied, and the node that would say what it cost would be
+    /// saying nought.
     ///
     /// **Every field on every Issue node is filled.** A milestone's own read
     /// already answers each issue's number, title and state, so nothing here
     /// is left for a later fetch — `#1394`.
+    ///
+    /// **Reading it in again widens or narrows what is on the board**, against
+    /// the other answer — `#1405`, and [`epic::what_it_took`] decides it.
     #[allow(clippy::too_many_arguments)]
     async fn milestone_read_in(
         &self,
         studio_id: &ipc::StudioId,
         source: &StudioNode,
         read: MilestoneRead,
+        take: EpicTake,
         at_position: ipc::StudioPosition,
         by: Redirector,
         within: Option<ManifestId>,
     ) -> Result<ipc::Studio, Refusal> {
         let at = self.now();
         let author = author(by);
-        let from = at_position.to_domain();
         let link = source.id().clone();
-        let mut made: Vec<(StudioNode, StudioEdgeId)> = Vec::new();
-        for (n, issue) in read.issues.iter().enumerate() {
-            let Some(content) = issue.node() else {
-                continue;
-            };
-            made.push((
-                StudioNode::added(
-                    StudioNodeId::carried(self.mint().ulid()),
-                    content,
-                    laid_out(from, n),
-                    at.clone(),
-                    author,
-                ),
-                StudioEdgeId::carried(self.mint().ulid()),
-            ));
-        }
-        // **What the Epic itself now says**, which is where a capped read is
-        // recorded: the node survives with its address and gains its title and
-        // how many of how many of its issues are on the board.
-        let resolved = source.resolved(&read.facts()).ok();
+        let took = {
+            let store = self.store().lock().await;
+            let graph = self.studio_held(&store, &studio_id.to_domain(), within.as_ref())?;
+            epic::what_it_took(&graph, source, take, &read, at_position.to_domain())
+        };
+        let made: Vec<(StudioNode, StudioEdgeId)> = took
+            .made
+            .into_iter()
+            .map(|(content, at_cell)| {
+                (
+                    StudioNode::added(
+                        StudioNodeId::carried(self.mint().ulid()),
+                        content,
+                        at_cell,
+                        at.clone(),
+                        author,
+                    ),
+                    StudioEdgeId::carried(self.mint().ulid()),
+                )
+            })
+            .collect();
+        // **What the Epic itself now says**: the node survives with its
+        // address and gains its title, which of its issues the read took, how
+        // many of how many are on the board, how many the answer left out and
+        // how many it left standing because somebody had worked on them.
+        let resolved = source.resolved(&read.facts(took.read_in)).ok();
         let node_ids: Vec<ipc::StudioNodeId> = made
             .iter()
             .map(|(node, _)| ipc::StudioNodeId::from(node.id()))
             .collect();
+        let taken_back = took.taken_back;
         let studio = self
             .written(studio_id, within, |store, id| {
-                store.keep_read_in(id, &link, resolved.as_ref(), &made, &[], &at)
+                store.keep_read_in(id, &link, resolved.as_ref(), &made, &[], &taken_back, &at)
             })
             .await?;
         self.published_as_helms(
@@ -237,7 +263,7 @@ where
         let made = [(gathering.node().clone(), edge)];
         let studio = self
             .written(studio_id, within.clone(), |store, id| {
-                store.keep_read_in(id, &link, resolved.as_ref(), &made, &[], &at)
+                store.keep_read_in(id, &link, resolved.as_ref(), &made, &[], &[], &at)
             })
             .await?;
         self.published_as_helms(
@@ -282,7 +308,7 @@ where
         let from = frozen.node().position();
         let mut made: Vec<(StudioNode, StudioEdgeId)> = Vec::new();
         let mut by_handle: Vec<(String, StudioNodeId)> = Vec::new();
-        let mut placed = 0usize;
+        let mut placed = 0i64;
         let mut mint = |content: StudioNodeContent, handle: Option<&str>| {
             let node = StudioNode::added(
                 StudioNodeId::carried(self.mint().ulid()),
@@ -353,11 +379,11 @@ where
                 edges.push(edge);
             }
         }
-        let kept = self
-            .store()
-            .lock()
-            .await
-            .keep_read_in(studio, link, None, &made, &edges, &at);
+        let kept =
+            self.store()
+                .lock()
+                .await
+                .keep_read_in(studio, link, None, &made, &edges, &[], &at);
         let _ = kept;
     }
 
@@ -487,8 +513,7 @@ async fn ran(call: &LookupCall, path: &str) -> Result<String, String> {
 }
 
 /// The `n`th node of a read-in, down a column and then across.
-fn laid_out(from: StudioPosition, n: usize) -> StudioPosition {
-    let n = n as i64;
+pub(crate) fn laid_out(from: StudioPosition, n: i64) -> StudioPosition {
     StudioPosition {
         x: from.x + (n / DOWN_A_COLUMN) * ACROSS,
         y: from.y + (n % DOWN_A_COLUMN) * DOWN,

@@ -98,11 +98,13 @@ export function HelmDock({
         chip={chip}
         onRemoveChip={onRemoveChip}
         location={locationOf(context, jobs, studio)}
-        // Drawn whenever there is somewhere else to point Helm — a specific
-        // pick does not hide it, because Discuss or the switch itself is
-        // what points Helm away from the picked repository without moving
-        // the picker.
-        onSwitch={options.length > 1 ? onSwitch : undefined}
+        // Always passed: **the composer alone decides when a switch is worth
+        // drawing**, off `current` and this list. Counting the repositories
+        // here as well is how one set up and Helm pointed at nothing kept
+        // drawing no control under a sentence naming one. A specific pick
+        // does not hide it either — Discuss, or the switch itself, points
+        // Helm away from the picked repository without moving the rail.
+        onSwitch={onSwitch}
         onStartFresh={onStartFresh}
         startFreshDisabled={replying}
         value={draft}
@@ -137,8 +139,10 @@ function unpointedNote(options: readonly HelmRepositoryOption[]): string {
     return "Nothing is set up yet for Helm to answer about. Set up a repository, and Helm answers for it.";
   }
   // The composer below holds the switch that does this, so the act is named
-  // and its control is not described twice. With one set up the switch draws
-  // nothing to choose between, so the sentence names the repository instead.
+  // and its control is not described twice. With one set up the sentence
+  // names that repository rather than counting it, and the switch under it
+  // offers exactly that one to pick — pointed at nothing, one is somewhere
+  // to go.
   const only = options.length === 1 ? options[0] : undefined;
   if (only !== undefined) return `Helm is not pointed at a repository. Pick ${only.label} to ask about it.`;
   return `Helm is not pointed at a repository. ${options.length} are set up, so pick one to ask about it.`;

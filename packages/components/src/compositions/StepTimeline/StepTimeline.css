@@ -86,6 +86,15 @@
   min-width: 0;
 }
 
+/* The live phase fills the chapter's name box rather than shrinking to fit it.
+   Shrink-to-fit would size this to the word `Working`, and the reserved
+   summary band below is `inset-inline: 0` of whatever this box is — so a
+   live header would clip the Drone's sentence to the width of the phase's own
+   name and waste the rest of the line. */
+.armada-steps__mark[data-live] {
+  display: flex;
+}
+
 /* The live phase's mark left, and its slot did not: four phase names read down
    one left edge, and the row a person is looking for is the wrong one to move.
    The same 16px `StepActivityMark` holds. */
@@ -96,10 +105,26 @@
 
 /* The phase's name over what the Drone is doing under it. A column, because
    the name is the heading and the line under it changes every few seconds:
-   side by side, the name would move every time the path got longer. */
+   side by side, the name would move every time the path got longer.
+
+   THE SUMMARY'S BOX IS RESERVED HERE, AND OUT OF FLOW SO IT IS FIXED IN BOTH
+   AXES. `padding-block-end` holds one --leading-2xs line below the name
+   whatever the Drone says, and an absolutely positioned child contributes no
+   intrinsic width — so the sentence's length stops reaching
+   `.armada-chapter__name`'s `flex-basis: auto`, which is what had the chapter
+   header decide whether its act wrapped to a second row by reading the
+   Drone's latest word. The header line measured 57px on one word and 97px on
+   a sentence at one 721px panel before this.
+
+   It grows, rather than the `0 1 auto` a column would take: the band is
+   `inset-inline: 0` of this box, so the summary gets the header's width
+   instead of the phase name's. */
 .armada-steps__title {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  position: relative;
+  padding-block-end: var(--leading-2xs);
   min-width: 0;
 }
 
@@ -111,9 +136,20 @@
 
 /* What the Drone is doing right now. Mono, because it is a tool call and a
    path; quieter than the name above it, because the name is what a person
-   navigates by and this is what they read once they have. One line, clipped —
-   a path that wrapped would change the header's height every few seconds. */
+   navigates by and this is what they read once they have.
+
+   ONE LINE, AND THE LINE IS RESERVED RATHER THAN FOUND: it fills the band
+   `__title` holds open above and clips at the end, so `thinking` and a
+   sentence occupy the same box. One and not two — these summaries run from a
+   word to about a hundred characters, which is roughly what one --text-2xs
+   line holds here, and a second would be a permanent empty band under every
+   live phase. Nothing is lost to the clip: the sentence is a row of the
+   activity log in this chapter's own body, directly beneath. */
 .armada-steps__now {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline: 0;
+  height: var(--leading-2xs);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   font-weight: var(--weight-body);
