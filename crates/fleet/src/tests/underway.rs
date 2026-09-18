@@ -6,10 +6,8 @@
 //! the bound on how many run at once; the second holds that saying so changed
 //! nothing the gate rules on.
 //!
-//! **The bound is read off the stream, so the stream has to be true to it**
-//! (#1436). What a message shows started and not finished is the reading, and
-//! [`more_checks_running_than_the_bound_allows_is_read_as_a_breach`] is what
-//! holds that reading to a run that really does exceed its room.
+//! **The bound is read off the stream, so the stream has to be true to it**:
+//! [`more_checks_running_than_the_bound_allows_is_read_as_a_breach`] (#1467).
 //!
 //! Real commands, for `crate::tests::checking`'s reason: the claims here are
 //! about processes starting and ending, and a fake runner would be asserting
@@ -56,8 +54,8 @@ fn named(name: &str, run: &str) -> ResolvedCheck {
 /// declaring `places: 2` holds two of them (#1102), and counting rows would
 /// read a run of two such Checks as two against a bound of four.
 ///
-/// **The reading the bound is asserted through**, so it is named once and the
-/// case that proves it catches a breach reads the same function. #1436.
+/// **The reading the bound is asserted through**, named once so the case that
+/// proves it catches a breach reads the same function. #1467.
 fn most_places_at_once(said: &[ipc::JobChecking]) -> u32 {
     said.iter()
         .filter_map(|one| one.checking.as_ref())
@@ -130,12 +128,12 @@ async fn heard_over(
 /// then one message per start and one per finish — never more running than
 /// the gate has slots, the fifth waiting until one frees — and a last message
 /// with nothing in it once the writer is dropped.
-/// **Skipped while the machine is loaded, `#1436`.** It passes alone and
+/// **Skipped while the machine is loaded, `#1467`.** It passes alone and
 /// fails only when the whole suite runs on a saturated machine, which is
-/// what the merge line does — so it refused every branch tonight. Whether
-/// this is a defect it is catching, a timing dependence, or a test worth
-/// keeping at all is `#1436`'s to settle.
-#[ignore = "flaky under load, #1436"]
+/// what the merge line does — so it refused every branch on the night it
+/// was switched off. `#1467` carries the causes already found and what is
+/// left to read; switching it back on is that issue's, not this file's.
+#[ignore = "flaky under load, #1467"]
 #[tokio::test]
 async fn each_check_is_said_to_start_and_to_finish_in_order_under_the_slot_bound() {
     let repo = TempDir::new();
@@ -234,9 +232,9 @@ async fn each_check_is_said_to_start_and_to_finish_in_order_under_the_slot_bound
 }
 
 /// **The reading above is not vacuous.** The same Checks over a room of twice
-/// the places are published as holding more than `AT_ONCE` of them, so the
-/// assertion the case above makes still refuses a run that really does exceed
-/// its bound, rather than a run whose stream lags behind it. #1436.
+/// the places are published as holding more than `AT_ONCE` of them, so that
+/// assertion still refuses a run that exceeds its bound rather than one whose
+/// stream lags. #1467.
 #[tokio::test]
 async fn more_checks_running_than_the_bound_allows_is_read_as_a_breach() {
     let repo = TempDir::new();
