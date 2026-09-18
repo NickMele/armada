@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 /**
  * Whether Cmd is down right now, so a control carrying a Global-tier binding
  * can show its own `Kbd` badge without a person opening the palette to learn
- * it exists. **Global tier only** — `⌘K`, `⌘1–⌘8`, `⌘J`, `⌘\`, `⌘[ ⌘]`, per
+ * it exists. **Global tier only** — `⌘K`, `⌘1–⌘9`, `⌘J`, `⌘\`, `⌘[ ⌘]`, per
  * `docs/contracts/design-system.md`'s "Two tiers". `Esc` takes no modifier
  * and every Contextual act (`j`, `x`, `n`, …) is single-key; holding Cmd does
  * not fire either kind, so revealing them here would tell a person to press a

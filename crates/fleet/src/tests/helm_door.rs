@@ -40,6 +40,10 @@ impl Hosting for Running {
         Box::pin(std::future::pending()) as Pin<Box<dyn Future<Output = _> + Send>>
     }
 
+    fn model(&self) -> String {
+        String::from("a-model")
+    }
+
     fn running(&self) -> Vec<u32> {
         vec![SESSION]
     }

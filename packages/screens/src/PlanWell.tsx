@@ -5,7 +5,8 @@
 // Split out of `InsideAJob.tsx` for `Redirect.tsx`'s own reason — one file
 // per control that owns a dialog or a field — now that the well owns two.
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 import {
   Button,
   Clamped,
@@ -131,62 +132,14 @@ function AddTaskControl({
  * is a short act on the row it is about, and a modal over a list a person is
  * still reading would hide the very row the reason is about.
  */
-/**
- * What a task says beyond its title: its note, the files it touches, and the
- * evidence expected of it beside the evidence the work showed.
- *
- * **Expected and shown are drawn as two lines, never reconciled into one.**
- * The planner names an artifact before the work starts and whoever does the
- * work finds out what actually proved it; the pair disagreeing is the fact a
- * reader is here for, and a single line showing only one of them hides it.
- *
- * Quiet at `--text-2xs` and `--fg-subtle`, the reason line's own weight: a
- * task's title is what a person scans, and these are what they stop on.
- */
-function TaskFacts({ task }: { task: PlanTaskRow }): ReactNode {
-  const scope = task.scope ?? [];
-  const has =
-    (task.note ?? "") !== "" ||
-    scope.length > 0 ||
-    (task.expects ?? "") !== "" ||
-    (task.shown ?? "") !== "";
-  if (!has) return null;
-  return (
-    <span className="armada-inside__plan-task-facts">
-      {(task.note ?? "") === "" ? null : (
-        <span className="armada-inside__plan-task-note">{task.note}</span>
-      )}
-      {scope.length === 0 ? null : (
-        <span className="armada-inside__plan-task-scope">
-          {scope.map((path) => (
-            <code key={path} className="armada-inside__plan-task-path">
-              {path}
-            </code>
-          ))}
-        </span>
-      )}
-      {(task.expects ?? "") === "" ? null : (
-        <span className="armada-inside__plan-task-evidence">
-          <span className="armada-inside__plan-task-evidence-label">Expects</span>
-          {task.expects}
-        </span>
-      )}
-      {(task.shown ?? "") === "" ? null : (
-        <span className="armada-inside__plan-task-evidence">
-          <span className="armada-inside__plan-task-evidence-label">Shown</span>
-          {task.shown}
-        </span>
-      )}
-    </span>
-  );
-}
-
 function TaskRow({
   task,
+  onOpenTask,
   onDropTask,
   onSaid,
 }: {
   task: PlanTaskRow;
+  onOpenTask?: (taskId: string) => void;
   onDropTask?: (taskId: string, reason: string) => Promise<PlanEditAnswer>;
   onSaid?: (sentence: string) => void;
 }) {
@@ -204,6 +157,7 @@ function TaskRow({
   const [attemptedEmpty, setAttemptedEmpty] = useState(false);
   const canDrop =
     onDropTask !== undefined && (task.state === "open" || task.state === "working");
+  const files = task.scope?.length ?? 0;
   const blank = reason.trim() === "";
 
   function close(): void {
@@ -244,11 +198,29 @@ function TaskRow({
       <TaskMark state={task.state} />
       <span className="armada-inside__plan-task-id">{task.id}</span>
       <span className="armada-inside__plan-task-body">
-        <span className="armada-inside__plan-task-title">{task.title}</span>
+        {/* **The title is the control, not the row.** A pressable `li` would
+            nest the drop button inside it, and a screen reader would read one
+            control where there are two. */}
+        {onOpenTask === undefined ? (
+          <span className="armada-inside__plan-task-title">{task.title}</span>
+        ) : (
+          <button
+            type="button"
+            className="armada-inside__plan-task-open"
+            onClick={() => onOpenTask(task.id)}
+          >
+            <span className="armada-inside__plan-task-title">{task.title}</span>
+            <ChevronRight size={12} strokeWidth={2} aria-hidden />
+          </button>
+        )}
         {task.state === "dropped" && task.reason !== undefined ? (
           <span className="armada-inside__plan-task-reason">{task.reason}</span>
         ) : null}
-        <TaskFacts task={task} />
+        {files === 0 ? null : (
+          <span className="armada-inside__plan-task-files">
+            {files} {files === 1 ? "file" : "files"}
+          </span>
+        )}
         {open ? (
           <span className="armada-inside__plan-task-drop-form">
             <Input
@@ -341,10 +313,12 @@ export function PlanPending({ stepLabel }: { stepLabel: string }) {
 export function PlanWell({
   approach,
   tasks,
+  onOpenTask,
   onAddTask,
   onDropTask,
   onSaid,
 }: PlanRegionData & {
+  onOpenTask?: (taskId: string) => void;
   onAddTask?: (title: string, detail: string) => Promise<PlanEditAnswer>;
   onDropTask?: (taskId: string, reason: string) => Promise<PlanEditAnswer>;
   onSaid?: (sentence: string) => void;
@@ -375,7 +349,13 @@ export function PlanWell({
         <Clamped lines={2}>{approach}</Clamped>
         <ul className="armada-inside__plan-tasks">
           {tasks.map((task) => (
-            <TaskRow key={task.id} task={task} onDropTask={onDropTask} onSaid={onSaid} />
+            <TaskRow
+              key={task.id}
+              task={task}
+              onOpenTask={onOpenTask}
+              onDropTask={onDropTask}
+              onSaid={onSaid}
+            />
           ))}
         </ul>
       </div>

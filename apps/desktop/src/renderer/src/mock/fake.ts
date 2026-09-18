@@ -172,6 +172,12 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
     listRepositoryAllowedCommands: async () => refused("/manifest/allowed-commands"),
     removeRepositoryAllowedCommand: async () => refused("/manifest/allowed-commands"),
 
+    listKitServers: async () => refused("/kit/servers"),
+    addKitServer: async () => refused("/kit/servers"),
+    forgetKitServer: async () => refused("/kit/servers"),
+    setKitServerReach: async () => refused("/kit/servers"),
+    setManifestServerReach: async () => refused("/kit/servers"),
+
     // The rail's pick is this window's own, so it moves here as it does in main.
     pickRepository: async (root) => publish({ repository: root }),
 
@@ -234,6 +240,9 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
     },
 
     askHelm: async () => OK,
+    // No session behind a mock Fleet, so the record is the refusal a window
+    // with nothing connected already draws — never an invented record.
+    helmDebugInfo: async () => refused("/helm/debug"),
     startHelmFresh: async () => OK,
     pointHelm: async () => undefined,
     // The mock provides no haptics, so nothing calls this; answered for the type.

@@ -46,6 +46,8 @@ mod fleetwide;
 /// **The third voice in the activity log.**
 mod following;
 mod journal;
+/// Kit's MCP servers, and each Manifest's word over one. `#1275`.
+mod kit;
 /// Fleet's three changeable limits, read and saved.
 mod limiting;
 /// Setup's proposals, an edit to one, and its Write.

@@ -31,6 +31,7 @@ import { useEffect, useState } from "react";
 
 import type { BridgeState } from "../../shared/bridge";
 import type { EditManifest, SaveManifestFile } from "@armada/protocol";
+import type { AddKitServer, ManifestReach, ReachesDrones } from "@armada/protocol";
 import type {
   AddTask,
   Artifact,
@@ -83,7 +84,8 @@ export const addStudioNode = (studioId: string, node: StudioNodeByHand, position
   window.armada.addStudioNode(studioId, node, position);
 export const moveStudioNode = (studioId: string, nodeId: string, position: { x: number; y: number }) =>
   window.armada.moveStudioNode(studioId, nodeId, position);
-export const removeStudioNode = (studioId: string, nodeId: string) => window.armada.removeStudioNode(studioId, nodeId);
+export const removeStudioNodes = (studioId: string, nodeIds: readonly string[]) =>
+  window.armada.removeStudioNodes(studioId, nodeIds);
 export const decideStudioEdge = (studioId: string, edgeId: string, accepted: boolean) =>
   window.armada.decideStudioEdge(studioId, edgeId, accepted);
 // Studio capture — #1290. What a person pointed at; the frame is main's to take.
@@ -158,6 +160,8 @@ export const pickRepository = (root: string | null): void => void window.armada.
 // Helm's conversation — #944. The reply, and the thread it joins, arrive on
 // `BridgeState.helm`. `context` names where the person is — #1075.
 export const askHelm = (text: string, context?: HelmContext) => window.armada.askHelm(text, context);
+/** The session as one quotable record, read once when a person opens it — #1367. */
+export const helmDebugInfo = () => window.armada.helmDebugInfo();
 export const startHelmFresh = () => window.armada.startHelmFresh();
 export const pointHelm = (manifestId: string): void => void window.armada.pointHelm(manifestId);
 // Locate: a folder from the OS dialog, and a repository added or cloned. The window picks what it located.
@@ -180,6 +184,14 @@ export const writeManifestProposal = (body: WriteManifestProposal) => window.arm
 export const listRepositoryAllowedCommands = () => window.armada.listRepositoryAllowedCommands();
 export const removeRepositoryAllowedCommand = (run: string) =>
   window.armada.removeRepositoryAllowedCommand(run);
+/** Kit's MCP servers, and the two tiers of reach over each — #1275. */
+export const listKitServers = () => window.armada.listKitServers();
+export const addKitServer = (adding: AddKitServer) => window.armada.addKitServer(adding);
+export const forgetKitServer = (name: string) => window.armada.forgetKitServer(name);
+export const setKitServerReach = (name: string, drones: ReachesDrones) =>
+  window.armada.setKitServerReach(name, drones);
+export const setManifestServerReach = (name: string, reach: ManifestReach | null) =>
+  window.armada.setManifestServerReach(name, reach);
 export const startServer = (name: string, jobId?: string) => window.armada.startServer(name, jobId);
 export const stopServer = (serverId: string) => window.armada.stopServer(serverId);
 export const openServerLink = (serverId: string, url: string) =>

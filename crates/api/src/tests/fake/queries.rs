@@ -297,6 +297,16 @@ impl Queries for FakeDaemon {
         })
     }
 
+    /// Whatever the fake's own acts have left — `#1275`.
+    async fn get_kit_servers(
+        &self,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::KitServers, Refusal> {
+        Ok(ipc::KitServers {
+            servers: self.kit_servers.lock().expect("not poisoned").clone(),
+        })
+    }
+
     /// **Always a reading, and always one worth saying.** The fake exists so a
     /// route test has a shape to assert on; a `None` here would make the
     /// ordinary case a test of the empty answer.

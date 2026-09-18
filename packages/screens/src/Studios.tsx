@@ -3,8 +3,8 @@
 // **Reopened read-only.** A Studio is kept to be reread (`docs/concepts/studio.md`), so one opened
 // from the list moves nothing and draws no act until Continue; one a person just started opens
 // editable. **A person's acts live here and nowhere else**: accepting or rejecting a proposed
-// relation, deleting a node, which confirms because its edges go with it, and every rung of
-// promotion, which is `StudioPromotion.tsx`'s panel. What is drawn is what Fleet wrote — every act
+// relation, deleting what is picked, which confirms because its edges go with it, and every rung
+// of promotion, which is `StudioPromotion.tsx`'s panel. What is drawn is what Fleet wrote — every act
 // answers with the Studio whole, and main folds it into `studio`.
 //
 // **The whiteboard's selection is held here, not in `App`.** Clustering is of several nodes, and
@@ -54,6 +54,7 @@ import {
   whiteboardNodes,
 } from "./studio";
 import { useStudioFrames, type ReadStudioFrame } from "./studio-frames";
+import { clearingLabel, clearingOf, clearingSaid } from "./studio-clearing";
 import { keepsAnAddress } from "./studio-promotion";
 import { useAddNodeKeys } from "./studio-keys";
 import type { StudioAnswer, StudioRead, StudiosRead } from "./studio-reads";
@@ -105,7 +106,13 @@ export type StudiosProps = {
   /** Put a Note, a Link or a Sketch on the open Studio, where the person is looking. */
   onAddNode: (node: StudioNodeByHand, position: StudioPosition) => Promise<Outcome>;
   onMoveNode: (nodeId: string, position: { x: number; y: number }) => Promise<Outcome>;
-  onRemoveNode: (nodeId: string) => Promise<Outcome>;
+  /**
+   * Delete everything picked, as one write — #1411. **The only delete**, one
+   * node or eighteen, and **all of them or none**: Fleet takes the whole
+   * selection in one transaction, so a refusal leaves every node standing and
+   * there is no half a board to reconcile.
+   */
+  onRemoveNodes: (nodeIds: readonly string[]) => Promise<Outcome>;
   onDecideEdge: (edgeId: string, accepted: boolean) => Promise<Outcome>;
   /** The picture one Note kept, as bytes. The screen mints the `blob:` and revokes it — #1352. */
   onReadFrame: ReadStudioFrame;
@@ -289,7 +296,8 @@ function OpenedStudio(props: StudiosProps & { open: OpenStudio }) {
 function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
   const { graph: studio, open, jobs, live, selectedNode, onSelectNode, onBack, onContinue } = props;
   const [refused, setRefused] = useState<string | null>(null);
-  const [removing, setRemoving] = useState<string | null>(null);
+  /** Whether the confirmation for deleting what is picked is up — #1411. */
+  const [clearing, setClearing] = useState(false);
   const [deciding, setDeciding] = useState<string | null>(null);
   /** The Note whose frame is open, full size. */
   const [opened, setOpened] = useState<string | null>(null);
@@ -363,8 +371,19 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
     ...(openable === undefined
       ? []
       : [{ id: "job", label: "Open Job", press: () => props.onOpenJob(openable.id) }]),
-    ...(editable && selected !== undefined
-      ? [{ id: "remove", label: "Delete node", danger: true, press: () => setRemoving(selected.id) }]
+    // **One delete, counted rather than named** — #1411. Eighteen titles is the
+    // panel that overflowed the window, and a second act for the one-node case
+    // is a second path to keep in step with this one: they had already drifted
+    // over what happens to a Note's picture.
+    ...(editable && onBoard.length > 0
+      ? [
+          {
+            id: "remove-picked",
+            label: clearingLabel(onBoard.length),
+            danger: true,
+            press: () => setClearing(true),
+          },
+        ]
       : []),
   ];
 
@@ -508,25 +527,24 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
           onClose={() => setOpened(null)}
         />
       )}
+      {/* Everything picked, as one write — #1411. **The count is the name**, in the act, in the
+          title and on the confirm, and what goes with them is said before the press. */}
       <Dialog
-        open={removing !== null}
-        title="Delete this node"
-        confirmLabel="Delete node"
-        onCancel={() => setRemoving(null)}
+        open={clearing && onBoard.length > 0}
+        tone="destructive"
+        title={clearingLabel(onBoard.length)}
+        confirmLabel={clearingLabel(onBoard.length)}
+        onCancel={() => setClearing(false)}
         onConfirm={() => {
-          const nodeId = removing;
-          setRemoving(null);
-          if (nodeId === null) return;
+          const going = [...onBoard];
+          setClearing(false);
           onSelectNode(null);
-          void props.onRemoveNode(nodeId).then(answered);
+          void props.onRemoveNodes(going).then(answered);
         }}
       >
-        {removing === null ? null : (
-          <p>
-            {nodeNamed(studio, removing, jobs)} goes, and every edge on it. The rest of the Studio stays where
-            it is.
-          </p>
-        )}
+        {clearingSaid(clearingOf(studio, onBoard)).map((line) => (
+          <p key={line}>{line}</p>
+        ))}
       </Dialog>
     </div>
   );

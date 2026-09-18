@@ -556,6 +556,13 @@ export const CHANNELS = {
   // Fleet names the repository, so neither takes a path or an id.
   listRepositoryAllowedCommands: "bridge:list-repository-allowed-commands",
   removeRepositoryAllowedCommand: "bridge:remove-repository-allowed-command",
+  // Kit's MCP servers — #1275. Five entries, on the same terms: Fleet names
+  // the repository, so the Manifest tier needs no id from here.
+  listKitServers: "bridge:list-kit-servers",
+  addKitServer: "bridge:add-kit-server",
+  forgetKitServer: "bridge:forget-kit-server",
+  setKitServerReach: "bridge:set-kit-server-reach",
+  setManifestServerReach: "bridge:set-manifest-server-reach",
   // The rail's pick. A root and nothing else; main ignores one Fleet does not list.
   pickRepository: "bridge:pick-repository",
   // Locate: the OS folder dialog, and a repository added or cloned. Main asks Fleet; the renderer names paths.
@@ -596,6 +603,8 @@ export const CHANNELS = {
   // Helm's conversation: say something, forget it, and point it at a
   // repository without moving the rail's own pick. #944.
   askHelm: "bridge:ask-helm",
+  // The session as one record, read once when a person opens it — #1367.
+  helmDebugInfo: "bridge:helm-debug-info",
   startHelmFresh: "bridge:start-helm-fresh",
   pointHelm: "bridge:point-helm",
   // A repository's Studios — #1287. Two reads a surface holds open, and one act per operation:
@@ -607,7 +616,9 @@ export const CHANNELS = {
   renameStudio: "bridge:rename-studio",
   addStudioNode: "bridge:add-studio-node",
   moveStudioNode: "bridge:move-studio-node",
-  removeStudioNode: "bridge:remove-studio-node",
+  // Everything picked, deleted as one write — #1411. Its own channel because it
+  // is its own operation on the wire, not a loop over the one above.
+  removeStudioNodes: "bridge:remove-studio-nodes",
   decideStudioEdge: "bridge:decide-studio-edge",
   // Studio capture — #1290. One channel: the renderer says where it pointed and
   // main takes the frame of its own window, so no image ever reaches the renderer.

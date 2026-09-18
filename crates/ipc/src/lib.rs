@@ -84,6 +84,8 @@ mod health;
 mod helm;
 /// A call a Helm session made that its person's settings do not cover.
 mod helm_call;
+/// One repository's Helm session as one quotable record. `#1367`.
+mod helm_debug;
 mod history;
 /// What Fleet is holding disk for, and the test each one did not pass.
 /// **A piloted worktree is not on this wire at all** — `#367`.
@@ -94,6 +96,8 @@ mod job;
 /// activity log was designed around and nothing produced.**
 mod journal;
 mod judged;
+/// Kit's MCP servers, and each Manifest's word over one. `#1275`.
+mod kit;
 /// Fleet's three changeable limits. **A value out of range does not decode.**
 mod limits;
 /// A possible `armada.yml` per workspace, and the edits and Write that finish it.
@@ -207,9 +211,10 @@ pub use drones::{DroneDetail, DroneList, DroneSummary};
 pub use editing::{ManifestFile, ManifestSaved, SaveManifestFile};
 pub use enums::{
     Actor, AdvanceGate, BudgetHold, CheckOutcome, CriterionSource, DependencyDirection,
-    DronePresence, EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, Recourse,
-    Resumption, ScoutSourceKind, Side, StepState, StudioAuthor, StudioEdgeKind, StudioEdgeStanding,
-    StudioNodeKind, StudioNodeState, StudioRelation, TaskState, TopLevelOrigin, Urgency,
+    DronePresence, EvidenceType, JobStatus, JudgeVerdict, ManifestReach, Origin, QueuedReason,
+    ReachesDrones, Recourse, Resumption, ScoutSourceKind, Side, StepState, StudioAuthor,
+    StudioEdgeKind, StudioEdgeStanding, StudioNodeKind, StudioNodeState, StudioRelation, TaskState,
+    TopLevelOrigin, Urgency,
 };
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
@@ -230,6 +235,7 @@ pub use helm_call::{
     AnswerHelmCall, AskingToRun, HelmAskingToRun, HelmCallAnswer, HelmCallAnswered,
     HelmCallInFlight, HelmCallSettled, HelmCallsWaiting, RunOrNot,
 };
+pub use helm_debug::{HelmDebugInfo, HelmDebugLine, HelmDebugSaid, HelmDebugText};
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};
 pub use ids::{
@@ -245,6 +251,10 @@ pub use journal::{
     JobLog, JournalClosed, JournalMessage, JournalOpened, LogNote, NoteLevel, NotedField, Quiet,
 };
 pub use judged::{Citation, CitedAt, Cleared, Flagged, Given, Judged, KeptDeliverable};
+pub use kit::{
+    AddKitServer, ForgetKitServer, KitServerRow, KitServers, ServerAddress, SetKitServerReach,
+    SetManifestServerReach,
+};
 pub use limits::{
     ChecksAtOnce, DiskFloorGib, DronesAtOnce, FleetLimits, LimitValues, MemorySparePercent,
     SaveLimits, Within,
@@ -301,7 +311,7 @@ pub use since::{EventTally, EventsSince};
 pub use studio::{
     AddStudioNode, ContradictionSettled, CreateStudio, DecideStudioEdge, DeferOnStudio,
     DispatchStudioDraft, EditStudioDraft, EditStudioLink, EpicRead, EpicTake, ForgeState,
-    GroupStudioNodes, HelmStudioAct, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode,
+    GroupStudioNodes, HelmStudioAct, MoveStudioNode, ProposeStudioEdge, RemoveStudioNodes,
     RenameStudio, SettleContradiction, StartStudioRun, Studio, StudioDeleted, StudioEdge,
     StudioHelmActed, StudioList, StudioNode, StudioNodeContent, StudioPosition, StudioRunKept,
     StudioRunStarted, StudioSummary, WriteUpStudioNode,

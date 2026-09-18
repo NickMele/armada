@@ -116,6 +116,14 @@ impl Thread {
         (watch, held.messages.iter().cloned().collect(), held.skipped)
     }
 
+    /// The thread as it stands, and how many older lines it has dropped.
+    /// **No subscription**, unlike [`Thread::watched`]: a record is taken
+    /// once and nothing follows it.
+    pub(crate) fn taken(&self) -> (Vec<HelmMessage>, u64) {
+        let held = self.held();
+        (held.messages.iter().cloned().collect(), held.skipped)
+    }
+
     /// Forget the thread, and tell every viewer it is gone.
     pub(crate) fn clear(&self) {
         let mut held = self.held();

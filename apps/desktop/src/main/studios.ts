@@ -172,8 +172,13 @@ export class StudioReads {
     return this.acted(await this.act(member(studioId, "/move_node"), { node_id: nodeId, position }));
   }
 
-  async removeNode(studioId: string, nodeId: string): Promise<Outcome> {
-    return this.acted(await this.act(member(studioId, "/remove_node"), { node_id: nodeId }));
+  /**
+   * Everything picked, removed as one write — #1411. **The only delete on a
+   * Studio's nodes**, one node or eighteen: eighteen calls can stop at the
+   * ninth, and what is left is a board a person has to reconcile by reading it.
+   */
+  async removeNodes(studioId: string, nodeIds: readonly string[]): Promise<Outcome> {
+    return this.acted(await this.act(member(studioId, "/remove_nodes"), { node_ids: [...nodeIds] }));
   }
 
   async decideEdge(studioId: string, edgeId: string, accepted: boolean): Promise<Outcome> {

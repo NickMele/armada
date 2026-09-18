@@ -22,6 +22,7 @@ import type {
 } from "@armada/protocol";
 import type { EditManifest, SaveManifestFile, StartCheckoutRun, StartRun } from "@armada/protocol";
 import type { EditManifestProposal, WriteManifestProposal } from "@armada/protocol";
+import type { AddKitServer, ManifestReach, ReachesDrones } from "@armada/protocol";
 import type { StagedFrame, StudioCapture, StudioNodeByHand, StudioPosition } from "@armada/protocol";
 import { ANNOTATE_FLAG } from "../shared/annotations";
 import { handleAnnotations } from "./annotations";
@@ -744,6 +745,7 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.askHelm, (_event, text: string, context?: HelmContext) =>
     connection?.askHelm(text, context),
   );
+  ipcMain.handle(CHANNELS.helmDebugInfo, () => connection?.helmDebugInfo());
   ipcMain.handle(CHANNELS.startHelmFresh, () => connection?.startHelmFresh());
   ipcMain.handle(CHANNELS.pointHelm, (_event, manifestId: string) => connection?.pointHelm(manifestId));
   ipcMain.handle(CHANNELS.startCheckoutVerify, (event, workspace: unknown) =>
@@ -798,6 +800,23 @@ void app.whenReady().then(() => {
   );
   ipcMain.handle(CHANNELS.removeRepositoryAllowedCommand, (event, run: string) =>
     connection?.repositoryAllowsFor(windowIdOf(event)).remove(run),
+  );
+  // Kit's MCP servers — #1275. Kit itself is machine-wide; the picked
+  // repository is what scopes the Manifest tier, so none of these names one.
+  ipcMain.handle(CHANNELS.listKitServers, (event) => connection?.kitFor(windowIdOf(event)).list());
+  ipcMain.handle(CHANNELS.addKitServer, (event, adding: AddKitServer) =>
+    connection?.kitFor(windowIdOf(event)).add(adding),
+  );
+  ipcMain.handle(CHANNELS.forgetKitServer, (event, name: string) =>
+    connection?.kitFor(windowIdOf(event)).forget(name),
+  );
+  ipcMain.handle(CHANNELS.setKitServerReach, (event, name: string, drones: ReachesDrones) =>
+    connection?.kitFor(windowIdOf(event)).setKitReach(name, drones),
+  );
+  ipcMain.handle(
+    CHANNELS.setManifestServerReach,
+    (event, name: string, reach: ManifestReach | null) =>
+      connection?.kitFor(windowIdOf(event)).setManifestReach(name, reach),
   );
   // A declared server, for this Job's worktree or the main checkout where no
   // Job is named. `servers` on the published state is what keeps a *Serving*
@@ -916,9 +935,13 @@ void app.whenReady().then(() => {
     if (!text(studioId) || !text(nodeId) || at === null) return undefined;
     return (await connection?.studios.moveNode(studioId, nodeId, at)) ?? unsent;
   });
-  ipcMain.handle(CHANNELS.removeStudioNode, async (_event, studioId: unknown, nodeId: unknown) =>
-    text(studioId) && text(nodeId) ? ((await connection?.studios.removeNode(studioId, nodeId)) ?? unsent) : undefined,
-  );
+  // Everything picked, deleted as one write — #1411. **Every name is checked
+  // here before any of them crosses**, so a list carrying one thing that is not
+  // a node reaches no route at all rather than half a delete.
+  ipcMain.handle(CHANNELS.removeStudioNodes, async (_event, studioId: unknown, nodeIds: unknown) => {
+    if (!text(studioId) || !Array.isArray(nodeIds) || nodeIds.length === 0 || !nodeIds.every(text)) return undefined;
+    return (await connection?.studios.removeNodes(studioId, nodeIds)) ?? unsent;
+  });
   // Studio capture — #1290. **Main takes the frame, of the sender's own window
   // and no other**, so the one capability the preload gains is a Note on a
   // Studio rather than a screenshot the renderer could ask for and keep.

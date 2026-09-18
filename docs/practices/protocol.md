@@ -1298,6 +1298,79 @@ one — which is the same rule `title` and `state` already follow at 14.18.
 `laid_out_from` is Fleet's own bookkeeping on the wire: the corner of the block an Epic's issues sit
 in, so a widening fills that block's gaps and a node dragged out of it is readable as dragged.
 
+## Protocol 15.1: a Helm session can be carried to whoever could fix it
+
+`#1367`. One new route, `GET /helm/debug`, answering `HelmDebugInfo` — the repository, its
+authority and model; the brief as it was sent; the tools the door offered by name; the thread,
+bounded, with each turn's cost, its calls and its refusals; what the session's last poll was
+answered; and the protocol Fleet speaks beside the Fleet process that answered. Additive: a new
+operation and a new DTO family, and nothing an older peer already parses changes.
+
+**Fields and not text**, for `ErrorNotice/payload.ts`'s reason: Bridge formats them, so one
+producer writes the artifact and the expanded view renders the same string the clipboard takes. A
+Fleet that formatted the record and a Bridge that framed it would be two producers of one artifact.
+
+**`polled` is kept as the door answers a session's `get_events_since`**, not recounted when the
+record is taken — a window counted later is not the window a turn read. It is in memory for one run
+of Fleet, so it is absent on a session that has not polled since Fleet started, and the record says
+so rather than claiming the session never polled.
+
+**The thread is bounded and says what it cut**, the way a log tail does, and a long reply is cut
+with its own length beside it. `agent_access` is `No`: a session must not read another session, and
+reading its own brief and roster would be reading a record kept about it.
+## Protocol 16.0: one delete on a Studio's nodes, one node or eighteen
+
+`#1411`. `remove_studio_node` is gone — the route, the DTO, the `Studios` method, the store write
+and the capability Bridge reached it by. `remove_studio_nodes` replaces it, `POST
+/studios/:studio_id/remove_nodes` carrying `RemoveStudioNodes { node_ids }`, `Bridge only`.
+**Removing an operation is a major bump by this document's own table**, as at 14.0, so the major
+moves and the minor resets.
+
+**This was written as 15.0 and is 16.0**, because 15.0 landed underneath it while the branch was
+open. Both files read `major = 15, minor = 0`, so git merged them clean and the collision was
+invisible — two changes claiming one version, which is the failure this file's own numbering
+exists against. A version taken on a branch is a claim about the base it was taken from, and it is
+re-read at every merge of `main`.
+
+**Two routes for one act is two paths that drift, and these had.** The single-node write left a
+captured Note's frame on disk; the selection write deletes it. Retiring the first closes that leak
+rather than writing it down. A Bridge built before this presses a route that answers
+`fleet.route_not_found`, which the major is what stops it reaching.
+
+**All of them or none is the store's transaction, not the caller's care.** Every name is checked
+before anything is deleted, so a selection carrying one name the Studio does not hold refuses with
+every node still on it — including the Studio's own `touched_at`, which rolls back with the rest.
+A name given twice removes that node once. A call naming no node at all is refused as
+`fleet.studio_no_nodes_named` rather than taken as a write that does nothing.
+
+**The frames go after the write, never before it.** A Note's picture is a file beside the records
+and the record is what names it, so the file is deleted once the row that named it is gone. A
+refused write leaves every picture where the Note that keeps it can still draw it.
+
+## Protocol 16.1: Kit's MCP servers, and what a Drone here is handed
+
+`#1275`. `get_kit_servers`, `add_kit_server`, `forget_kit_server`, `set_kit_server_reach` and
+`set_manifest_server_reach` — five routes under `/kit/servers`, the Manifest riding as
+`?manifest_id=` the way `get_repository_allowed_commands` already carries it. Additive: no existing
+field moved, and an older Bridge reads none of them.
+
+`KitServerRow` carries **both tiers and the answer they come to**. `drones` is Kit's default,
+`manifest` is this repository's word — left out where it has none, which is not a third spelling but
+Kit's default answering — and `resolves` is `core_model::a_drone_resolves` over the two. It crosses
+rather than being computed on the far side because the same call writes the `--mcp-config` document
+a Drone is spawned against, and a surface that recomputed it could draw a server as reaching a Drone
+that no Drone is handed.
+
+`ServerAddress` is tagged by `transport`, so a reader matches one field rather than guessing which
+of two optional keys turned up.
+
+`SetManifestServerReach.reach` is `Option`, **and the key must be present**: `null` is the
+take-back, and `SetModel` is the precedent. A Bridge that dropped the field would throw away a
+person's word about who may reach a server and be answered 200.
+
+Every one of the five is `agent_access = "No"`. What a Drone may reach is the owner's decision, and
+a tool that read the set is a step toward one that changes it.
+
 ## Open questions
 
 Naming these rather than deciding them, per this document's brief:

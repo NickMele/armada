@@ -1,32 +1,24 @@
-//! The configuration file a Drone is spawned against, holding one server — and
+//! The configuration file a Drone is spawned against — and
 //! [`publish_the_agents_door`], the opposite guarantee in a file Armada does
 //! not own.
 //!
-//! # Why this is written rather than assembled at the call site
-//!
-//! Because the guarantee is about what the document does **not** contain, and a
-//! document assembled from a map somebody passes in is a document a caller can
-//! add a second entry to. [`only_the_evidence_server`] takes one address and
-//! there is no parameter through which a second server could arrive.
+//! Armada's Evidence server, plus the Kit servers `fleet::spawning` resolved
+//! for this Manifest and no others. Until `#1275` it took no parameter a second
+//! server could arrive through; the guarantee moved rather than went, to
+//! **`core_model::a_drone_resolves` and nothing else** — a person's own Claude
+//! configuration is read nowhere here.
 //!
 //! Paired with `--strict-mcp-config`, which `harness` puts on every argument
-//! list: the file says which server, the flag says *only* that server. v1
-//! passed neither and its Drone came up holding the operator's seven connected
+//! list: the file says which servers, the flag says *only* those. v1 passed
+//! neither and its Drone came up holding the operator's seven connected
 //! servers, ninety-five tools and the accounts behind them.
-//!
-//! # What is not here
-//!
-//! **The server itself.** Answering a tool call means turning JSON-RPC bytes
-//! into a typed call, and gate rule five scopes that to the crates where bytes
-//! enter the process. `fleet::evidence` is everything from the typed call
-//! inward and says the same thing from the other side. What answers on the
-//! address this document names is `api`'s Evidence endpoint, which is where the
-//! JSON-RPC is read and where `ipc` does the reading.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::Path;
 
+use core_model::{KitServer, ServerAddress};
 use serde::Serialize;
 
 /// The name Armada's own server is registered under, and the prefix every tool
@@ -39,24 +31,29 @@ pub const EVIDENCE_SERVER: &str = "armada";
 
 /// The document, as the harness reads it.
 ///
-/// A struct rather than a map, so the shape is fixed at compile time and the
-/// only server in it is the one field below.
+/// A `BTreeMap` so the bytes are the same every spawn: an unordered map would
+/// rewrite the file on no change, and the test below asserts bytes.
 #[derive(Serialize)]
 struct StrictConfig<'a> {
     #[serde(rename = "mcpServers")]
-    servers: OnlyServer<'a>,
+    servers: BTreeMap<&'a str, Server<'a>>,
 }
 
+/// One server, in the two shapes the CLI's schema accepts.
 #[derive(Serialize)]
-struct OnlyServer<'a> {
-    armada: HttpServer<'a>,
-}
-
-#[derive(Serialize)]
-struct HttpServer<'a> {
-    #[serde(rename = "type")]
-    transport: Transport,
-    url: &'a str,
+#[serde(untagged)]
+enum Server<'a> {
+    Http {
+        #[serde(rename = "type")]
+        transport: Transport,
+        url: &'a str,
+    },
+    Stdio {
+        #[serde(rename = "type")]
+        transport: Transport,
+        command: &'a str,
+        args: &'a [String],
+    },
 }
 
 /// The `type` the agent CLI's `--mcp-config` schema accepts for a server this
@@ -80,22 +77,42 @@ enum Transport {
     Stdio,
 }
 
-/// Write the file, holding Armada's Evidence server and nothing else.
+/// Write the file: Armada's Evidence server, and the Kit servers `kit` names.
 ///
 /// `at` is where the file goes and `url` is where Fleet is serving. The path is
 /// outside the worktree — a Drone that could read its own MCP configuration
 /// could read the address it reports to, and a Drone that could write it could
 /// name a different server.
-pub fn only_the_evidence_server(at: &Path, url: &str) -> Result<(), io::Error> {
-    let document = ipc::encode(&StrictConfig {
-        servers: OnlyServer {
-            armada: HttpServer {
+///
+/// **The Evidence server is inserted last and cannot be displaced**, so a Kit
+/// server a person happened to call `armada` shadows nothing. `add_kit_server`
+/// refuses the name as well; this is the half that holds without it.
+pub fn the_drones_servers(at: &Path, url: &str, kit: &[KitServer]) -> Result<(), io::Error> {
+    let mut servers = BTreeMap::new();
+    for server in kit {
+        let entry = match &server.address {
+            ServerAddress::Http { url } => Server::Http {
                 transport: Transport::Http,
                 url,
             },
+            ServerAddress::Stdio { command, args } => Server::Stdio {
+                transport: Transport::Stdio,
+                command,
+                args,
+            },
+        };
+        servers.insert(server.name.as_str(), entry);
+    }
+    servers.insert(
+        EVIDENCE_SERVER,
+        Server::Http {
+            transport: Transport::Http,
+            url,
         },
-    })
-    .map_err(|why| io::Error::new(io::ErrorKind::InvalidData, why.to_string()))?;
+    );
+
+    let document = ipc::encode(&StrictConfig { servers })
+        .map_err(|why| io::Error::new(io::ErrorKind::InvalidData, why.to_string()))?;
 
     if let Some(parent) = at.parent() {
         fs::create_dir_all(parent)?;
@@ -122,7 +139,7 @@ fn restrict(_at: &Path) -> Result<(), io::Error> {
 ///
 /// **The repository's own file, and that is what makes it safe.** A Drone is
 /// spawned under `--strict-mcp-config` against the document
-/// [`only_the_evidence_server`] writes, so it never reads this one — see
+/// [`the_drones_servers`] writes, so it never reads this one — see
 /// `harness`. Fleet control is therefore published in the one place a Drone
 /// cannot inherit it from.
 pub const REPOSITORY_CONFIG: &str = ".mcp.json";
@@ -156,8 +173,8 @@ pub enum Published {
 /// Register the agent's door in `at`, keeping everything else in the file.
 ///
 /// **The opposite guarantee to the document above.** That one is Armada's,
-/// written whole, holding exactly one server; this one is the repository's, so
-/// one entry is added and every other key survives.
+/// written whole, holding only what Fleet resolved; this one is the
+/// repository's, so one entry is added and every other key survives.
 ///
 /// `command` and `args` are the caller's, because the program is `armada`'s own
 /// verb and this crate may not know it. What this crate owns is the file's

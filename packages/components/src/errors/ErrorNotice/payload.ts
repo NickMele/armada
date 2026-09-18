@@ -116,12 +116,16 @@ const NO_CODE = "none";
 /**
  * A two-column block, aligned on the longest label.
  *
+ * **Exported so a second artifact reads as the same act.** `HelmRecord`'s own
+ * producer lays a session out in these columns — one producer each, one
+ * grammar between them, and a change to the grammar moves both.
+ *
  * A value containing newlines keeps them, and its continuation lines are
  * indented to the value column rather than collapsed onto one line. Losing a
  * newline out of a machine value to keep a column tidy is the wrong trade in
  * an artifact that exists to be complete.
  */
-function aligned(rows: [string, string][], indent: string): string[] {
+export function aligned(rows: [string, string][], indent: string): string[] {
   const width = Math.max(...rows.map(([label]) => label.length)) + GAP;
   return rows.map(([label, value]) => {
     const pad = " ".repeat(indent.length + width);

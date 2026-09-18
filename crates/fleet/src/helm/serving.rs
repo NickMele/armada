@@ -13,14 +13,14 @@ use adapter_traits::{AgentHarness, Delivery, DroneEvent, Vcs, WorkProduct};
 use api::{Conversations as Surface, ObservedHelm, Refusal};
 use core_model::StepId;
 use ipc::{
-    AnswerHelmCall, AskHelm, AskingToRun, Freshness, HelmAsked, HelmCallsWaiting,
-    HelmChangedCheckout, HelmContext, HelmConversation, HelmFresh, HelmMessage, HelmScreen,
-    HelmUnanswered, Instant, ManifestId, RunOrNot, Shown, WireError,
+    AnswerHelmCall, AskHelm, AskingToRun, EventsSince, Freshness, HelmAsked, HelmCallsWaiting,
+    HelmChangedCheckout, HelmContext, HelmConversation, HelmDebugInfo, HelmFresh, HelmMessage,
+    HelmScreen, HelmUnanswered, Instant, ManifestId, RunOrNot, Shown, WireError,
 };
 
 use super::conversation::{Conversation, ConversationKey};
 use super::hosting::{Carried, Carry, Heard};
-use super::{brief, Authority};
+use super::{brief, recording, Authority};
 use crate::clock::Clock;
 use crate::daemon::Fleet;
 use crate::repositories::Served;
@@ -81,6 +81,55 @@ where
                 .await;
         });
         Ok(answered)
+    }
+
+    /// **Taken at a moment, and never a second `observe_helm`.** Everything
+    /// here is read in one pass: nothing is subscribed to and nothing follows.
+    async fn get_helm_debug_info(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> Result<HelmDebugInfo, Refusal> {
+        let (served, key) = self.helm_of(manifest_id.as_ref())?;
+        let conversation = self.helm().open(&key, served.records_root());
+        let (messages, dropped) = conversation.thread.taken();
+        let (thread, cut) = recording::thread(&messages, dropped);
+        let authority = self.helm_authority();
+        let session = self
+            .store()
+            .lock()
+            .await
+            .helm_session(key.as_str())
+            .map_err(|why| self.helm_fault(why))?;
+        Ok(HelmDebugInfo {
+            manifest_id: on_the_wire(&served),
+            checkout: served.root().to_string(),
+            authority: recording::authority_on_the_wire(authority),
+            model: self.helm().host().model(),
+            // The brief this session was sent, assembled the one way
+            // `carrying` assembles it — never a second wording of it.
+            brief: brief(served.manifest(), authority, None)
+                .as_str()
+                .to_string(),
+            door: ipc::door::SERVER.to_string(),
+            tools: recording::tools(authority),
+            servers: recording::servers(&messages),
+            session,
+            thread,
+            cut,
+            polled: conversation.last_poll(),
+            run_id: self.run_id().as_str().to_string(),
+            protocol_version: ipc::PROTOCOL_VERSION,
+            at: Instant::from(&self.now()),
+        })
+    }
+
+    async fn helm_polled(&self, manifest_id: ManifestId, counted: EventsSince) {
+        let Ok((served, key)) = self.helm_of(Some(&manifest_id)) else {
+            return;
+        };
+        self.helm()
+            .open(&key, served.records_root())
+            .polled(counted);
     }
 
     async fn ask_the_person(
@@ -321,6 +370,8 @@ fn screen_phrase(screen: HelmScreen) -> &'static str {
         HelmScreen::Manifest => "the Manifest",
         HelmScreen::Cleanup => "Cleanup",
         HelmScreen::Studio => "Studios",
+        HelmScreen::Kit => "Kit",
+        HelmScreen::Settings => "Settings",
         HelmScreen::JobDetail => "a Job's detail",
     }
 }

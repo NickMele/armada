@@ -1038,7 +1038,7 @@ is the back-fill by hand that this section existed to prevent.
 
 ```
 ⌘K       command palette
-⌘1–⌘8    Bridge surfaces, in rail order
+⌘1–⌘9    Bridge surfaces, in rail order
 ⌘J       Helm, toggles the dock on every surface
 ⌥⌘C      capture a note onto the open Studio
 ⌘\       toggle sidebar
@@ -1145,8 +1145,8 @@ the design drew are all spoken for: `n` is dispatch and its scope is
 `anywhere`, `v` is observe and `s` is restart step, so an unshifted key
 would answer twice on one press. See [Studio](../concepts/studio.md).
 
-**`⌘1`–`⌘8` follow the rail** — Overview, Job Board, Studios, Alerts,
-Doctor, Manifest, Cleanup, Settings — since Active Jobs, Reviews and the Activity
+**`⌘1`–`⌘9` follow the rail** — Overview, Job Board, Studios, Alerts,
+Doctor, Manifest, Cleanup, Kit, Settings — since Active Jobs, Reviews and the Activity
 Feed folded into the Board and Cleanup joined at the end of it.
 The digits shift if the rail does; the rule is rail order, not the
 numbers.
@@ -1179,7 +1179,18 @@ belongs beside the work it becomes rather than after the settings; Alerts,
 Doctor, Manifest, Cleanup and Settings each moved down one, Settings from `⌘7`
 to `⌘8`. The rule is still rail order — only the arrival was the exception.
 
-**`1`–`5` and `⌘1`–`⌘8` are different acts on one row of keys.** One is
+**Kit joined before Settings, on 2026-09-18 (#1275), taking `⌘8`** — the third
+arrival to move a digit other than its own, and the first to join anywhere but
+the end: Settings moved to `⌘9`. The owner's decision, and his reason is that
+Kit is what he brings and Settings is what this machine is, so the machine reads
+last. It is a rail row rather than a view on one repository's Manifest because
+Kit is his and not a repository's. Its glyph is `briefcase` — the tool set you
+bring, and the only Navigation glyph whose handle stands above its body.
+`icons.settings` had said `means = "Kit"` since it was written, with two other
+rows citing it, while the Settings surface wore the cog; the owner settled it
+the other way, so Settings keeps the cog and those three rows were corrected.
+
+**`1`–`5` and `⌘1`–`⌘9` are different acts on one row of keys.** One is
 modified and one is not, which is the whole separation. It was drawn
 that way deliberately rather than by omission.
 
@@ -1938,6 +1949,15 @@ the artifact holds is the [Error Contract](error-contract.md).
 **A clipboard write is silent, so a toast confirms it — and the toast carries
 no status dot.** A leading dot carries a Job state and is never chosen, and a
 clipboard write is not a Job state.
+
+**The act is not an error's alone.** A Helm session carries the same payload
+under the same word, bound to the same key, with one producer and an expanded
+view rendering the string the control copies — `../concepts/helm.md`,
+*Reporting a bad answer*. It takes the banner's form, because a dock is a
+standing surface: the copy acts on one press and a second control opens the
+reading beside it. Its safety sentence is its own — nothing in it is a
+structured field a type bounds, so the sentence below cannot be reused over
+it.
 
 **One sentence about safety, in the expanded view only, stating the mechanism
 rather than promising an outcome.** It is bounded to what the mechanism

@@ -37,7 +37,8 @@ use crate::commands::{
     stop_proposal, take_up_remarks,
 };
 use crate::conversing::{
-    answer_helm_call, ask_helm, ask_the_person, list_helm_calls, observe_helm, start_helm_fresh,
+    answer_helm_call, ask_helm, ask_the_person, get_helm_debug_info, list_helm_calls, observe_helm,
+    start_helm_fresh,
 };
 use crate::daemon::Daemon;
 use crate::editing::{get_manifest_file, save_manifest_file};
@@ -68,7 +69,7 @@ use crate::studios::{
     add_studio_node, ask_scout, capture_studio_note, create_studio, decide_studio_edge,
     defer_on_studio, delete_studio, dispatch_studio_draft, edit_studio_draft, edit_studio_link,
     get_studio, get_studio_frame, group_studio_nodes, list_studios, move_studio_node,
-    propose_studio_edge, read_in_link, remove_studio_node, rename_studio, settle_contradiction,
+    propose_studio_edge, read_in_link, remove_studio_nodes, rename_studio, settle_contradiction,
     start_scout, start_studio_run, stop_scout, write_up_studio_node,
 };
 
@@ -148,6 +149,20 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route(
             "/manifest/allowed_commands/remove",
             post(remove_repository_allowed_command::<D>),
+        )
+        .route("/kit/servers", get(crate::kit::get_kit_servers::<D>))
+        .route("/kit/servers/add", post(crate::kit::add_kit_server::<D>))
+        .route(
+            "/kit/servers/forget",
+            post(crate::kit::forget_kit_server::<D>),
+        )
+        .route(
+            "/kit/servers/reach",
+            post(crate::kit::set_kit_server_reach::<D>),
+        )
+        .route(
+            "/kit/servers/manifest_reach",
+            post(crate::kit::set_manifest_server_reach::<D>),
         )
         .route("/jobs/:job_id", get(get_job::<D>))
         .route("/jobs/:job_id/events", get(get_job_events::<D>))
@@ -285,6 +300,7 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         )
         .route("/helm/observe", get(observe_helm::<D>))
         .route("/helm/ask", post(ask_helm::<D>))
+        .route("/helm/debug", get(get_helm_debug_info::<D>))
         .route("/helm/start_fresh", post(start_helm_fresh::<D>))
         .route("/helm/permission", post(ask_the_person::<D>))
         .route("/helm/calls", get(list_helm_calls::<D>))
@@ -305,8 +321,8 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         )
         .route("/studios/:studio_id/move_node", post(move_studio_node::<D>))
         .route(
-            "/studios/:studio_id/remove_node",
-            post(remove_studio_node::<D>),
+            "/studios/:studio_id/remove_nodes",
+            post(remove_studio_nodes::<D>),
         )
         .route(
             "/studios/:studio_id/propose_edge",

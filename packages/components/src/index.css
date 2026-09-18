@@ -302,6 +302,13 @@
 @import "./compositions/StudioName/StudioName.css";
 @import "./compositions/StudioAddNode/StudioAddNode.css";
 @import "./compositions/StudioPicked/StudioPicked.css";
+/* Kit's MCP servers, on their own rail surface. Above the rule below, per
+   HeldFlag's note. #1275. */
+@import "./compositions/KitServers/KitServers.css";
+/* One Helm session as one quotable record, on the layer wide enough to read
+   it. #1367. */
+@import "./compositions/HelmRecord/HelmRecord.css";
+@import "./compositions/PlanTaskSheet/PlanTaskSheet.css";
 @import "./compositions/DriftSheet/DriftSheet.css";
 @import "./compositions/VerifySheet/VerifySheet.css";
 
