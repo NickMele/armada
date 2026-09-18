@@ -40,6 +40,18 @@ import {
 import type { LogRow } from "./story";
 import { runsOf, workingOf, type WorkingRun } from "./working";
 
+/**
+ * The whole activity log, runs of one tool folded to a line — the sheet behind
+ * *Open the log*.
+ *
+ * **It draws every row it is handed, and it is the one surface that does.** It
+ * carried a bound in groups for the chapter's preview, on the argument that
+ * five rows of a real step is five consecutive `Read` calls where five groups
+ * is five different things the Drone did. The preview is `WorkNarrated` now and
+ * bounds itself in entries — the owner's decision of 2026-09-18, below — so the
+ * bound here was a second answer to a question this surface is not asked: it is
+ * where everything is read.
+ */
 export function WorkGrouped({
   rows,
   turns,
@@ -48,7 +60,6 @@ export function WorkGrouped({
   emptyNote,
   calls: fetched,
   log,
-  most,
 }: {
   /** The step's readable rows, in order — what the log would draw flat. */
   rows: LogRow[];
@@ -61,14 +72,6 @@ export function WorkGrouped({
   calls: Calls;
   /** The log's own keyboard binding, by region. Threaded to every group. */
   log: ReturnType<DetailKeys["inLog"]>;
-  /**
-   * How many groups to draw, newest last. Absent draws them all.
-   *
-   * **Counted in groups and not in rows**, which is the point of the folding: a
-   * preview bounded at five rows showed five `Read` calls, and the same height
-   * bounded at five groups shows five different things the Drone did.
-   */
-  most?: number;
 }) {
   // **Which run each row belongs to**, the call's row and its answer's alike.
   // The derivation folds an answer into its call to count one thing that
@@ -119,11 +122,7 @@ export function WorkGrouped({
   });
 
   return (
-    <WorkGroups
-      groups={most === undefined ? groups : groups.slice(-most)}
-      {...(unread === undefined ? {} : { unread })}
-      emptyNote={emptyNote}
-    />
+    <WorkGroups groups={groups} {...(unread === undefined ? {} : { unread })} emptyNote={emptyNote} />
   );
 }
 
@@ -143,7 +142,7 @@ export function WorkNarrated({
   emptyNote,
   calls: fetched,
   log,
-  most,
+  mostEntries,
   diff,
   jobTurns,
 }: {
@@ -157,8 +156,16 @@ export function WorkNarrated({
   emptyNote: string;
   calls: Calls;
   log: ReturnType<DetailKeys["inLog"]>;
-  /** How many sentences the open section draws, newest last. */
-  most?: number;
+  /**
+   * How many of the step's entries are drawn, newest last, across the whole
+   * area. Absent draws every one of them.
+   *
+   * **Counted in entries — the rows the chapter's header counts** — so the
+   * header's `97 entries` and what is under it are the same unit. It bounded
+   * sentences before, and groups before that, and both let one preview run to
+   * thousands of pixels because neither counted what a person scrolls past.
+   */
+  mostEntries?: number;
   /** The Job's diff, for each task's files and the row no task owns. #1187. */
   diff?: readonly ChangedFile[];
   /**
@@ -169,7 +176,7 @@ export function WorkNarrated({
 }) {
   // Armada's instruction is the Instructed row above, and the log sheet keeps it.
   const worked = rows.filter((row) => row.kind !== "instructed");
-  const narration = narrationOf(worked, turns, stepId, plan);
+  const narration = narrationOf(worked, turns, stepId, plan, mostEntries);
   const edits = editsIn(jobTurns ?? turns, plan?.tasks ?? []);
   const changed = diff ?? [];
   const byTask = filesByTask(edits, changed);
@@ -184,9 +191,11 @@ export function WorkNarrated({
     ...(file.deleted === undefined ? {} : { deleted: file.deleted }),
   });
   const newestId = narration.sections.find((one) => one.newest)?.beats.at(-1)?.id;
+  // **The line for what was left out goes above the oldest thing drawn**, once
+  // for the whole area: the bound is the area's, and a section that kept
+  // nothing draws no beats to hang it on.
+  const oldestDrawn = narration.sections.find((work) => work.beats.length > 0);
   const sections: NarrationSection[] = narration.sections.map((work) => {
-    const kept = most === undefined || !work.newest ? work.beats : work.beats.slice(-most);
-    const left = work.beats.length - kept.length;
     const files = work.task === undefined ? [] : (byTask.get(work.task.id) ?? []);
     const meta = [workSaid(work), filesSaid(files.length)].filter((part) => part !== undefined).join(" · ");
     return {
@@ -202,8 +211,10 @@ export function WorkNarrated({
       ...(meta === "" ? {} : { meta }),
       ...(files.length === 0 ? {} : { files: files.map(named), filesSay: EDIT_SIZES }),
       open: work.newest || work.beats.some((beat) => beat.wrong),
-      ...(left === 0 ? {} : { earlier: `${left} earlier, in the log` }),
-      beats: kept.map((beat) => {
+      ...(narration.earlier === 0 || work !== oldestDrawn
+        ? {}
+        : { earlier: `${narration.earlier} earlier, in the log` }),
+      beats: work.beats.map((beat) => {
         const newest = beat.id === newestId;
         return {
           id: beat.id,
