@@ -404,17 +404,17 @@ test("a pasted address is asked about, takes a line of its own, and keeps it acr
   });
 });
 
-test("an issue is read in and a milestone fills the board, with each Link left standing", async () => {
+test("an issue is read in and an epic fills the board, with each address node left standing", async () => {
   const fleet = studying();
   open(fleet.scenario);
   await page.getByRole("button", { name: "Studios", exact: true }).first().click();
   await page.getByRole("button", { name: "The Board's legend", exact: true }).click();
   // Reopened read-only, so nothing acts on it until a person continues it.
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect.element(node(/^Link: https:\/\/example\.invalid\/o\/r\/issues\/1293/)).toBeVisible();
+  await expect.element(node(/^Issue: Read a source a person already has/)).toBeVisible();
 
   // One issue: a Finding beside the Notes and the Contradiction its scout asked for.
-  await pick(/^Link: https:\/\/example\.invalid\/o\/r\/issues\/1293/);
+  await pick(/^Issue: Read a source a person already has/);
   await acts().getByRole("button", { name: "Read in" }).click();
   await asked("Read in").click();
   await expect.element(node(/^Finding: Read in https:\/\/example\.invalid\/o\/r\/issues\/1293, frozen/)).toBeVisible();
@@ -422,36 +422,36 @@ test("an issue is read in and a milestone fills the board, with each Link left s
   await expect.element(node(/^Contradiction: The issue says Connections have no home yet/)).toBeVisible();
 
   const studio = () => fleet.studios()[0]!;
-  // The Link keeps its address whatever came back, and everything hangs off it.
+  // The node keeps its address whatever came back, and everything hangs off it.
   expect(studio().nodes.find((one) => one.id === "legend-issue")).toMatchObject({
-    kind: "link",
+    kind: "issue",
     address: "https://example.invalid/o/r/issues/1293",
+    number: "1293",
   });
   expect(studio().edges.filter((edge) => edge.from === "legend-issue" && edge.kind === "produced")).toHaveLength(4);
   // A relation the scout asked for waits on a person.
   expect(studio().edges.filter((edge) => edge.standing === "proposed" && edge.kind === "blocks")).toHaveLength(1);
 
-  // A milestone: one Link per issue, each naming the filed issue's address, and
-  // the milestone's own Link saying how many of how many were read in.
-  await pick(/^Link: https:\/\/example\.invalid\/o\/r\/milestone\/17/);
+  // An Epic: one Issue per issue, each carrying the filed issue's address, and
+  // the Epic itself saying how many of how many were read in.
+  await pick(/^Epic: Studio/);
   await acts().getByRole("button", { name: "Read in" }).click();
   await asked("Read in").click();
-  await expect.element(node(/^Link: Studio — 3 of 3 issues read in/)).toBeVisible();
-  await expect.element(node(/^Link: #1293 An issue cannot be read into a Studio — open/)).toBeVisible();
-  await expect.element(node(/^Link: #1275 Kit manages connections — open/)).toBeVisible();
+  await expect.element(node(/^Issue: An issue cannot be read into a Studio/)).toBeVisible();
+  await expect.element(node(/^Issue: Kit manages connections/)).toBeVisible();
 
   const issues = studio()
     .edges.filter((edge) => edge.from === "legend-milestone" && edge.kind === "produced")
     .map((edge) => studio().nodes.find((one) => one.id === edge.to));
-  expect(issues.map((one) => (one?.kind === "link" ? one.address : null))).toEqual([
+  expect(issues.map((one) => (one?.kind === "issue" ? one.address : null))).toEqual([
     "https://example.invalid/o/r/issues/1293",
     "https://example.invalid/o/r/issues/1291",
     "https://example.invalid/o/r/issues/1275",
   ]);
-  // Its own address survives being named.
+  // Its own address survives, and how much of it landed is two numbers.
   expect(studio().nodes.find((one) => one.id === "legend-milestone")).toMatchObject({
     address: "https://example.invalid/o/r/milestone/17",
-    named: "Studio — 3 of 3 issues read in",
+    read_in: { issues: 3, total: 3 },
   });
 });
 
@@ -473,29 +473,30 @@ test("an issue read in is dispatched, its Job opens from the node, and the node 
   await page.getByRole("button", { name: "The Board's legend", exact: true }).click();
   await page.getByRole("button", { name: "Continue" }).click();
 
-  // The milestone fills the board with a Link per issue — #1293.
-  await pick(/^Link: https:\/\/example\.invalid\/o\/r\/milestone\/17/);
+  // The Epic fills the board with an Issue per issue — #1293.
+  await pick(/^Epic: Studio/);
   await acts().getByRole("button", { name: "Read in" }).click();
   await asked("Read in").click();
-  await expect.element(node(/^Link: #1293 An issue cannot be read into a Studio — open/)).toBeVisible();
+  await expect.element(node(/^Issue: An issue cannot be read into a Studio/)).toBeVisible();
 
   // All three forge kinds dispatch, and the dialog names which it is about:
-  // an issue, a pull request and a milestone are three different asks — #1379.
-  await pick(/^Link: the branch that needs reading/);
+  // an issue, a pull request and an epic are three different asks — #1379,
+  // #1394. Reading an Epic in and dispatching it are not rivals either.
+  await pick(/^Pull request: where dispatch landed/);
   await acts().getByRole("button", { name: "Dispatch" }).click();
-  await expect.element(page.getByRole("dialog", { name: "Dispatch the pull request this Link names" })).toBeVisible();
+  await expect.element(page.getByRole("dialog", { name: "Dispatch this pull request" })).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
 
-  await pick(/^Link: Studio — 3 of 3 issues read in/);
+  await pick(/^Epic: Studio/);
   await acts().getByRole("button", { name: "Dispatch" }).click();
-  await expect.element(page.getByRole("dialog", { name: "Dispatch the milestone this Link names" })).toBeVisible();
+  await expect.element(page.getByRole("dialog", { name: "Dispatch this epic" })).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
 
-  // A Link naming nothing on the forge has nothing filed to dispatch against.
-  await pick(/^Link: where the legend was drawn/);
+  // A Link is an address no adapter recognised: nothing filed to dispatch.
+  await pick(/^Link: why the ids collide/);
   await expect.poll(() => acts().getByRole("button", { name: "Dispatch" }).query()).toBeNull();
 
-  await pick(/^Link: #1293 An issue cannot be read into a Studio — open/);
+  await pick(/^Issue: An issue cannot be read into a Studio/);
   await acts().getByRole("button", { name: "Dispatch" }).click();
   // The address is the whole request. Nothing is filed — the issue already is.
   await expect
@@ -503,16 +504,16 @@ test("an issue read in is dispatched, its Job opens from the node, and the node 
     .toBe("https://example.invalid/o/r/issues/1293");
   await asked("Dispatch").click();
 
-  // The Job node lands with a `Produced` edge from the Link it came from, and
+  // The Job node lands with a `Produced` edge from the node it came from, and
   // stands at the gate like every other Job.
-  const dispatched = /^Job: #1293 An issue cannot be read into a Studio — open/;
+  const dispatched = /^Job: An issue cannot be read into a Studio/;
   await expect.element(node(dispatched)).toBeVisible();
   const studio = () => fleet.studios()[0]!;
   const jobNode = () => studio().nodes.find((one) => one.kind === "job")!;
   const edge = studio().edges.find((one) => one.to === jobNode().id)!;
   expect(edge.kind).toBe("produced");
   expect(studio().nodes.find((one) => one.id === edge.from)).toMatchObject({
-    kind: "link",
+    kind: "issue",
     address: "https://example.invalid/o/r/issues/1293",
   });
 
@@ -529,5 +530,5 @@ test("an issue read in is dispatched, its Job opens from the node, and the node 
 
   // Back on the Studio it was left on, and the node reads what the Job is
   // doing now rather than what it was doing when it was made.
-  await expect.element(node(/^Job: #1293 An issue cannot be read into a Studio — open, running/)).toBeVisible();
+  await expect.element(node(/^Job: An issue cannot be read into a Studio, running/)).toBeVisible();
 });

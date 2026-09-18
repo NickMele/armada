@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { JobDetail, JobSummary, JudgeQuestion, QuestionInFlight } from "@armada/protocol";
 import { NOTHING_YET, type BridgeState } from "../shared/bridge";
+import { questionsJob } from "@armada/screens/src/outstanding";
 import { Questions } from "./questions";
 
 function job(over: Partial<JobSummary> = {}): JobSummary {
@@ -130,8 +131,10 @@ describe("questions waiting on a person", () => {
       job({ id: "d", status: "completed" }),
     ]);
     await questions.readAll(port);
-    expect(asked.sort()).toEqual(["/jobs/a", "/jobs/b"]);
-    expect(state().questions.map((question) => [question.job_id, question.kind]).sort()).toEqual([
+    // `/helm/calls` beside them: a helm call is on no board, so a resync reads it from its own
+    // route rather than from any job. #1389.
+    expect(asked.sort()).toEqual(["/helm/calls", "/jobs/a", "/jobs/b"]);
+    expect(state().questions.map((question) => [questionsJob(question), question.kind]).sort()).toEqual([
       ["a", "drone"],
       ["b", "judge"],
     ]);
@@ -161,5 +164,46 @@ describe("questions waiting on a person", () => {
     state().jobs = [];
     await questions.readAll(1);
     expect(state().questions).toEqual([]);
+  });
+});
+
+// #1389: a helm call has no job, so none of the machinery above reaches it — its own event puts it
+// up, its own event takes it down, and a resync reads it from its own route.
+describe("a helm call waiting on a person", () => {
+  const WAITING = {
+    call: "helm-1",
+    manifest_id: "armada",
+    asked_at: "2026-09-13T10:02:00Z",
+    tool: "Bash",
+    detail: "gh issue list",
+    truncated: false,
+    rule: "Bash(gh issue list:*)",
+    offers: ["allow_once", "allow_and_remember", "refuse"] as const,
+    holding_for_seconds: 300,
+  };
+
+  it("goes up on its ask and comes down on its answer", () => {
+    const { questions, state } = holding([]);
+    questions.helmAsking({ ...WAITING, offers: [...WAITING.offers] });
+    expect(state().questions.map((question) => question.kind)).toEqual(["helm"]);
+
+    questions.helmAnswered("helm-1");
+    expect(state().questions).toEqual([]);
+  });
+
+  it("is drawn once when its ask arrives twice", () => {
+    const { questions, state } = holding([]);
+    questions.helmAsking({ ...WAITING, offers: [...WAITING.offers] });
+    questions.helmAsking({ ...WAITING, offers: [...WAITING.offers] });
+    expect(state().questions).toHaveLength(1);
+  });
+
+  // A board that holds no job takes every job's question down. A helm call is on no board, so it
+  // survives what would clear one.
+  it("survives a board that lists nothing", async () => {
+    const { questions, state } = holding([]);
+    questions.helmAsking({ ...WAITING, offers: [...WAITING.offers] });
+    await questions.readAll(1);
+    expect(state().questions.map((question) => question.kind)).toEqual(["helm"]);
   });
 });

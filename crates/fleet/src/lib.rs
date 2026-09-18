@@ -179,6 +179,8 @@ pub mod readopting;
 /// A person running a stopped step's Checks again, with no Drone — `#1105`.
 mod rechecking;
 mod reclaiming;
+/// Links already on a Studio, read as what their addresses name — `#1394`.
+mod recognising;
 /// What the boot read found and what the reconciliation did about it.
 mod reconciled;
 /// Where one repository's records live, off the checkout — the per-repository

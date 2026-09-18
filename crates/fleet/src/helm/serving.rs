@@ -13,8 +13,9 @@ use adapter_traits::{AgentHarness, Delivery, DroneEvent, Vcs, WorkProduct};
 use api::{Conversations as Surface, ObservedHelm, Refusal};
 use core_model::StepId;
 use ipc::{
-    AskHelm, Freshness, HelmAsked, HelmChangedCheckout, HelmContext, HelmConversation, HelmFresh,
-    HelmMessage, HelmScreen, HelmUnanswered, Instant, ManifestId, Shown, WireError,
+    AnswerHelmCall, AskHelm, AskingToRun, Freshness, HelmAsked, HelmCallsWaiting,
+    HelmChangedCheckout, HelmContext, HelmConversation, HelmFresh, HelmMessage, HelmScreen,
+    HelmUnanswered, Instant, ManifestId, RunOrNot, Shown, WireError,
 };
 
 use super::conversation::{Conversation, ConversationKey};
@@ -80,6 +81,22 @@ where
                 .await;
         });
         Ok(answered)
+    }
+
+    async fn ask_the_person(
+        &self,
+        asking: AskingToRun,
+        manifest_id: Option<ManifestId>,
+    ) -> Result<RunOrNot, Refusal> {
+        self.helm_permission(asking, manifest_id).await
+    }
+
+    async fn list_helm_calls(&self) -> Result<HelmCallsWaiting, Refusal> {
+        Ok(self.helm_calls_waiting())
+    }
+
+    async fn answer_helm_call(&self, said: AnswerHelmCall) -> Result<HelmCallsWaiting, Refusal> {
+        self.helm_call_answered(said)
     }
 
     async fn start_helm_fresh(

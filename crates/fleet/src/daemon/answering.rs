@@ -75,6 +75,9 @@ where
         self.reconciled_main_checkout_ports().await;
         // A scout does not outlive the Fleet reading it. `crate::scouting`.
         self.scouts_left_gathering().await;
+        // Before any Studio is read: the Links this build reads as an Issue, a
+        // Pull request or an Epic. `crate::recognising`.
+        let recognised = self.links_recognised().await;
         let (loaded, unreadable) = self.every_job().await?;
         // Before anything else reads a path: every Job's name, and the rename
         // of what an older Fleet wrote under a ULID. See
@@ -83,6 +86,7 @@ where
         let mut reconciled = Reconciled {
             repaired: loaded.repaired.len(),
             unreadable,
+            recognised,
             ..Reconciled::default()
         };
         // **Each repository over its own Jobs.** A Job whose repository is not

@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use super::asking::{Asks, HelmAskHold};
 use super::hosting::Hosting;
 use super::thread::Thread;
 
@@ -51,18 +52,33 @@ impl ConversationKey {
 pub struct Conversations {
     host: Arc<dyn Hosting>,
     open: Mutex<BTreeMap<ConversationKey, Arc<Conversation>>>,
+    /// Every call held open for a person, across every conversation. **Here
+    /// rather than on a [`Conversation`]** because the dock is one list: what
+    /// is waiting on a person is waiting on them wherever it came from.
+    asks: Asks,
 }
 
 impl Conversations {
-    pub fn hosted_by(host: Arc<dyn Hosting>) -> Conversations {
+    pub fn hosted_by(host: Arc<dyn Hosting>, hold: HelmAskHold) -> Conversations {
         Conversations {
             host,
             open: Mutex::new(BTreeMap::new()),
+            asks: Asks::holding_for(hold),
         }
     }
 
     pub(crate) fn host(&self) -> &dyn Hosting {
         self.host.as_ref()
+    }
+
+    pub(crate) fn asks(&self) -> &Asks {
+        &self.asks
+    }
+
+    /// The hold this Fleet was assembled with, so a Fleet rebuilt around a
+    /// different host keeps the bound the composition root resolved.
+    pub fn hold(&self) -> HelmAskHold {
+        self.asks.held_for()
     }
 
     /// The conversation `key` names, its thread read from under `records_root`

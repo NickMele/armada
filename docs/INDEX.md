@@ -177,6 +177,7 @@ approximations.
   — whether `--tools` and `--restricted` hold a read-only agent to one checkout,
   and what `SIGINT` and `SIGTERM` each leave of a run's cost.
 - [`spikes/018-what-can-a-helm-session-do-in-each-permission-mode.md`](spikes/018-what-can-a-helm-session-do-in-each-permission-mode.md)
+- [`spikes/019-is-auto-mode-reachable-for-a-helm-session.md`](spikes/019-is-auto-mode-reachable-for-a-helm-session.md)
   — what a session resolves once `--strict-mcp-config` comes off, what each
   permission mode lets it call, and what a refusal leaves in the stream.
 - [`spikes/019-what-raises-the-resize-loop-notice-on-a-studio.md`](spikes/019-what-raises-the-resize-loop-notice-on-a-studio.md)

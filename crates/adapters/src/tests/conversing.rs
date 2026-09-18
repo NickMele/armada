@@ -44,7 +44,6 @@ fn a_new_conversation_opens_in_the_repository_with_the_door_beside_what_a_person
     );
     assert_eq!(door_tools(), "mcp__armada-fleet");
     assert!(!args.iter().any(|arg| arg == "--resume"));
-    assert!(!args.iter().any(|arg| arg == "--permission-prompt-tool"));
 }
 
 /// `#1373`: each of these withholds something a person has in a terminal, and
@@ -66,9 +65,41 @@ fn nothing_narrows_what_a_conversation_resolves() {
     }
     assert_eq!(
         value_after(&args, "--permission-mode").as_deref(),
-        Some("acceptEdits"),
-        "a write to the checkout is the ask; a command is not"
+        Some("default"),
+        "the person's own settings decide, which is what a terminal session runs"
     );
+}
+
+/// `#1389`: **the mode alone would refuse everything the settings do not
+/// cover.** What makes `default` the terminal's behaviour rather than a
+/// narrowing is the tool the uncovered call is put to, and it is the door's own
+/// — spike 19.
+#[test]
+fn every_call_the_settings_do_not_cover_is_put_to_the_person_at_the_door() {
+    let args = rendered(&fresh()).args().to_vec();
+    assert_eq!(
+        value_after(&args, "--permission-prompt-tool").as_deref(),
+        Some("mcp__armada-fleet__ask_the_person")
+    );
+    assert!(
+        !args.iter().any(|arg| arg == "--permission-prompts"),
+        "`host` is the default, and naming it would be a second spelling of it"
+    );
+}
+
+/// `#1389`: auto mode is what the owner asked for and is not reachable for a
+/// spawned session — spike 19 measured it reporting `default` on `init` with no
+/// classifier call. **A value the CLI accepts and ignores is worse than one it
+/// refuses**, so this holds the rendering to what was measured.
+#[test]
+fn a_conversation_does_not_ask_for_a_mode_a_spawned_session_cannot_have() {
+    let args = rendered(&fresh()).args().to_vec();
+    for unreachable in ["auto", "manual"] {
+        assert!(
+            !args.iter().any(|arg| arg == unreachable),
+            "{unreachable} is not in force for a `-p` session"
+        );
+    }
 }
 
 /// `#1373`: **widening Helm must not widen a Drone.** Rendered side by side,

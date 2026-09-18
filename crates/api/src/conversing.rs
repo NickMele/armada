@@ -15,7 +15,7 @@ use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::Response;
-use ipc::{AskHelm, HelmMessage, HelmOpened, ManifestId, Missed, PROTOCOL_VERSION};
+use ipc::{AskHelm, AskingToRun, HelmMessage, HelmOpened, ManifestId, Missed, PROTOCOL_VERSION};
 use tokio::sync::broadcast;
 
 use crate::answers::{answer, refused, undecodable};
@@ -180,6 +180,53 @@ pub(crate) async fn ask_helm<D: Conversations>(
     };
     match served.shared().ask_helm(asked, scope.manifest()).await {
         Ok(conversation) => answer(StatusCode::ACCEPTED, &conversation, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Put one call to the person, and **hold the response open until they answer**.
+///
+/// The one route on this surface that waits on a person. It is reached from the
+/// agent door and from nowhere else: the caller is the CLI's own permission
+/// prompt, not a model. `#1389`.
+pub(crate) async fn ask_the_person<D: Conversations>(
+    State(served): State<Served<D>>,
+    Query(scope): Query<InManifest>,
+    body: Bytes,
+) -> Response {
+    let asking: AskingToRun = match ipc::decode("a permission question", &body) {
+        Ok(asking) => asking,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served
+        .daemon()
+        .ask_the_person(asking, scope.manifest())
+        .await
+    {
+        Ok(decided) => answer(StatusCode::OK, &decided, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// What is waiting on a person right now, Fleet-wide.
+pub(crate) async fn list_helm_calls<D: Conversations>(State(served): State<Served<D>>) -> Response {
+    match served.daemon().list_helm_calls().await {
+        Ok(waiting) => answer(StatusCode::OK, &waiting, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// A person's answer, into the call that is waiting on it.
+pub(crate) async fn answer_helm_call<D: Conversations>(
+    State(served): State<Served<D>>,
+    body: Bytes,
+) -> Response {
+    let said: ipc::AnswerHelmCall = match ipc::decode("an answer to a Helm call", &body) {
+        Ok(said) => said,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.daemon().answer_helm_call(said).await {
+        Ok(waiting) => answer(StatusCode::OK, &waiting, served.run_id()),
         Err(refusal) => refused(refusal),
     }
 }

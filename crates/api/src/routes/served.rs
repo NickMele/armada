@@ -89,6 +89,23 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/helm/start_fresh",
     },
+    // The permission path, `#1389`: the door calls the first, a person answers
+    // the third, and the second is what a Bridge started mid-wait reads.
+    Route {
+        operation: "ask_the_person",
+        method: "POST",
+        path: "/helm/permission",
+    },
+    Route {
+        operation: "list_helm_calls",
+        method: "GET",
+        path: "/helm/calls",
+    },
+    Route {
+        operation: "answer_helm_call",
+        method: "POST",
+        path: "/helm/calls/answer",
+    },
     // A repository's Studios, `#1285`: the collection reads `?manifest_id=`,
     // a member is its id, and each act is spelled in the last segment without
     // `studio_`, which the segment before it already says.
@@ -988,6 +1005,18 @@ pub const SERVED: &[Route] = &[
     // Helm's act on a Studio, beside the `studio.changed` it made. `#1288`.
     Route {
         operation: "studio.helm_acted",
+        method: "GET",
+        path: "/events",
+    },
+    // A Helm session held inside a call the person's own settings do not cover,
+    // and what became of it. `#1389`.
+    Route {
+        operation: "helm.asking_to_run",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "helm.call_answered",
         method: "GET",
         path: "/events",
     },

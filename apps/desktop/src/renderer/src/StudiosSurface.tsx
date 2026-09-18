@@ -74,9 +74,10 @@ export function StudiosSurface(props: StudiosSurfaceProps) {
       return (
         <BoardEmptyState
           quiet
-          // **Not "No repository has a Manifest yet"**, though that is the same fact: Helm's dock
-          // opens a sentence beginning those six words on the same screen, and two lines a hand's
-          // width apart reading alike is a surface a person has to disentangle.
+          // **Not the sentence Helm's dock opens with**, though the fact is the same one: the dock
+          // says "Nothing is set up yet for Helm to answer about." a hand's width from this line,
+          // and two lines that read alike are a surface a person has to disentangle. The dock took
+          // this line's vocabulary in `HelmDock.tsx` and kept its own opening for that reason.
           lead="No repository is set up yet, so none of them keeps Studios."
           action={
             <Button variant="primary" onClick={props.onSetUp}>

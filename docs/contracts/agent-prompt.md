@@ -1387,11 +1387,18 @@ naming the files changed is not politeness: it is the only part of the audit a
 person reading the reply sees, `helm.changed_checkout` being for a client rather
 than for them.
 
-**The refusal block exists because a refusal reads as a broken tool.** A session
-told nothing about it treats *requires approval* as a fault to route around,
-which is exactly what the Drone's own refusal clause was written for. It is
-temporary in the same sense the mode is: a person answering the call is what
-would remove it.
+**The waiting block exists because a pause reads as a hung tool.** A session
+told nothing about it treats a call that takes minutes as a fault to retry, and
+one told *requires approval* treats it as a fault to route around — which is
+exactly what the Drone's own refusal clause was written for. `#1373` shipped the
+refusal wording because nobody could be asked; `#1389` made the ask reach a
+person, so what the block now says is *wait*, and what it says about a refusal
+is one line rather than the whole block.
+
+**It is the person's own settings that decide, and the block does not say
+whose.** A session that named the file would be telling a person about their own
+configuration, which they wrote; what it needs to know is that the pause is
+somebody deciding and not a tool breaking.
 
 **The rule is stated, not enumerated.** Every act the door offers is Helm's
 once asked for, except `undo_run` — `fleet::helm::reach::RESERVED`, named in
@@ -1489,14 +1496,17 @@ never receives, so the block names the reads that say how it ended.
 │ asked for is one nobody will go looking for. Say
 │ in your answer which files you changed.
 └────────────────────────────────────────────────
-┌─ WHEN A CALL IS REFUSED ───────────────────────
-│ A command or a tool from another server may come
-│ back saying it requires approval. Nobody can be
-│ asked about it here — a person at a terminal
-│ would be, and this conversation has nowhere to
-│ put the question. Say what you were refused and
-│ what you wanted it for, and stop. Do not look for
-│ another way to do the same thing.
+┌─ WHEN A CALL WAITS ────────────────────────────
+│ A command, an edit or a tool from another server
+│ that this person's own settings do not already
+│ allow is put to them, in Armada, and your call
+│ waits inside itself until they answer. That wait
+│ is the system working. Do not retry it, do not
+│ look for another way round it, and do not say it
+│ failed. Where they refuse, or where nobody
+│ answers, you are told so in the tool's own
+│ result: say what you could not do and carry on
+│ without it.
 └────────────────────────────────────────────────
 ┌─ EACH TURN ────────────────────────────────────
 │ Start every turn by calling get_events_since

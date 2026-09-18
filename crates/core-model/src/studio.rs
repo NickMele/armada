@@ -13,6 +13,7 @@
 
 mod edge;
 mod finding;
+mod forge;
 mod note;
 mod promotion;
 
@@ -23,6 +24,7 @@ pub use finding::{
     FrozenFinding, GatheringFinding, NotScoutable, ScoutCheckout, ScoutEnded, ScoutLook,
     ScoutOutcome, ScoutSource, Scouted, StudioFinding,
 };
+pub use forge::{EpicRead, ForgeFacts, Recognised};
 pub use note::{CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, StudioCapture};
 pub use promotion::{ContradictionOutcome, NotRewritable, Rewritten};
 
@@ -130,6 +132,17 @@ spelled! {
         Contradiction => "contradiction",
         Sketch => "sketch",
         Link => "link",
+        /// An issue on a forge. **The concept, never the vendor** — which
+        /// forge served the address is `adapters`' to know, and the node is an
+        /// Issue whoever hosts it. `#1394`.
+        Issue => "issue",
+        /// A pull request on a forge.
+        PullRequest => "pull_request",
+        /// A milestone, an epic, a wave — whatever a forge calls the thing one
+        /// address names that holds a set of issues. **Epic is the node**; the
+        /// `epic` workflow is what dispatching one may run, and the Job
+        /// proposer decides that.
+        Epic => "epic",
         Deferral => "deferral",
         Outline => "outline",
         IssueDraft => "issue_draft",
@@ -212,6 +225,21 @@ spelled! {
 }
 
 spelled! {
+    /// Where something on a forge stands, as an Issue or a Pull request node
+    /// carries it. `#1394`.
+    ///
+    /// **Three, and each is the concept rather than a forge's spelling.** A
+    /// forge that says `OPEN`, `open` or `Opened` is read as the same word by
+    /// `adapters`, which is the only crate that sees one.
+    ForgeState {
+        Open => "open",
+        Closed => "closed",
+        /// A pull request's own end. An issue never holds it.
+        Merged => "merged",
+    }
+}
+
+spelled! {
     /// Whether a person has accepted an edge. A proposed edge is drawn dashed.
     StudioEdgeStanding {
         Proposed => "proposed",
@@ -226,10 +254,16 @@ impl StudioNodeKind {
     pub fn states(&self) -> &'static [StudioNodeState] {
         use StudioNodeState as S;
         match self {
+            // The three forge kinds hold no state of Armada's. Where the
+            // *forge* says one stands is a field on the node, read off the
+            // forge and never a lifecycle of ours.
             StudioNodeKind::Run
             | StudioNodeKind::Note
             | StudioNodeKind::Cluster
             | StudioNodeKind::Link
+            | StudioNodeKind::Issue
+            | StudioNodeKind::PullRequest
+            | StudioNodeKind::Epic
             | StudioNodeKind::Job => &[],
             StudioNodeKind::Finding => &[S::Proposed, S::Gathering, S::Frozen],
             StudioNodeKind::Contradiction => &[
@@ -268,6 +302,12 @@ impl StudioNodeKind {
     /// scout, a Run from a run, a Cluster or a Deferral from promotion, an
     /// Issue draft from writing up, a Job from dispatch, a Contradiction from
     /// two sources read in. `docs/concepts/studio.md`, *Promotion*.
+    ///
+    /// **An Issue, a Pull request and an Epic are not here either, and a
+    /// person still makes one by pasting.** They paste a Link; the adapter
+    /// recognises the address and Fleet writes the kind that follows —
+    /// `#1394`. So the one act stays *paste an address*, and nothing on the
+    /// seam can name a kind an address did not earn.
     pub fn added_by_hand(&self) -> bool {
         matches!(
             self,
@@ -319,6 +359,15 @@ pub struct StudioRunKept {
     pub whole: bool,
 }
 
+/// A line a person typed, or `None` where they typed nothing but space.
+///
+/// **One place decides what a blank line is**, so a node pasted with an empty
+/// field and one whose line was cleared afterwards are the same record.
+pub(super) fn trimmed(said: Option<String>) -> Option<String> {
+    said.map(|line| String::from(line.trim()))
+        .filter(|line| !line.is_empty())
+}
+
 /// What a node holds, one variant per kind.
 ///
 /// **The smallest each kind needs to be drawn and read.** A later step adds
@@ -368,6 +417,44 @@ pub enum StudioNodeContent {
         said: Option<String>,
         named: Option<String>,
     },
+    /// An issue on a forge, made by pasting its address. `#1394`.
+    ///
+    /// **`address` and `number` are read off the address the moment the node
+    /// is made**, by `adapters`, which is the only crate that knows whose
+    /// forge it is. **`title` and `state` are read off the forge**, so they
+    /// are absent until the node is read in.
+    Issue {
+        address: String,
+        number: String,
+        /// The line a person wrote beside it, as on a Link — `#1378`.
+        said: Option<String>,
+        title: Option<String>,
+        state: Option<ForgeState>,
+    },
+    /// A pull request on a forge. Its fields are an Issue's, and `state` holds
+    /// the one an issue cannot: `Merged`.
+    PullRequest {
+        address: String,
+        number: String,
+        said: Option<String>,
+        title: Option<String>,
+        state: Option<ForgeState>,
+    },
+    /// What a forge calls a set of issues under one address — a milestone, an
+    /// epic, a wave. `#1394`.
+    ///
+    /// **No `state` and a count instead.** What matters about an Epic is how
+    /// much of it is on the Studio, which is what reading it in answers; where
+    /// it stands is the sum of its issues and is not a field anybody reads.
+    Epic {
+        address: String,
+        number: String,
+        said: Option<String>,
+        title: Option<String>,
+        /// How many of its issues are on this Studio, of how many it holds.
+        /// Absent until it is read in.
+        read_in: Option<EpicRead>,
+    },
     /// Something a person put off.
     Deferral { what: String },
     /// An ordered reading of the nodes feeding it.
@@ -386,9 +473,7 @@ impl StudioNodeContent {
     /// empty field and one whose line was cleared afterwards are the same
     /// record rather than two shapes a reader has to tell apart.
     pub fn link(address: String, said: Option<String>) -> StudioNodeContent {
-        let said = said
-            .map(|line| String::from(line.trim()))
-            .filter(|line| !line.is_empty());
+        let said = trimmed(said);
         StudioNodeContent::Link {
             address,
             said,
@@ -416,6 +501,9 @@ impl StudioNodeContent {
             StudioNodeContent::Contradiction { .. } => StudioNodeKind::Contradiction,
             StudioNodeContent::Sketch { .. } => StudioNodeKind::Sketch,
             StudioNodeContent::Link { .. } => StudioNodeKind::Link,
+            StudioNodeContent::Issue { .. } => StudioNodeKind::Issue,
+            StudioNodeContent::PullRequest { .. } => StudioNodeKind::PullRequest,
+            StudioNodeContent::Epic { .. } => StudioNodeKind::Epic,
             StudioNodeContent::Deferral { .. } => StudioNodeKind::Deferral,
             StudioNodeContent::Outline { .. } => StudioNodeKind::Outline,
             StudioNodeContent::IssueDraft { .. } => StudioNodeKind::IssueDraft,
@@ -439,6 +527,17 @@ impl StudioNodeContent {
             // Neither `said` nor `named` is here: a Link with no line and no
             // name is a Link, and both are normalised to absent, never blank.
             StudioNodeContent::Link { address, .. } => &[("address", address)],
+            // Neither `title` nor `state` is here: what the forge says is
+            // absent until the node is read in, never blank.
+            StudioNodeContent::Issue {
+                address, number, ..
+            }
+            | StudioNodeContent::PullRequest {
+                address, number, ..
+            }
+            | StudioNodeContent::Epic {
+                address, number, ..
+            } => &[("address", address), ("number", number)],
             StudioNodeContent::Deferral { what } => &[("what", what)],
             StudioNodeContent::IssueDraft { title, body } => &[("title", title), ("body", body)],
             StudioNodeContent::Job { job_id } => &[("job_id", job_id.as_str())],
@@ -459,14 +558,31 @@ impl StudioNodeContent {
         }
     }
 
-    /// The address a Link keeps, and `None` on every other kind — `#1379`.
+    /// The address a node keeps, and `None` on every kind that keeps none —
+    /// `#1379`, `#1394`.
     ///
-    /// **What the address names is not decided here.** Which host is the forge
-    /// and which paths on it are an issue is `crates/adapters`' to know, so
-    /// this answers what the node holds and the caller answers what it is.
+    /// **Four kinds keep one.** A Link is an address nothing recognised; an
+    /// Issue, a Pull request and an Epic are an address an adapter did. What
+    /// the address names is still not decided here: which host is the forge is
+    /// `crates/adapters`' to know, and by the time a node holds one of the
+    /// three that question has already been answered once, on the way in.
     pub fn address(&self) -> Option<&str> {
         match self {
-            StudioNodeContent::Link { address, .. } => Some(address),
+            StudioNodeContent::Link { address, .. }
+            | StudioNodeContent::Issue { address, .. }
+            | StudioNodeContent::PullRequest { address, .. }
+            | StudioNodeContent::Epic { address, .. } => Some(address),
+            _ => None,
+        }
+    }
+
+    /// The line a person wrote beside an address, on any kind that keeps one.
+    pub fn said(&self) -> Option<&str> {
+        match self {
+            StudioNodeContent::Link { said, .. }
+            | StudioNodeContent::Issue { said, .. }
+            | StudioNodeContent::PullRequest { said, .. }
+            | StudioNodeContent::Epic { said, .. } => said.as_deref(),
             _ => None,
         }
     }

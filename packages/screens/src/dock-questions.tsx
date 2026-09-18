@@ -4,7 +4,7 @@
 import { JUDGE_ANSWER, type DockAnswer, type DockQuestion } from "@armada/components";
 import type { JobSummary, JudgeAnswer, Outcome, RepositorySummary } from "@armada/protocol";
 import { manifestLabel } from "@armada/shell/src/repository-label";
-import { offeredOf, said } from "./copy";
+import { helmOfferedOf, offeredOf, said } from "./copy";
 import { span } from "./duration";
 import { outstandingId, type Outstanding } from "./outstanding";
 
@@ -34,6 +34,8 @@ export function askedAt(question: Outstanding): string {
       return question.waiting.asked_at;
     case "judge":
       return question.question.asked_at;
+    case "helm":
+      return question.call.asked_at;
   }
 }
 
@@ -57,10 +59,27 @@ export function dockQuestionsOf(
   return [...questions]
     .sort((a, b) => Date.parse(askedAt(a)) - Date.parse(askedAt(b)))
     .flatMap((question) => {
+      const { onAnswer, answering, refusalFor, onDiscuss } = acts;
+      // **A helm call is drawn without a job**, because it has none: it names
+      // its repository off the ask itself, and never falls out of the list for
+      // a board that does not hold it. #1389.
+      if (question.kind === "helm") {
+        return [
+          {
+            id: outstandingId(question),
+            repository: manifestLabel(question.call.manifest_id, repositories),
+            waiting: span(askedAt(question), now) ?? undefined,
+            ...askedOf(question),
+            ...(onAnswer === undefined
+              ? { note: "Open Armada on this machine to answer." }
+              : { onAnswer: (answer: string) => onAnswer(question, answer), answering: answering?.(question) }),
+            refusal: refusalFor?.(question),
+          },
+        ];
+      }
       const job = byId.get(question.job_id);
       if (job === undefined) return [];
       const number = jobNumber(job);
-      const { onAnswer, answering, refusalFor, onDiscuss } = acts;
       return [
         {
           id: outstandingId(question),
@@ -95,6 +114,15 @@ function askedOf(question: Outstanding): Pick<DockQuestion, "label" | "asked" | 
         asked: detail === "" ? `The drone wants to use ${tool}.` : <span className="mono">{detail}</span>,
         // An answer from a Fleet ahead of this build is left out, `offeredOf`'s rule.
         answers: offeredOf(offers).map(({ offer, label, means }) => ({ id: offer, label, consequence: means })),
+      };
+    }
+    case "helm": {
+      const { tool, detail, rule, offers } = question.call;
+      return {
+        label: "Helm needs your permission",
+        asked: detail === "" ? `Helm wants to use ${tool}.` : <span className="mono">{detail}</span>,
+        detail: `Your settings would have to allow ${rule}.`,
+        answers: helmOfferedOf(offers).map(({ offer, label, means }) => ({ id: offer, label, consequence: means })),
       };
     }
     case "judge":

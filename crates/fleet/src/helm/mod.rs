@@ -6,16 +6,20 @@
 //! interface, [`Hosting`], so a host elsewhere is a switch.
 
 mod admitting;
+mod asking;
 mod brief;
 mod conversation;
 mod hosting;
+mod permitting;
 mod reach;
 mod serving;
 mod thread;
 
+pub use asking::{Asks, HelmAskHold, NotAnswerable, Said};
 pub use brief::{brief, Brief, Voice};
 pub use conversation::{ConversationKey, Conversations};
 pub use hosting::{Carried, Carry, Carrying, Heard, Hosting, ProcessHost};
+pub use permitting::SHIPPED_ASK_HOLD;
 pub use reach::{may, Authority};
 pub use thread::{what_was_said, THREAD};
 

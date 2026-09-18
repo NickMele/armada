@@ -150,6 +150,10 @@ pub struct Fittings<H, V, W> {
     /// `settings.helm-session-retention-expiry`, resolved here for
     /// `run_log_retention`'s reason. `#943`.
     pub helm_session_retention: std::time::Duration,
+    /// How long one Helm call is held open for a person before Fleet answers
+    /// `deny` for them. `#1389`, and `crate::helm::HelmAskHold` says why it is
+    /// a fitting.
+    pub helm_ask_hold: crate::helm::HelmAskHold,
     /// How a caller is placed: which process holds the connection a tool call
     /// arrived on. **A seam so a test can plant one** — the shipped answer is
     /// [`peer::Kernel`](crate::peer::Kernel), and a fixture has no sockets to
@@ -280,9 +284,10 @@ where
 {
     pub fn assembled(fittings: Fittings<H, V, W>) -> Fleet<H, V, W> {
         let run = fittings.mint.ulid();
-        let helm = crate::helm::Conversations::hosted_by(Arc::new(
-            crate::helm::ProcessHost::on_this_machine(&fittings.host),
-        ));
+        let helm = crate::helm::Conversations::hosted_by(
+            Arc::new(crate::helm::ProcessHost::on_this_machine(&fittings.host)),
+            fittings.helm_ask_hold,
+        );
         let scouts = crate::scout::Scouts::hosted_by(Arc::new(
             crate::scout::ScoutHost::on_this_machine(&fittings.host),
         ));
@@ -384,7 +389,7 @@ where
     /// The same Fleet with Helm's messages carried by `host` — a stand-in in a
     /// test, or a host somewhere other than a process Fleet starts.
     pub fn hosting_helm_on(mut self, host: Arc<dyn crate::helm::Hosting>) -> Fleet<H, V, W> {
-        self.helm = crate::helm::Conversations::hosted_by(host);
+        self.helm = crate::helm::Conversations::hosted_by(host, self.helm.hold());
         self
     }
 
