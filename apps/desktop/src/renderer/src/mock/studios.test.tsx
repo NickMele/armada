@@ -479,10 +479,22 @@ test("an issue read in is dispatched, its Job opens from the node, and the node 
   await asked("Read in").click();
   await expect.element(node(/^Issue: An issue cannot be read into a Studio/)).toBeVisible();
 
-  // An Epic dispatches too — #1394 — and reading it in and dispatching it are
-  // different asks rather than rivals.
+  // All three forge kinds dispatch, and the dialog names which it is about:
+  // an issue, a pull request and an epic are three different asks — #1379,
+  // #1394. Reading an Epic in and dispatching it are not rivals either.
+  await pick(/^Pull request: where dispatch landed/);
+  await acts().getByRole("button", { name: "Dispatch" }).click();
+  await expect.element(page.getByRole("dialog", { name: "Dispatch this pull request" })).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+
   await pick(/^Epic: Studio/);
-  await expect.element(acts().getByRole("button", { name: "Dispatch" })).toBeVisible();
+  await acts().getByRole("button", { name: "Dispatch" }).click();
+  await expect.element(page.getByRole("dialog", { name: "Dispatch this epic" })).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+
+  // A Link is an address no adapter recognised: nothing filed to dispatch.
+  await pick(/^Link: why the ids collide/);
+  await expect.poll(() => acts().getByRole("button", { name: "Dispatch" }).query()).toBeNull();
 
   await pick(/^Issue: An issue cannot be read into a Studio/);
   await acts().getByRole("button", { name: "Dispatch" }).click();

@@ -15,6 +15,7 @@
 //! | That a sweep past retention is what fills a Run node in | It deletes a directory. `fleet`'s `studio_runs` drives a real run past a real sweep; what is asserted here is the tail that sweep takes and the node carrying it over the wire |
 //! | That a reopened Studio is read-only until Continue | A Bridge state; #1287's mock browser test proves it |
 //! | That an Issue, a Pull request and an Epic dispatch their address, and that a Link does not | The route is `fleet`'s `promoting`, which drives a real dispatch to a Job at the gate; what Bridge offers off the kind is #1379's and #1394's mock browser tests. What is asserted here is the node each address makes, and the fields it carries on the wire |
+//! | That the proposer picks the right workflow for each of the three | A model's, and this file calls none. `crates/config/tests/shipped.rs` holds the `for_requests` line each has to match on, and `fleet`'s `tests::proposing` measures the request and the catalogue the call is handed |
 //! | Anything a person sees | Nothing here renders. The whiteboard is #1286 and #1287 |
 //! | That Helm keeps to what it is told | A model's. `fleet`'s `helm_studio` drives the door through a stand-in agent |
 //! | That a scout reads only the checkout, holds no write tool, and shows its cost when stopped | A process's, and nothing here spawns one: `adapters`' tests hold the launch to read tools under `--restricted`, and `fleet`'s run and stop it against a stand-in agent |

@@ -69,8 +69,19 @@ function servedFrom(manifest: ManifestSummary): RepositorySummary {
     : { root: `/Users/user/${manifest.id}`, records_root: manifest.records_root, manifest };
 }
 
-/** A connected Fleet holding these fixtures' Jobs, each with its own reads. */
-function holding(name: string, says: string, fixtures: JobFixture[], opens?: string): Scenario {
+/**
+ * A connected Fleet holding these fixtures' Jobs, each with its own reads.
+ *
+ * `alsoServed` is served beside what the Manifests imply. **Every repository a
+ * fixture reaches is set up by construction** — `servedFrom` builds one per
+ * Manifest — so a repository nobody set up can only arrive this way.
+ */
+function holding(
+  name: string,
+  says: string,
+  fixtures: JobFixture[],
+  { opens, alsoServed = [] }: { opens?: string; alsoServed?: RepositorySummary[] } = {},
+): Scenario {
   const manifests = distinct(fixtures.flatMap((one) => one.manifests), (one) => one.id);
   return {
     name,
@@ -78,7 +89,7 @@ function holding(name: string, says: string, fixtures: JobFixture[], opens?: str
     state: connected(
       fixtures.map((one) => one.job),
       distinct(fixtures.flatMap((one) => one.workflows), (one) => `${one.manifest_id}/${one.id}`),
-      manifests.map(servedFrom),
+      [...manifests.map(servedFrom), ...alsoServed],
     ),
     reads: Object.fromEntries(fixtures.map((one) => [one.job.id, one])),
     opens,
@@ -91,7 +102,7 @@ function holding(name: string, says: string, fixtures: JobFixture[], opens?: str
  * person's own preference for the Where things are section.
  */
 export function onJob(fixture: JobFixture, { whereOpen = false }: { whereOpen?: boolean } = {}): Scenario {
-  const scenario = holding("job", fixture.name, [fixture], fixture.job.id);
+  const scenario = holding("job", fixture.name, [fixture], { opens: fixture.job.id });
   return {
     ...scenario,
     state: { ...scenario.state, preferences: { ...scenario.state.preferences, where_things_are_open: whereOpen } },
@@ -237,6 +248,29 @@ const EVERY_STATE_ROWS: JobFixture[] = BUILT.map(([name, fixture], at) =>
   asRow(fixture, at + 1, name, EVERY_STATE_TITLES[name]),
 );
 
+/**
+ * A second folder added by path and never set up, so that `NOTHING_SET_UP`
+ * holds more than one — the surfaces that ask for a repository ask because
+ * there are several, and one of them alone would not say so.
+ */
+const NOTES: RepositorySummary = {
+  root: "/Users/user/notes",
+  records_root: "/Users/user/Library/Application Support/Armada/records/notes",
+};
+
+/**
+ * Repositories served, and not one of them with a Manifest. **The moment every
+ * surface that needs a Manifest has nothing to offer**: the rail is on All
+ * repositories, the ask lists only what is set up, and nothing is. Studios is
+ * where it was found.
+ */
+const NOTHING_SET_UP: Scenario = {
+  name: "nothing-set-up",
+  says: "Two repositories served, neither set up",
+  state: connected([], [], [SCRATCH, NOTES]),
+  reads: {},
+};
+
 /** A Fleet that is not running: no runtime file, so nothing was ever connected. */
 const NOT_RUNNING: Scenario = {
   name: "fleet-not-running",
@@ -290,12 +324,22 @@ export const SCENARIOS: readonly Scenario[] = [
         // recorded today is the Board's Cleared tab, which no builder reaches.
         ...RECORDED.map(([, fixture]) => fixture),
       ],
+      // The folder somebody added and never set up. **Without it nobody
+      // browsing the mock ever sees the greyed-out half of a repository
+      // picker**: every repository here comes from a Manifest, so New job's
+      // ask and Studios' ask drew nothing under Not set up, and the one
+      // scenario that shows an unset repository — `nothing-set-up` — has no
+      // set-up one to show it beside. `scratch` rather than a new name: it is
+      // the folder Setup is run against, and the same folder in every
+      // scenario that needs one nobody set up.
+      { alsoServed: [SCRATCH] },
     ),
     // Studios worth looking at, the way the rows are Jobs worth looking at: every node kind and
     // every edge kind on one, and a second nobody has named — #1341.
     studios: [everyKind(EVERY_STATE_ROWS[0]!.job.id), untitled()],
   },
   NOT_RUNNING,
+  NOTHING_SET_UP,
   {
     name: "first-launch",
     says: "Fleet running and serving no repository",
@@ -312,8 +356,10 @@ export const SCENARIOS: readonly Scenario[] = [
   settingUp({ repositories: [repository(), SCRATCH], sheet: SHEET_READ }),
   manifesting({ alwaysAllowed: [GH_ISSUE_VIEW], drift: DRIFT_GONE }),
   studying().scenario,
-  ...BUILT.map(([name, fixture]) => holding(`job/${name}`, fixture.name, [fixture], fixture.job.id)),
-  ...RECORDED.map(([slug, fixture]) => holding(`recorded/${slug}`, fixture.name, [fixture], fixture.job.id)),
+  ...BUILT.map(([name, fixture]) => holding(`job/${name}`, fixture.name, [fixture], { opens: fixture.job.id })),
+  ...RECORDED.map(([slug, fixture]) =>
+    holding(`recorded/${slug}`, fixture.name, [fixture], { opens: fixture.job.id }),
+  ),
 ];
 
 /** The scenario by name, or `undefined` for a name nothing here holds. */

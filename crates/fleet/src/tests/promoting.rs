@@ -335,6 +335,11 @@ async fn a_job_dispatched_from_a_draft_stands_at_the_gate_with_the_drafts_own_wo
 ///
 /// **The node was pasted as a Link.** Bridge cannot read an address, so what
 /// arrives on the seam is a Link and Fleet writes what it is.
+///
+/// **Which workflow each of the three runs under is not here and must not
+/// be.** `docs/concepts/job-proposer.md` makes choosing the proposer's own
+/// decision off the request and each definition's `for_requests` line, which
+/// `crates/config/tests/shipped.rs` holds and `tests::proposing` measures.
 #[tokio::test]
 async fn a_pasted_issue_dispatches_its_address_and_the_job_node_hangs_off_it() {
     let home = TempDir::new();
@@ -420,6 +425,112 @@ async fn a_pasted_issue_dispatches_its_address_and_the_job_node_hangs_off_it() {
         address,
         "the address is the request, whole and on its own"
     );
+}
+
+/// **A Pull request and an Epic dispatch the same way an Issue does**, and a
+/// Link — an address no adapter recognised — still dispatches nothing.
+/// `#1379`, `#1394`.
+///
+/// One test over both, because what is being held is one rule: the request is
+/// the address, whichever of the three it is, and nothing here names a
+/// workflow.
+#[tokio::test]
+async fn a_pull_request_and_an_epic_each_dispatch_their_own_address() {
+    let home = TempDir::new();
+    let fleet = std::sync::Arc::new(a_fleet_that_proposes(&home));
+    let studio = a_studio(&fleet).await;
+    let host = adapters::FORGE_HOST;
+
+    for (n, address) in [
+        format!("https://{host}o/r/pull/1391"),
+        format!("https://{host}o/r/milestone/17"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let link = added(
+            &fleet,
+            &studio,
+            StudioNodeContent::Link {
+                address: address.clone(),
+                said: None,
+                named: None,
+            },
+        )
+        .await;
+        let dispatched = std::sync::Arc::clone(&fleet)
+            .dispatch_studio_draft(
+                studio.id.clone(),
+                DispatchStudioDraft {
+                    node_id: link.clone(),
+                    position: at(480, 240 * n as i64),
+                },
+                Redirector::Person,
+                None,
+            )
+            .await
+            .unwrap_or_else(|why| panic!("`{address}` dispatches: {why:?}"));
+        let job = of_kind(&dispatched, StudioNodeKind::Job)
+            .last()
+            .expect("a Job node")
+            .id
+            .clone();
+        assert_eq!(
+            made_by(&dispatched, &job),
+            [&link],
+            "the Job points back at the node it was dispatched from"
+        );
+    }
+
+    let listed = api::Queries::list_jobs(fleet.as_ref(), None)
+        .await
+        .expect("the Board reads");
+    let mut briefed: Vec<String> = Vec::new();
+    for row in &listed.jobs {
+        let detail = api::Queries::get_job(fleet.as_ref(), row.id.clone())
+            .await
+            .expect("the Job it dispatched");
+        assert_eq!(
+            row.status.as_wire(),
+            "awaiting_approval",
+            "the dispatch gate is the same gate, whichever kind it was"
+        );
+        briefed.push(detail.facts.expect("the brief the Link became"));
+    }
+    briefed.sort();
+    assert_eq!(
+        briefed,
+        [
+            format!("https://{host}o/r/milestone/17"),
+            format!("https://{host}o/r/pull/1391"),
+        ],
+        "each Job's brief is its own address, whole and on its own"
+    );
+
+    // A Link is an address no adapter recognised, so there is nothing filed.
+    let board = added(
+        &fleet,
+        &studio,
+        StudioNodeContent::Link {
+            address: "https://example.invalid/a-board".to_string(),
+            said: None,
+            named: None,
+        },
+    )
+    .await;
+    let refused = std::sync::Arc::clone(&fleet)
+        .dispatch_studio_draft(
+            studio.id.clone(),
+            DispatchStudioDraft {
+                node_id: board,
+                position: at(480, 720),
+            },
+            Redirector::Person,
+            None,
+        )
+        .await
+        .expect_err("a board names nothing filed");
+    assert_eq!(code(&refused), "fleet.studio_not_a_draft");
 }
 
 /// **Helm dispatching on a person's ask draws as Helm's.** The same draft, the
@@ -767,6 +878,6 @@ async fn each_rung_refuses_the_kinds_it_is_not_for() {
             None,
         )
         .await
-        .expect_err("a Link to a board names no issue to dispatch against");
+        .expect_err("a Link to a board names nothing on the forge to dispatch against");
     assert_eq!(code(&refused), "fleet.studio_not_a_draft");
 }
