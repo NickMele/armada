@@ -36,11 +36,22 @@ base: main
 # file rather than a flag reads `ARMADA_CHECK_WIDTH` from its environment
 # instead. #1444.
 #
-# **No `--` before the flag.** `pnpm -C <dir> test -- --maxWorkers=4` reaches
-# vitest as `vitest run -- --maxWorkers=4`, and an argument after a bare `--` is
-# a positional rather than an option, so it is read and discarded. Measured
-# 18 Sep on `desktop_test`: unbounded peaked at 20 vitest processes, `--` with
-# `--maxWorkers=4` peaked at 20, and `--maxWorkers=2` without it peaked at 8.
+# **`runner:` is where the ways of running less than a whole check live.** A
+# check names the runner and the commands are written once in that runner's own
+# description, not once per check here — `.armada/runners/vitest.yml`, and
+# `docs/concepts/runner-adapter.md` for why. A drone that names the files it
+# changed gets the tests that import them, through vitest's own graph: measured
+# on `screens_test`, 1178 tests in 7.61s becomes 11 in 245ms. #1456.
+#
+# **`exec` rather than the package script**, which is #1205's finding and the
+# reason `one_test` below is written the same way. `pnpm -C <dir> test --
+# --maxWorkers=4` reaches vitest as `vitest run -- --maxWorkers=4`, and an
+# argument after a bare `--` is a positional rather than an option, so vitest
+# reads it, discards it and exits zero. Measured 18 Sep on `desktop_test`, peak
+# vitest processes: unbounded 20, the `--` form 20, the script form without it
+# 8, and `pnpm --dir <dir> exec vitest run --maxWorkers=2` 6. Only the last
+# has no script and no `--` to get this wrong in, which is what #1216 settled
+# for every shape a runner is given.
 #
 # **`runs_at: gate` keeps a Check out of a Drone's own run** and nowhere else —
 # the gate still runs it (#849). The two here are the slowest things a Drone
@@ -223,7 +234,10 @@ checks:
   desktop_test:
     # Main's own state machines in node, against a `ws` server on a loopback
     # port — nothing else here runs main (#324).
-    run: pnpm -C apps/desktop test --maxWorkers=${width}
+    run: pnpm --dir apps/desktop exec vitest run --maxWorkers=${width}
+    runner:
+      name: vitest
+      pkg: apps/desktop
     # One test by exact name, which Fleet runs against a checkout of main
     # before a Drone's `draft_fix` drafts anything — same shape as the two
     # Rust one_test lines above, `vitest -t` in place of `nextest -E`. #1203.
@@ -244,7 +258,10 @@ checks:
   screens_test:
     # Pure modules in node, and screens in a browser project, because a screen
     # cannot be storied: `xtask/src/rules_layers.rs` refuses the import.
-    run: pnpm -C packages/screens test --maxWorkers=${width}
+    run: pnpm --dir packages/screens exec vitest run --maxWorkers=${width}
+    runner:
+      name: vitest
+      pkg: packages/screens
     # See desktop_test's one_test above. #1203.
     one_test:
       run: pnpm --dir packages/screens exec vitest run -t {}
@@ -263,7 +280,10 @@ checks:
     # Every component story in a real browser through `@storybook/addon-vitest`;
     # a `play` function has its assertions run. Whole screens are tested
     # through `App` on the mock Fleet instead, in `desktop_test`.
-    run: pnpm -C packages/components test --maxWorkers=${width}
+    run: pnpm --dir packages/components exec vitest run --maxWorkers=${width}
+    runner:
+      name: vitest
+      pkg: packages/components
     runs_at: gate
     # See desktop_test's one_test above. The Storybook interaction tests'
     # own names (a story's `name`, not its export) are what a Drone names

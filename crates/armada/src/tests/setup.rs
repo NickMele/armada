@@ -172,15 +172,15 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             // The Bridge's tests, one Check per package since #849.
             (
                 "desktop_test",
-                "pnpm -C apps/desktop test --maxWorkers=${width}"
+                "pnpm --dir apps/desktop exec vitest run --maxWorkers=${width}"
             ),
             (
                 "screens_test",
-                "pnpm -C packages/screens test --maxWorkers=${width}",
+                "pnpm --dir packages/screens exec vitest run --maxWorkers=${width}",
             ),
             (
                 "components_test",
-                "pnpm -C packages/components test --maxWorkers=${width}",
+                "pnpm --dir packages/components exec vitest run --maxWorkers=${width}",
             ),
             // The local merge line's own two suites, which nothing else runs.
             // `hooks_test` is checked below instead of here: its command names
