@@ -205,6 +205,12 @@ pub enum Delivered {
     /// repository Fleet did not make**, so a test that could not see it could
     /// not tell a press that merged from one that only moved a Job.
     Merged { pull_request: String },
+    /// The forge was asked to merge a pull request pinned to a gated commit —
+    /// `Delivery::merge_pinned`, `armada land`'s own write.
+    MergedPinned {
+        pull_request: String,
+        expected_head: String,
+    },
 }
 
 /// What the fake's version control looks like from the delivery side.
@@ -764,6 +770,28 @@ impl Delivery for FakeVcs {
             .expect("not poisoned")
             .push(Delivered::Merged {
                 pull_request: pull_request.to_string(),
+            });
+        match self.merging.lock().expect("not poisoned").clone() {
+            Merging::Takes => Ok(Merged::Taken),
+            Merging::AlreadyMerged => Ok(Merged::AlreadyMerged),
+            Merging::Refuses(why) => Err(why),
+        }
+    }
+
+    fn merge_pinned(
+        &self,
+        _in_repo: &str,
+        pull_request: &str,
+        expected_head: &str,
+    ) -> Result<Merged, NotMerged> {
+        // Scripted the same way as `merge`, through the one `merging` field:
+        // this fake has no forge state to compare a pinned commit against.
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .push(Delivered::MergedPinned {
+                pull_request: pull_request.to_string(),
+                expected_head: expected_head.to_string(),
             });
         match self.merging.lock().expect("not poisoned").clone() {
             Merging::Takes => Ok(Merged::Taken),
