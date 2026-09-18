@@ -188,3 +188,39 @@ export async function openServerLink(
 ): Promise<string | null> {
   return whyNotOpenedServerLink(await open(serverId, url));
 }
+
+/**
+ * Why a Studio node's address did not open, in the app's voice, or `null`
+ * because it did — #1406.
+ *
+ * **Not `whyNotFollowed`.** Those sentences are about a Job's record; these are
+ * about a node on the board in front of the person, and `unknown_job` is a shape
+ * this act cannot produce — a Studio main is not holding answers `no_address`.
+ */
+export function whyNotOpenedNode(followed: Followed): string | null {
+  if (followed.ok) return null;
+  switch (followed.why) {
+    case "unknown_job":
+    case "no_address":
+      return "This node carries no address on the Studio Bridge is holding. Reopen the Studio and try again.";
+    case "not_addressable":
+      return `This node's address is ${followed.address}, and Bridge only opens a web address.`;
+    case "refused":
+      return `This machine did not open ${followed.address}: ${followed.detail}`;
+  }
+}
+
+/** Asking the host to open one Studio node's address — a Studio id and a node id. */
+export type OpenStudioNode = (studioId: string, nodeId: string) => Promise<Followed>;
+
+/**
+ * Ask main to open what a node points at, and answer with the sentence to say
+ * where it did not. `null` is success.
+ */
+export async function openStudioNode(
+  open: OpenStudioNode,
+  studioId: string,
+  nodeId: string,
+): Promise<string | null> {
+  return whyNotOpenedNode(await open(studioId, nodeId));
+}

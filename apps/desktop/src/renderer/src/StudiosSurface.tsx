@@ -21,6 +21,7 @@ import {
   createStudio,
   decideStudioEdge,
   moveStudioNode,
+  openStudioNode,
   promoteOnStudio,
   readStudioFrame,
   removeStudioNode,
@@ -136,6 +137,9 @@ export function StudiosSurface(props: StudiosSurfaceProps) {
         onDecideEdge={(edgeId, accepted) => decideStudioEdge(openId ?? "", edgeId, accepted)}
         onReadFrame={readStudioFrame}
         onPromote={(promotion) => promoteOnStudio(openId ?? "", promotion)}
+        // A node's own address, to the system browser through main — #1406.
+        // Nothing opens inside Bridge: no surface navigates.
+        onOpenAddress={openStudioNode}
         // The Studio stays standing under the Job, so closing it comes back to
         // the whiteboard with the node reading whatever the Job is doing now.
         onOpenJob={props.onOpenJob}

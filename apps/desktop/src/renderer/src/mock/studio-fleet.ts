@@ -47,6 +47,7 @@ export type StudioRoutes = Pick<
   | "removeStudioNode"
   | "decideStudioEdge"
   | "promoteOnStudio"
+  | "openStudioNode"
 >;
 
 /** The Studios a mock Fleet keeps, and what Helm writes into one. */
@@ -61,6 +62,8 @@ export type StudioKeeping = {
   twoNotes: (studioId: string) => void;
   /** One Contradiction, Reported, which a person ends one of four ways. */
   aContradiction: (studioId: string) => void;
+  /** Every address handed to the system browser, in the order it was — #1406. */
+  browsed: () => readonly string[];
 };
 
 /** One scenario's own Fleet, keeping Studios. */
@@ -173,6 +176,8 @@ export function keeping(seeded: readonly Studio[] = []): StudioKeeping {
     return { ok: true, studio } as const;
   }
 
+  const browsed: string[] = [];
+
   const routes = (handle: FleetHandle): StudioRoutes => {
     fleet = handle;
     return {
@@ -266,6 +271,16 @@ export function keeping(seeded: readonly Studio[] = []): StudioKeeping {
         }));
         return answer.ok ? OK : answer.outcome;
       },
+      // **Main's act and not Fleet's** — #1406: main reads the address off the
+      // Studio it published and hands it to the system browser. Nothing here
+      // browses, so the address is recorded and the test reads it back.
+      openStudioNode: async (studioId, nodeId) => {
+        const node = store.get(studioId)?.nodes.find((one) => one.id === nodeId);
+        const address = node !== undefined && "address" in node ? node.address : undefined;
+        if (address === undefined) return { ok: false, why: "no_address" };
+        browsed.push(address);
+        return { ok: true };
+      },
       promoteOnStudio: async (studioId, promotion) => {
         const answer = write(studioId, (studio) => promoted(studio, promotion));
         // **A dispatch puts a row on the Board as well as a node on the
@@ -281,6 +296,7 @@ export function keeping(seeded: readonly Studio[] = []): StudioKeeping {
   return {
     routes,
     studios: () => [...store.values()],
+    browsed: () => [...browsed],
     twoNotes: (studioId) =>
       void write(studioId, (studio) => {
         const now = tick();
