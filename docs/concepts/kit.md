@@ -30,6 +30,20 @@ Resources, budget, timing, interface and notification routing are **not** here �
 
 **A folder a person can see and sync**, apart from the store, the runtime file and [Machine](machine.md)'s settings: Kit travels and the Machine does not. Everything else this page lists arrives in the same home under #41, and nothing else is read from it yet.
 
+## What a person already has, read to be shown
+
+**Armada reads the harness's own home to show what is in it** — `#1491`. Somebody arrives with a way of working already built: skills they wrote, plugins they installed, a global file saying how they want an agent to behave, servers they connected. Kit opened on *Nothing in your Kit yet* with all of it one directory away, and **see** was the verb the build was missing.
+
+**An adapter per harness**, decided with the owner on 18 Sep. Which folder, which file and how one harness spells a skill are `crates/adapters`' to know, and a second harness is a second adapter with nothing above it moving. `get_kit_inventory` is the read and `adapter_traits::HarnessSetup` is the seam.
+
+**Six kinds of the eight are read**: Skills, Plugins, Agent file, Sub agents, Commands and the servers a person connected. The allowlist and the models list answer *not read yet, and why* — a rule drawn out of its two tiers reads as a grant, and both tiers are #41. **A kind is never drawn as empty when nothing looked**, which is the defect this read exists to end rather than repeat one row along.
+
+**Reading is not granting, and no part of it is a control.** What is read carries a name, the thing's own words for itself and where it came from — no address, no command, no argument list, no environment — so there is nothing in the reading a server a Drone gets could be built out of. A server a person connected outside Armada is visible here and reaches no Drone: adding one to Kit and then allowing it are the two acts they were. That is `../scope.md`'s one confinement, kept where an import would have broken it.
+
+**A file that will not read is named, with its reason, under the kind it belongs to.** It costs that kind and nothing else, and nothing offers to repair it: the reader has no write to reach for.
+
+**Write-back is decided and not built.** Kit writes to the harness's home rather than keeping a copy — one setup, Armada a window onto it — because two copies drift the moment either is touched and nobody can then say which a Drone ran against. The cost is that Armada would be writing into a directory it does not own, holding work a person depends on outside Armada entirely, so the read landed first and carries no write at all. #41.
+
 **A Kit definition that does not fit a repository is left out there, and named.** One that will not parse, names a Check that repository does not declare, or shares its id with another Kit file, is set aside — two sharing an id are both left out, and named together. Fleet starts anyway and says at start which definition was left out, why, and whose runs instead: *Kit's `bug` was left out, because …; Armada's `bug` is used instead.* One bad Kit file never stops Fleet for every repository. The owner's decision. One the repository replaces is never resolved against it. A repository's own definitions stay strict, because the repository declared them.
 
 ## Navigation — two functional groups
@@ -61,7 +75,7 @@ The original four groups split across the two concepts: AI Behavior and the tool
 
 **A scout gets none of them.** [Scout](scout.md) starts with no server at all, and the sources it reads are fetched by Fleet rather than opened by the agent — so "a scout's connections" is a different question from this one, and nothing here widens a scout.
 
-**Helm's set is still the person's own, resolved by the CLI** — `#1373`, and Kit replaces none of it yet. Nothing in Armada reads `~/.claude`; Helm simply launches without the flag a Drone launches with.
+**Helm's set is still the person's own, resolved by the CLI** — `#1373`, and Kit replaces none of it yet. Helm simply launches without the flag a Drone launches with.
 
 **Known cost: allowlist rot.** Two-tier inheritance keeps changes scoped, but upkeep is ongoing as new tools are needed. No automated solution exists; worth monitoring rather than solving now.
 
