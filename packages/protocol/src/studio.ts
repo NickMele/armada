@@ -271,7 +271,7 @@ export type StudioCapture = {
   frame?: { filename: string; byte_size: number; width: number; height: number };
   /**
    * The server this Note was captured on, in the capture window — #1294, since
-   * 16.7. **Absent on every Note captured on Bridge**, which is every Note
+   * 17.1. **Absent on every Note captured on Bridge**, which is every Note
    * before it. `docs/practices/capture-window.md`.
    */
   served?: CaptureServed;

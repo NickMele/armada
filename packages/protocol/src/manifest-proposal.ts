@@ -75,8 +75,8 @@ export type ProposedCheck = {
  */
 export type ProposedRunner = {
   name: string;
-  /** What `{pkg}` resolves to. Absent on a workspace that is the root. */
-  pkg?: string;
+  /** What `{dir}` resolves to. Absent on a workspace that is the root. */
+  dir?: string;
 };
 
 export type ProposedCommand = {

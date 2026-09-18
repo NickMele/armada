@@ -110,14 +110,27 @@ pub trait AgentHarness {
     /// the configuration exists to guarantee.
     fn render(&self, config: &DroneSpawnConfig) -> Result<Launch, Self::Error>;
 
-    /// Whether this command could be granted to a Drone at all, as a declared
-    /// or an allowed command: the refusal [`render`](AgentHarness::render)
-    /// would give for it, asked before a person allows it.
+    /// Whether this command could be granted to a Drone as a **standing**
+    /// rule — a declared or an allowed command: the refusal
+    /// [`render`](AgentHarness::render) would give for it, asked before a
+    /// person allows it.
     ///
     /// **Asked first, because the render refuses the whole spawn.** A command
     /// a person allowed that this harness cannot express, or one that would
     /// push, would otherwise fail the Job the next time a Drone is put on it.
     fn grantable(&self, run: &str) -> Result<(), Self::Error>;
+
+    /// Whether a Drone may run this command **on this one call**, with no rule
+    /// written anywhere.
+    ///
+    /// **Narrower than [`grantable`](AgentHarness::grantable), and that gap is
+    /// the point.** A command may be one no rule can be written for and still
+    /// be one a Drone may run: a harness spells its allowlist in some syntax,
+    /// and a command holding that syntax's own characters cannot be spelled in
+    /// it — which says nothing about the command. `sed -n '1,140' file` reads a
+    /// file and holds a comma. Answering one permission question grants
+    /// nothing later, so only what a Drone may never do belongs here.
+    fn runnable(&self, run: &str) -> Result<(), Self::Error>;
 
     /// Read one line of the Drone's output.
     ///

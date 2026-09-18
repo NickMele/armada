@@ -66,7 +66,7 @@ impl Draft {
                 narrow: None,
                 runner: check.runner.as_ref().map(|runner| NewRunner {
                     name: runner.name.clone(),
-                    pkg: runner.pkg.clone(),
+                    dir: runner.dir.clone(),
                 }),
             }),
         }));

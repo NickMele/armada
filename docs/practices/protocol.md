@@ -1508,7 +1508,26 @@ and title, which live on a row Bridge does not hold.
 
 **Additive, so a Fleet ahead of a Bridge sends a field it ignores** and the
 header draws the ULID it already drew.
-## Protocol 16.7: a Note says which server it was captured on
+## Protocol 17.0: a runner's directory is called `dir`
+
+`#1456`. `ProposedRunner.pkg` becomes `dir`, and `{pkg}` becomes `{dir}` in
+every runner description's templates.
+
+**The rename is the whole of why this is major**, on `PlanTask.detail`'s
+precedent one major back: the old name silently stops arriving, which no
+version of "additive" covers. Nothing else about the message moved.
+
+`pkg` said package, and the value is a directory — the one a runner is invoked
+in, which is what makes `vitest` mean one suite rather than the three others in
+the same repository. It came from an illustrative example rather than from a
+decision, and reached a real key without anyone asking what it meant.
+
+**Taken at the cheapest moment there was.** The field shipped in 16.5 and no
+Bridge outside this repository had yet been built against it, so the refusal a
+major causes falls on a rebuild that was already owed. The longer a name that
+says the wrong thing survives, the more it costs to move.
+
+## Protocol 17.1: a Note says which server it was captured on
 
 `#1294`. `StudioCapture.served`, optional — `{ run, name, address }`: the instance Fleet held, what
 the Manifest calls it, and the origin the capture window was pinned to. Additive: one new optional
@@ -1524,13 +1543,22 @@ together are the page. The address is not an identity and the field does not cla
 whatever bound that loopback port owns the origin, which is why capture ends with the Run —
 `docs/practices/capture-window.md`, *What this does not claim*.
 
-**This was written as 16.5, then 16.6, and is 16.7.** `#1456` took 16.5 underneath it and `#1477`
-took 16.6, both while this branch was open — the fourth and fifth times this file records the
-collision, and both on one day.
+**Additive against 17.0, re-read as such rather than carried across the major.** This was written
+on 16.x, and 17.0's rename is what makes it worth saying out loud: what it adds is one optional
+field on `StudioCapture` and one new DTO beside it, neither named anywhere 17.0 touched.
+`ProposedRunner` is the manifest-proposal surface and nothing here composes it. The two new
+`Outcome` arms are Bridge's own — produced in main, read in its own renderer, sent in neither
+direction — so they are not on this wire at all.
 
-**Re-reading the file is not the check.** The 16.5 collision produced no conflict at all: both
-branches wrote `minor = 5`, so git had nothing to disagree about and two additive changes agreed on
-a number meaning two different things. A branch that reads 16.7 and a `main` that reads 16.7 look
+**This was written as 16.5, then 16.6, then 16.7, and is 17.1.** `#1456` took 16.5, `#1477` took
+16.6 and `#1487` took the major, all three while this branch was open — the fourth, fifth and sixth
+times this file records the collision, and all of them on one day.
+
+**Re-reading the file is not the check, and a conflict is not the check either.** The 16.5
+collision produced no conflict at all: both branches wrote `minor = 5`, so git had nothing to
+disagree about and two additive changes agreed on a number meaning two different things. The 16.6
+one did conflict, and the major conflicted loudest of the three — which is exactly the trap, because
+the quiet one is the one that lands. A branch that reads 17.1 and a `main` that reads 17.1 look
 identical and are not. The check is whether the bump is still the branch's own:
 
 ```

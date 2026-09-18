@@ -238,6 +238,10 @@ impl Withheld {
 
 /// The answer before anyone is asked.
 ///
+/// `not_runnable` is the harness's refusal of this command **on this call**,
+/// where it has one — never its refusal to write a standing rule for it, which
+/// is a different question and `#1420` is where they came apart.
+///
 /// `destructive` is every destructive command the Manifest declares, as
 /// `(name, run)`, `check_runners` is every Check it declares as
 /// `(check name, program)`, and `ungrantable` is the harness's refusal of this
@@ -249,7 +253,7 @@ pub fn first(
     allowed: &[AllowedCommand],
     destructive: &[(String, String)],
     check_runners: &[(String, String)],
-    ungrantable: Option<String>,
+    not_runnable: Option<String>,
     when: WhenBlocked,
 ) -> First {
     let Some(command) = command else {
@@ -279,7 +283,7 @@ pub fn first(
             program: program.clone(),
         });
     }
-    if let Some(why) = ungrantable {
+    if let Some(why) = not_runnable {
         return First::Withheld(Withheld::Ungrantable { why });
     }
     match when {
@@ -877,6 +881,74 @@ mod tests {
             ),
             First::Withheld(Withheld::Ungrantable {
                 why: "it would push".to_string()
+            })
+        );
+    }
+
+    /// **`#1420`.** A comma is the allowlist's own syntax, so no standing rule
+    /// can be written for `sed -n '1,140' file` — and answering one permission
+    /// question writes no rule, so the command runs. Under Allow all it runs
+    /// without a person; under the other two the person is still asked or the
+    /// Job still holds, which is what those settings mean.
+    #[test]
+    fn a_command_no_rule_can_be_written_for_is_answered_like_any_other() {
+        assert_eq!(
+            first(
+                "Bash",
+                Some("sed -n '1,140' f"),
+                &[],
+                &[],
+                &[],
+                None,
+                WhenBlocked::AllowAll
+            ),
+            First::Allowed
+        );
+        assert_eq!(
+            first(
+                "Bash",
+                Some("sed -n '1,140' f"),
+                &[],
+                &[],
+                &[],
+                None,
+                WhenBlocked::AskMe
+            ),
+            First::Ask
+        );
+        assert_eq!(
+            first(
+                "Bash",
+                Some("sed -n '1,140' f"),
+                &[],
+                &[],
+                &[],
+                None,
+                WhenBlocked::RefuseAndHold
+            ),
+            First::NotGranted
+        );
+    }
+
+    /// **The standing question still withholds, and `offers_after` is where it
+    /// is asked.** That path hands `first` the harness's refusal to write a
+    /// rule, under `AskMe`, so a person is offered no Allow for a command no
+    /// rule can be written for — a row for one would fail the next spawn
+    /// outright, since the render refuses the whole Drone.
+    #[test]
+    fn no_standing_allow_is_offered_for_a_command_no_rule_can_be_written_for() {
+        assert_eq!(
+            first(
+                "Bash",
+                Some("sed -n '1,140' f"),
+                &[],
+                &[],
+                &[],
+                Some("it holds `,`".to_string()),
+                WhenBlocked::AskMe,
+            ),
+            First::Withheld(Withheld::Ungrantable {
+                why: "it holds `,`".to_string()
             })
         );
     }

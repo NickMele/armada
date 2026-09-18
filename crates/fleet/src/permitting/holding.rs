@@ -346,7 +346,11 @@ where
             &allowed,
             &destructive,
             &check_runners,
-            command.and_then(|run| self.ungrantable(run)),
+            // **The per-call question, not the standing one.** Answering this
+            // writes no rule, so a command the allowlist cannot spell is still
+            // one a Drone may run. `offers_after` asks the other one, because
+            // by then a standing allow is the only answer left. `#1420`.
+            command.and_then(|run| self.not_runnable(run)),
             when,
         )
     }
@@ -401,10 +405,26 @@ where
         runners
     }
 
-    /// The harness's refusal of this command as a grant, where it has one.
+    /// The harness's refusal of this command **as a standing rule**, where it
+    /// has one. Asked where a person's answer would write one down.
     fn ungrantable(&self, run: &str) -> Option<String> {
         self.harness()
             .grantable(run)
+            .err()
+            .map(|why| why.to_string())
+    }
+
+    /// The harness's refusal of this command **on this one call**, where it
+    /// has one.
+    ///
+    /// **Narrower than [`ungrantable`](Self::ungrantable), and this is the one
+    /// a permission question asks.** Answering one question writes no rule, so
+    /// a command this harness cannot spell in its allowlist is not thereby a
+    /// command a Drone may not run — `sed -n '1,140' file` reads a file and
+    /// holds a comma. `#1420`.
+    fn not_runnable(&self, run: &str) -> Option<String> {
+        self.harness()
+            .runnable(run)
             .err()
             .map(|why| why.to_string())
     }

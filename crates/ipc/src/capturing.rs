@@ -59,7 +59,7 @@ pub struct StagedFrame {
 }
 
 /// The server a Note was captured on, where it was captured in the capture
-/// window rather than on Bridge. `#1294`, since protocol 16.7.
+/// window rather than on Bridge. `#1294`, since protocol 17.1.
 ///
 /// **The origin only.** `location` on the capture is the path within it, so the
 /// two together are the page and neither repeats the other.
@@ -104,7 +104,7 @@ pub struct StudioCapture {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frame: Option<CaptureFrame>,
     /// The server it was captured on. **Absent on every Note captured on
-    /// Bridge**, which is every Note before 16.7.
+    /// Bridge**, which is every Note before 17.1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub served: Option<CaptureServed>,
 }
