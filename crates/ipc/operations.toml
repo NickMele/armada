@@ -1281,6 +1281,69 @@ Refused with a 409 where nothing always-allowed for this Manifest is spelled `ru
 `agent_access` is `Helm only`, `remove_allowed_command`'s reason.
 """
 
+[operations.get_kit_servers]
+kind = "query"
+transport = "HTTP"
+agent_access = "No"
+description = "Every MCP server in Kit, both tiers of its reach, and whether a Drone dispatched against this Manifest resolves it"
+notes = """
+`#1275`. `docs/concepts/kit.md` designs Kit and until now nothing parsed one, so connecting an MCP server meant leaving Armada for a terminal. The row carries Kit's own default, this Manifest's word over it, and `resolves` — the answer `core_model::a_drone_resolves` gives over the two, which is the same call that writes the document a Drone is spawned against. A surface that recomputed it could draw a server as reaching a Drone that no Drone is handed.
+
+The Manifest rides as `?manifest_id=`, `get_repository_allowed_commands`' reason: a Fleet serves one repository, and the parameter scopes the second tier rather than naming a resource.
+
+`agent_access` is `No` on this read and on all four writes below: what a Drone may reach is the owner's decision, `answer_command`'s reason, and a tool that let an agent read the set is a step toward one that changes it.
+"""
+
+[operations.add_kit_server]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Put an MCP server in Kit, reaching no Drone until a person says so"
+notes = """
+The body is a name and an address — a program with its arguments, or an `http`/`https` URL. The answer is `get_kit_servers`' whole list, so a caller folding one answer has already folded the other.
+
+**It cannot widen a Drone.** `core_model::KitServer::added` takes no reach and there is no constructor that starts one anywhere but off, so a server arrives reaching nobody and `set_kit_server_reach` or `set_manifest_server_reach` is the second, separate act. That is `docs/scope.md`'s one confinement kept: without `--strict-mcp-config` a v1 Drone came up holding every server the operator had connected, and a Kit whose rows arrived switched on would be the same defect through the front door.
+
+A name Kit already holds replaces that server's address and leaves both tiers of its reach alone — correcting a command is not re-granting it. Refused with a 409 where the name is blank, over 64 characters, holds anything but letters, digits, `-` and `_`, is `armada`, or where the address is a blank command or not `http`.
+
+**No environment.** A server needing an API key is still a terminal's job; a credential in Fleet's store is a decision nobody has taken.
+"""
+
+[operations.forget_kit_server]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Take an MCP server out of Kit, and every Manifest's word about it with it"
+notes = """
+The body is `name`, exactly as `get_kit_servers` lists it, and the answer is what remains. Every Manifest's word about the server goes with it: a rule about a server Kit no longer holds is a rule about nothing, and leaving it would let a re-added name arrive already extended.
+
+**Read by the next spawn**, so nothing running is touched — a Drone spawned under the old document keeps it for the step it is on. Refused with a 409 where Kit holds no server of that name.
+"""
+
+[operations.set_kit_server_reach]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Kit's own default for one server, across every Manifest that has not said otherwise"
+notes = """
+The body is `name` and `drones`, which is `yes` or `no`. The first tier of `kit.md`'s two: Kit holds the defaults, and a Manifest extends or restricts them.
+
+Refused with a 409 where Kit holds no server of that name. Read by the next spawn, `forget_kit_server`'s reason.
+"""
+
+[operations.set_manifest_server_reach]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "This Manifest's word over one Kit server: extended, restricted, or taken back"
+notes = """
+The second tier. `reach` is `extended`, `restricted`, or `null` — and **`null` is sent rather than implied**, `set_model`'s reason: a Bridge that dropped the key would throw away a person's word about who may reach a server and answer 200. A taken-back word leaves no row, which is what leaves Kit's own default answering again.
+
+**Extend and restrict both**, in either direction, per `docs/concepts/kit.md`: nothing above the Manifest constrains it, so a Manifest may turn on a server Kit leaves off as well as off one Kit leaves on.
+
+Refused with a 409 where Kit holds no server of that name.
+"""
+
 [operations.approve_dispatch]
 kind = "command"
 transport = "HTTP"

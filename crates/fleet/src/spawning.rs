@@ -401,7 +401,7 @@ where
             worktree,
             Model::named(job.model_spawned_at(step, chosen.as_ref()).as_str())?,
             brief,
-            McpConfig::only_these(&self.host().mcp_config)?,
+            self.mcp_config(job).await?,
             self.toolbelt(job, step).await,
             environment(
                 HostPaths {
@@ -412,6 +412,35 @@ where
                 &ports,
             )?,
         ))
+    }
+
+    /// The document this Drone is bound to: Armada's Evidence server, and the
+    /// Kit servers this Manifest resolves — `#1275`.
+    ///
+    /// **Written per Manifest at every spawn**, so a person's change reaches
+    /// the next Drone with no restart and a running one keeps what it started
+    /// with. Beside the machine-wide file rather than in the worktree, for
+    /// `adapters::mcp`'s reason: a Drone that could write its own MCP
+    /// configuration could name a different server.
+    ///
+    /// **A Job whose repository Fleet cannot name falls back to that file**,
+    /// which holds the Evidence server alone. The safe answer to not knowing
+    /// where a Job is, is the narrowest document rather than the widest.
+    async fn mcp_config(&self, job: &Job) -> Result<McpConfig, SpawnConfigRefused> {
+        let machine = &self.host().mcp_config;
+        let Ok(served) = self.served_by(job) else {
+            return McpConfig::only_these(machine);
+        };
+        let servers = self.servers_for_a_drone(&served).await;
+        let at = std::path::Path::new(machine)
+            .with_file_name(format!("mcp-{}.json", served.manifest().id().as_str()));
+        let url = format!("http://127.0.0.1:{}{}", self.host().port, api::MCP_PATH);
+        match adapters::the_drones_servers(&at, &url, &servers) {
+            Ok(()) => McpConfig::only_these(&at.to_string_lossy()),
+            // Nothing written is nothing resolved, and a Drone still has to be
+            // able to report. The file `serve` wrote holds the Evidence server.
+            Err(_) => McpConfig::only_these(machine),
+        }
     }
 
     /// What the Drone may call: the Evidence tool, its own worktree, the git

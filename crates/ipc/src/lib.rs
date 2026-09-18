@@ -94,6 +94,8 @@ mod job;
 /// activity log was designed around and nothing produced.**
 mod journal;
 mod judged;
+/// Kit's MCP servers, and each Manifest's word over one. `#1275`.
+mod kit;
 /// Fleet's three changeable limits. **A value out of range does not decode.**
 mod limits;
 /// A possible `armada.yml` per workspace, and the edits and Write that finish it.
@@ -207,9 +209,10 @@ pub use drones::{DroneDetail, DroneList, DroneSummary};
 pub use editing::{ManifestFile, ManifestSaved, SaveManifestFile};
 pub use enums::{
     Actor, AdvanceGate, BudgetHold, CheckOutcome, CriterionSource, DependencyDirection,
-    DronePresence, EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, Recourse,
-    Resumption, ScoutSourceKind, Side, StepState, StudioAuthor, StudioEdgeKind, StudioEdgeStanding,
-    StudioNodeKind, StudioNodeState, StudioRelation, TaskState, TopLevelOrigin, Urgency,
+    DronePresence, EvidenceType, JobStatus, JudgeVerdict, ManifestReach, Origin, QueuedReason,
+    ReachesDrones, Recourse, Resumption, ScoutSourceKind, Side, StepState, StudioAuthor,
+    StudioEdgeKind, StudioEdgeStanding, StudioNodeKind, StudioNodeState, StudioRelation, TaskState,
+    TopLevelOrigin, Urgency,
 };
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
@@ -245,6 +248,10 @@ pub use journal::{
     JobLog, JournalClosed, JournalMessage, JournalOpened, LogNote, NoteLevel, NotedField, Quiet,
 };
 pub use judged::{Citation, CitedAt, Cleared, Flagged, Given, Judged, KeptDeliverable};
+pub use kit::{
+    AddKitServer, ForgetKitServer, KitServerRow, KitServers, ServerAddress, SetKitServerReach,
+    SetManifestServerReach,
+};
 pub use limits::{
     ChecksAtOnce, DiskFloorGib, DronesAtOnce, FleetLimits, LimitValues, MemorySparePercent,
     SaveLimits, Within,

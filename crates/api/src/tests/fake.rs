@@ -83,6 +83,8 @@ pub struct FakeDaemon {
     /// Every rule a person always-allowed for the repository. Set by a test,
     /// and changed by the fake's own removes — `#836`.
     pub repository_allowed: Mutex<Vec<ipc::AllowedCommandRow>>,
+    /// Kit's servers, as the fake's own acts leave them — `#1275`.
+    pub kit_servers: Mutex<Vec<ipc::KitServerRow>>,
     /// The one Helm conversation's channel, which a test can offer into.
     pub helm: crate::HelmFeed,
     /// What `observe_helm` answers with as the thread. Set by a test.
@@ -131,6 +133,7 @@ impl FakeDaemon {
             limits: Mutex::new(shapes::limits()),
             preferences: Mutex::new(shapes::preferences()),
             repository_allowed: Mutex::new(Vec::new()),
+            kit_servers: Mutex::new(Vec::new()),
             helm: crate::HelmFeed::new(),
             helm_thread: Mutex::new(Vec::new()),
             asked_to_run: Mutex::new(Vec::new()),

@@ -85,6 +85,7 @@ mod http;
 mod journal;
 mod judging;
 mod keeping;
+mod kit;
 mod landing;
 mod landing_committed;
 mod left_behind;

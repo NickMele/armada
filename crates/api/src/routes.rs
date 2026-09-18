@@ -149,6 +149,20 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
             "/manifest/allowed_commands/remove",
             post(remove_repository_allowed_command::<D>),
         )
+        .route("/kit/servers", get(crate::kit::get_kit_servers::<D>))
+        .route("/kit/servers/add", post(crate::kit::add_kit_server::<D>))
+        .route(
+            "/kit/servers/forget",
+            post(crate::kit::forget_kit_server::<D>),
+        )
+        .route(
+            "/kit/servers/reach",
+            post(crate::kit::set_kit_server_reach::<D>),
+        )
+        .route(
+            "/kit/servers/manifest_reach",
+            post(crate::kit::set_manifest_server_reach::<D>),
+        )
         .route("/jobs/:job_id", get(get_job::<D>))
         .route("/jobs/:job_id/events", get(get_job_events::<D>))
         .route("/jobs/:job_id/evidence", get(get_evidence::<D>))
