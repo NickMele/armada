@@ -53,6 +53,85 @@ describe("which task an edit belongs to", () => {
   });
 });
 
+// `#1498`. The reproduction, from Job `3-show-what-s-running-in-the-drones-stat`
+// on 18 Sep: T5 declared two files, edited both, then moved `open` → `done`
+// without ever being marked `working`, so Fleet sent it no window at all.
+describe("a task that declared its files and was never marked working", () => {
+  const OVERVIEW = "packages/screens/src/overview.ts";
+  const SPEC = "packages/screens/src/overview.test.ts";
+  const LEFT = "packages/screens/src/left-column.ts";
+
+  const declaring: PlanTask[] = [
+    {
+      id: "T1",
+      title: "Give the left column its own reading",
+      state: "working",
+      scope: [LEFT],
+      working_windows: [{ entered: at(60) }],
+    },
+    { id: "T5", title: "Show what is running", state: "done", scope: [OVERVIEW, SPEC] },
+  ];
+
+  const changed: ChangedFile[] = [
+    { path: OVERVIEW, change: "modified", added: 12, deleted: 3 },
+    { path: SPEC, change: "modified", added: 40 },
+  ];
+
+  /** The three edits the Drone made before any task was marked working. */
+  const edits = (): ReturnType<typeof editsIn> =>
+    editsIn(
+      [
+        called(STEP, at(0), "a", "Edit", `${TREE}${OVERVIEW} +8 -3`),
+        called(STEP, at(14), "b", "Edit", `${TREE}${SPEC} +30`),
+        called(STEP, at(24), "c", "Edit", `${TREE}${SPEC} +10`),
+      ],
+      declaring,
+    );
+
+  it("holds both of them in its own well", () => {
+    expect(filesByTask(edits(), changed).get("T5")).toEqual([
+      { path: OVERVIEW, inDiff: true, added: 8, deleted: 3 },
+      { path: SPEC, inDiff: true, added: 40, deleted: 0 },
+    ]);
+  });
+
+  it("leaves nothing changed outside any task's edits", () => {
+    expect(unownedOf(edits(), changed)).toEqual([]);
+  });
+
+  it("reads both declared paths as touched", () => {
+    const read = declaredAgainstTouched(
+      declaring[1]?.scope ?? [],
+      filesByTask(edits(), changed).get("T5") ?? [],
+    );
+    expect(read.declared).toEqual([
+      { path: OVERVIEW, touched: true },
+      { path: SPEC, touched: true },
+    ]);
+    expect(read.unplanned).toEqual([]);
+  });
+
+  it("still names a file no task declared in the row no task owns", () => {
+    const stray: ChangedFile = {
+      path: "packages/screens/src/TheShell.tsx",
+      change: "modified",
+      added: 1,
+    };
+    const also = editsIn(
+      [called(STEP, at(30), "d", "Edit", `${TREE}${stray.path} +1`)],
+      declaring,
+    );
+    expect(unownedOf([...edits(), ...also], [...changed, stray]).map((file) => file.path)).toEqual([
+      stray.path,
+    ]);
+  });
+
+  it("does not take an edit a window already covers, whatever another task declared", () => {
+    const [edit] = editsIn([called(STEP, at(61), "d", "Edit", `${TREE}${OVERVIEW} +2`)], declaring);
+    expect(edit?.task).toBe("T1");
+  });
+});
+
 describe("a call's path, as the diff names it", () => {
   it("matches at a path segment, and the longest match wins", () => {
     const repo = ["src/lib.rs", "crates/store/src/lib.rs"];
@@ -88,7 +167,8 @@ describe("the files no task's edits account for", () => {
     const edits = [
       { id: "1", path: `${TREE}crates/fleet/src/evidence.rs`, added: 4, task: "T2" },
       { id: "2", path: `${TREE}crates/store/src/pending_evidence.rs`, added: 82, task: "T1" },
-      // Edited while no task was working: that is outside every task's edits too.
+      // Placed by neither a window nor a declaration, so it is outside every
+      // task's edits too.
       { id: "3", path: `${TREE}crates/store/src/lib.rs`, added: 2 },
     ];
     expect(unownedOf(edits, DIFF).map((file) => file.path)).toEqual(["crates/store/src/lib.rs"]);

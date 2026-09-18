@@ -791,9 +791,31 @@ answered, and from whether the command can be allowed at all.
 
 **A command that runs a Check is withheld under every `when_blocked`**, as a
 destructive one is: no person's setting widens what the repository already
-declared. Its refusal names the Check that covers what was typed and says to
-ask for it instead, and says that asking by name costs nothing — a Drone that
-believes asking is rationed runs the command itself, which is [#1174](https://github.com/NickMele/armada/issues/1174).
+declared.
+
+**And the question it asked is answered by running what the repository
+declared for it.** Fleet does not grant the command as typed; it answers the
+permission call with the Check's own command, narrowed to what the Drone has
+changed, and the harness runs that. A Drone typing a test command wants to know
+whether its work holds up; being told to call a tool instead leaves it to go and
+call that tool, and across six Drones none ever did — thirty-two commands by
+hand against one call.
+
+**What the transcript records is the command that ran.** The answer is a yes
+with a different input, never a no carrying a result it did not earn, so a
+reader of the record is never shown a refusal whose body is a passing test.
+
+**Handed over only where a command is the whole of what is needed.** The harness
+runs one string and knows nothing about what Fleet would have put around it, so
+a Check with a prerequisite, a command still naming a placeholder only Fleet's
+environment fills, and a narrowing that comes to nothing are all refused as
+before, naming the Check and pointing at `run_checks`.
+
+**It does not carry the place in the machine's queue.** `${width}` is resolved
+before the command is handed over, so a suite is bounded in workers; a command
+the harness runs holds no place, so two Jobs could each have one going. That is
+the second half of [#1444](https://github.com/NickMele/armada/issues/1444), and
+the trade this shape makes for being honest about what ran.
 
 The already-asking and ungrantable forms follow the same two sentences: what
 is happening, then what not to do. Neither is a final refusal of the first

@@ -59,8 +59,13 @@ use crate::silence::Liveness;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
+use crate::tests::transcript::reading::{Transcript, A_WRITER_HAS_LONG_ENOUGH};
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
+
+/// What a run of real commands gets to finish and say what it came to, before
+/// a case calls itself broken.
+const A_CHECK_RUN_HAS_LONG_ENOUGH: Duration = Duration::from_secs(10);
 
 /// The production silence threshold, so what these cases push past is the
 /// number that ships.
@@ -220,7 +225,7 @@ async fn ask(app: &Router, fleet: &Fixture, home: &TempDir) -> Said {
 async fn asking(app: &Router, fleet: &Fixture, home: &TempDir, only_what_changed: bool) -> Said {
     let drone = the_one_drone(fleet).await;
     let before = match &drone {
-        Some((job, drone)) => told_checks(fleet, home, job, drone).await.len(),
+        Some((job, drone)) => checks_so_far(fleet, home, job, drone).await.len(),
         None => 0,
     };
     let body = post(app, &call(only_what_changed)).await;
@@ -236,23 +241,23 @@ async fn asking(app: &Router, fleet: &Fixture, home: &TempDir, only_what_changed
         "the call says where the report comes from: {}",
         answered.text
     );
-    for _ in 0..2_000 {
-        let told = told_checks(fleet, home, &job, &drone).await;
-        // The report is the run's last turn; a result that landed while others
-        // still ran is a turn of its own before it (#1062).
-        if let Some(text) = told
+    // The report is the run's last turn; a result that landed while others
+    // still ran is a turn of its own before it (#1062).
+    let report = |said: &str| {
+        checks_in(said)
             .into_iter()
             .skip(before)
             .find(|turn| !turn.contains("Still going: "))
-        {
-            return Said {
-                text,
-                is_error: false,
-            };
-        }
-        tokio::time::sleep(Duration::from_millis(5)).await;
+    };
+    let said = transcript(fleet, home, &job, &drone)
+        .await
+        .until(A_CHECK_RUN_HAS_LONG_ENOUGH, |said| report(said).is_some())
+        .await
+        .expect("the report never arrived as a later turn");
+    Said {
+        text: report(&said).expect("the turn the wait stopped on"),
+        is_error: false,
     }
-    panic!("the report never arrived as a later turn");
 }
 
 /// The `run_checks` call, as JSON-RPC.
@@ -270,14 +275,32 @@ async fn the_one_drone(fleet: &Fixture) -> Option<(JobId, DroneId)> {
     Some((job, drone))
 }
 
-/// Every Checks report written into this Drone's transcript, oldest first, as
-/// the rows carry the text. The transcript is the record of what Fleet said.
-async fn told_checks(fleet: &Fixture, home: &TempDir, job: &JobId, drone: &DroneId) -> Vec<String> {
+/// This Drone's transcript.
+async fn transcript(fleet: &Fixture, home: &TempDir, job: &JobId, drone: &DroneId) -> Transcript {
     let handle = fleet.load(job).await.expect("the Job").handle();
-    let path = crate::transcript::transcript_of(&home.path().to_string_lossy(), &handle, drone);
-    std::fs::read_to_string(path)
-        .unwrap_or_default()
-        .lines()
+    Transcript::of(home, &handle, drone)
+}
+
+/// Every Checks report the transcript carries once it has stopped growing,
+/// oldest first. **A baseline**, so there is no row to wait on — what it must
+/// not do is count a turn the writer has not put down yet, which would make the
+/// `skip(before)` below hand back an older report as this call's answer.
+async fn checks_so_far(
+    fleet: &Fixture,
+    home: &TempDir,
+    job: &JobId,
+    drone: &DroneId,
+) -> Vec<String> {
+    let said = transcript(fleet, home, job, drone)
+        .await
+        .settled(A_WRITER_HAS_LONG_ENOUGH)
+        .await;
+    checks_in(&said)
+}
+
+/// Every Checks report a transcript's text carries, as the rows carry it.
+fn checks_in(said: &str) -> Vec<String> {
+    said.lines()
         .filter(|row| row.contains("\"occasion\":\"checks\""))
         .map(text_of)
         .collect()

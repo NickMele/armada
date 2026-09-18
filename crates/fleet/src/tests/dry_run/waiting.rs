@@ -11,7 +11,8 @@ use core_model::JobStatus;
 use testkit::FakeHarness;
 
 use crate::tests::dry_run::{
-    a_fleet_driven, called, one_step, started, the_one_drone, told_checks, Fixture, Held,
+    a_fleet_driven, called, checks_in, one_step, started, the_one_drone, transcript, Fixture, Held,
+    A_CHECK_RUN_HAS_LONG_ENOUGH,
 };
 use crate::tests::tmp::TempDir;
 
@@ -93,15 +94,14 @@ async fn a_drone_at_rest_on_its_own_checks_is_kept_and_told_the_report() {
         matches!(finished, Some(Ok(_))),
         "the run was cut short: {finished:?}"
     );
-    // The transcript is written off the turn, so the row can land a moment late.
-    let mut told = Vec::new();
-    for _ in 0..2_000 {
-        told = told_checks(&fleet, &home, &job, &drone).await;
-        if !told.is_empty() {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
+    let said = transcript(&fleet, &home, &job, &drone)
+        .await
+        .until(A_CHECK_RUN_HAS_LONG_ENOUGH, |said| {
+            !checks_in(said).is_empty()
+        })
+        .await
+        .unwrap_or_else(|stood| stood);
+    let told = checks_in(&said);
     assert_eq!(told.len(), 1, "the Drone was not sent its report: {told:?}");
     assert!(
         slot_reads(&fleet, |at_work| !at_work.at_rest()).await,

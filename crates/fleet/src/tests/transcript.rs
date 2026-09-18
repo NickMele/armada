@@ -26,8 +26,12 @@ use crate::tests::daemon::Ticking;
 use crate::tests::drone::config;
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
-use crate::transcript::{history, log_of, transcript_of, Recording, Spine, Tap};
+use crate::tests::transcript::reading::{Transcript, A_WRITER_HAS_LONG_ENOUGH};
+use crate::transcript::{history, log_of, Recording, Spine, Tap};
 use crate::watch::Watching;
+
+/// The one reader every test in the crate gets a transcript through.
+pub(crate) mod reading;
 
 /// A Drone that reads its first turn and then says three things.
 const SAYS_THREE: &str = "IFS= read -r _; printf 'one\\ntwo\\nthree\\n'";
@@ -60,40 +64,26 @@ fn recording(at: &TempDir, drone: &str) -> Recording {
 
 /// The transcript, once the writer has put `how_many` rows in it.
 ///
-/// **Polled rather than slept on, and `#443` is why.** Dropping the `Watching`
-/// drops the `Recording` inside it, which closes the queue and lets the writer
-/// task drain — on a turn of the runtime that nothing here holds. Fifty
-/// milliseconds was enough on an idle machine and was not enough at load 147,
-/// where this read two of the three rows and called the record wrong.
+/// **Waited on rather than slept on, and `#443` is why.** Dropping the
+/// `Watching` drops the `Recording` inside it, which closes the queue and lets
+/// the writer task drain — on a turn of the runtime that nothing here holds.
 ///
-/// `Recording::settled` is the exact answer and is out of reach: it consumes
-/// the `Recording`, which by then is an `Arc<dyn Tap>` inside the `Watching`.
-/// So this waits on the thing under assertion instead, and breaks the moment it
-/// arrives — a run that is right spends a poll, and only a run that is wrong
-/// spends the deadline.
+/// `Recording::settled` is the exact answer and is out of reach here: it
+/// consumes the `Recording`, which by then is an `Arc<dyn Tap>` inside the
+/// `Watching`. So this waits on the thing under assertion instead.
 async fn rows_once_written(at: &TempDir, drone: &str, how_many: usize) -> String {
-    for _ in 0..A_WRITER_HAS_LONG_ENOUGH {
-        let written = rows(at, drone);
-        if written.lines().count() >= how_many {
-            return written;
-        }
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
-    panic!("the writer never put {how_many} rows in {drone}'s transcript");
+    transcript(at, drone)
+        .until(A_WRITER_HAS_LONG_ENOUGH, |written| {
+            written.lines().count() >= how_many
+        })
+        .await
+        .unwrap_or_else(|stood| {
+            panic!("the writer never put {how_many} rows in {drone}'s transcript: {stood}")
+        })
 }
 
-/// Five-millisecond polls, so six seconds. Generous for
-/// `crate::tests::resting`'s reason: it is only ever spent on a run that is
-/// already broken.
-const A_WRITER_HAS_LONG_ENOUGH: usize = 1_200;
-
-fn rows(at: &TempDir, drone: &str) -> String {
-    let path = transcript_of(
-        &at.path().to_string_lossy(),
-        HANDLE,
-        &DroneId::carried(Ulid::carried(drone)),
-    );
-    std::fs::read_to_string(path).expect("the transcript is on disk")
+fn transcript(at: &TempDir, drone: &str) -> Transcript {
+    Transcript::of(at, HANDLE, &DroneId::carried(Ulid::carried(drone)))
 }
 
 fn job_log(at: &TempDir) -> String {
@@ -235,8 +225,13 @@ async fn a_retry_gets_its_own_file_under_the_one_job() {
     recording(&at, first).settled().await;
     recording(&at, second).settled().await;
 
-    assert_eq!(rows(&at, first), "", "the first Drone's file is untouched");
-    assert_eq!(rows(&at, second), "");
+    let settled = A_WRITER_HAS_LONG_ENOUGH;
+    assert_eq!(
+        transcript(&at, first).settled(settled).await,
+        "",
+        "the first Drone's file is untouched"
+    );
+    assert_eq!(transcript(&at, second).settled(settled).await, "");
     let log = job_log(&at);
     assert_eq!(
         log.lines().filter(|line| line.contains(first)).count(),
@@ -264,7 +259,9 @@ async fn a_queue_that_fills_drops_rows_rather_than_holding_up_the_loop() {
     recording.saw(&said);
     recording.settled().await;
 
-    let written = rows(&at, drone);
+    let written = transcript(&at, drone)
+        .settled(A_WRITER_HAS_LONG_ENOUGH)
+        .await;
     let kept = written
         .lines()
         .filter(|line| line.contains(r#""event":"said""#))

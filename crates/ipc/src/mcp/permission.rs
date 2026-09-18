@@ -114,3 +114,19 @@ pub(super) fn permission_tool() -> Value {
         },
     })
 }
+
+/// The same input, running `command` in place of whatever it named.
+///
+/// **Here rather than where the answer is decided**, because this is the one
+/// place that already reads an untyped input — `xtask` rule five scopes that to
+/// `store` and this crate, and a caller rebuilding the object would be a second
+/// reader of the same shape. A non-object input is handed back untouched: there
+/// is no field to replace and a command is not a substitute for one.
+pub fn running(input: &Value, command: &str) -> Value {
+    let Value::Object(held) = input else {
+        return input.clone();
+    };
+    let mut put = held.clone();
+    put.insert("command".to_string(), Value::String(command.to_string()));
+    Value::Object(put)
+}

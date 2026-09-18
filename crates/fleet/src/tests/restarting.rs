@@ -40,7 +40,7 @@ use crate::tests::admitted::{dispatched, started};
 use crate::tests::daemon::{a_proposal, diff_evidence, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
-use crate::transcript::transcript_of;
+use crate::tests::transcript::reading::{Transcript, A_WRITER_HAS_LONG_ENOUGH};
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
@@ -169,28 +169,21 @@ async fn until_reaped(fleet: &Fixture) {
     panic!("the Drone never left");
 }
 
-/// What the Drone said, once it has said anything. The transcript is written
-/// off a queue, so this waits for the row rather than assuming it landed.
-///
-/// **`pub(super)` so `overruling` can read a brief too.** An override onto a
-/// Job whose Drone has gone spawns exactly as a restart does, and a second
-/// copy of this poll is a second thing that can be wrong about the queue.
 /// What the Job is called, which is what its transcript directory is named by.
 pub(super) async fn the_handle(fleet: &Fixture, job: &JobId) -> String {
     fleet.load(job).await.expect("the Job").handle()
 }
 
+/// What the Drone said, once it has said anything.
+///
+/// **`pub(super)` so `overruling` can read a brief too.** An override onto a
+/// Job whose Drone has gone spawns exactly as a restart does, and what it wants
+/// to read is this one.
 pub(super) async fn until_spoken(home: &TempDir, handle: &str, drone: &DroneId) -> String {
-    let path = transcript_of(&home.path().to_string_lossy(), handle, drone);
-    for _ in 0..400 {
-        if let Ok(said) = std::fs::read_to_string(&path) {
-            if !said.trim().is_empty() {
-                return said;
-            }
-        }
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
-    panic!("the restarted Drone's transcript stayed empty");
+    Transcript::of(home, handle, drone)
+        .until(A_WRITER_HAS_LONG_ENOUGH, |said| !said.trim().is_empty())
+        .await
+        .expect("the restarted Drone's transcript stayed empty")
 }
 
 /// The Drone the record says is on the Job now.

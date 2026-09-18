@@ -121,3 +121,47 @@ async fn naming_a_check_never_spends_the_allowance() {
         "{refused:?}"
     );
 }
+
+/// **What is handed to the harness is the Check's own command**, narrowed to
+/// what the Drone changed — never the command it typed, and never something
+/// Fleet composed for it. #1174.
+#[tokio::test]
+async fn the_command_handed_over_is_the_checks_own() {
+    let home = TempDir::new();
+    let fleet = Arc::new(a_fleet_checking(
+        &home,
+        fast_and_slow(),
+        Arc::new(Held::started()),
+        3,
+    ));
+    started(&fleet, &home).await;
+    let job = fleet.working_on().await.first().cloned().expect("a Job");
+
+    let command = fleet
+        .the_check_command(&job, ChecksAsk::just("fast"))
+        .await
+        .expect("a command to hand over");
+    assert_eq!(command, "/usr/bin/true");
+}
+
+/// A name the part does not gate on hands nothing over, and the caller refuses
+/// as it did before rather than inventing a command.
+#[tokio::test]
+async fn a_check_this_part_does_not_gate_on_hands_nothing_over() {
+    let home = TempDir::new();
+    let fleet = Arc::new(a_fleet_checking(
+        &home,
+        fast_and_slow(),
+        Arc::new(Held::started()),
+        3,
+    ));
+    started(&fleet, &home).await;
+    let job = fleet.working_on().await.first().cloned().expect("a Job");
+
+    assert_eq!(
+        fleet
+            .the_check_command(&job, ChecksAsk::just("typecheck"))
+            .await,
+        None
+    );
+}

@@ -22,7 +22,9 @@ use tokio::sync::oneshot;
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::permitting::{always_allow_rules, first, Answered, First, Permitted, Refusing, Waiting};
+use crate::permitting::{
+    always_allow_rules, first, Answered, First, Permitted, Refusing, Waiting, Withheld,
+};
 use crate::resume::Steer;
 use crate::session::{LiveSession, Occasion};
 
@@ -233,6 +235,47 @@ where
         let (job, step, _) = at_work.standing();
         let refusing = match self.first_answer(&job, asked).await {
             First::Allowed => return PermissionAnswer::Allow,
+            // **It is not granted as typed, and the question it asked is
+            // answered by running what the repository declared for it.** A
+            // Drone typing `cargo nextest run -p ipc` wants to know whether its
+            // work holds up; refusing and naming a tool leaves it to go and
+            // call that tool, and across six Drones on this machine none ever
+            // did — thirty-two commands by hand against one call. The answer
+            // arrives through the door it already reaches for, and what the
+            // transcript records is the command that ran. #1174.
+            First::Withheld(Withheld::RunsACheck { check, program }) => {
+                drop(working);
+                let ask = ipc::mcp::ChecksAsk {
+                    only_what_changed: true,
+                    check: Some(check.clone()),
+                    files: Vec::new(),
+                };
+                // **Refused as before where it cannot be handed over**, which
+                // `the_check_command` decides: a prerequisite the harness would
+                // not run, a placeholder only Fleet's environment fills, a
+                // narrowing that comes to nothing.
+                let Some(command) = self.the_check_command(job_id, ask).await else {
+                    return self
+                        .refused_instead(
+                            job_id,
+                            asked,
+                            &what,
+                            Withheld::RunsACheck { check, program },
+                        )
+                        .await;
+                };
+                self.noted_permission(
+                    &job,
+                    &step,
+                    "the drone reached for a check's own runner, and fleet ran the check instead",
+                    &[
+                        ("call", asked.call.clone()),
+                        ("command", what.clone()),
+                        ("ran", command.clone()),
+                    ],
+                );
+                return PermissionAnswer::Instead(command);
+            }
             First::Withheld(withheld) => Refusing::Withheld(withheld),
             First::NotGranted => Refusing::NotGranted,
             First::Ask => {
@@ -371,6 +414,25 @@ where
                     .then(|| (name.clone(), command.run().to_string()))
             })
             .collect()
+    }
+
+    /// Answer no, and record it, where a Check's own command could not be
+    /// handed over in place of what was typed.
+    async fn refused_instead(
+        &self,
+        job_id: &JobId,
+        asked: &PermissionAsked,
+        what: &str,
+        withheld: Withheld,
+    ) -> PermissionAnswer {
+        let words = Refusing::Withheld(withheld).to_the_drone(what);
+        if let Some(slot) = self.slot_of(job_id).await {
+            let mut working = slot.lock().await;
+            if let Some(at_work) = working.as_mut().filter(|at_work| at_work.is(job_id)) {
+                at_work.refused_by_fleet(&asked.tool, &asked.call, &words);
+            }
+        }
+        PermissionAnswer::Deny(words)
     }
 
     /// Every Check the Manifest declares, as `(check name, program)`.

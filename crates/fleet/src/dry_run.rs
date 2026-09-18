@@ -301,6 +301,53 @@ where
         self.dry_run_begins(caller, plan, read, spends(&ask)).await
     }
 
+    /// The command the named Check would run against what this Drone has
+    /// changed, ready for a harness to run in place of what it typed.
+    ///
+    /// **A command handed over, never a command run here.** The harness runs
+    /// one string and knows nothing about what Fleet would have put around it,
+    /// so anything that needs more than a string is not handed over at all and
+    /// the caller refuses as it did before:
+    ///
+    /// - a Check with a `requires`, because the Command that has to run first
+    ///   would not;
+    /// - a command still naming `${…}` after substitution, because that names
+    ///   something only Fleet's own environment provides and the harness would
+    ///   run it literally;
+    /// - a narrowing that comes to nothing, because there is nothing to run.
+    ///
+    /// **What it does not carry over is the place in the machine's queue.**
+    /// `${width}` is resolved here so the run is bounded in workers, but a
+    /// command the harness runs holds no place, so two Jobs could each have one
+    /// going. That is the second half of `#1444`, and the trade this shape
+    /// makes for being honest about what ran.
+    pub(crate) async fn the_check_command(
+        &self,
+        caller: &JobId,
+        ask: ipc::mcp::ChecksAsk,
+    ) -> Option<String> {
+        let plan = self.dry_run_looks(caller, &ask).await.ok()?;
+        let read = self.dry_run_reads(&plan, &ask).await.ok()?;
+        let declared = plan.record.workflow().step(&plan.step)?;
+        let checks = mid_step_named(&declared, ask.check.as_deref());
+        let check = checks.first()?;
+        if !check.requires().is_empty() {
+            return None;
+        }
+        let whole = check.run()?;
+        let narrowed = match checks_runner::narrowed(check.narrowing(), &read.touched) {
+            checks_runner::Narrowed::To(command) => command,
+            checks_runner::Narrowed::Whole => crate::checking::by_its_runner(check, &read.touched)
+                .unwrap_or_else(|| whole.to_string()),
+            checks_runner::Narrowed::Nothing => return None,
+        };
+        let command = checks_runner::resolve_width(
+            &crate::ports::resolve_ports(&narrowed, &read.ports),
+            self.places_width().narrowed_to(check.width()),
+        );
+        (!command.contains("${")).then_some(command)
+    }
+
     /// The slot's refusals, asked when the call arrives and again at the mark.
     ///
     /// **`spends` is what decides whether the allowance is consulted at all.**

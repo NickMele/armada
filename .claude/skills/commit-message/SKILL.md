@@ -88,6 +88,24 @@ call swapped the two, so the commit carried the PR description as its subject
 and the PR carried the commit message. It cost an amend, a force-push and an
 edit to the PR. Commit, then open the PR, in two calls.
 
+## An issue number is looked up before it is written
+
+**Every `#1234` you type, in a comment, a commit or a contract, is a link a
+reader will follow.** `gh issue view <n>` once, before it goes in.
+
+Confirmed 18 Sep 2026. A session wrote `#1481` into twenty-four comments and a
+rule in `docs/contracts/design-system.md`, citing it for work that landed as
+`#1484`. `#1481` is an open issue about capturing notes on another repository's
+running web app — unrelated to every line that named it. Nothing catches this:
+the number autolinks, so it renders as a deliberate citation, and no gate reads
+whether the issue behind it has anything to do with the file. It cost a second
+pull request and a full turn through the merge line.
+
+**The number a session is holding is usually its own pull request, not an
+issue.** Work that came out of a conversation has no issue, and inventing one in
+the range you last saw is how the wrong one gets cited — write the PR number, or
+nothing.
+
 ## Where the rest lives
 
 `docs/contracts/agent-copy.md` governs every surface a Drone, the Judge or Helm

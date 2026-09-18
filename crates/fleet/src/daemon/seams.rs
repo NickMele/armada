@@ -401,6 +401,11 @@ where
         self.places.limit(at_once);
     }
 
+    /// How wide one Check may run on this machine right now. #1444.
+    pub(crate) fn places_width(&self) -> checks_runner::CheckWidth {
+        self.places.width()
+    }
+
     /// Put a width in force after a saved Jobs bound moved — the two are one
     /// number, so `crate::limits` sets this wherever it rebounds the roster.
     /// #1444.

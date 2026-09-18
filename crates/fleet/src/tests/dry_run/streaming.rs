@@ -18,7 +18,8 @@ use crate::dry_run::DryRuns;
 use crate::silence::Liveness;
 use crate::tests::daemon::{fitted_with, one};
 use crate::tests::dry_run::{
-    a_quiet_drone, started, the_one_drone, told_checks, Fixture, Held, QUIET_AFTER, WALL_CLOCK,
+    a_quiet_drone, checks_in, started, the_one_drone, transcript, Fixture, Held,
+    A_CHECK_RUN_HAS_LONG_ENOUGH, QUIET_AFTER, WALL_CLOCK,
 };
 use crate::tests::tmp::TempDir;
 
@@ -78,19 +79,19 @@ async fn told_until_over(
     drone: &DroneId,
     runs: usize,
 ) -> Vec<String> {
-    for _ in 0..2_000 {
-        let told = told_checks(fleet, home, job, drone).await;
-        if told
+    let over = |said: &str| {
+        checks_in(said)
             .iter()
             .filter(|turn| turn.contains("The run is over"))
             .count()
             >= runs
-        {
-            return told;
-        }
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
-    panic!("the run never said it was over");
+    };
+    let said = transcript(fleet, home, job, drone)
+        .await
+        .until(A_CHECK_RUN_HAS_LONG_ENOUGH, over)
+        .await
+        .expect("the run never said it was over");
+    checks_in(&said)
 }
 
 /// **The first definition of done.** The build fails in a fraction of a second

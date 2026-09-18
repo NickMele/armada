@@ -20,6 +20,7 @@ use crate::fixing::{Drafted, FixAnswer, Fixes, NotFixed};
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fitted_over, one, worktree_directory};
 use crate::tests::tmp::TempDir;
+use crate::tests::transcript::reading::{Transcript, A_WRITER_HAS_LONG_ENOUGH};
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
@@ -100,18 +101,27 @@ async fn came_to(fleet: &Arc<Fixture>, reporter: &JobId, test: &str) -> Result<D
     }
 }
 
-/// Every fix turn written into the reporter's transcript, as the rows carry it.
+/// Every fix turn written into the reporter's transcript, as the rows carry it,
+/// **waited for rather than read once** (`#1436`).
+///
+/// Waiting for a row rather than for a length: every case here asserts on what
+/// the rows say, and a case wanting exactly one still reads a settled file,
+/// because only one fix turn is ever written for one call.
 async fn told_fix(fleet: &Fixture, home: &TempDir, reporter: &JobId) -> Vec<String> {
     let job = fleet.load(reporter).await.expect("the reporter");
     let drone = job.assigned_drone().cloned().expect("a Drone on it");
-    let path =
-        crate::transcript::transcript_of(&home.path().to_string_lossy(), &job.handle(), &drone);
-    std::fs::read_to_string(path)
-        .unwrap_or_default()
-        .lines()
+    let said = Transcript::of(home, &job.handle(), &drone)
+        .until(A_WRITER_HAS_LONG_ENOUGH, |said| {
+            fix_rows(said).next().is_some()
+        })
+        .await
+        .unwrap_or_else(|stood| stood);
+    fix_rows(&said).map(str::to_string).collect()
+}
+
+fn fix_rows(said: &str) -> impl Iterator<Item = &str> {
+    said.lines()
         .filter(|row| row.contains("\"occasion\":\"fix\""))
-        .map(str::to_string)
-        .collect()
 }
 
 /// **The claim of the issue.** The test fails on main too, so a fix is drafted
@@ -207,12 +217,13 @@ async fn the_call_answers_before_the_test_on_main_finishes() {
 }
 
 /// **A pass on main is the Drone's own change**, and nothing is drafted.
-/// **Skipped while the machine is loaded, `#1467`.** It passes alone and
-/// fails only when the whole suite runs on a saturated machine, which is
-/// what the merge line does — so it refused every branch on the night it
-/// was switched off. `#1467` carries the causes already found and what is
-/// left to read; switching it back on is that issue's, not this file's.
-#[ignore = "flaky under load, #1467"]
+///
+/// **Back on with [`told_fix`]'s wait, `#1467`.** What failed here was the
+/// read, not the claim: the transcript was read once, straight after the call
+/// that produced the turn, and the row goes to a writer task nothing awaits —
+/// so on a loaded machine the file was still empty and the panic carried `[]`
+/// as the whole of the evidence. Reproduced with the writer made to miss its
+/// first two hundred reads; the wait absorbs it and the single read does not.
 #[tokio::test]
 async fn a_test_passing_on_main_drafts_nothing() {
     let home = TempDir::new();

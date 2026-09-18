@@ -14,8 +14,9 @@ use core_model::{DroneId, JobId};
 use tokio::io::AsyncWriteExt;
 
 use crate::tests::dry_run::{
-    a_fleet_checking, call, one_step, post, router, started, submit, text_of, the_one_drone,
-    told_checks, wait_until_checking, Fixture, Held,
+    a_fleet_checking, call, checks_in, checks_so_far, one_step, post, router, started, submit,
+    text_of, the_one_drone, transcript, wait_until_checking, Fixture, Held,
+    A_CHECK_RUN_HAS_LONG_ENOUGH,
 };
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::checked_by_the_one;
@@ -32,14 +33,14 @@ async fn checking_now(fleet: &Fixture) -> bool {
 
 /// The reports this Drone has been told, once there is at least one.
 async fn told_once(fleet: &Fixture, home: &TempDir, job: &JobId, drone: &DroneId) -> Vec<String> {
-    for _ in 0..2_000 {
-        let told = told_checks(fleet, home, job, drone).await;
-        if !told.is_empty() {
-            return told;
-        }
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
-    panic!("no report arrived as a later turn");
+    let said = transcript(fleet, home, job, drone)
+        .await
+        .until(A_CHECK_RUN_HAS_LONG_ENOUGH, |said| {
+            !checks_in(said).is_empty()
+        })
+        .await
+        .expect("no report arrived as a later turn");
+    checks_in(&said)
 }
 
 /// A Check that sleeps and then leaves a marker, so a stopped one leaves none.
@@ -231,7 +232,7 @@ async fn a_submission_mid_run_stops_the_checks_and_nothing_is_told() {
     );
     tokio::time::sleep(Duration::from_secs(3)).await;
     assert!(!marker.exists(), "the Check went on after the step ended");
-    assert!(told_checks(&fleet, &home, &job, &drone).await.is_empty());
+    assert!(checks_so_far(&fleet, &home, &job, &drone).await.is_empty());
 }
 
 /// **A kill ends the run the same way**, through the slot it takes away.
@@ -264,5 +265,5 @@ async fn a_drone_killed_mid_run_stops_the_checks_and_nothing_is_told() {
         !marker.exists(),
         "the Check went on after the Drone was killed"
     );
-    assert!(told_checks(&fleet, &home, &job, &drone).await.is_empty());
+    assert!(checks_so_far(&fleet, &home, &job, &drone).await.is_empty());
 }

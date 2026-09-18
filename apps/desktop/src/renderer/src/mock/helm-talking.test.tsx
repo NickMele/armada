@@ -43,6 +43,14 @@ test("the dock opens on a conversation, both voices in it and the answer that ne
   const failed = page.getByText("Helm's door would not be configured: Permission denied (os error 13)");
   await expect.element(failed).toBeVisible();
   expect(failed.element().textContent).toBe("Helm's door would not be configured: Permission denied (os error 13)");
+
+  // Bridge's own line, immediately above Fleet's, in the case Fleet's reads.
+  // The two rows a thread writes about itself are the only place two producers
+  // meet in one column, and the split the owner saw was here. Whole text
+  // again, because a substring match reads the same in either case.
+  const fresh = page.getByText("the stored session could not be resumed, so this reply starts a new one");
+  await expect.element(fresh).toBeVisible();
+  expect(fresh.element().textContent).toBe("the stored session could not be resumed, so this reply starts a new one");
 });
 
 test("pointed at a repository, the composer takes a message", async () => {
@@ -84,4 +92,7 @@ test("the record's split button offers both acts, and Details opens this session
   expect(text).toContain("$0.0214 · 4 turns");
   expect(text).toMatch(/fleet +Helm's door would not be configured: Permission denied \(os error 13\)/);
   expect(text).not.toContain("no reply came: ");
+  // The record's own column has read lower case since it was written, which is
+  // the case the thread beside it now reads too — one rule, two surfaces.
+  expect(text).toMatch(/fleet +the stored session was gone, so this reply started a new one/);
 });
