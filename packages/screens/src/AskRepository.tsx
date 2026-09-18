@@ -12,7 +12,7 @@
 // clears every other surface before it sets one, nothing opens either over anything, and the rail
 // marks the surface itself. A Close there would have no state to close to. The design system says
 // the same for the trail — *a surface reached from Navigation carries no trail*, because
-// Navigation is already the answer to where you are — and `actions.bridge_surfaces` (`⌘1`–`⌘8`)
+// Navigation is already the answer to where you are — and `actions.bridge_surfaces` (`⌘1`–`⌘9`)
 // is the registered way off one. `actions.close` is for an overlay or a detail route, and the ask
 // here is neither: it is the surface's first step, answered in place by picking.
 

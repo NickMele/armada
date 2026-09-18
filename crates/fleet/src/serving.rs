@@ -248,6 +248,17 @@ where
         })
     }
 
+    /// Every MCP server in Kit, both tiers, and what a Drone dispatched here
+    /// resolves — `crate::kit`.
+    async fn get_kit_servers(
+        &self,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::KitServers, Refusal> {
+        Ok(self
+            .kit_servers_listed(&self.served_named(manifest_id.as_ref())?)
+            .await)
+    }
+
     /// What the last re-read of `armada.yml` came to, straight off what Fleet
     /// is holding.
     ///

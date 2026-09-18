@@ -106,6 +106,8 @@ without it a Drone comes up holding every MCP server the operator has connected
 — measured at seven servers, ninety-five tools, personal accounts. That is not
 hypothetical tightening; it is the v1 defect that made a Drone unusable.
 
+The flag stays, and Kit does not weaken it: `#1275` lets a person connect an MCP server from Bridge, and a server reaches a Drone only where that person turned it on for Kit or for the Manifest. A Drone still comes up holding what it was given. See [Kit](concepts/kit.md).
+
 **It is a Drone's and not Helm's.** A Drone is unattended, and the flag is what
 stops one reaching an operator's accounts with nobody watching. Helm is that
 operator, in their own checkout, reading the reply as it is written — so a Helm

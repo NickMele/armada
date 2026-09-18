@@ -14,6 +14,7 @@ import type {
   CheckoutRunUnderway,
   CheckoutVerify,
   EditManifest,
+  KitServerRow,
   ManifestDeclared,
   ManifestDriftRead,
   ManifestSpend,
@@ -184,6 +185,39 @@ export const GH_ISSUE_VIEW: AllowedCommandRow = {
 };
 
 /**
+ * A kit with both tiers already saying something, so the mock shows a Drone
+ * here getting one server and withheld from another. #1275.
+ */
+export const KIT_SERVERS: KitServerRow[] = [
+  {
+    name: "tracker",
+    address: { transport: "stdio", command: "npx", args: ["-y", "@scope/server-tracker"] },
+    drones: "no",
+    manifest: "extended",
+    resolves: true,
+    added_at: "2026-09-16T11:02:00Z",
+    by: "human",
+  },
+  {
+    name: "nexus",
+    address: { transport: "http", url: "https://nexus.example.com/mcp" },
+    drones: "yes",
+    manifest: "restricted",
+    resolves: false,
+    added_at: "2026-09-16T11:04:00Z",
+    by: "human",
+  },
+  {
+    name: "sentry",
+    address: { transport: "stdio", command: "sentry-mcp", args: [] },
+    drones: "no",
+    resolves: false,
+    added_at: "2026-09-17T08:30:00Z",
+    by: "human",
+  },
+];
+
+/**
  * What a save comes to, played the way Fleet plays it: the write answers,
  * then the watch re-reads and publishes. `refused` is a correction Fleet would
  * not adopt; `moved` is a pull that landed under the edit.
@@ -257,6 +291,8 @@ export type Manifesting = {
   /** What `list_checkout_runs` answers. */
   runs?: CheckoutRunList;
   alwaysAllowed?: AllowedCommandRow[];
+  /** What Kit holds, and what this repository has said about each. #1275. */
+  kitServers?: KitServerRow[];
   save?: SaveGoesTo;
   diff?: CheckoutRunDiff;
   drift?: ManifestDriftRead;
@@ -268,13 +304,18 @@ export type Manifesting = {
   setUp?: boolean;
   onEdits?: (body: EditManifest) => void;
   onStartRun?: (body: StartCheckoutRun) => void;
+  /** `false` leaves the rail on All repositories, which every per-repository surface has a state for. */
+  picked?: boolean;
 };
 
 /** A connected Fleet serving this repository, picked, with its Manifest as the options say. */
 export function manifesting(options: Manifesting = {}): Scenario {
   const one = repository();
   const served = options.setUp === false ? { root: one.root, records_root: one.records_root } : one;
-  const base = onBoard([], { repositories: [served], picked: served.root });
+  const base = onBoard([], {
+    repositories: [served],
+    picked: options.picked === false ? null : served.root,
+  });
   return {
     ...base,
     name: "manifest",
@@ -289,6 +330,10 @@ function behaviour(fleet: FleetHandle, options: Manifesting): Partial<BridgeApi>
   let disk = MANIFEST_TEXT;
   let declared: ManifestDeclared = options.frozen === true ? { ...DECLARED, freeze: true } : DECLARED;
   let allowed = options.alwaysAllowed ?? [];
+  // Kit's own table, and the resolution over both tiers — the mock answers
+  // exactly as `fleet::kit` does, because the surface draws `resolves` rather
+  // than working it out. #1275.
+  let servers: KitServerRow[] = options.kitServers ?? [];
   const file = () => ({ ok: true as const, file: { path: MANIFEST_PATH, text: disk, declared } });
   return {
     readManifestFile: async () => file(),
@@ -329,6 +374,38 @@ function behaviour(fleet: FleetHandle, options: Manifesting): Partial<BridgeApi>
       return { state: "saved", saved: { path: MANIFEST_PATH, at: WROTE_AT } };
     },
     readManifestSpend: async () => ({ ok: true, spend }),
+    listKitServers: async () => ({ ok: true, kit: { servers } }),
+    addKitServer: async (adding) => {
+      const added: KitServerRow = {
+        name: adding.name,
+        address: adding.address,
+        // Reaching nobody, which is what `KitServer::added` guarantees.
+        drones: "no",
+        resolves: false,
+        added_at: READ_AT,
+        by: "human",
+      };
+      servers = [...servers.filter((row) => row.name !== adding.name), added].sort((one, two) =>
+        one.name.localeCompare(two.name),
+      );
+      return { ok: true, kit: { servers } };
+    },
+    forgetKitServer: async (name) => {
+      servers = servers.filter((row) => row.name !== name);
+      return { ok: true, kit: { servers } };
+    },
+    setKitServerReach: async (name, drones) => {
+      servers = servers.map((row) => (row.name === name ? resolvedRow({ ...row, drones }) : row));
+      return { ok: true, kit: { servers } };
+    },
+    setManifestServerReach: async (name, reach) => {
+      servers = servers.map((row) =>
+        row.name === name
+          ? resolvedRow({ ...row, manifest: reach ?? undefined })
+          : row,
+      );
+      return { ok: true, kit: { servers } };
+    },
     listRepositoryAllowedCommands: async () => ({ ok: true, commands: { commands: allowed } }),
     removeRepositoryAllowedCommand: async (run) => {
       allowed = allowed.filter((row) => row.run !== run);
@@ -356,4 +433,14 @@ function behaviour(fleet: FleetHandle, options: Manifesting): Partial<BridgeApi>
       return { ok: true };
     },
   };
+}
+
+/**
+ * The two tiers, as Fleet answers them. **The Manifest's word wins where it has
+ * one**, in either direction; where it has none, Kit's default answers.
+ */
+function resolvedRow(row: KitServerRow): KitServerRow {
+  const resolves =
+    row.manifest === undefined ? row.drones === "yes" : row.manifest === "extended";
+  return { ...row, resolves };
 }

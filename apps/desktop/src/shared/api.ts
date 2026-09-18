@@ -50,6 +50,8 @@ import type {
 } from "@armada/screens/src/editing";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
+import type { KitServersRead } from "@armada/screens/src/manifest-kit";
+import type { AddKitServer, ManifestReach, ReachesDrones } from "@armada/protocol";
 import type { LocateAnswer } from "@armada/screens/src/locate-reads";
 import type { ComposingRead } from "@armada/screens/src/composing-reads";
 import type { StudioAnswer } from "@armada/screens/src/studio-reads";
@@ -606,6 +608,21 @@ export type BridgeApi = {
    * from the next spawn on.
    */
   removeRepositoryAllowedCommand: (run: string) => Promise<RepositoryAllowedCommandsRead>;
+
+  /**
+   * Every MCP server in Kit, Kit's own default for each, this repository's
+   * Manifest word over it, and whether a Drone dispatched here resolves it —
+   * #1275. Every act below answers with the same whole list.
+   */
+  listKitServers: () => Promise<KitServersRead>;
+  /** Put one in Kit. **It reaches no Drone** until one of the two reaches below says so. */
+  addKitServer: (adding: AddKitServer) => Promise<KitServersRead>;
+  /** Take one out, and every Manifest's word about it with it. */
+  forgetKitServer: (name: string) => Promise<KitServersRead>;
+  /** Kit's own tier, for every Manifest that has not said otherwise. */
+  setKitServerReach: (name: string, drones: ReachesDrones) => Promise<KitServersRead>;
+  /** This Manifest's own word, or `null` to take it back and follow Kit again. */
+  setManifestServerReach: (name: string, reach: ManifestReach | null) => Promise<KitServersRead>;
 
   /**
    * Pick the repository every per-repository read and act names, by a root `holds.repositories`

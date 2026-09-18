@@ -276,6 +276,7 @@ export * from "./compositions/PlanTaskSheet/PlanTaskSheet";
 // the header's way into it.
 export * from "./compositions/JobSettings/JobSettings";
 export * from "./compositions/FleetSettings/FleetSettings";
+export * from "./compositions/KitServers/KitServers";
 export * from "./compositions/MachineSettings/MachineSettings";
 
 // Asking a Job to show its work again, and every set a press kept beside the

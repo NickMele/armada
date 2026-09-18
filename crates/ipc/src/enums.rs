@@ -158,6 +158,17 @@ wire_enum! {
     CriterionSource, core_model::CriterionSource, "a criterion source"
 }
 wire_enum! {
+    /// Kit's own tier for one MCP server: whether a Drone gets it where the
+    /// Manifest has said nothing. `#1275`.
+    ReachesDrones, core_model::ReachesDrones, "Kit's reach for a server"
+}
+wire_enum! {
+    /// What one Manifest says about one of Kit's servers. **Absent is not a
+    /// third variant**: a Manifest that has said nothing carries no value, and
+    /// that is Kit's default answering.
+    ManifestReach, core_model::ManifestReach, "a Manifest's word about a server"
+}
+wire_enum! {
     /// Where one step of the frozen WorkflowDef got to. The inner machine's
     /// states, which are rows rather than a field on the Job.
     StepState, core_model::StepState, "a step state"

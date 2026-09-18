@@ -49,12 +49,19 @@ export function screenOf(where: {
   manifesting: boolean;
   overviewing: boolean;
   studying: boolean;
+  kitting: boolean;
+  settling: boolean;
 }): HelmScreen {
   if (where.reading) return "job_detail";
   if (where.clearing) return "cleanup";
   if (where.manifesting) return "manifest";
   if (where.overviewing) return "overview";
   if (where.studying) return "studio";
+  if (where.kitting) return "kit";
+  // **Last, and it was missing entirely until #1275.** A person on Settings
+  // was told to Helm as being on the Board, which is the gap #1287 left when
+  // it added `studio` and stopped.
+  if (where.settling) return "settings";
   return "board";
 }
 
@@ -109,6 +116,8 @@ const SCREEN_LABEL: Record<Exclude<HelmScreen, "job_detail">, string> = {
   manifest: "Manifest",
   cleanup: "Cleanup",
   studio: "Studios",
+  kit: "Kit",
+  settings: "Settings",
 };
 
 /**

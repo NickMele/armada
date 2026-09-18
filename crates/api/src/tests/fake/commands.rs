@@ -343,6 +343,78 @@ impl Commands for FakeDaemon {
         })
     }
 
+    /// A server joins reaching no Drone, which is the property the real one
+    /// holds by construction — `core_model::KitServer::added`. `#1275`.
+    async fn add_kit_server(
+        &self,
+        adding: ipc::AddKitServer,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::KitServers, Refusal> {
+        let mut servers = self.kit_servers.lock().expect("not poisoned");
+        servers.retain(|row| row.name != adding.name);
+        servers.push(ipc::KitServerRow {
+            name: adding.name,
+            address: adding.address,
+            drones: reaches("no"),
+            manifest: None,
+            resolves: false,
+            added_at: ipc::Instant::carried("2026-09-17T09:00:00.000Z"),
+            by: ipc::Actor::from_wire("human").expect("a spelling the registry has"),
+        });
+        Ok(ipc::KitServers {
+            servers: servers.clone(),
+        })
+    }
+
+    async fn forget_kit_server(
+        &self,
+        forgetting: ipc::ForgetKitServer,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::KitServers, Refusal> {
+        let mut servers = self.kit_servers.lock().expect("not poisoned");
+        let before = servers.len();
+        servers.retain(|row| row.name != forgetting.name);
+        if servers.len() == before {
+            return Err(no_such_server(&forgetting.name));
+        }
+        Ok(ipc::KitServers {
+            servers: servers.clone(),
+        })
+    }
+
+    /// **`resolves` is left where it was.** The resolution is Fleet's, over
+    /// `core_model::a_drone_resolves`, and `fleet::kit` is where it is tested;
+    /// a second rule here would be a second answer.
+    async fn set_kit_server_reach(
+        &self,
+        setting: ipc::SetKitServerReach,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::KitServers, Refusal> {
+        let mut servers = self.kit_servers.lock().expect("not poisoned");
+        let Some(row) = servers.iter_mut().find(|row| row.name == setting.name) else {
+            return Err(no_such_server(&setting.name));
+        };
+        row.drones = setting.drones;
+        Ok(ipc::KitServers {
+            servers: servers.clone(),
+        })
+    }
+
+    async fn set_manifest_server_reach(
+        &self,
+        setting: ipc::SetManifestServerReach,
+        _manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::KitServers, Refusal> {
+        let mut servers = self.kit_servers.lock().expect("not poisoned");
+        let Some(row) = servers.iter_mut().find(|row| row.name == setting.name) else {
+            return Err(no_such_server(&setting.name));
+        };
+        row.manifest = setting.reach;
+        Ok(ipc::KitServers {
+            servers: servers.clone(),
+        })
+    }
+
     /// Refused, naming what was asked for, so a route test can tell the body
     /// arrived. Holding a server is `fleet::servers`' and tested there.
     async fn start_server(
@@ -505,4 +577,17 @@ impl Commands for FakeDaemon {
     ) -> Result<Redispatched, Refusal> {
         self.fake_redispatch_job(job_id).await
     }
+}
+
+/// Kit's reach, through the one mapping `core-model` owns.
+fn reaches(spelling: &str) -> ipc::ReachesDrones {
+    ipc::ReachesDrones::from_wire(spelling).expect("a spelling the registry has")
+}
+
+fn no_such_server(name: &str) -> Refusal {
+    Refusal::Unacceptable(ipc::WireError::raised(
+        "fake.no_such_kit_server",
+        format!("Kit holds no server called `{name}`"),
+        crate::tests::shapes::run_id(),
+    ))
 }
