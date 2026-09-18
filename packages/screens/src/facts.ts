@@ -72,7 +72,7 @@ export function factsOf(job: JobSummary, whole: JobWhole | null, now: number): J
     ...turnsFact(whole),
     ...dispatchedByFact(job),
     ...studioGoneFact(job, whole),
-    ...redispatchedFromFact(whole),
+    ...redispatchedFromFact(job, whole),
   ];
 }
 
@@ -87,13 +87,21 @@ export function factsOf(job: JobSummary, whole: JobWhole | null, now: number): J
  * **One edge and no walk.** `foldLineages` counts a chain; this names the
  * direct predecessor and leaves the climb to the reader.
  *
- * Nothing until the read lands, and nothing where it comes back empty —
- * `studioGoneFact`'s rule. The ULID is not a fallback: drawing it was the bug.
+ * **A forgotten predecessor is named, not left silent** — `studioGoneFact`'s
+ * rule exactly: saying so is what keeps a dead end from reading as a job
+ * nobody redispatched. The word is the record's, from `store::forget_job`.
+ *
+ * Nothing until the read lands, and the ULID never: drawing it was the bug.
  */
-function redispatchedFromFact(whole: JobWhole | null): JobDetailField[] {
+function redispatchedFromFact(job: JobSummary, whole: JobWhole | null): JobDetailField[] {
   const from = whole?.replaces;
-  if (from === undefined) return [];
-  return [{ label: "Redispatched from", value: from.handle, mono: true, opensJob: from.job_id }];
+  if (from !== undefined) {
+    return [{ label: "Redispatched from", value: from.handle, mono: true, opensJob: from.job_id }];
+  }
+  // Before the read lands there is nothing to claim either way: a sentence
+  // that appears and then disappears is worse than one that arrives late.
+  if (whole === null || job.redispatched_from === undefined) return [];
+  return [{ label: "The job it replaced has been forgotten" }];
 }
 
 /**

@@ -302,8 +302,8 @@ export type JobDetail = {
    *
    * **Absent is two facts, and `redispatched_from` tells them apart.** A job no
    * redispatch minted carries neither; one carrying the id and nothing here has
-   * a predecessor that has been forgotten, and the header names nothing rather
-   * than drawing a control that opens nothing.
+   * a predecessor that has been forgotten, and the header says so rather than
+   * drawing a control that opens nothing.
    *
    * **The direct predecessor, never the root of a chain.**
    */

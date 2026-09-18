@@ -302,9 +302,20 @@ describe("which job it replaced", () => {
   it("never draws the raw id, before the read lands or after it comes back empty", () => {
     const carrying = job({ redispatched_from: FROM.job_id });
     for (const whole of [null, replacing(undefined)]) {
-      const drawn = factsOf(carrying, whole, now);
-      expect(drawn.some((fact) => fact.label === "Redispatched from")).toBe(false);
-      expect(drawn.some((fact) => fact.value === FROM.job_id)).toBe(false);
+      expect(factsOf(carrying, whole, now).some((fact) => fact.value === FROM.job_id)).toBe(false);
     }
+  });
+
+  // A dead end named rather than left silent — `studioGoneFact`'s rule. The
+  // id points at a job nothing holds, and saying nothing would read as a job
+  // nobody redispatched.
+  it("says the job it replaced is forgotten, where the read comes back empty", () => {
+    const drawn = factsOf(job({ redispatched_from: FROM.job_id }), replacing(undefined), now);
+    expect(drawn.at(-1)).toEqual({ label: "The job it replaced has been forgotten" });
+  });
+
+  it("claims neither way before the read lands", () => {
+    const drawn = factsOf(job({ redispatched_from: FROM.job_id }), null, now);
+    expect(drawn.some((fact) => String(fact.label).includes("forgotten"))).toBe(false);
   });
 });
