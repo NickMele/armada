@@ -113,7 +113,7 @@ shortcut = '⌘\'
 scope = "anywhere"
 destructive = false
 confirms = false
-notes = "No panel glyph is registered. The 48px rail is reachable by ⌘-digit without labels, which is why hiding it costs little."
+notes = "No panel glyph is registered. Navigation is reachable by ⌘-digit without labels, which is why hiding it costs little; Stats and Fleet are not, and a hidden column takes both. Bridge folds the column on its own under --window-fold-left and this act is still unbuilt, so nothing hides it by hand."
 
 [actions.history]
 kind = "Action"
