@@ -59,7 +59,24 @@ export type ProposedCheck = {
   run: string;
   /** Command names, in the order they run. */
   requires?: string[];
+  /**
+   * Which runner drives this check, where the scan's own evidence named one.
+   * Absent is every other case — a check nothing detected a runner for runs
+   * whole, as one in an unconfigured repository does.
+   */
+  runner?: ProposedRunner;
   provenance: Provenance;
+};
+
+/**
+ * The runner one proposed check names, and the package it runs in. Two fields
+ * and no commands: every way of running less than the whole check is written
+ * once in that runner's own description.
+ */
+export type ProposedRunner = {
+  name: string;
+  /** What `{pkg}` resolves to. Absent on a workspace that is the root. */
+  pkg?: string;
 };
 
 export type ProposedCommand = {

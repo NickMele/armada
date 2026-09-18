@@ -130,3 +130,118 @@ pub fn one_test(run: &str, test: &str) -> Option<String> {
     }
     Some(run.replace("{}", &quoted(test)))
 }
+
+/// The command a runner's `run_changed` shape makes for these files.
+///
+/// `None` where the template has nowhere to put them, where a path cannot be
+/// one argument, or where no path was given — all three are a runner that has
+/// nothing narrower to say about this change, and the caller runs the Check
+/// whole rather than running something that names no file.
+///
+/// **`{pkg}` is the Check's, `{files}` is the Drone's.** The first is a fact
+/// about where this Check runs and is substituted whether the Check declared
+/// one or not; a template naming it against a Check that declares none has
+/// nothing to put there, and that is the `None` above rather than an empty
+/// argument in the middle of a command.
+pub fn run_changed(template: &str, pkg: Option<&str>, files: &[String]) -> Option<String> {
+    if !template.contains("{files}") {
+        return None;
+    }
+    let mut named: Vec<&str> = files
+        .iter()
+        .map(|path| path.trim())
+        .filter(|path| !path.is_empty())
+        .collect();
+    named.sort_unstable();
+    named.dedup();
+    if named.is_empty() || !named.iter().all(|path| spellable(path)) {
+        return None;
+    }
+    let command = match (template.contains("{pkg}"), pkg) {
+        (true, None) => return None,
+        (true, Some(pkg)) if !spellable(pkg) => {
+            let _ = pkg;
+            return None;
+        }
+        (true, Some(pkg)) => template.replace("{pkg}", &quoted(pkg)),
+        (false, _) => template.to_string(),
+    };
+    let spelled = named
+        .iter()
+        .map(|path| quoted(path))
+        .collect::<Vec<String>>()
+        .join(" ");
+    Some(command.replace("{files}", &spelled))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::run_changed;
+
+    const VITEST: &str = "pnpm --dir {pkg} exec vitest related {files} --run";
+
+    fn paths(of: &[&str]) -> Vec<String> {
+        of.iter().map(|path| path.to_string()).collect()
+    }
+
+    #[test]
+    fn the_package_and_the_files_are_both_put_in() {
+        assert_eq!(
+            run_changed(VITEST, Some("packages/screens"), &paths(&["src/a.ts"])),
+            Some("pnpm --dir packages/screens exec vitest related src/a.ts --run".to_string())
+        );
+    }
+
+    /// Sorted and deduplicated for `narrowed`'s reason: a report that reads
+    /// differently on two identical runs is one nobody can compare.
+    #[test]
+    fn the_files_come_back_sorted_and_deduplicated() {
+        assert_eq!(
+            run_changed(
+                VITEST,
+                Some("p"),
+                &paths(&["src/b.ts", "src/a.ts", "src/b.ts"])
+            ),
+            Some("pnpm --dir p exec vitest related src/a.ts src/b.ts --run".to_string())
+        );
+    }
+
+    #[test]
+    fn a_path_holding_a_space_is_one_argument() {
+        let made =
+            run_changed(VITEST, Some("p"), &paths(&["src/two words.ts"])).expect("it narrows");
+        assert!(made.contains("\"src/two words.ts\""), "{made}");
+    }
+
+    /// Every one of these is the same answer to the caller — the Check runs
+    /// whole — and none of them is a command naming nothing.
+    #[test]
+    fn nothing_to_say_is_none_and_never_a_command_without_files() {
+        assert_eq!(run_changed(VITEST, Some("p"), &[]), None, "no files");
+        assert_eq!(
+            run_changed(VITEST, None, &paths(&["a.ts"])),
+            None,
+            "no package for a template that names one"
+        );
+        assert_eq!(
+            run_changed("pnpm test", Some("p"), &paths(&["a.ts"])),
+            None,
+            "a template with nowhere to put them"
+        );
+        assert_eq!(
+            run_changed(VITEST, Some("p"), &paths(&["src/it's.ts"])),
+            None,
+            "a path the splitter cannot be handed as one argument"
+        );
+    }
+
+    /// A runner rooted at the repository declares no `{pkg}`, and a Check
+    /// driven by it needs none.
+    #[test]
+    fn a_template_naming_no_package_needs_none() {
+        assert_eq!(
+            run_changed("pytest {files}", None, &paths(&["t/a.py"])),
+            Some("pytest t/a.py".to_string())
+        );
+    }
+}

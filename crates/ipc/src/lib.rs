@@ -261,8 +261,8 @@ pub use limits::{
 };
 pub use manifest_proposal::{
     Band, EditManifestProposal, ManifestProposal, ManifestProposals, PolicyKey, ProposalEdit,
-    ProposedCheck, ProposedCommand, ProposedId, ProposedPolicy, ProposedPort, ProposedSetup,
-    Provenance, StatedCaps, WriteManifestProposal,
+    ProposedCheck, ProposedCommand, ProposedId, ProposedPolicy, ProposedPort, ProposedRunner,
+    ProposedSetup, Provenance, StatedCaps, WriteManifestProposal,
 };
 pub use overlap::{ScopeOverlap, SharedPath};
 pub use preferences::{Preferences, SavePreference};

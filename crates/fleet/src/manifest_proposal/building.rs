@@ -5,8 +5,8 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use ipc::{
-    DeclaredPort, ProposedCheck, ProposedCommand, ProposedId, ProposedPort, ProposedSetup,
-    Provenance, RepositoryScan, ScannedWorkspace,
+    DeclaredPort, ProposedCheck, ProposedCommand, ProposedId, ProposedPort, ProposedRunner,
+    ProposedSetup, Provenance, RepositoryScan, ScannedWorkspace,
 };
 
 use super::{default_policy, Draft};
@@ -81,7 +81,13 @@ fn draft(
         };
         let provenance = convention(&runnable.file, Some(&runnable.key));
         match is_check(&runnable.name) {
-            true => checks.push(check(&runnable.name, run, provenance)),
+            true => checks.push(check_driven_by(
+                &runnable.name,
+                run,
+                provenance,
+                &runnable.run,
+                &workspace.dir,
+            )),
             false => commands.push(command(&runnable.name, run, provenance)),
         }
     }
@@ -152,8 +158,34 @@ fn check(name: &str, run: String, provenance: Provenance) -> ProposedCheck {
         name: name.to_string(),
         run,
         requires: Vec::new(),
+        runner: None,
         provenance,
     }
+}
+
+/// The same, naming the runner the workspace's own script gave away.
+///
+/// **Detected from what the script runs, not from what is installed.** A
+/// package holding vitest and a `test` script running something else is
+/// running something else, and `package.json`'s dependencies would say the
+/// opposite. `config::detected` holds which programs a shipped description
+/// claims.
+fn check_driven_by(
+    name: &str,
+    run: String,
+    provenance: Provenance,
+    script: &str,
+    dir: &str,
+) -> ProposedCheck {
+    let mut proposed = check(name, run, provenance);
+    proposed.runner = config::detected(script).map(|name| ProposedRunner {
+        name,
+        // The root workspace is the repository, and a template naming a
+        // package has nothing to put there — which reads as a Check that
+        // runs whole, not as one narrowed to the repository.
+        pkg: (dir != ".").then(|| dir.to_string()),
+    });
+    proposed
 }
 
 fn command(name: &str, run: String, provenance: Provenance) -> ProposedCommand {

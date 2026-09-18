@@ -126,3 +126,67 @@ export const Closes: Story = {
     await expect(args.onClose).toHaveBeenCalled();
   },
 };
+
+/**
+ * **The reading the fields exist for.** The plan named ten files; the work
+ * reached eight of them, never opened two, and changed one nobody planned.
+ * Neither half is an error — `crates/fleet/src/scope.rs` refuses to fail a
+ * step for either — so both read as a quiet note rather than a warning.
+ */
+export const AgainstWhatItTouched: Story = {
+  args: {
+    ...LONG,
+    state: "done",
+    shown: "The Fleet-side test drives a Job mid-Check and one mid-Judge-call.",
+    touched: {
+      declared: LONG.scope.map((path, at) => ({ path, touched: at > 1 })),
+      unplanned: ["crates/ipc/src/activity.rs"],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const sheet = within(canvasElement);
+    await expect(sheet.getByText("Files · declared 10 · touched 8 · unplanned 1")).toBeVisible();
+    await expect(sheet.getAllByText("not touched")).toHaveLength(2);
+    await expect(sheet.getByText("crates/ipc/src/activity.rs")).toBeVisible();
+  },
+};
+
+/**
+ * A task whose work reached everything it named. **The count says so and no
+ * row is marked** — a badge on every row would say nothing at all.
+ */
+export const EverythingItNamed: Story = {
+  args: {
+    id: "T3",
+    title: "Reword the Drones stat itself",
+    state: "done",
+    scope: ["packages/screens/src/overview.ts", "packages/screens/src/overview.test.ts"],
+    touched: {
+      declared: [
+        { path: "packages/screens/src/overview.ts", touched: true },
+        { path: "packages/screens/src/overview.test.ts", touched: true },
+      ],
+      unplanned: [],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const sheet = within(canvasElement);
+    await expect(sheet.getByText("Files · declared 2 · touched 2")).toBeVisible();
+    await expect(sheet.queryByText("not touched")).toBeNull();
+  },
+};
+
+/**
+ * The Job's turns were never read, so there is nothing to compare against.
+ * **It draws the declared list plainly** rather than a comparison claiming
+ * every file went untouched, which is what an absent reading would become if
+ * it were treated as an empty one.
+ */
+export const NotReadAgainstAnything: Story = {
+  args: { ...LONG, state: "working" },
+  play: async ({ canvasElement }) => {
+    const sheet = within(canvasElement);
+    await expect(sheet.getByText("Files · 10")).toBeVisible();
+    await expect(sheet.queryByText("not touched")).toBeNull();
+  },
+};

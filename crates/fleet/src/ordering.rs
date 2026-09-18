@@ -60,6 +60,7 @@ mod tests {
             narrow: None,
             one_test: None,
             width: None,
+            runner: None,
             runs_at: core_model::RunsAt::Everywhere,
             places: std::num::NonZeroU32::MIN,
         }

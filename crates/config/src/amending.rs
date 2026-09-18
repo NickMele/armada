@@ -18,7 +18,7 @@ mod emit;
 mod merge;
 mod splice;
 
-pub use drafts::{NewCheck, NewCommand, NewEvidence, NewLink, NewNarrowing, NewPort};
+pub use drafts::{NewCheck, NewCommand, NewEvidence, NewLink, NewNarrowing, NewPort, NewRunner};
 pub use edits::{CheckEdit, CommandEdit, Edit, EvidenceEdit, PortEdit};
 
 use std::fmt;
