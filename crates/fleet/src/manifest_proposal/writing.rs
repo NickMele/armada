@@ -3,7 +3,9 @@
 
 use std::io;
 
-use config::{amend, CheckEdit, CommandEdit, Edit, NewCheck, NewCommand, NewPort, PortEdit};
+use config::{
+    amend, CheckEdit, CommandEdit, Edit, NewCheck, NewCommand, NewPort, NewRunner, PortEdit,
+};
 use core_model::{AutoMerge, ReviewGate};
 use ipc::{Instant, ManifestFault, ManifestRefused, ManifestSaved, PolicyKey, Provenance};
 
@@ -62,6 +64,10 @@ impl Draft {
                 requires: check.requires.clone(),
                 when: Vec::new(),
                 narrow: None,
+                runner: check.runner.as_ref().map(|runner| NewRunner {
+                    name: runner.name.clone(),
+                    pkg: runner.pkg.clone(),
+                }),
             }),
         }));
         edits.extend(self.commands.iter().map(|command| Edit::Command {

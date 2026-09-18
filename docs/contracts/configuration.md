@@ -357,6 +357,11 @@ Rules that follow:
   whole until one exists.
 - **It is frozen with the workflow**, and `after_merge` drops it for the reason
   it drops `narrow`: what merged is the whole tree.
+- **Setup proposes it from what a script runs.** A workspace whose runnable
+  names a program a shipped description claims gets that runner on the Checks
+  built from it, and the block appears in the file a person approves. An edit
+  to such a Check carries it forward: the edit form names no runner, so it
+  decides nothing about one.
 
 ## How wide a Check runs
 

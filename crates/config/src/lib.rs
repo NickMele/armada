@@ -44,7 +44,7 @@ mod tests;
 
 pub use amending::{
     amend, Amended, CheckEdit, CommandEdit, Edit, EvidenceEdit, NewCheck, NewCommand, NewEvidence,
-    NewLink, NewNarrowing, NewPort, NotAmended, PortEdit, Unplaceable,
+    NewLink, NewNarrowing, NewPort, NewRunner, NotAmended, PortEdit, Unplaceable,
 };
 pub use catalogue::{
     carried, Catalogue, CatalogueRefused, LeftOut, ResolvedCatalogue, WhyLeftOut, Written,
@@ -57,7 +57,7 @@ pub use manifest::{
 };
 pub use resolve::ResolvedWorkflow;
 pub use roster::Roster;
-pub use runners::{shipped, RunnerDescription};
+pub use runners::{detected, shipped, RunnerDescription};
 pub use workflow::{MechanicalCheck, Step, Structure, WorkflowDef};
 
 // Re-exported, not re-declared. A Job carries its resolved workflow, so these

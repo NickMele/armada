@@ -115,6 +115,7 @@ fn forward() -> Vec<Edit> {
                 requires: strings(&["bootstrap"]),
                 when: strings(&["crates/**"]),
                 narrow: None,
+                runner: None,
             }),
         ),
         command(

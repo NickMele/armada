@@ -12,6 +12,12 @@ detect:
   manifest: package.json
   dependency: vitest
   files: ["vitest.config.*"]
+  # A program the workspace's own runnable names. **The one signal Scan
+  # already carries**, and better evidence than the dependency above: a
+  # package with vitest installed and a `test` script running something else
+  # is running something else. `manifest`, `dependency` and `files` are read
+  # by nothing yet.
+  command: vitest
 
 commands:
   # Tests that reach the named files, by vitest's own import graph — never a

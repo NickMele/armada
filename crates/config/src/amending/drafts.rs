@@ -10,6 +10,15 @@ pub struct NewCheck {
     pub requires: Vec<String>,
     pub when: Vec<String>,
     pub narrow: Option<NewNarrowing>,
+    pub runner: Option<NewRunner>,
+}
+
+/// `checks.<name>.runner`, whole. **A name and the package**, never commands:
+/// those are the runner's own, written once — `docs/concepts/runner-adapter.md`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewRunner {
+    pub name: String,
+    pub pkg: Option<String>,
 }
 
 /// `checks.<name>.narrow`, whole.
@@ -104,6 +113,16 @@ impl NewCheck {
             .list("requires", &self.requires)
             .list("when", &self.when)
             .with("narrow", self.narrow.as_ref().map(NewNarrowing::node))
+            .with("runner", self.runner.as_ref().map(NewRunner::node))
+            .done()
+    }
+}
+
+impl NewRunner {
+    pub(super) fn node(&self) -> Node {
+        Entries::new()
+            .with("name", Some(text(&self.name)))
+            .with("pkg", self.pkg.as_deref().map(text))
             .done()
     }
 }

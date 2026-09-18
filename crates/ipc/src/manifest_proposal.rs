@@ -98,7 +98,28 @@ pub struct ProposedCheck {
     /// Command names, in the order they run.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requires: Vec<String>,
+    /// Which runner drives this Check, where the scan's own evidence named
+    /// one. **`None` is every other case** — a Check nothing detected a runner
+    /// for runs whole, exactly as one in a repository nobody has configured
+    /// does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runner: Option<ProposedRunner>,
     pub provenance: Provenance,
+}
+
+/// The runner one proposed Check names, and the package it runs in.
+///
+/// **Two fields and no commands.** Every way of running less than the whole
+/// Check is written once in that runner's own description, never per Check —
+/// `docs/concepts/runner-adapter.md`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProposedRunner {
+    pub name: String,
+    /// What `{pkg}` resolves to in that description's templates. **`None` on a
+    /// workspace that is the repository root**, where there is no package
+    /// below it to name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pkg: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
