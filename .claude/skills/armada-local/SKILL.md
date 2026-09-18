@@ -114,7 +114,7 @@ through the runtime file, so nothing here needs a port.
 **Moving the owner's own Fleet onto a merged fix is `scripts/restart`, not
 either of the above.** It refuses while a Drone is working, naming the Job,
 and runs under launchd so it outlives the session that called it.
-`.claude/skills/restart-fleet/SKILL.md` says when, and why it is never on an
+`.claude/skills/restart-app/SKILL.md` says when, and why it is never on an
 allow list.
 
 ## Asking what one Job did

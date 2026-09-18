@@ -94,6 +94,9 @@ export const readStudioFrame = (studioId: string, nodeId: string) =>
   window.armada.readStudioFrame(studioId, nodeId);
 export const promoteOnStudio = (studioId: string, promotion: StudioPromotion) =>
   window.armada.promoteOnStudio(studioId, promotion);
+/** Open what a Studio node points at. Main reads the address; the renderer sends none. #1406. */
+export const openStudioNode = (studioId: string, nodeId: string) =>
+  window.armada.openStudioNode(studioId, nodeId);
 export const reclaimOne = (jobId: string) => window.armada.reclaimWorktree(jobId);
 export const deleteBranchOne = (jobId: string, tip: string) => window.armada.deleteBranch(jobId, tip);
 export const forgetOne = (jobId: string) => window.armada.forgetJob(jobId);
