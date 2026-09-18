@@ -1,13 +1,17 @@
 // A step's rows as the Drone narrated them, placed under the plan task it had
 // marked working when each happened. #1185.
 //
-// **Placed by the windows Fleet sends, and by nothing else.** A call is never
-// matched to a task by its path or its words: a Drone that never calls
-// `update_task` leaves no windows, and all of its work is outside any task.
+// **A window places a row. Where no window covers an Edit, the task whose
+// `scope` names the file does** — #1498: a task marked `done` without ever
+// being marked `working` has no window, so its own declared files read as
+// changed outside every task. A path written down in `scope` is a declaration
+// and reading it is not guessing; a task's title and its prose are still never
+// matched, and nothing but an Edit or a Write is ever moved by one.
+import { toolFamily } from "@armada/components";
 import type { PlanTask, Turn, WorkPlan } from "@armada/protocol";
 
 import { instant, lasting } from "./duration";
-import type { LogRow } from "./story";
+import { editOf, type LogRow } from "./story";
 import { workingOf } from "./working";
 
 /** One sentence the Drone said, and the rows after it up to the next. */
@@ -75,6 +79,54 @@ export function taskAt(ts: string, tasks: readonly PlanTask[]): string | undefin
 }
 
 /**
+ * The task whose `scope` names `path`, by id — what places an edit no window
+ * covers. Nothing here reads the clock, so a window always answers first.
+ *
+ * **Matched at a path segment, not against the diff.** A call names the file
+ * under a worktree and a declaration is repository-relative, and `narrationOf`
+ * is never handed the diff to reconcile the two — `repoPathOf`'s rule, applied
+ * without it. A declared directory holds the files under it, because
+ * `declare_scope` takes both.
+ *
+ * **The more specific declaration wins, and a tie goes to plan order.** An
+ * exact name beats a directory holding it, and a deeper directory beats a
+ * shallower one.
+ */
+export function declaredBy(path: string, tasks: readonly PlanTask[]): string | undefined {
+  let best: { id: string; exact: boolean; length: number } | undefined;
+  for (const task of tasks) {
+    for (const declared of task.scope ?? []) {
+      const named = declared.endsWith("/") ? declared.slice(0, -1) : declared;
+      if (named === "") continue;
+      const exact = path === named || path.endsWith(`/${named}`);
+      const under = path.startsWith(`${named}/`) || path.includes(`/${named}/`);
+      if (!exact && !under) continue;
+      const better =
+        best === undefined ||
+        (exact && !best.exact) ||
+        (exact === best.exact && named.length > best.length);
+      if (better) best = { id: task.id, exact, length: named.length };
+    }
+  }
+  return best?.id;
+}
+
+/**
+ * The task a changing call belongs to by its declared path, or nothing.
+ *
+ * **Only an Edit or a Write moves** — `toolFamily`'s `changing` roster, the
+ * gate `editsIn` reads by. A `Read` or a `Bash` call names no task it was for
+ * and stays where the clock put it.
+ */
+function declaredFor(turn: Turn, tasks: readonly PlanTask[]): string | undefined {
+  const saw = turn.saw;
+  if (saw.event !== "called" || toolFamily(saw.tool) !== "changing" || saw.detail === "") {
+    return undefined;
+  }
+  return declaredBy(editOf(saw.detail, saw.truncated).path, tasks);
+}
+
+/**
  * The step's rows as sentences, under the task each belongs to.
  *
  * `mostEntries` bounds what is drawn to that many of the step's own entries,
@@ -123,7 +175,9 @@ export function narrationOf(
     const drawn = index >= from;
     const turn = turnOf.get(row.id);
     if (turn !== undefined) {
-      const id = taskAt(turn.ts, tasks);
+      // A window still wins: a declaration beating one would put files against
+      // a task nobody had started while the Drone was marked working on another.
+      const id = taskAt(turn.ts, tasks) ?? declaredFor(turn, tasks);
       const next = id === undefined ? outside : (byTask.get(id) ?? outside);
       if (next !== placed) beat = undefined;
       placed = next;
