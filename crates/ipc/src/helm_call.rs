@@ -81,10 +81,10 @@ pub enum RunOrNot {
 
 /// What a person may answer about one Helm call.
 ///
-/// **Three, where a Drone's command offers three others.** There is no
-/// `AllowForJob` because there is no Job, and no `armada.yml` to write to:
-/// Helm runs in the person's own checkout under the person's own settings, so
-/// the only place a lasting rule belongs is a settings file of theirs.
+/// **There is no `AllowForJob`** because there is no Job, and no `armada.yml`
+/// to write to: Helm runs in the person's own checkout under the person's own
+/// settings, so the only place a lasting rule belongs is a settings file of
+/// theirs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HelmCallAnswer {
@@ -97,8 +97,22 @@ pub enum HelmCallAnswer {
     /// in Helm and in the person's terminal alike.
     ///
     /// **The only thing in Armada that writes a person's settings**, and it
-    /// does so on this answer and no other.
+    /// does so on this answer and [`AllowEveryRead`](Self::AllowEveryRead).
     AllowAndRemember,
+    /// Run it, and write a rule for every read Armada's own door offers —
+    /// each `kind = "query"` row of `crates/ipc/operations.toml`, in the
+    /// CLI's `mcp__<server>__<operation>` spelling.
+    ///
+    /// **Offered on a door read and on nothing else.** A person answering it
+    /// is saying that Helm may read this Fleet without asking, which is one
+    /// decision; the same press over a shell line or an edit would be a
+    /// different one wearing the same words.
+    ///
+    /// **The reads and not the whole server.** Every act the door offers is
+    /// behind the same wall — merging a pull request, ending a Job — and a
+    /// single rule covering all of them would put those behind the press that
+    /// allowed reading a log. `#1518`.
+    AllowEveryRead,
     /// Do not run it. The session is told, and goes on without it.
     Refuse,
 }
@@ -190,6 +204,12 @@ pub enum HelmCallSettled {
     AllowedOnce,
     /// A person allowed it and Fleet wrote the rule into their settings.
     AllowedAndRemembered,
+    /// A person allowed it and Fleet wrote a rule for every read the door
+    /// offers into their settings. **Its own end and not
+    /// [`AllowedAndRemembered`](Self::AllowedAndRemembered)**: the two write
+    /// different amounts into a person's own file, and a record that called
+    /// them the same thing would not say which had happened.
+    EveryReadAllowed,
     /// A person allowed it and the rule could not be written. **The call still
     /// ran**: the answer was theirs and a settings file that would not open is
     /// not a reason to refuse them.

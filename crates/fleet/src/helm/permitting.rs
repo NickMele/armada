@@ -133,6 +133,18 @@ where
                     Err(_) => HelmCallSettled::AllowedButNotRemembered,
                 }
             }
+            // The call's own rule is one of these by construction —
+            // `super::asking::offers_for` offers this answer on a door read
+            // and nowhere else — so it is not written a second time.
+            HelmCallAnswer::AllowEveryRead => {
+                let at = adapters::personal_settings(served.root());
+                let reads = super::asking::door_reads();
+                let each: Vec<&str> = reads.iter().map(String::as_str).collect();
+                match adapters::remember_the_rules(&at, &each) {
+                    Ok(_) => HelmCallSettled::EveryReadAllowed,
+                    Err(_) => HelmCallSettled::AllowedButNotRemembered,
+                }
+            }
         }
     }
 
