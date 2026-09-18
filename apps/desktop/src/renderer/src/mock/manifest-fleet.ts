@@ -5,6 +5,7 @@
 // Manifest surface runs through `App` — #1224.
 
 import type {
+  KitInventory,
   AllowedCommandRow,
   CheckoutRunDiff,
   CheckoutRunFollowed,
@@ -25,9 +26,11 @@ import type {
   StartCheckoutRun,
   VerifyStep,
 } from "@armada/protocol";
+
 import { repository } from "@armada/screens/src/fixtures/build/base";
 
 import type { BridgeApi } from "../../../shared/api";
+import { KIT_INVENTORY } from "./kit-inventory";
 import { appliedTo } from "./manifest-applied";
 import { onBoard } from "./moment";
 import type { FleetHandle, Scenario } from "./moment";
@@ -334,6 +337,8 @@ export type Manifesting = {
   alwaysAllowed?: AllowedCommandRow[];
   /** What Kit holds, and what this repository has said about each. #1275. */
   kitServers?: KitServerRow[];
+  /** The setup this machine already has, read to be shown. #1491. */
+  kitInventory?: KitInventory;
   save?: SaveGoesTo;
   diff?: CheckoutRunDiff;
   drift?: ManifestDriftRead;
@@ -417,6 +422,7 @@ function behaviour(fleet: FleetHandle, options: Manifesting): Partial<BridgeApi>
       return { state: "saved", saved: { path: MANIFEST_PATH, at: WROTE_AT } };
     },
     readManifestSpend: async () => ({ ok: true, spend }),
+    readKitInventory: async () => ({ ok: true, setup: options.kitInventory ?? KIT_INVENTORY }),
     listKitServers: async () => ({ ok: true, kit: { servers } }),
     addKitServer: async (adding) => {
       const added: KitServerRow = {

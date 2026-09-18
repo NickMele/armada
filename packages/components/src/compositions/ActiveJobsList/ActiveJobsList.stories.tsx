@@ -628,3 +628,130 @@ export const PanelFolded: StoryObj = {
     await expect(canvas.getByRole("option")).toBeVisible();
   },
 };
+
+/**
+ * **Every column the Board can draw, at a width wide enough to draw them.**
+ * `columnsFor` names four facts on every Board, adds Repository on *All
+ * repositories* and adds Tasks wherever some Job on the board has a plan — six,
+ * and the list had track lists for three and four. Anything past four fell
+ * through to the four-track default: the fifth fact took the slack track, whose
+ * floor is zero, and the sixth took the action's own column. The owner met it
+ * on a killed Job — `Tasks` clipped to `TA…` behind `Redispatch as a new job`,
+ * a column header with its cell printed under a button.
+ *
+ * **1400px, above the 1100px container rule**, because below it the row hides
+ * its trailing three facts by design and the crowding cannot happen. The bug
+ * lives at the widths where every fact is drawn.
+ */
+const EVERY_COLUMN = ["Workflow", "Progress", "Run time", "Dispatched by", "Repository", "Tasks"];
+
+/** A single-repository Board carrying plans: the same run without Repository. */
+const WITHOUT_REPOSITORY = EVERY_COLUMN.filter((name) => name !== "Repository");
+
+/** One row's facts, named so a list can draw whichever subset its columns name. */
+const EVERY_FACT: Record<string, JobRowStackedProps["fields"][number]> = {
+  Workflow: { label: "Workflow", icon: Layers, value: "Bug, 6 steps" },
+  Progress: {
+    label: "Progress",
+    value: (
+      <>
+        <StepBar total={6} current={2} activity="running" label="Step 2 of 6" />
+        <span className="armada-row-step">regression_verify</span>
+      </>
+    ),
+  },
+  "Run time": { label: "Run time", value: "11h 00m", mono: true },
+  "Dispatched by": { label: "Dispatched by", value: "Dispatched by you" },
+  Repository: { label: "Repository", value: "armada" },
+  Tasks: {
+    label: "Tasks",
+    value: (
+      <>
+        <StepBar tasks={["done", "working", "open"]} label="1 of 3 tasks" />
+        <span className="armada-row-step">1 of 3 tasks</span>
+      </>
+    ),
+  },
+};
+
+function BoardOf({ columns }: { columns: string[] }) {
+  return (
+    <ActiveJobsList heading="Job Board" summary="3 jobs." selectable label="Job Board" columns={columns}>
+      {TABLE_ROWS.map((row) => (
+        <JobRowStacked
+          key={row.handle}
+          status={row.status}
+          statusIcon={row.icon}
+          statusLabel={row.label}
+          headline={row.headline}
+          jobId={row.handle}
+          handle={row.handle}
+          onOpen={() => {}}
+          fields={columns.map((name) => EVERY_FACT[name]!)}
+          action={<SplitButton ground="card" items={menu}>Redispatch as a new job</SplitButton>}
+        />
+      ))}
+    </ActiveJobsList>
+  );
+}
+
+export const EveryColumnTheBoardCanDraw: Story = {
+  render: () => (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-8)",
+        // Above `--layout-breakpoint`, which that token's own comment calls
+        // "where the Job row's six-track field run stops fitting" — below it
+        // the row hides its trailing facts by design and the crowding cannot
+        // happen, so the bug lives only at the widths this draws.
+        width: "calc(var(--layout-breakpoint) + var(--w-run-column))",
+      }}
+    >
+      <div>
+        <span className="armada-screen__eyebrow">six — All repositories, and a Job with a plan</span>
+        <BoardOf columns={EVERY_COLUMN} />
+      </div>
+      <div>
+        <span className="armada-screen__eyebrow">five — one repository, and a Job with a plan</span>
+        <BoardOf columns={WITHOUT_REPOSITORY} />
+      </div>
+    </div>
+  ),
+  /**
+   * **Every fact on one line, none crushed, none under the action** — in both
+   * lists, because five and six each got their own track list and a rule
+   * nothing exercises is how the four-track default came to serve them both.
+   *
+   * Measured on three axes, because the overflow took a different one than
+   * anybody guessed: with five tracks for six facts the sixth did not spill
+   * right, it *wrapped* — onto a second grid row, back under Workflow — while
+   * Repository was squeezed to 16px beside it. A row that looks merely cramped
+   * and a row whose last fact has gone somewhere else read the same from a
+   * screenshot, which is why none of this is judged by eye.
+   */
+  play: async ({ canvasElement }) => {
+    const rows = [...canvasElement.querySelectorAll<HTMLElement>(".armada-job-row")];
+    await expect(rows).toHaveLength(TABLE_ROWS.length * 2);
+    for (const row of rows) {
+      const named = Number(row.closest(".armada-active-jobs__frame")!.getAttribute("data-columns"));
+      const action = row.querySelector<HTMLElement>(".armada-job-row__action")!.getBoundingClientRect();
+      const fields = [...row.querySelectorAll<HTMLElement>(".armada-job-row__field")];
+      await expect(fields).toHaveLength(named);
+      const first = fields[0]!.getBoundingClientRect();
+      for (const field of fields) {
+        const box = field.getBoundingClientRect();
+        // One line: a fact that wrapped sits a row lower and reads as one
+        // belonging to the field above it.
+        await expect(box.top).toBeCloseTo(first.top, 0);
+        // Clear of the action, the column the last fact took when the widths
+        // fell the other way.
+        await expect(box.right).toBeLessThanOrEqual(action.left);
+        // Wide enough to read its own label. A 16px cell is a column that is
+        // drawn, counted and useless.
+        await expect(box.width).toBeGreaterThanOrEqual(40);
+      }
+    }
+  },
+};

@@ -411,15 +411,54 @@ fn runs_a_check<'a>(
     command: &str,
     runners: &'a [(String, String)],
 ) -> Option<&'a (String, String)> {
-    command
+    let typed: Vec<&str> = command
         .split_whitespace()
         .filter(|token| !token.starts_with('-'))
-        .find_map(|token| {
-            let named = program_named(token);
-            runners
-                .iter()
-                .find(|(_, program)| program_named(program) == named)
-        })
+        .collect();
+    // **The Check whose own line this command looks most like.** Matching on
+    // the program alone named the first Check declaring that program, so on
+    // this repository every `cargo` command was reported as `build` — and a
+    // Drone told to ask for `build` when it typed `cargo nextest` would have
+    // been told nothing about its tests. Seen for real on job
+    // `3-show-what-s-running-in-the-drones-stat`.
+    // **Strictly greater, so a tie goes to the Check declared first.**
+    // `max_by_key` answers the last of equal keys, which made a command
+    // sharing only its program with three Checks report whichever the file
+    // happened to write last.
+    let mut best: Option<(usize, &(String, String))> = None;
+    for runner in runners {
+        let shared = shared_prefix(&typed, &runner.1);
+        if shared > 0 && best.is_none_or(|(most, _)| shared > most) {
+            best = Some((shared, runner));
+        }
+    }
+    if let Some((_, runner)) = best {
+        return Some(runner);
+    }
+    // **A runner reached through a wrapper shares no prefix at all.**
+    // `npx --yes pnpm@11.6.0 … test` starts with `npx`, so nothing above can
+    // see it; this names the Check by the program hiding further along, which
+    // is the hole #1174 was filed for.
+    typed.iter().find_map(|token| {
+        let named = program_named(token);
+        runners
+            .iter()
+            .find(|(_, run)| run.split_whitespace().next().map(program_named) == Some(named))
+    })
+}
+
+/// How many leading words `typed` and `run` name in common, comparing the
+/// program each word names rather than the word. Zero where the first differs.
+fn shared_prefix(typed: &[&str], run: &str) -> usize {
+    let declared: Vec<&str> = run
+        .split_whitespace()
+        .filter(|token| !token.starts_with('-'))
+        .collect();
+    typed
+        .iter()
+        .zip(declared.iter())
+        .take_while(|(one, other)| program_named(one) == program_named(other))
+        .count()
 }
 
 /// A token reduced to the program it names: the last path segment, and what
@@ -558,13 +597,70 @@ mod tests {
 
     /// The Manifest of a repository whose `format` check narrows to `rustfmt`,
     /// which is the case a list built from `run` alone would miss.
+    /// This repository's own shape: several Checks on one program, `build`
+    /// declared first, and a `narrow.run` naming a program its `run` does not.
     fn runners() -> Vec<(String, String)> {
         vec![
-            ("test".to_string(), "cargo".to_string()),
-            ("screens_test".to_string(), "pnpm".to_string()),
-            ("format".to_string(), "cargo".to_string()),
-            ("format".to_string(), "rustfmt".to_string()),
+            (
+                "build".to_string(),
+                "cargo build --workspace --locked".to_string(),
+            ),
+            (
+                "test".to_string(),
+                "cargo nextest run --workspace --exclude acceptance".to_string(),
+            ),
+            (
+                "screens_test".to_string(),
+                "pnpm --dir packages/screens exec vitest run".to_string(),
+            ),
+            ("format".to_string(), "cargo fmt --all --check".to_string()),
+            (
+                "format".to_string(),
+                "rustfmt --check --edition 2021".to_string(),
+            ),
         ]
+    }
+
+    /// **Seen for real on job `3-show-what-s-running-in-the-drones-stat`.**
+    /// Matching on the program alone named the first Check declaring it, so
+    /// every `cargo` command was reported as `build` — and a Drone told to ask
+    /// for `build` when it typed `cargo nextest` would have been told nothing
+    /// about its tests.
+    #[test]
+    fn the_refusal_names_the_check_the_command_most_looks_like() {
+        let named = |command: &str| {
+            let decided = first(
+                "Bash",
+                Some(command),
+                &[],
+                &[],
+                &runners(),
+                None,
+                WhenBlocked::AllowAll,
+            );
+            match decided {
+                First::Withheld(Withheld::RunsACheck { check, .. }) => check,
+                other => panic!("{command}: {other:?}"),
+            }
+        };
+        assert_eq!(named("cargo nextest run -p ipc"), "test");
+        assert_eq!(named("cargo build -p ipc"), "build");
+        assert_eq!(named("cargo fmt --all --check"), "format");
+        assert_eq!(named("rustfmt --check src/lib.rs"), "format");
+        assert_eq!(
+            named("pnpm --dir packages/screens exec vitest run overview"),
+            "screens_test"
+        );
+        assert_eq!(
+            named("npx --yes pnpm@11.6.0 --dir packages/screens exec vitest run"),
+            "screens_test",
+            "a wrapper shares no prefix, so the program further along names it"
+        );
+        assert_eq!(
+            named("cargo check -p ipc"),
+            "build",
+            "nothing declares `cargo check`, so the nearest Check on that program takes it"
+        );
     }
 
     /// **`#1174`, and the whole of why `#737` did not hold.** The pointer lived
@@ -586,7 +682,7 @@ mod tests {
             assert!(
                 matches!(
                     decided,
-                    First::Withheld(Withheld::RunsACheck { ref check, .. }) if check == "test"
+                    First::Withheld(Withheld::RunsACheck { ref check, .. }) if check == "build"
                 ),
                 "under {when:?}: {decided:?}"
             );

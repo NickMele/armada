@@ -76,6 +76,11 @@ where
     pub(crate) fn locating(&self) -> &Arc<dyn crate::repositories::Locating> {
         &self.locating
     }
+    /// Reading the setup a person already has — `crate::kit`. **Cloned rather
+    /// than borrowed**, because the read happens off this thread.
+    pub(crate) fn setup(&self) -> Arc<dyn adapter_traits::HarnessSetup + Send + Sync> {
+        Arc::clone(&self.setup)
+    }
     pub(crate) fn port_range(&self) -> crate::ports::PortRange {
         self.port_range
     }

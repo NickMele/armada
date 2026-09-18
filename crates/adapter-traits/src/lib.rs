@@ -41,6 +41,7 @@ mod harness;
 mod judge;
 mod link_lookup;
 mod secret;
+mod setup;
 mod under_review;
 mod work_product;
 mod worktree;
@@ -64,6 +65,9 @@ pub use harness::{
 pub use judge::{Ask, CallProgress, Heard, JudgeCall, ModelClient};
 pub use link_lookup::{LinkLookup, LookupCall};
 pub use secret::Secret;
+pub use setup::{
+    HarnessSetup, Inventory, KindRead, SetupFiles, SetupItem, SetupKind, Unreadable, WhatWasRead,
+};
 pub use under_review::{
     FromOutside, InlineContext, PullRequestDiff, Remark, ReviewVerdict, ReviewedBy, UnderReview,
     WhatPeopleSaid, WhatTheForgeRan,

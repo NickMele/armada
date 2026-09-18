@@ -189,6 +189,7 @@ export const listRepositoryAllowedCommands = () => window.armada.listRepositoryA
 export const removeRepositoryAllowedCommand = (run: string) =>
   window.armada.removeRepositoryAllowedCommand(run);
 /** Kit's MCP servers, and the two tiers of reach over each — #1275. */
+export const readKitInventory = () => window.armada.readKitInventory();
 export const listKitServers = () => window.armada.listKitServers();
 export const addKitServer = (adding: AddKitServer) => window.armada.addKitServer(adding);
 export const forgetKitServer = (name: string) => window.armada.forgetKitServer(name);

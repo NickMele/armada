@@ -8,45 +8,83 @@
 //
 // **Both tiers stay on one screen**, because `resolves` is the answer over the
 // two and a surface showing one of them cannot say why a Drone gets a server.
+//
+// **What a person already has is read first and drawn first.** #1491: this
+// screen opened on *Nothing in your Kit yet* while fourteen skills and eight
+// plugins sat one directory away. What is read reaches no Drone — the servers
+// below are the only ones that can, and only once allowed.
 
 // Which repository "here" means is the rail's pick, the same pick every other
 // per-repository read follows. On All repositories there is no Manifest to
 // narrow, so the app asks for one rather than drawing a dead control — the
 // Manifest surface's own arrangement.
+//
+// **The ask replaces the servers and not the screen.** What a person already
+// has is this machine's and answers for every repository, so it is drawn with
+// no pick at all; it is the second tier that needs one.
+//
+// **Two homes, and the screen says which is which** — the owner's decision, 18
+// Sep, `kit.md`. Above is the harness's own home, which Armada reads and he
+// edits where it lives; below is Armada's own, which is changed here. Neither
+// is authoritative over the other's idea of anything, and a person who cannot
+// tell them apart is the failure two homes was weighed against.
 
-import { KitServers } from "@armada/components";
+import type { ReactNode } from "react";
+
+import { KitServers, KitSetup } from "@armada/components";
 
 import { said } from "./copy";
 import { addressReads, addressTyped, useKit, type KitSlice } from "./manifest-kit";
 
 export type KitProps = KitSlice & {
-  /** The repository the rail has picked, as a person reads it. Names the second tier. */
-  repository: string;
+  /**
+   * The repository the rail has picked, as a person reads it. Names the second
+   * tier. `null` is All repositories, and draws [`ask`](KitProps.ask) in the
+   * servers' place.
+   */
+  repository: string | null;
+  /** What to draw where the servers would be, with no repository picked. */
+  ask?: ReactNode;
 };
 
 export function Kit(props: KitProps) {
   const kit = useKit(props);
   return (
-    <KitServers
-      here={props.repository}
-      servers={kit.kit?.servers.map((server) => ({
-        name: server.name,
-        address: addressReads(server.address),
-        kind: server.address.transport,
-        reachesByDefault: server.drones === "yes",
-        here: server.manifest,
-        resolves: server.resolves,
-      }))}
-      refused={kit.refused === null ? undefined : said(kit.refused)}
-      onAdd={({ name, kind, address }) => {
-        const typed = addressTyped(kind, address);
-        // Fleet refuses the same shapes and says why. What is refused here is
-        // an empty field, which has nothing to send and nothing to say.
-        if (typed !== null) kit.onAdd({ name, address: typed });
-      }}
-      onForget={kit.onForget}
-      onKitReach={(name, reaches) => kit.onKitReach(name, reaches ? "yes" : "no")}
-      onHereReach={kit.onManifestReach}
-    />
+    <div className="armada-kit">
+      <KitSetup setup={kit.setup} />
+      <section className="armada-kit__own" aria-label="What Armada holds">
+        <header className="armada-kit__head">
+          <h3 className="armada-kit__title">What Armada holds</h3>
+          <p className="armada-kit__where">
+            Armada&rsquo;s own, and changed here. The setup above is edited where it lives.
+          </p>
+        </header>
+        {props.repository === null ? (
+          props.ask
+        ) : (
+          <KitServers
+            here={props.repository}
+            servers={kit.kit?.servers.map((server) => ({
+              name: server.name,
+              address: addressReads(server.address),
+              kind: server.address.transport,
+              reachesByDefault: server.drones === "yes",
+              here: server.manifest,
+              resolves: server.resolves,
+            }))}
+            refused={kit.refused === null ? undefined : said(kit.refused)}
+            onAdd={({ name, kind, address }) => {
+              const typed = addressTyped(kind, address);
+              // Fleet refuses the same shapes and says why. What is refused here is
+              // an empty field, which has nothing to send and nothing to say.
+              if (typed !== null) kit.onAdd({ name, address: typed });
+            }}
+            onForget={kit.onForget}
+            onKitReach={(name, reaches) => kit.onKitReach(name, reaches ? "yes" : "no")}
+            onHereReach={kit.onManifestReach}
+          />
+        )}
+      </section>
+    </div>
   );
 }

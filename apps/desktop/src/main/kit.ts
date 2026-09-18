@@ -6,6 +6,7 @@
 
 import type {
   AddKitServer,
+  KitInventory,
   ForgetKitServer,
   KitServers,
   ManifestReach,
@@ -13,7 +14,7 @@ import type {
   SetKitServerReach,
   SetManifestServerReach,
 } from "@armada/protocol";
-import type { KitServersRead } from "@armada/screens/src/manifest-kit";
+import type { KitInventoryRead, KitServersRead } from "@armada/screens/src/manifest-kit";
 
 import type { Picked } from "./picked";
 import { ask, NOT_SET_UP } from "./request";
@@ -26,6 +27,18 @@ export class KitCommands {
   constructor(port: () => number | null, picked: Picked) {
     this.port = port;
     this.picked = picked;
+  }
+
+  /**
+   * The setup a person already has, read to be shown — #1491. **Machine-wide**,
+   * so no pick scopes it and the route takes no Manifest.
+   */
+  async inventory(): Promise<KitInventoryRead> {
+    const port = this.port();
+    if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
+    const answer = await ask(port, "GET", "/kit/inventory");
+    if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
+    return { ok: true, setup: answer.body as KitInventory };
   }
 
   /** Every server in Kit, with what a Drone dispatched here resolves. */

@@ -248,6 +248,13 @@ where
         })
     }
 
+    /// The setup a person already works with — `crate::kit`. Machine-wide, so
+    /// no Manifest is named, and read fresh: a person who installs a skill and
+    /// comes back expects to see it.
+    async fn get_kit_inventory(&self) -> Result<ipc::KitInventory, Refusal> {
+        Ok(self.kit_inventory().await)
+    }
+
     /// Every MCP server in Kit, both tiers, and what a Drone dispatched here
     /// resolves — `crate::kit`.
     async fn get_kit_servers(

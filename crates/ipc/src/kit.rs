@@ -116,3 +116,68 @@ where
 {
     Option::<ManifestReach>::deserialize(input)
 }
+
+/// One thing a person already has, as `get_kit_inventory` lists it — `#1491`.
+///
+/// **No credential.** A connected server crosses as the program's own file name
+/// or the host it is at, and never as what comes after either — no argument
+/// list, no query string, no userinfo, no environment. What crosses could not
+/// start the server it names, and allowing one stays its own act on a Kit row
+/// a person added themselves.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetupItem {
+    pub name: String,
+    /// The item's own words for itself, where its file carries them — or, for
+    /// a connected server, the program or host it is at.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub says: Option<String>,
+    /// Where it came from, as a person would type it.
+    pub source: String,
+}
+
+/// Something of the right shape in the right place that would not read.
+/// **Carried rather than dropped**: a skill Armada cannot describe is still a
+/// skill the person has.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetupUnreadable {
+    pub source: String,
+    pub why: String,
+}
+
+/// What became of one kind. **Tagged**, so a surface matches one field rather
+/// than reading an empty list as *you have none of these*.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "what", rename_all = "snake_case")]
+pub enum WhatWasRead {
+    Read {
+        items: Vec<SetupItem>,
+        unreadable: Vec<SetupUnreadable>,
+    },
+    NotRead {
+        why: String,
+    },
+}
+
+/// One kind of thing, and what became of it. `kind` is Armada's word for it —
+/// `skills`, `plugins`, `agent_file`, `sub_agents`, `commands`, `mcp_servers`,
+/// `allowlist`, `models` — and never a harness's.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetupKindRow {
+    pub kind: String,
+    pub read: WhatWasRead,
+}
+
+/// `get_kit_inventory`' answer: the setup a person already works with, read
+/// from the harness's own home and shown beside what Armada itself holds.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KitInventory {
+    /// The harness, in its own name. **The one vendor word on this wire**, and
+    /// it arrives as data an adapter produced rather than as a literal Bridge
+    /// holds — so a second harness draws on the same screen.
+    pub harness: String,
+    pub home: String,
+    /// Whether that home is there at all.
+    pub present: bool,
+    /// Every kind, in a fixed order, including the ones nothing reads yet.
+    pub kinds: Vec<SetupKindRow>,
+}
