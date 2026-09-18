@@ -1,39 +1,46 @@
-/* Tabs with counts. The same geometry as Tabs, plus a trailing mono count in
- * --fg-subtle. Not a filled pill: a pill is a badge, and a badge carries
- * status. Mono because the count is machine-derived, and one step smaller than
- * the sans beside it.
+/* Tabs with counts. The same segmented geometry as Tabs, plus a trailing mono
+ * count in --fg-subtle. Not a filled pill: a pill is a badge, and a badge
+ * carries status. Mono because the count is machine-derived, and one step
+ * smaller than the sans beside it.
  *
- * MISSING TOKENS on the line below, the same two Tabs names.
- * --armada-hairline: no border-width token exists in packages/tokens.
- * --armada-active-bar: the accent shorthands in packages/tokens both mean
- *   focus, and an active tab's underline is not focus.
+ * MISSING TOKEN, the same name Tabs.css spells.
+ * --armada-tab-inset: the track's inner padding, 2px from --space-1.
  */
 .armada-tabs-counts {
-  --armada-hairline: var(--border-width);
-  --armada-active-bar: var(--edge-active);
+  --armada-tab-inset: calc(var(--space-1) / 2);
 }
 
+/* `fit-content`, for Tabs.css's reason: the track hugs its segments rather
+   than stretching the width of whatever column it is mounted in. */
 .armada-tabs-counts {
+  position: relative;
   display: flex;
+  width: fit-content;
+  max-width: 100%;
   align-items: center;
-  gap: var(--space-1);
-  border-bottom: var(--armada-hairline) solid var(--border-subtle);
+  gap: 0;
+  padding: var(--armada-tab-inset);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
 }
 
 .armada-tabs-counts__tab {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: var(--h-control);
+  height: var(--h-control-sm);
   padding: 0 var(--space-3);
   border: none;
-  border-bottom: var(--armada-active-bar) solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--fg-muted);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   white-space: nowrap;
   cursor: pointer;
+  position: relative;
+  z-index: 1;
   transition: color var(--duration-fast) var(--ease);
 }
 
@@ -58,8 +65,8 @@
 
 /* Suspended: the strip is on screen and is not narrowing anything, because
  * something else on the surface is. Every tab steps back to --fg-subtle and the
- * selected one gives up its accent underline — an underline reads as "this is
- * what you are looking at", and while suspended that is not true.
+ * selected one gives up its fill — a fill reads as "this is what you are
+ * looking at", and while suspended that is not true.
  *
  * The selection is kept, not cleared: it is what a person gets back when the
  * other control lets go, and the tab that holds it keeps --weight-medium so it
@@ -75,9 +82,9 @@
   color: var(--fg-subtle);
 }
 
-/* The underline gives way in colour and stays where it is, so the selection
-   it comes back to is the one it left. */
-.armada-tabs-counts[data-suspended] .armada-tabs-counts__bar {
+/* The fill gives way in colour and stays where it is, so the selection it
+   comes back to is the one it left. */
+.armada-tabs-counts[data-suspended] .armada-tabs-counts__fill {
   background-color: transparent;
 }
 
@@ -86,30 +93,25 @@
   color: var(--fg-muted);
 }
 
-/* The underline, one bar for the whole strip. It sits where the selected tab's
- * own bottom edge was drawn — inside the strip, on the rule — and the component
- * writes where that is. Each tab keeps its transparent edge so its label sits
- * exactly where it did.
+/* The fill, one for the whole strip, behind the chosen tab and inset by the
+ * track's own padding. The component writes where that is.
  *
  * It travels at --duration-base, and only once `data-travel` is set, so the
  * first placement lands rather than slides. Transform and width, so nothing
- * reflows; zero under reduced motion, so a new selection is simply underlined. */
-.armada-tabs-counts {
-  position: relative;
-}
-
-.armada-tabs-counts__bar {
+ * reflows; zero under reduced motion, so a new selection is simply filled. */
+.armada-tabs-counts__fill {
   position: absolute;
   left: 0;
-  bottom: 0;
-  width: var(--armada-tab-bar-w, 0);
-  height: var(--armada-active-bar);
-  background: var(--accent);
-  transform: translateX(var(--armada-tab-bar-x, 0));
+  top: var(--armada-tab-inset);
+  bottom: var(--armada-tab-inset);
+  width: var(--armada-tab-fill-w, 0);
+  border-radius: var(--radius-sm);
+  background: var(--accent-muted);
+  transform: translateX(var(--armada-tab-fill-x, 0));
   pointer-events: none;
 }
 
-.armada-tabs-counts__bar[data-travel] {
+.armada-tabs-counts__fill[data-travel] {
   transition:
     transform var(--duration-base) var(--ease),
     width var(--duration-base) var(--ease),

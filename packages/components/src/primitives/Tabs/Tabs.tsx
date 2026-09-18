@@ -1,11 +1,18 @@
 import { useLayoutEffect, useRef, useState, type HTMLAttributes } from "react";
+import { useSelectedFill } from "./selected-fill";
 
 /**
- * Sections of one object. The active tab takes a 2px `--accent` underline,
- * `--fg-default` and weight 500; the rest sit in `--fg-muted`. Nothing
- * animates in — no entrance animations on data — but the underline travels
- * from the tab it left to the tab that was chosen, and a body drawn under the
- * strip in a `TabPanel` crossfades in.
+ * Sections of one object, drawn as a segmented control: one `--bg-sunken`
+ * track, and the chosen tab filled inside it at `--accent-muted` with
+ * `--fg-default` and weight 500; the rest sit in `--fg-muted`. Nothing animates
+ * in — no entrance animations on data — but the fill travels from the tab it
+ * left to the tab that was chosen, and a body drawn under the strip in a
+ * `TabPanel` crossfades in.
+ *
+ * **Filled rather than underlined since #1383.** The rail's selected row is
+ * `--accent-muted` filled and a panel's tabs sit in the same eyeline as it, so
+ * an underline drew the two selections as two different ideas. It is the same
+ * shadcn `tabs` primitive painted differently, not a new one.
  *
  * These carry no count. They are views of one job and there is nothing to
  * tally. The counted form is a separate component, and a separate row in the
@@ -25,56 +32,10 @@ export type TabsProps = {
   onChange?: (id: string) => void;
 };
 
-/**
- * Places the strip's one underline under the selected tab. **One bar that
- * travels**, at `--duration-base`, so the eye follows the selection from the
- * tab it left; an edge per tab can only swap.
- *
- * Measured from `offsetLeft` and `offsetWidth` before paint, and again when any
- * tab or the strip changes size — a count arriving moves every tab after it.
- * Written to the bar's style rather than rendered: a render would be a commit
- * between the layout and the paint. **The first placement does not travel**:
- * `data-travel`, which the transition is keyed on, is set a frame later.
- */
-function useActiveBar(active: string | undefined, key: string) {
-  const strip = useRef<HTMLDivElement>(null);
-  const bar = useRef<HTMLSpanElement>(null);
-
-  useLayoutEffect(() => {
-    const list = strip.current;
-    const line = bar.current;
-    if (list === null || line === null) return;
-
-    function place() {
-      if (list === null || line === null) return;
-      const tab = list.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
-      if (tab === null) {
-        line.hidden = true;
-        return;
-      }
-      line.hidden = false;
-      line.style.setProperty("--armada-tab-bar-x", `${tab.offsetLeft}px`);
-      line.style.setProperty("--armada-tab-bar-w", `${tab.offsetWidth}px`);
-    }
-
-    place();
-    const frame = requestAnimationFrame(() => line.setAttribute("data-travel", ""));
-    const watching = new ResizeObserver(place);
-    watching.observe(list);
-    for (const tab of list.querySelectorAll('[role="tab"]')) watching.observe(tab);
-    return () => {
-      cancelAnimationFrame(frame);
-      watching.disconnect();
-    };
-  }, [active, key]);
-
-  return { strip, bar };
-}
-
 export function Tabs({ items, value, defaultValue, onChange }: TabsProps) {
   const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
   const active = value ?? internal;
-  const { strip, bar } = useActiveBar(active, items.map((item) => item.id).join("\u0000"));
+  const { strip, fill } = useSelectedFill(active, items.map((item) => item.id).join("\u0000"));
 
   function select(id: string) {
     if (value === undefined) setInternal(id);
@@ -116,7 +77,7 @@ export function Tabs({ items, value, defaultValue, onChange }: TabsProps) {
           {item.label}
         </button>
       ))}
-      <span ref={bar} className="armada-tabs__bar" aria-hidden="true" hidden />
+      <span ref={fill} className="armada-tabs__fill" aria-hidden="true" hidden />
     </div>
   );
 }
