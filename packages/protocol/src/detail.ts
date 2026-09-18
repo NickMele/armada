@@ -293,6 +293,21 @@ export type JobDetail = {
    * screen says so rather than drawing a control that opens nothing.
    */
   from_studio?: FromStudio;
+  /**
+   * The job this one replaced, where a redispatch minted this one. Since 16.6.
+   *
+   * **The readable half of `JobSummary.redispatched_from`**, which is the one
+   * record and carries an id alone. The id still identifies; this is what a
+   * person reads and presses.
+   *
+   * **Absent is two facts, and `redispatched_from` tells them apart.** A job no
+   * redispatch minted carries neither; one carrying the id and nothing here has
+   * a predecessor that has been forgotten, and the header says so rather than
+   * drawing a control that opens nothing.
+   *
+   * **The direct predecessor, never the root of a chain.**
+   */
+  replaces?: Replaces;
 };
 
 /**
@@ -318,6 +333,19 @@ export type FromStudio = {
  * name the same job.
  */
 export type ReplacedBy = {
+  job_id: string;
+  handle: string;
+};
+
+/**
+ * The job a redispatch replaced: what to call it, and what to open.
+ * `crates/ipc/src/detail.rs`.
+ *
+ * **Its own type rather than `ReplacedBy` reused**, though the two fields
+ * match. They answer opposite questions of one record, and the direction is the
+ * whole content of the answer.
+ */
+export type Replaces = {
   job_id: string;
   handle: string;
 };
