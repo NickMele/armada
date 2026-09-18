@@ -12,6 +12,7 @@ mod conversation;
 mod hosting;
 mod permitting;
 mod reach;
+mod recording;
 mod serving;
 mod thread;
 

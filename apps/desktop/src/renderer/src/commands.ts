@@ -158,6 +158,8 @@ export const pickRepository = (root: string | null): void => void window.armada.
 // Helm's conversation — #944. The reply, and the thread it joins, arrive on
 // `BridgeState.helm`. `context` names where the person is — #1075.
 export const askHelm = (text: string, context?: HelmContext) => window.armada.askHelm(text, context);
+/** The session as one quotable record, read once when a person opens it — #1367. */
+export const helmDebugInfo = () => window.armada.helmDebugInfo();
 export const startHelmFresh = () => window.armada.startHelmFresh();
 export const pointHelm = (manifestId: string): void => void window.armada.pointHelm(manifestId);
 // Locate: a folder from the OS dialog, and a repository added or cloned. The window picks what it located.

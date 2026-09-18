@@ -15,6 +15,8 @@ import WebSocket from "ws";
 import type {
   AskHelm,
   HelmContext,
+  HelmDebugInfo,
+  HelmDebugRead,
   HelmMessage,
   HelmThread,
   HelmThreadItem,
@@ -165,6 +167,25 @@ export class HelmSocket {
     return answer.ok === true ? { ok: true } : answer.outcome;
   }
 
+  /**
+   * `GET /helm/debug` — the session as one record, taken now.
+   *
+   * **Answered to the caller and never published.** It is one person's gesture
+   * on one conversation; a record in `BridgeState` would redraw every surface
+   * each time a reply arrived.
+   */
+  async debugInfo(manifestId: string): Promise<HelmDebugRead> {
+    if (this.port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
+    const answer = await ask(
+      this.port,
+      "GET",
+      `/helm/debug?manifest_id=${encodeURIComponent(manifestId)}`,
+    );
+    return answer.ok === true
+      ? { ok: true, record: answer.body as HelmDebugInfo }
+      : { ok: false, outcome: answer.outcome };
+  }
+
   /** `POST /helm/start_fresh`. Refused while a reply is being written. */
   async startFresh(manifestId: string): Promise<Outcome> {
     if (this.port === null) return { ok: false, why: "not_connected" };
@@ -253,6 +274,13 @@ export class HelmConnection {
     const manifestId = this.targetManifestId();
     if (manifestId === null) return { ok: false, why: "not_connected" };
     return await this.socket.startFresh(manifestId);
+  }
+
+  /** The record for whichever repository Helm answers for right now. */
+  async debugInfo(): Promise<HelmDebugRead> {
+    const manifestId = this.targetManifestId();
+    if (manifestId === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
+    return await this.socket.debugInfo(manifestId);
   }
 
   /** The repository Helm answers for right now, for the dock to name. `null` where nothing is servable yet. */

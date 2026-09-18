@@ -1892,6 +1892,15 @@ the artifact holds is the [Error Contract](error-contract.md).
 no status dot.** A leading dot carries a Job state and is never chosen, and a
 clipboard write is not a Job state.
 
+**The act is not an error's alone.** A Helm session carries the same payload
+under the same word, bound to the same key, with one producer and an expanded
+view rendering the string the control copies — `../concepts/helm.md`,
+*Reporting a bad answer*. It takes the banner's form, because a dock is a
+standing surface: the copy acts on one press and a second control opens the
+reading beside it. Its safety sentence is its own — nothing in it is a
+structured field a type bounds, so the sentence below cannot be reused over
+it.
+
 **One sentence about safety, in the expanded view only, stating the mechanism
 rather than promising an outcome.** It is bounded to what the mechanism
 reaches: structured fields carry primitives and a credential does not compile

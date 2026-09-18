@@ -1,7 +1,8 @@
-//! A Helm conversation's three routes, over the same in-memory pipe the other
+//! A Helm conversation's routes, over the same in-memory pipe the other
 //! sockets use: the thread and then what is said after, on one connection; a
 //! blank message refused by the transport; a fresh start closing the socket
-//! saying why; and a repository nobody serves refused before the upgrade.
+//! saying why; a repository nobody serves refused before the upgrade; and the
+//! record served whole.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -145,4 +146,40 @@ async fn a_repository_nobody_serves_is_refused_before_the_upgrade() {
         panic!("a repository nobody serves has no conversation to open");
     };
     assert_eq!(answer.status(), StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn the_record_is_served_whole_and_a_repository_nobody_serves_is_refused() {
+    let (_daemon, app) = wired();
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/helm/debug?manifest_id=armada")
+                .body(Body::empty())
+                .expect("a well-formed request"),
+        )
+        .await
+        .expect("the router answers");
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = http_body_util::BodyExt::collect(response.into_body())
+        .await
+        .expect("a body")
+        .to_bytes()
+        .to_vec();
+    let record: ipc::HelmDebugInfo = ipc::decode("a record", &body).expect("the record comes back");
+    assert_eq!(record.manifest_id.as_str(), SERVED_MANIFEST);
+    assert_eq!(record.protocol_version, ipc::PROTOCOL_VERSION);
+    assert!(!record.brief.is_empty(), "the brief as it was sent");
+
+    let refused = app
+        .oneshot(
+            Request::builder()
+                .uri("/helm/debug?manifest_id=elsewhere")
+                .body(Body::empty())
+                .expect("a well-formed request"),
+        )
+        .await
+        .expect("the router answers");
+    assert_eq!(refused.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }
