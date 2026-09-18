@@ -82,6 +82,8 @@ mod files;
 mod health;
 /// One repository's Helm conversation, and the socket its replies come on.
 mod helm;
+/// A call a Helm session made that its person's settings do not cover.
+mod helm_call;
 mod history;
 /// What Fleet is holding disk for, and the test each one did not pass.
 /// **A piloted worktree is not on this wire at all** — `#367`.
@@ -224,6 +226,10 @@ pub use helm::{
     HelmConversation, HelmFresh, HelmMessage, HelmOpened, HelmScreen, HelmSilence, HelmText,
     HelmUnanswered,
 };
+pub use helm_call::{
+    AnswerHelmCall, AskingToRun, HelmAskingToRun, HelmCallAnswer, HelmCallAnswered,
+    HelmCallInFlight, HelmCallSettled, HelmCallsWaiting, RunOrNot,
+};
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};
 pub use ids::{
@@ -294,9 +300,9 @@ pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet, SpecPic
 pub use since::{EventTally, EventsSince};
 pub use studio::{
     AddStudioNode, ContradictionSettled, CreateStudio, DecideStudioEdge, DeferOnStudio,
-    DispatchStudioDraft, EditStudioDraft, EditStudioLink, ForgeOf, GroupStudioNodes, HelmStudioAct,
-    MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio, SettleContradiction,
-    StartStudioRun, Studio, StudioDeleted, StudioEdge, StudioHelmActed, StudioLinkForge,
+    DispatchStudioDraft, EditStudioDraft, EditStudioLink, EpicRead, ForgeState, GroupStudioNodes,
+    HelmStudioAct, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RenameStudio,
+    SettleContradiction, StartStudioRun, Studio, StudioDeleted, StudioEdge, StudioHelmActed,
     StudioList, StudioNode, StudioNodeContent, StudioPosition, StudioRunKept, StudioRunStarted,
     StudioSummary, WriteUpStudioNode,
 };

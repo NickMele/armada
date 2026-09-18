@@ -10,6 +10,19 @@ import type { Studio, StudioNode, StudioPosition } from "@armada/protocol";
 /** The kinds a rung writes up. `docs/concepts/studio.md`, Promotion. */
 const WRITABLE_UP = ["note", "cluster", "contradiction", "outline"] as const;
 
+/**
+ * The kinds that keep an address — #1394. **Read off the kind, never off the
+ * address**: which host is the forge is `crates/adapters`' to know and the gate
+ * refuses its name here, so a rule about forge links written in this file could
+ * not be written at all.
+ */
+const KEEPS_AN_ADDRESS = ["link", "issue", "pull_request", "epic"] as const;
+
+/** The three an address on a forge makes. A Link is one nothing recognised. */
+const ON_A_FORGE = ["issue", "pull_request", "epic"] as const;
+
+const isOneOf = (kinds: readonly string[], node: StudioNode) => kinds.includes(node.kind);
+
 /** Which acts the current selection offers. Each is one control on the whiteboard's aside. */
 export type StudioActs = {
   /** Two or more Notes: they can be accepted as one Cluster. */
@@ -22,16 +35,16 @@ export type StudioActs = {
   defer: boolean;
   /** One Issue draft: its title and body are a person's to change. */
   edit: boolean;
-  /** One Link: the line beside its address is a person's to change. #1378. */
+  /** One node with an address: the line beside it is a person's to change. #1378. */
   editLink: boolean;
   /**
-   * One Issue draft, or one Link whose address Fleet said names something on
-   * the forge: its text or its address goes through the Job proposer — #1379.
+   * One Issue draft, or one Issue, Pull request or Epic: its text or its
+   * address goes through the Job proposer — #1379, #1394.
    */
   dispatch: boolean;
   /** One Contradiction that has not ended yet. */
   settle: boolean;
-  /** One Link. Fleet decides whether its address is a source; this only offers. */
+  /** One node with an address. Fleet decides whether it is a source; this only offers. */
   readIn: boolean;
 };
 
@@ -73,13 +86,13 @@ export function actsOn(studio: Studio, selected: readonly string[]): StudioActs 
     writeUp: (WRITABLE_UP as readonly string[]).includes(one.kind) && !ended,
     defer: !ended,
     edit: one.kind === "issue_draft",
-    editLink: one.kind === "link",
+    editLink: isOneOf(KEEPS_AN_ADDRESS, one),
     dispatch: dispatchedAs(one) !== null,
     settle: one.kind === "contradiction" && !ended,
-    // **Offered on every Link**, because which addresses are sources is
-    // `crates/adapters`' to know and a rule copied here would drift from it.
-    // A Link to a board comes back refused, which is the answer.
-    readIn: one.kind === "link",
+    // **Offered on every node with an address**, because which addresses are
+    // sources is `crates/adapters`' to know and a rule copied here would drift
+    // from it. A Link to a board comes back refused, which is the answer.
+    readIn: isOneOf(KEEPS_AN_ADDRESS, one),
   };
 }
 
@@ -147,21 +160,19 @@ export function aWriteUp(studio: Studio, node: StudioNode): { title: string; bod
 /**
  * What dispatching this node sends, and `null` on one that dispatches nothing.
  *
- * **An Issue draft sends its own words and a Link sends its address** — the
- * draft's title, a blank line, its body, which is `crates/core-model`'s own
- * shape; and for a Link, the address alone, because what it names is already
- * filed and the Job proposer takes a ticket link as a request (#1379).
+ * **An Issue draft sends its own words; an Issue, a Pull request and an Epic
+ * send their address** — the draft's title, a blank line, its body, which is
+ * `crates/core-model`'s own shape; and for the other three the address alone,
+ * because what it names is already filed and the Job proposer takes such a
+ * link as a request (#1379, #1394).
  *
- * **All three forge kinds dispatch, and none of them names a workflow.** Which
- * workflow each runs under is the proposer's answer off the request and each
- * definition's `for_requests` line, not this file's.
+ * **Read off the kind, and a Link dispatches nothing**: a Link is an address
+ * no adapter recognised — a board, a page, a session — so there is nothing
+ * filed to dispatch against. Which workflow each of the three runs under is
+ * the proposer's answer off each definition's `for_requests` line, not this
+ * file's.
  */
 export function dispatchedAs(node: StudioNode): string | null {
   if (node.kind === "issue_draft") return `${node.title}\n\n${node.body}`;
-  // **Read off `forge` and never off the address.** Which host is the forge is
-  // `crates/adapters`' to know and the gate refuses its name here, so a rule
-  // about forge links written in this file could not be written at all — and
-  // would drift from Fleet's the day either moved. A Link to a board, a page
-  // or a session names nothing filed and is offered no Dispatch.
-  return node.kind === "link" && node.forge !== undefined ? node.address : null;
+  return isOneOf(ON_A_FORGE, node) && "address" in node ? node.address : null;
 }

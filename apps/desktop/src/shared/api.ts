@@ -13,6 +13,7 @@ import type {
   CheckOutputRead,
   ClearOutcome,
   CommandAnswer,
+  HelmCallAnswer,
   CommandExplainedRead,
   Draft,
   DropTask,
@@ -232,6 +233,15 @@ export type BridgeApi = {
     note?: string,
     rule?: string,
   ) => Promise<Outcome>;
+  /**
+   * Answer one held helm call: allow it once, allow it and write the rule into
+   * this repository's own personal agent settings, or refuse it. #1389.
+   *
+   * **The session is waiting inside its own tool call while this is out**, so
+   * an answer that lands is what it runs on. A 409 where nothing is waiting
+   * under that call — it was answered already, or fleet's hold ran out.
+   */
+  answerHelmCall: (call: string, answer: HelmCallAnswer, note?: string) => Promise<Outcome>;
   /**
    * What one command does, in a cheap model's words, for the person deciding
    * whether to allow it.

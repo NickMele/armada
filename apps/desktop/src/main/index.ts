@@ -13,6 +13,7 @@ import type { AddTask, DropTask, FileReport } from "@armada/protocol";
 import type {
   Artifact,
   CommandAnswer,
+  HelmCallAnswer,
   JudgeAnswer,
   SaveLimits,
   SavePreference,
@@ -543,6 +544,13 @@ void app.whenReady().then(() => {
       note?: string,
       rule?: string,
     ) => connection?.commands.answerCommand(jobId, call, answer, note, rule),
+  );
+  // One call helm was held on, answered in the dock. No job id: the session is
+  // waiting inside its own tool call, and nothing on the board moves. #1389.
+  ipcMain.handle(
+    CHANNELS.answerHelmCall,
+    (_event, call: string, answer: HelmCallAnswer, note?: string) =>
+      connection?.commands.answerHelmCall(call, answer, note),
   );
   // What that command does, read for the person deciding. It moves nothing and
   // decides nothing — the answers above stay live while it is out.

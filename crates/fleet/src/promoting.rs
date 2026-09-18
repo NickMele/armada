@@ -45,24 +45,29 @@ pub(crate) const NOT_A_LINK: &str = "fleet.studio_not_a_link";
 const NOT_A_CONTRADICTION: &str = "fleet.studio_not_a_contradiction";
 
 /// The request a node dispatches as, and `None` on a node that dispatches
-/// nothing — `#1379`.
+/// nothing — `#1379`, `#1394`.
 ///
-/// **An Issue draft sends its own words and a Link sends its address**, whole
-/// either way: the first is text nobody has filed, and the second names
-/// something already on the forge, which the Job proposer has taken as a
-/// request since it shipped.
+/// **An Issue draft sends its own words and the three forge kinds send their
+/// address**, whole either way: the first is text nobody has filed, the second
+/// names something already on the forge, and the [Job
+/// proposer](../../../docs/concepts/job-proposer.md) has taken such a link as a
+/// request since it shipped. A Link is an address nothing recognised — a board,
+/// a page, a session — so there is nothing filed to dispatch against.
 ///
-/// **All three forge kinds, and nothing here picks a workflow.** An issue is a
-/// change to make, a pull request is work already written that wants a
-/// judgement, a milestone is a wave to split; which workflow each runs under
-/// is the proposer's answer off the request and each definition's
-/// `for_requests` line. See `docs/concepts/job-proposer.md`.
+/// **Read off the kind; no address is read here.** Which host is the forge was
+/// `crates/adapters`' answer when the node was made, and asking again would be
+/// a second answer the day the first changed. Which workflow each of the three
+/// runs under is the proposer's, off each definition's `for_requests` line.
 fn dispatched_as(content: &StudioNodeContent) -> Option<String> {
     if let Some(request) = content.dispatched_as() {
         return Some(request);
     }
-    let address = content.address()?;
-    adapters::forge_named(address).map(|_| String::from(address))
+    matches!(
+        content.kind(),
+        StudioNodeKind::Issue | StudioNodeKind::PullRequest | StudioNodeKind::Epic
+    )
+    .then(|| content.address().map(String::from))
+    .flatten()
 }
 /// A Contradiction ended twice. A 409.
 const CONTRADICTION_SETTLED: &str = "fleet.studio_contradiction_settled";
@@ -489,13 +494,13 @@ where
                     // refusal names the address rather than saying *a link is
                     // not dispatched*, which is untrue of the next one.
                     Some(address) => format!(
-                        "`{address}` names nothing on this repository's forge, so there is \
+                        "`{address}` names no issue on this repository's forge, so there is \
                          nothing filed to dispatch against. Write the work up as an Issue \
                          draft and dispatch that"
                     ),
                     None => format!(
                         "a {} is not dispatched: an Issue draft is, and so is a Link naming \
-                         an issue, a pull request or a milestone on this repository's forge",
+                         an issue on this repository's forge",
                         draft.kind().as_wire()
                     ),
                 },
