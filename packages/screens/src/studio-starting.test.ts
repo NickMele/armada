@@ -3,7 +3,15 @@ import type { CheckoutRunSheet, CheckoutRunSheetRead } from "@armada/protocol";
 
 import { startId, studioStartEntries, studioStarts } from "./studio-starting";
 
-const entry = (name: string) => ({ name, run: `run ${name}`, requires: [], destructive: false });
+const entry = (name: string) => ({
+  name,
+  run: `run ${name}`,
+  requires: [],
+  destructive: false,
+  narrows: false,
+  expect_exit_code: 0,
+  frozen: false,
+});
 
 const SHEET: CheckoutRunSheet = {
   setup: [entry("bootstrap")],
