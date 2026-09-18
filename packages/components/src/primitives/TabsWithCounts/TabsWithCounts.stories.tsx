@@ -82,8 +82,8 @@ export const TheBoard: Story = {
  * field holds text.
  *
  * **Set back, never disabled.** `Running` is still the tab a person chose and
- * still says so; it has only given up the accent underline, which would
- * otherwise claim to be what is on screen. Pressing a tab is how the state is
+ * still says so; it has only given up its fill, which would otherwise claim
+ * to be what is on screen. Pressing a tab is how the state is
  * left, so every tab stays pressable — a disabled strip would make the way out
  * the thing that does not work.
  */

@@ -272,9 +272,11 @@
   --z-toast: 80;
   --z-palette: 90;
 
-  /* An active tab's underline. Both 2px accent shorthands already in
-     semantic.css mean focus — a resting mark that borrowed one would say
-     "you are here" in the vocabulary reserved for "your cursor is here". */
+  /* A resting mark that says "you are here" — a picked node's stroke, a diff
+     rail's edge. Both 2px accent shorthands already in semantic.css mean
+     focus, and one borrowed for a resting mark would say "you are here" in
+     the vocabulary reserved for "your cursor is here". It was named for an
+     active tab's underline; #1383 made that a fill, and the rest still hold. */
   --edge-active: 2px;
 
   /* A fault's edge, and the one channel severity is allowed to move.

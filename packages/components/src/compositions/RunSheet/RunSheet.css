@@ -179,9 +179,12 @@
 /* --- the segmented control: Changed / All -------------------------------- */
 /*
    Composed from `RadioGroup`/`Radio` — two sanctioned choices, exclusive,
-   restyled as segments. Not `Tabs`: a tab strip's underline is for a view
-   already open, and this is a choice made before pressing Run, which is what
-   a radio input already models. The detail that used to sit beside the
+   restyled as segments. Not `Tabs`, though `Tabs` is drawn as a segmented
+   control too since #1383: this is a choice made before pressing Run, which
+   is what a radio input already models, and a tab is a view already open.
+   That is why this one fills solid --accent and divides its segments with
+   hairlines where a tab strip fills --accent-muted and travels — the two
+   renderings are told apart in design-system.md, under Tabs. The detail that used to sit beside the
    toggle as a sentence — "Narrowed to what this Job changed" — moved into a
    `Tooltip` on each segment instead, carrying the command that segment
    resolves to; a one-word label is what a row scanned at speed can read.
