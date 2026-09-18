@@ -116,6 +116,13 @@ export type ShellProps = {
   questions?: readonly DockQuestion[];
   /** Helm's own conversation, under the questions — #944. Bridge builds it; the dock only mounts it. */
   helm?: ReactNode;
+  /**
+   * Helm's own act in the dock's head, beside Close — *Start fresh*, moved
+   * there by the owner on 18 Sep 2026. Bridge builds it, for the same reason
+   * `helm` is a node: what the act costs and when Fleet refuses it are the
+   * app's to know, not the shell's.
+   */
+  helmAction?: ReactNode;
   children: ReactNode;
 };
 
@@ -135,6 +142,7 @@ export function Shell({
   onSurface,
   questions = [],
   helm,
+  helmAction,
   children,
 }: ShellProps) {
   const narrow = useNarrow();
@@ -162,6 +170,7 @@ export function Shell({
         questions: questions.length,
         width: dockWidth,
         onResize: resizeDock,
+        action: helmAction,
         children: (
           <>
             {questions.length === 0 ? null : <DockQuestions questions={questions} />}

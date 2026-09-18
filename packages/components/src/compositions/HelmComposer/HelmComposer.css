@@ -10,21 +10,32 @@
   margin-block-start: var(--space-4);
 }
 
+/* One line, at the dock's own width. **Never wraps**: three controls beside
+   the repository took a second line at 286px — the owner's note of
+   18 Sep 2026 — and the answer is one control fewer, not a row allowed to
+   grow. Wrapping back on would hide the next control that does not fit
+   instead of showing it, so the row holds and the name below gives way. */
 .armada-helm-composer__head {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--space-2);
   min-width: 0;
 }
 
-/* The controls keep the trailing edge as one group, and the slack is taken
-   once — on the first of them. On every button it was taken three times, and
-   the name was squeezed out of its own line the day the record's two controls
-   joined Start fresh (#1367). Pointed at nothing there is no name and the
-   switch takes that slack instead, which is what this rule was written for. */
-.armada-helm-composer__head > button.armada-button:first-of-type {
+/* The record's control keeps the trailing edge, and the slack is taken once.
+   Pointed at nothing there is no name and the switch takes that slack
+   instead, which is what this rule was written for. */
+.armada-helm-composer__head > .armada-split-button,
+.armada-helm-composer__head > button.armada-button {
+  flex: none;
   margin-inline-start: auto;
+}
+
+/* The switch gives way before the control beside it: at the dock's width a
+   repository's own name is elidable and the act is not. */
+.armada-helm-composer__head > .armada-select-field {
+  min-width: 0;
 }
 
 .armada-helm-composer__repository {
