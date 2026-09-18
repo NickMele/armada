@@ -136,6 +136,24 @@ one per story.
 what the args already say is ceremony, and one that computes is a unit test
 paying a browser's price.
 
+### A play written for a defect is run against the defect first
+
+**Take the fix out, watch the story fail, put the fix back.** A regression test
+that has only ever been seen passing is a test whose subject you have assumed.
+
+Confirmed 18 Sep 2026, on the Job row's field run. A story was written for a
+row overflowing into its own action, it passed, and the fix looked proven —
+until the fix was backed out and it passed again. The assertion looked
+rightward, at whether a fact crossed the action's left edge; the sixth fact was
+not spilling right, it had **wrapped onto a second grid row** and landed back
+under the first column. A second run with the geometry printed is what said so.
+The assertion that survived measures three things — the top edge, the right
+edge and the width — because the same defect renders as a crushed 16px cell at
+one width, a wrapped row at another and a cell under the button at a third.
+
+**What it costs to skip is not a weaker test, it is a green one.** The fix
+might have been wrong in either direction and nothing would have said.
+
 ### Assert on roles, names and text
 
 **Never a class name and never a `data-` attribute.** A test naming a
