@@ -18,6 +18,8 @@ export type JobDetailHeading = {
   statusLabel: ReactNode;
   headline: ReactNode;
   jobId?: ReactNode;
+  /** What the id is called. Absent draws it alone. */
+  jobIdLabel?: ReactNode;
   fields: JobDetailField[];
   /** The controls at the header's trailing edge. `Kill`, or a redispatch, and the way into a running Job's settings. */
   actions?: ReactNode;
@@ -33,18 +35,13 @@ export type JobDetailHeading = {
    */
   onFollowed?: (href: string) => void;
   /**
-   * The trail's first segment — the screen this Job was opened from,
-   * `Overview`. Absent draws no trail: the badge and the title alone, for a
-   * caller that has not said where "back" goes.
+   * A fact carrying an `opensJob` was pressed, with the Job id it names.
+   *
+   * Rides on the heading for `onFollowed`'s reason, and is the inward half of
+   * the same pair: one fact in this block points at another Job, and where
+   * that press lands is one decision made in one place.
    */
-  from?: ReactNode;
-  /**
-   * The trail's first segment, pressed. Absent draws `from` as plain text
-   * rather than a control — a caller that names where the person came from
-   * without yet wiring a way there is the one shape to look for when this
-   * segment does nothing on a click.
-   */
-  onLeave?: () => void;
+  onOpenJob?: (jobId: string) => void;
 };
 
 /**

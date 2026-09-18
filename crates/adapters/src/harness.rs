@@ -289,6 +289,10 @@ impl AgentHarness for HeadlessAgent {
         command_rule(run).map(|_| ())
     }
 
+    fn runnable(&self, run: &str) -> Result<(), HarnessRefused> {
+        never_runs(run)
+    }
+
     fn read(&self, line: &str) -> Vec<DroneEvent> {
         transcript::read(line)
     }
@@ -364,11 +368,27 @@ fn command_rule(run: &str) -> Result<String, HarnessRefused> {
     if run.is_empty() {
         return Err(HarnessRefused::CommandEmpty);
     }
+    // **Spelling first, and only here.** `never_runs` below is what a Drone
+    // may never do whatever is written down; this is what this harness cannot
+    // write down, which is a different question and is why `runnable` does not
+    // ask it. `#1420`.
     if let Some(found) = run.chars().find(|c| matches!(c, '(' | ')' | ',' | '\n')) {
         return Err(HarnessRefused::CommandNotExpressibleAsARule {
             run: String::from(run),
             found,
         });
+    }
+    never_runs(run)?;
+    Ok(format!("Bash({run}:*)"))
+}
+
+/// What a Drone may never run, whatever a person says and whether or not a
+/// rule is being written. **Every arm is about the command**, not about the
+/// allowlist's syntax — `command_rule` owns that half.
+fn never_runs(run: &str) -> Result<(), HarnessRefused> {
+    let run = run.trim();
+    if run.is_empty() {
+        return Err(HarnessRefused::CommandEmpty);
     }
     // Push first, so its refusal keeps naming push specifically. No `Grant`
     // names one and no type a Drone is handed carries one, so a declared
@@ -397,7 +417,7 @@ fn command_rule(run: &str) -> Result<String, HarnessRefused> {
             flag,
         });
     }
-    Ok(format!("Bash({run}:*)"))
+    Ok(())
 }
 
 /// Why a Drone could not be rendered.

@@ -2,6 +2,7 @@ import type { FormEvent, KeyboardEvent } from "react";
 import { AttachmentChip } from "../../primitives/AttachmentChip/AttachmentChip";
 import { Button } from "../../primitives/Button/Button";
 import { Select } from "../../primitives/Select/Select";
+import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 import { SendKbd, sendsOn } from "../../send-message";
 import { COPY_DEBUG_INFO } from "../../errors/ErrorNotice/payload";
@@ -31,23 +32,21 @@ export type HelmComposerProps = {
   repositories?: HelmRepositoryOption[];
   /** The dock's own switch, on All repositories. The rail's pick never moves for it. */
   onSwitch?: (manifestId: string) => void;
-  onStartFresh?: () => void;
   /**
    * Puts the session record on the clipboard in one press — `#1367`. **The
    * banner form of the error treatment**: the dock is a standing surface, and
    * the moment this exists for is a bad answer somebody wants to carry now.
-   * Absent draws no control.
+   * That is why it is the split button's face and *Details* is behind the
+   * caret. Absent draws no control.
    */
   onCopyRecord?: () => void;
   /**
-   * Opens the same record to read. **The banner's *Details*, in that word**:
-   * it sits beside *Copy debug info* exactly where a banner's does, and the
-   * dock has no width for a longer name beside two other controls — the sheet
-   * it opens is titled *Session record*. Absent draws no control.
+   * Opens the same record to read. **The banner's *Details*, in that word** —
+   * the sheet it opens is titled *Session record*, and that sheet carries a
+   * copy of its own, so nothing is lost by it sitting under the caret. Absent
+   * draws no control.
    */
   onOpenRecord?: () => void;
-  /** Refused while a reply is being written — Fleet's own rule, not a guess drawn here. */
-  startFreshDisabled?: boolean;
   /** The open Job, while its chip stands. Absent off a Job, or once its `×` has been pressed. */
   chip?: HelmComposerChip;
   /** The chip's own `×`. Omitted with no `chip` draws nothing to remove. */
@@ -71,10 +70,8 @@ export function HelmComposer({
   current,
   repositories = [],
   onSwitch,
-  onStartFresh,
   onCopyRecord,
   onOpenRecord,
-  startFreshDisabled = false,
   chip,
   onRemoveChip,
   location,
@@ -161,21 +158,38 @@ export function HelmComposer({
             ))}
           </Select>
         )}
-        {onCopyRecord === undefined ? null : (
-          <Button variant="ghost" size="sm" onClick={onCopyRecord}>
+        {/* The record's two acts as one control — the owner's note of
+            18 Sep 2026: three controls beside the repository wrapped this row
+            onto a second line at the dock's own width. *Copy debug info*
+            takes the face because it is the act this pair exists for — a bad
+            answer somebody wants to carry now — and the reading it hides is
+            still one press away behind the caret, in a sheet that carries a
+            copy of its own.
+
+            **Both handlers or nothing to split.** With one, there is no menu
+            to put behind a caret, and a caret over an empty menu is a control
+            that does not answer — so that case draws the plain button it
+            already was, in the same weight as the split one. */}
+        {onCopyRecord !== undefined && onOpenRecord !== undefined ? (
+          <SplitButton
+            variant="secondary"
+            ground="card"
+            size="sm"
+            items={[{ label: "Details", onSelect: onOpenRecord }]}
+            menuLabel="More ways to report this answer"
+            onAction={onCopyRecord}
+          >
+            {COPY_DEBUG_INFO}
+          </SplitButton>
+        ) : onCopyRecord !== undefined ? (
+          <Button variant="secondary" ground="card" size="sm" onClick={onCopyRecord}>
             {COPY_DEBUG_INFO}
           </Button>
-        )}
-        {onOpenRecord === undefined ? null : (
-          <Button variant="ghost" size="sm" onClick={onOpenRecord}>
+        ) : onOpenRecord !== undefined ? (
+          <Button variant="secondary" ground="card" size="sm" onClick={onOpenRecord}>
             Details
           </Button>
-        )}
-        {onStartFresh === undefined ? null : (
-          <Button variant="ghost" size="sm" onClick={onStartFresh} disabled={startFreshDisabled}>
-            Start fresh
-          </Button>
-        )}
+        ) : null}
       </div>
       {/* Send sits inside the field's own frame, at its trailing foot — the
           same treatment as the drone message box, decided together on

@@ -21,10 +21,10 @@ import { dockQuestionsOf, jobNumber, ofPicked } from "@armada/screens";
 import type { Outstanding } from "@armada/screens";
 import type { HelmContext, JobSummary } from "@armada/protocol";
 import { useDockAnswering } from "./dock-answering";
-import { HelmDock } from "./HelmDock";
+import { HelmDock, helmReplying } from "./HelmDock";
 import { chippedJobId, contextOf, cursorRowFor, dismissed, NO_CHIP, opened, screenOf } from "./helm-context";
 import type { ChipState } from "./helm-context";
-import { Dialog, Textarea } from "@armada/components";
+import { Button, Dialog, Textarea } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
 import type { BridgeState } from "../../shared/bridge";
@@ -617,13 +617,28 @@ export function App() {
                         }) }),
                   }
             }
-            onStartFresh={() => void startHelmFresh()}
             onSwitch={(manifestId) => pointHelm(manifestId)}
             onReadRecord={helmDebugInfo}
             onCopied={setCopied}
             onSaid={setTelling}
             onApprove={commands.approve}
           />
+        }
+        // The dock's head carries this, beside Close — the owner's note of
+        // 18 Sep 2026. It ends the conversation the whole dock is showing, so
+        // it belongs to the dock rather than to the row above the message box,
+        // where three controls wrapped onto a second line at the dock's width.
+        // Refused while a reply is being written: Fleet's own rule, read
+        // through the same helper the thread below reads it with.
+        helmAction={
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void startHelmFresh()}
+            disabled={helmReplying(state.helm)}
+          >
+            Start fresh
+          </Button>
         }
         stats={{
           rows: statsOf(state.connection, state.jobs, state.capacity, repositories, state.repository, state.drifts),

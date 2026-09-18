@@ -34,6 +34,7 @@ import {
   useStudioPlacement,
 } from "@armada/components";
 import type { StudioNodeByHand, StudioNodeByHandKind, StudioPickedAct } from "@armada/components";
+import { captureOn, type OpenCaptureWindow } from "./capturing";
 import type {
   CheckoutRunSheetRead,
   JobSummary,
@@ -158,6 +159,16 @@ export type StudiosProps = {
    * its own reasons for failing, and they are the same ones a forge link's are.
    */
   onOpenServerLink: OpenServerLink;
+  /**
+   * Open one of a server's links in the capture window, so Notes can be left on
+   * another repository's running web app — #1294,
+   * `../../../docs/practices/capture-window.md`.
+   *
+   * **A server id and one of its own links**, as `onOpenServerLink` takes: main
+   * resolves the address off the live holder and pins the window to that
+   * origin, and the Studio a Note lands on is read off the one main is holding.
+   */
+  onCaptureOn: OpenCaptureWindow;
 };
 
 export function Studios(props: StudiosProps) {
@@ -436,6 +447,16 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
           id: `link-${at}`,
           label: `Open ${link.name ?? link.url}`,
           press: () => void openServerLink(props.onOpenServerLink, serving.id, link.url).then(setRefused),
+        }))),
+    // **Capture is its own act beside Open**, and not a mode on it: one hands
+    // the address to the browser a person already uses, the other opens a
+    // window Armada owns and pins to that origin — #1294.
+    ...(serving === undefined || !editable
+      ? []
+      : serving.links.map((link, at) => ({
+          id: `capture-${at}`,
+          label: `Capture on ${link.name ?? link.url}`,
+          press: () => void captureOn(props.onCaptureOn, serving.id, link.url).then(setRefused),
         }))),
     ...(serving === undefined
       ? []

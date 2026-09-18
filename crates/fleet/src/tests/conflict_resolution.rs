@@ -30,6 +30,15 @@ type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
 const FIRST_BASE: &str = "8c2ce68100000000000000000000000000000000";
 
+/// How many turns [`until_a_drone_is_on`] will take. **A count of the moves a
+/// turn has to make**, not of how long one takes: the sweep's send and the
+/// spawn, and one spare. Every wait past those is a sleep.
+const TURNS_FOR_A_SPAWN: u32 = 4;
+
+/// How long it waits between turns, in five-millisecond sleeps. Paid in full
+/// only where the Drone never arrives and the case is about to fail anyway.
+const WAITS_PER_TURN: u32 = 400;
+
 /// The two-step fixture, gated on `summarise`, over a harness that echoes back
 /// what it is told, because these cases read a Drone's own opening brief.
 fn a_fleet_echoing(home: &TempDir, vcs: FakeVcs) -> Fixture {
@@ -133,19 +142,38 @@ fn main_moved_with_a_conflict(fleet: &Fixture, onto: &str) {
 }
 
 /// Turn until a Drone is on `step`. **Turned for, not assumed**: under a full
-/// suite's load one turn does not always see the spawn through — widened
-/// from 8, which a loaded machine could still exhaust.
+/// suite's load one turn does not always see the spawn through.
+///
+/// **A turn is not a clock** (`#1467`). This read the record only after
+/// turning, and turned again whenever it had not arrived — so on a busy
+/// machine the case took turns it does not take on an idle one. The fixture's
+/// Drone speaks once and exits, and the first turn taken after it has gone
+/// stops its step as `RunEnded` and escalates the Job, which is what the merge
+/// line saw: `no Drone reached summarise: Some(Escalated)`. The wait was
+/// deciding the case it was waiting on.
+///
+/// So: **the record is read before a turn is taken and between turns, and the
+/// wait is in sleeps rather than in turns.** A step a Drone already holds costs
+/// no turn at all — which is the whole of the `summarise` call — and a spawn
+/// that is slow to land costs waiting rather than sweeping.
 async fn until_a_drone_is_on(fleet: &Fixture, job_id: &JobId, step: &str) {
-    for _ in 0..32 {
-        fleet.turn().await.expect("a turn");
-        let job = fleet.load(job_id).await.expect("the Job reads");
-        let on = job.step(&StepId::new(step));
-        if job.status() == JobStatus::Running
-            && on.map(JobStep::state) == Some(StepState::Running)
-            && on.and_then(JobStep::assigned_drone).is_some()
-        {
-            return;
+    for _ in 0..TURNS_FOR_A_SPAWN {
+        for _ in 0..WAITS_PER_TURN {
+            let job = fleet.load(job_id).await.expect("the Job reads");
+            let on = job.step(&StepId::new(step));
+            if job.status() == JobStatus::Running
+                && on.map(JobStep::state) == Some(StepState::Running)
+                && on.and_then(JobStep::assigned_drone).is_some()
+            {
+                return;
+            }
+            match job.status() {
+                // Nothing is under way to wait for: the turn is what starts it.
+                JobStatus::AwaitingReview | JobStatus::Queued => break,
+                _ => tokio::time::sleep(Duration::from_millis(5)).await,
+            }
         }
+        fleet.turn().await.expect("a turn");
     }
     let status = fleet.load(job_id).await.ok().map(|job| job.status());
     panic!("no Drone reached `{step}`: {status:?}");

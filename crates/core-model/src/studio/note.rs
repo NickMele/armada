@@ -51,6 +51,24 @@ pub struct CaptureFrame {
     pub height: i64,
 }
 
+/// The server a Note was captured on, where it was not captured on Bridge.
+/// `#1294`, `docs/practices/capture-window.md`.
+///
+/// **The address is the origin the window was pinned to**, and `location` on
+/// the capture is the path within it — the two together are the page. A Note
+/// captured on Bridge carries none of this.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CaptureServed {
+    /// The instance Fleet held, by its id. **Not an identity afterwards**: the
+    /// instance is gone by the time anything reads this, and what the id is
+    /// good for is saying which Run it was.
+    pub run: String,
+    /// What the Manifest calls that server.
+    pub name: String,
+    /// Scheme, host and port — the origin, with no path.
+    pub address: String,
+}
+
 /// Everything a Note keeps about where it was pointed.
 ///
 /// Public fields because there is nothing to protect: no method writes one,
@@ -82,4 +100,7 @@ pub struct StudioCapture {
     pub source: Option<String>,
     /// The frame kept beside the Studio's records, where one was taken.
     pub frame: Option<CaptureFrame>,
+    /// The server this was captured on, **absent on every Note captured on
+    /// Bridge** — which is every Note written before `#1294`.
+    pub served: Option<CaptureServed>,
 }

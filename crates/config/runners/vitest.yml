@@ -34,4 +34,4 @@ commands:
   # **`exec`, never the package script.** `pnpm -C <dir> test -- …` reaches
   # vitest with the arguments after a bare `--` read as positionals and
   # discarded, silently (#1205, #1216). There is no script in the way here.
-  run_changed: "pnpm --dir {pkg} exec vitest related {files} --run --passWithNoTests=false"
+  run_changed: "pnpm --dir {dir} exec vitest related {files} --run --passWithNoTests=false"

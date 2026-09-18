@@ -22,9 +22,9 @@ export type FleetPanelProps = {
   /**
    * "Running", "Not running", "Unreachable", "Reading" — the panel already says "Fleet".
    *
-   * **A string, not a node**, since #1437: the title bar's folded dot reads
-   * this same word for its accessible name and its tooltip, and neither can
-   * take a node. One word, two readers, no second vocabulary.
+   * **A string, not a node**, since #1438: the title row's dot and this
+   * panel's own dot at the rail both read it through `fleetSaid` for their
+   * accessible name and tooltip, and neither can take a node.
    */
   label: string;
   /**
@@ -50,10 +50,21 @@ export type FleetPanelProps = {
 };
 
 /**
+ * What Fleet's dot says in words, wherever it is drawn without the panel's own
+ * rows beside it — the title row at every width, and this panel at the 48px
+ * rail. One producer, so the tooltip a person hovers and the name a screen
+ * reader speaks cannot become two sentences. The em dash is the title row's
+ * own separator, from `Open Helm — ⌘J`.
+ */
+export function fleetSaid(label: string): string {
+  return `Fleet — ${label}`;
+}
+
+/**
  * Which tone each Fleet state's dot takes. **The one mapping**, exported
- * because the title bar draws the same dot while the left column is folded
- * (#1437) and a second table there could disagree with this one on the day
- * either moved. Status colour is mapped, never chosen — `iconography.md`.
+ * because the title bar draws the same dot (#1438) and a second table there
+ * could disagree with this one on the day either moved. Status colour is
+ * mapped, never chosen — `iconography.md`.
  */
 export const FLEET_DOT_TONE: Record<FleetState, "success" | "escalated" | "warn" | "muted"> = {
   running: "success",
@@ -64,7 +75,14 @@ export const FLEET_DOT_TONE: Record<FleetState, "success" | "escalated" | "warn"
 
 export function FleetPanel({ state, label, rows, detail, doctor, open, onOpenChange, narrow }: FleetPanelProps) {
   return (
-    <Panel label="Fleet" open={open} onOpenChange={onOpenChange} narrow={narrow} dotTone={FLEET_DOT_TONE[state]}>
+    <Panel
+      label="Fleet"
+      open={open}
+      onOpenChange={onOpenChange}
+      narrow={narrow}
+      dotTone={FLEET_DOT_TONE[state]}
+      dotLabel={fleetSaid(label)}
+    >
       <div className="armada-fleet-panel">
         <div className="armada-fleet-panel__state">
           <span className="armada-fleet-panel__dot" data-tone={FLEET_DOT_TONE[state]} aria-hidden />

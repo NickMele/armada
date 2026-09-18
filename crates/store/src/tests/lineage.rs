@@ -1,8 +1,8 @@
-//! Reading a redispatch backwards, off the one column that records it.
+//! Reading a redispatch from both ends, off the one column that records it.
 //!
 //! The claim worth breaking is that there is no second record: every answer
-//! here comes from a replacement's own `redispatched_from`, so forgetting the
-//! replacement has to take the answer with it.
+//! here comes from a replacement's own `redispatched_from`, so forgetting
+//! either end has to take the answer with it.
 
 use core_model::{Job, JobId, NewJob, TopLevelOrigin};
 
@@ -192,6 +192,121 @@ fn the_replacement_comes_back_with_the_number_and_title_a_handle_is_made_of() {
     assert_eq!(
         found.title.as_str(),
         full_new_job("01NAMING").title.as_str()
+    );
+    assert!(found.number.get() > 0, "every job is numbered");
+}
+
+/// The forward read: a Job minted by a redispatch names what it replaced.
+#[test]
+fn a_redispatched_job_names_the_job_it_replaced() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01ORIGIN");
+    let replacement = replacing(&mut store, "01HEIR", "01ORIGIN", "2026-09-17T10:00:00.000Z");
+
+    let found = store
+        .replaces(&replacement)
+        .expect("the read runs")
+        .expect("this job was minted by a redispatch");
+
+    assert_eq!(found.job_id, job_id("01ORIGIN"));
+}
+
+/// Most Jobs. **The absence is the record**, not a missing row: nothing
+/// redispatched this one, so the column is null and the join finds nothing.
+#[test]
+fn a_job_no_redispatch_minted_replaces_nothing() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01FIRSTEVER");
+
+    assert_eq!(
+        store
+            .replaces(&job_id("01FIRSTEVER"))
+            .expect("the read runs"),
+        None,
+    );
+}
+
+/// One hop backwards as well as forwards: the third names the second and never
+/// the first, so neither read can go round a chain.
+#[test]
+fn the_backward_read_is_one_hop_and_never_the_root() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01ROOT");
+    let second = replacing(&mut store, "01MIDDLE", "01ROOT", "2026-09-17T10:00:00.000Z");
+    let third = replacing(&mut store, "01LEAF", "01MIDDLE", "2026-09-17T11:00:00.000Z");
+
+    assert_eq!(
+        store
+            .replaces(&third)
+            .expect("the read runs")
+            .map(|found| found.job_id),
+        Some(second.clone()),
+    );
+    assert_eq!(
+        store
+            .replaces(&second)
+            .expect("the read runs")
+            .map(|found| found.job_id),
+        Some(job_id("01ROOT")),
+    );
+}
+
+/// **The predecessor's row is the name, so forgetting it takes the name.** The
+/// id stays on the replacement and points at nothing, and this read says so
+/// with `None` rather than handing back a Job that is gone.
+#[test]
+fn forgetting_the_predecessor_leaves_the_replacement_naming_nobody() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01GONE");
+    let replacement = replacing(
+        &mut store,
+        "01STILLHERE",
+        "01GONE",
+        "2026-09-17T10:00:00.000Z",
+    );
+
+    store
+        .forget_job(&job_id("01GONE"))
+        .expect("it is forgotten");
+
+    assert_eq!(store.replaces(&replacement).expect("the read runs"), None);
+}
+
+/// The number and the title come back as the record holds them, which is what
+/// lets Fleet compose the one handle a person reads — `replaced_by`'s rule,
+/// read the other way.
+#[test]
+fn the_predecessor_comes_back_with_the_number_and_title_a_handle_is_made_of() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let named = full_new_job("01CALLED");
+    let earlier = Job::create_top_level(
+        named,
+        TopLevelOrigin::Manual,
+        at("2026-09-17T09:00:00.000Z"),
+    );
+    store
+        .insert_job(&earlier, &at("2026-09-17T09:00:00.000Z"))
+        .expect("the earlier job is stored");
+    let replacement = replacing(
+        &mut store,
+        "01CALLING",
+        "01CALLED",
+        "2026-09-17T10:00:00.000Z",
+    );
+
+    let found = store
+        .replaces(&replacement)
+        .expect("the read runs")
+        .expect("this job was minted by a redispatch");
+
+    assert_eq!(
+        found.title.as_str(),
+        full_new_job("01CALLED").title.as_str()
     );
     assert!(found.number.get() > 0, "every job is numbered");
 }

@@ -46,6 +46,7 @@ import realBoard from "@armada/screens/src/fixtures/boards/real-board.json";
 import { NOTHING_YET } from "../../../shared/bridge";
 import { connected } from "./moment";
 import type { Scenario } from "./moment";
+import { talking } from "./helm-fleet";
 import { DRIFT_GONE, GH_ISSUE_VIEW, KIT_SERVERS, RUNS, manifesting } from "./manifest-fleet";
 import { SCRATCH, SHEET_READ, settingUp } from "./setup-fleet";
 import { EVERY_KIND_NAME, EVERY_KIND_STUDIO, everyKind, studying, untitled } from "./studio-fleet";
@@ -379,6 +380,7 @@ export const SCENARIOS: readonly Scenario[] = [
   settingUp({ repositories: [repository(), SCRATCH], sheet: SHEET_READ }),
   manifesting({ alwaysAllowed: [GH_ISSUE_VIEW], drift: DRIFT_GONE, kitServers: KIT_SERVERS, runs: RUNS }),
   studying().scenario,
+  talking(),
   ...BUILT.map(([name, fixture]) => holding(`job/${name}`, fixture.name, [fixture], { opens: fixture.job.id })),
   ...RECORDED.map(([slug, fixture]) =>
     holding(`recorded/${slug}`, fixture.name, [fixture], { opens: fixture.job.id }),

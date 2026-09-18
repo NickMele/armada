@@ -258,7 +258,9 @@ pub const THEME: &[(&str, Slot)] = &[
     ),
     (
         "--window-fold-left",
-        Slot::CssOnly("the window width the left column folds under, read by Shell.tsx"),
+        Slot::CssOnly(
+            "the window width the left column collapses to its rail under, read by Shell.tsx",
+        ),
     ),
     // The collapse points, in the namespace Tailwind reads for responsive
     // variants. A component that spells `narrow:` resolves from here, which is

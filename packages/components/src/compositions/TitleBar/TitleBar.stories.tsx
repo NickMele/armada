@@ -37,12 +37,18 @@ const picker = (
   </Select>
 );
 
-/** Every slot filled: the picker, the search field, Dispatch and the logo — Helm's dock is open, so its button is absent. */
+/**
+ * Every slot filled: the picker, the search field, Dispatch, the logo and
+ * Fleet's dot — Helm's dock is open, so its button is absent. The dot is not a
+ * slot that can be left out: it is drawn at every width, so every story below
+ * carries it.
+ */
 export const Full: Story = {
   args: {
     repositoryPicker: picker,
     onSearch: () => {},
     onDispatch: fn(),
+    fleet: { state: "running", label: "Running" },
   },
   /**
    * #1156: Dispatch is one button with no caret, and clicking it dispatches.
@@ -67,39 +73,43 @@ export const HelmClosed: Story = {
   },
 };
 
-/** Nothing connected yet: no picker, no Dispatch — the bar still draws, with the logo and nowhere else to go but search. */
+/**
+ * Nothing connected yet: no picker, no Dispatch — the bar still draws, with
+ * the logo and nowhere else to go but search. Fleet is still read, because
+ * "not read yet" is one of the dot's own four states.
+ */
 export const BeforeAnythingIsRead: Story = {
   args: {
     onSearch: () => {},
+    fleet: { state: "unknown", label: "Connecting" },
   },
 };
 
 /**
- * The left column is folded, so Fleet's dot is on the bar's trailing edge —
- * the one width it is drawn at (#1437). It says liveness and no more: pid,
- * port, protocol and uptime come back with the panel.
+ * Fleet's dot on the bar's trailing edge — #1438, drawn at every width since
+ * 18 Sep 2026 rather than only while the left column was away. It says
+ * liveness and no more: pid, port, protocol and uptime are the panel's.
  */
-export const FleetFolded: Story = {
+export const FleetRunning: Story = {
   args: {
     ...Full.args,
     helm: { questions: 3, binding: "⌘J", onOpen: () => {} },
-    fleet: { state: "running", label: "Running" },
   },
 };
 
 /** Fleet is not running — `--status-escalated`, the panel's own hue for it, and the word in the name. */
-export const FleetFoldedNotRunning: Story = {
-  args: { ...FleetFolded.args, fleet: { state: "not-running", label: "Not running" } },
+export const FleetNotRunning: Story = {
+  args: { ...FleetRunning.args, fleet: { state: "not-running", label: "Not running" } },
 };
 
 /** Alive and not answering — `--status-awaiting-review`, a state a dot alone could not tell from running. */
-export const FleetFoldedUnreachable: Story = {
-  args: { ...FleetFolded.args, fleet: { state: "unreachable", label: "Unreachable" } },
+export const FleetUnreachable: Story = {
+  args: { ...FleetRunning.args, fleet: { state: "unreachable", label: "Unreachable" } },
 };
 
 /** None of the three — reading, connecting, a refused runtime file — neutral, and the label names which. */
-export const FleetFoldedUnknown: Story = {
-  args: { ...FleetFolded.args, fleet: { state: "unknown", label: "Connecting" } },
+export const FleetUnknown: Story = {
+  args: { ...FleetRunning.args, fleet: { state: "unknown", label: "Connecting" } },
 };
 
 /**
@@ -114,7 +124,7 @@ export const FleetFoldedUnknown: Story = {
  * and a dot that had only one of them would be silent for half its readers.
  */
 export const FleetStates: Story = {
-  args: FleetFolded.args,
+  args: FleetRunning.args,
   render: (args) => (
     <>
       {FLEET_SAID.map(({ state, label }) => (
@@ -140,12 +150,27 @@ const FLEET_SAID: { state: FleetState; label: string }[] = [
   { state: "unknown", label: "Connecting" },
 ];
 
-/** Unfolded: the Fleet panel carries the dot, and this row draws none. Two would be one fact twice. */
-export const FleetUnfolded: Story = {
-  args: { ...Full.args, helm: { questions: 3, binding: "⌘J", onOpen: () => {} } },
-  play: async ({ canvas }) => {
-    await expect(canvas.queryByRole("img", { name: /^Fleet — / })).not.toBeInTheDocument();
-  },
+/**
+ * The dot is unconditional. #1438 mounted it on a prop the shell set from the
+ * window's width, so the row a person saw at 1512px had no dot at all and the
+ * row at 1150px did; the owner rejected that and rejected removing the dot,
+ * and chose it drawn always on 18 Sep 2026.
+ *
+ * The two arrangements that used to decide it: the dock open beside the
+ * content, which is `Full`, and the dock closed with Helm's own button in the
+ * row. **No `play`, because there is nothing here for one to catch** — the
+ * condition was never in this component but in what `TheShell` passed it, so
+ * the assertion lives in `The shell`'s own stories and in
+ * `job-detail-width.test.tsx`, which drives a real window across the widths.
+ */
+export const FleetIsDrawnWhateverElseTheRowCarries: Story = {
+  args: Full.args,
+  render: (args) => (
+    <>
+      <TitleBar {...args} />
+      <TitleBar {...args} helm={{ questions: 3, binding: "⌘J", onOpen: () => {} }} />
+    </>
+  ),
 };
 
 /**

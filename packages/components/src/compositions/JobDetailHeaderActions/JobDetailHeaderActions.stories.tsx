@@ -34,9 +34,14 @@ type Story = StoryObj<typeof JobDetailHeaderActions>;
  * A running job. The badge is static: the rail's current step is the running
  * mark, so it carries the loop and the badge does not.
  *
- * The branch copies on click. A Job with no assigned Drone has one act, so the
- * split button is a button, held rather than asked because it is a kill alone.
- * Nothing to approve or merge while a Job works, so no primary.
+ * **The id is behind a word and the run is readings only**, since #1484. The
+ * repository and the branch were on this line and are drawn a second time by
+ * *Where things are*, one column down; Spend and Turns went to Pulse. What is
+ * left is what a person reads rather than what they came to fetch.
+ *
+ * A Job with no assigned Drone has one act, so the split button is a button,
+ * held rather than asked because it is a kill alone. Nothing to approve or
+ * merge while a Job works, so no primary.
  */
 export const ARunningJob: Story = {
   args: {
@@ -44,19 +49,11 @@ export const ARunningJob: Story = {
     statusIcon: CircleDot,
     statusLabel: "Running",
     headline: "Split the settings reducer",
-    jobId: "job_2d90bb",
-    from: "Overview",
-    onLeave: fn(),
+    jobId: "12-split-the-settings-reducer",
+    jobIdLabel: "Job",
     fields: [
       { label: "Step", value: "2 of 4", mono: true },
-      {
-        label: "Branch",
-        value: "fix/settings-split",
-        mono: true,
-        copyValue: "fix/settings-split",
-      },
-      { label: "Elapsed", value: "11m 03s", mono: true },
-      { label: "Spend, estimated", value: "~$1.80", mono: true },
+      { label: "Run time", value: "11m 03s", mono: true },
       { label: "Dispatched by you" },
     ],
     actions: (
@@ -73,10 +70,14 @@ export const ARunningJob: Story = {
       </>
     ),
   },
-  play: async ({ args, canvas, userEvent }) => {
-    // The trail's first segment leaves; its name never does — #1093.
-    await userEvent.click(canvas.getByRole("button", { name: "Overview" }));
-    await expect(args.onLeave).toHaveBeenCalledTimes(1);
+  play: async ({ canvas }) => {
+    // The id says what it is. It was the first value on a line of bare
+    // strings, and the owner could not tell it from the branch beside it.
+    await expect(canvas.getByRole("heading", { name: "Split the settings reducer" })).toBeVisible();
+    await expect(canvas.getByText("Job")).toBeVisible();
+
+    // And no way back that does not go anywhere — #1484.
+    await expect(canvas.queryByRole("button", { name: "Overview" })).toBeNull();
   },
 };
 
@@ -110,11 +111,12 @@ export const ARunningJobWithSettings: Story = {
  * because a step name is a label and not a machine-derived value.
  *
  * No action here either. What you can do with a dead end is read its log and
- * its worktree, and those sit beside the branch further down the screen.
+ * its worktree, and those sit further down the screen.
  *
- * **`from` with no `onLeave`**, so the trail's first segment draws as plain
- * text — the shape to look for when a caller has named where "back" goes and
- * not yet wired the way there.
+ * **Run time on a Job that is over is the figure it stopped at.** It ticks
+ * while the Job runs and freezes at `ended_at`; a killed Job whose figure kept
+ * climbing read as one still working, which is how the owner met a ten-hour
+ * `Elapsed` on a Job dead since the morning.
  */
 export const AFailedJob: Story = {
   args: {
@@ -122,13 +124,12 @@ export const AFailedJob: Story = {
     statusIcon: X,
     statusLabel: "Failed",
     headline: "Cache the manifest read",
-    jobId: "job_91ab",
-    from: "Overview",
+    jobId: "91-cache-the-manifest-read",
+    jobIdLabel: "Job",
     fields: [
       { label: "Stopped at", value: "Run tests" },
       { label: "step", value: "3 of 4", mono: true, continues: true },
-      { label: "Ran", value: "22m 41s", mono: true },
-      { label: "Spend, estimated", value: "~$2.10", mono: true },
+      { label: "Run time", value: "22m 41s", mono: true },
       { label: "Dispatched by you" },
     ],
   },
@@ -142,9 +143,8 @@ export const AFailedJob: Story = {
  *
  * **`Pull request #4711` is a fact and not an act**, which is why it is in the
  * run rather than in the trailing group. Going to read something is not one of
- * the things that end a job, and it belongs beside the branch it was opened
- * from. It is `--accent`, the token the design contract gives links, and it
- * underlines only on hover.
+ * the things that end a job. It is `--accent`, the token the design contract
+ * gives links, and it underlines only on hover.
  *
  * **The number, never the address.** The address is sixty characters of which
  * a person reads four; the whole of it is on the link's `title`.
@@ -155,19 +155,17 @@ export const AFinishedJob: Story = {
     statusIcon: Check,
     statusLabel: "Done",
     headline: "Add a retry ceiling to the poke loop",
-    jobId: "job_4f10",
-    from: "Overview",
+    jobId: "40-add-a-retry-ceiling-to-the-poke-loop",
+    jobIdLabel: "Job",
     fields: [
       { label: "All", value: "4 of 4", mono: true, suffix: "steps advanced" },
-      { label: "Branch", value: "fix/poke-ceiling", mono: true, copyValue: "fix/poke-ceiling" },
       {
         label: "Pull request",
         value: "#4711",
         mono: true,
         href: "https://forge.invalid/org/repo/pull/4711",
       },
-      { label: "Ran", value: "18m 22s", mono: true },
-      { label: "Spend, estimated", value: "~$2.40", mono: true },
+      { label: "Run time", value: "18m 22s", mono: true },
       { label: "Dispatched by you" },
     ],
   },
@@ -188,7 +186,6 @@ export const ThePullRequestOnceItLanded: Story = {
     ...AFinishedJob.args,
     fields: [
       { label: "All", value: "4 of 4", mono: true, suffix: "steps advanced" },
-      { label: "Branch", value: "fix/poke-ceiling", mono: true, copyValue: "fix/poke-ceiling" },
       {
         label: "Pull request",
         value: "#4711",
@@ -196,8 +193,7 @@ export const ThePullRequestOnceItLanded: Story = {
         href: "https://forge.invalid/org/repo/pull/4711",
       },
       { label: "merged", continues: true },
-      { label: "Ran", value: "18m 22s", mono: true },
-      { label: "Spend, estimated", value: "~$2.40", mono: true },
+      { label: "Run time", value: "18m 22s", mono: true },
       { label: "Dispatched by you" },
     ],
     onFollowed: fn(),
@@ -239,10 +235,8 @@ export const BothKills: Story = {
     fields: [
       { label: "Step", value: "2 of 4", mono: true },
       { label: "at", value: "implement", mono: true, continues: true },
-      { label: "Elapsed", value: "11m 03s", mono: true },
-      { label: "Branch", value: "fix/settings-split", mono: true, copyValue: "fix/settings-split" },
-      { label: "Drone", value: "drn_7c21", mono: true, copyValue: "drn_7c21" },
-      { label: "Writes", value: "src/settings/reducer.ts", mono: true },
+      { label: "Run time", value: "11m 03s", mono: true },
+      { label: "Dispatched by you" },
     ],
     actions: (
       <>
@@ -298,6 +292,66 @@ export const BothKillsMenuOpen: Story = {
 };
 
 /**
+ * A job minted by a redispatch, naming the one it replaced. **The handle, and
+ * pressable** — it drew a bare ULID, which was the one fact on the screen about
+ * where the job came from and the one fact a person could not use. `#1474`.
+ *
+ * **`opensJob` rather than `href`.** The destination is inside Armada, so the
+ * value is a job id and the press goes to `onOpenJob`; an address would make
+ * `onFollowed` answer two questions and send this one to a browser.
+ *
+ * The drawing is the link's, because the affordance a person reads is the
+ * same. What differs is the element: a button, because there is nowhere to go
+ * without the app.
+ */
+export const ItReplacedAnEarlierJob: Story = {
+  args: {
+    ...AFinishedJob.args,
+    fields: [
+      { label: "Branch", value: "fix/poke-ceiling", mono: true, copyValue: "fix/poke-ceiling" },
+      { label: "Ran", value: "18m 22s", mono: true },
+      { label: "Dispatched by you" },
+      {
+        label: "Redispatched from",
+        value: "118-add-a-retry-ceiling-to-the-poke-loop",
+        mono: true,
+        opensJob: "01M2C1TJ8G0099REDISPATCHED",
+      },
+    ],
+    onOpenJob: fn(),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const handle = "118-add-a-retry-ceiling-to-the-poke-loop";
+    const said = canvas.getByRole("button", { name: handle });
+
+    // What is on screen is the handle, and no id is anywhere near it.
+    await expect(said).toHaveTextContent(handle);
+    await expect(said).not.toHaveTextContent("01M2C1TJ8G0099REDISPATCHED");
+
+    // The press sends the id, and this component navigates nowhere.
+    await userEvent.click(said);
+    await expect(args.onOpenJob).toHaveBeenCalledWith("01M2C1TJ8G0099REDISPATCHED");
+  },
+};
+
+/**
+ * The same fact with nowhere to go. **No control where nothing opens** — the
+ * rule the callout on the replaced job already keeps, rather than a link that
+ * looks pressable and is not.
+ */
+export const ItReplacedAJobNothingCanOpen: Story = {
+  args: {
+    ...ItReplacedAnEarlierJob.args,
+    onOpenJob: undefined,
+  },
+  play: async ({ canvas }) => {
+    const handle = "118-add-a-retry-ceiling-to-the-poke-loop";
+    await expect(canvas.queryByRole("button", { name: handle })).toBeNull();
+    await expect(canvas.getByText(handle)).toBeVisible();
+  },
+};
+
+/**
  * A stopped job, with the one recovery. **The label says what happens** — a
  * redispatch mints a replacement and kills this job, so "retry" or "run again"
  * would name an act Fleet does not perform.
@@ -311,14 +365,13 @@ export const StoppedWithARedispatch: Story = {
     statusIcon: OctagonAlert,
     statusLabel: "stalled",
     headline: "Cache the manifest read",
-    jobId: "job_91ab04",
-    from: "Overview",
+    jobId: "91-cache-the-manifest-read",
+    jobIdLabel: "Job",
     fields: [
       { label: "Step", value: "3 of 4", mono: true },
       { label: "at", value: "verify", mono: true, continues: true },
-      { label: "Elapsed", value: "22m 41s", mono: true },
-      { label: "Branch", value: "feat/manifest-cache", mono: true, copyValue: "feat/manifest-cache" },
-      { label: "Scope undetermined" },
+      { label: "Run time", value: "22m 41s", mono: true },
+      { label: "Dispatched by you" },
     ],
     actions: (
       <>
@@ -352,13 +405,13 @@ export const AtTheApprovalGate: Story = {
     statusIcon: UserCheck,
     statusLabel: "needs approval",
     headline: "Cache the manifest read",
-    jobId: "job_91ab04",
-    from: "Overview",
+    jobId: "91-cache-the-manifest-read",
+    jobIdLabel: "Job",
     fields: [
       { label: "Step", value: "1 of 4", mono: true },
       { label: "at", value: "plan", mono: true, continues: true },
       { label: "Waiting", value: "4m 12s", mono: true },
-      { label: "Writes", value: "crates/config/src/manifest.rs", mono: true },
+      { label: "Dispatched by you" },
     ],
     actions: (
       <>
@@ -376,14 +429,15 @@ export const AtTheApprovalGate: Story = {
  *
  * The block used to hold one row at every width, and only the title column
  * could give: the acts are fixed-width controls, so the headline wrapped to
- * four lines beside three buttons and the fact run broke with `Spend` alone on
- * the end. Now the acts drop under the title when the two stop fitting, and the
- * facts read as one run again the moment they have the width.
+ * four lines beside three buttons and the fact run broke with one fact alone
+ * on the end. Now the acts drop under the title when the two stop fitting, and
+ * the facts read as one run again the moment they have the width.
  *
  * `--window-floor` is the narrowest window Bridge opens, and the two below it
  * are what the panel is given inside one — the header is not the window.
  * **Below `--w-sheet` the trailing two facts give way**, since #1093 replaced
- * the rule that nothing here was ever dropped.
+ * the rule that nothing here was ever dropped. The two that go are the two
+ * least urgent, which is what fixed the run's order.
  */
 export const AsTheWindowNarrows: Story = {
   args: AtTheApprovalGate.args,

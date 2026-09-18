@@ -1,10 +1,9 @@
 // The Job header, built — and the Job that has no header, so cannot be drawn.
 //
-// The badge, the headline, the Job's own facts, the acts that end or replace
-// it, and the one way out of the app. **Four things about the Job rather than
-// about any step**, which is the line between this file and `step.tsx`: what is
-// here changes when the Job does, and what is there changes when the selection
-// does.
+// The badge, the headline, the Job's own facts, and the acts that end or
+// replace it. **Four things about the Job rather than about any step**, which
+// is the line between this file and `step.tsx`: what is here changes when the
+// Job does, and what is there changes when the selection does.
 //
 // **This is where the next thing lands.** Pilot's slot is left of the kill
 // group — `#250` — and the pull request link arrived here in `#422`. Both were
@@ -63,11 +62,11 @@ export type Heading = {
   /** Open the Job settings panel. The sheet is the screen's, so the screen opens it. */
   onOpenSettings: () => void;
   onOpenPullRequest: OpenPullRequest;
+  /** Land on another Job. The `Redispatched from` fact is the header's one. */
+  onOpenJob?: ((jobId: string) => void) | undefined;
   onCopied: (value: string) => void;
   /** Say a sentence to the person. Only ever a failure — see `opening.ts`. */
   onSaid: (sentence: string) => void;
-  /** The trail's first segment, pressed. Absent draws `from` as plain text. */
-  onLeave?: () => void;
 };
 
 /**
@@ -99,17 +98,13 @@ export function headingOf({
   onRaisingTurns,
   onOpenSettings,
   onOpenPullRequest,
+  onOpenJob,
   onCopied,
   onSaid,
-  onLeave,
 }: Heading): JobDetailHeading | null {
   const reading = readingOf(job);
   if (reading.as !== "badge") return null;
   return {
-    // Fixed to Overview, the screen Bridge opens on — #1093's own trail does
-    // not yet know which screen actually opened this Job.
-    from: "Overview",
-    onLeave,
     status: reading.status,
     statusIcon: reading.icon,
     // The registry's own verb, opening a line. `enum-verbs.toml` spells it
@@ -122,7 +117,13 @@ export function headingOf({
     // a branch name, a worktree path, or a sentence to somebody else. The id
     // still names every request the screen makes; it is just not the thing a
     // person is asked to read.
+    //
+    // **Behind the word `Job`, since #1484.** It was the first value on the
+    // line and it was bare, so it read as one more unexplained string in a run
+    // of them — the owner's own question about this header was which of them
+    // was the id.
     jobId: job.handle,
+    jobIdLabel: "Job",
     fields: factsOf(job, whole, now),
     // The acts that end or replace the Job. **Pilot's slot is this one**, left
     // of the kill group — #250, and it lands without this line changing.
@@ -167,6 +168,9 @@ export function headingOf({
         if (because !== null) onSaid(because);
       });
     },
+    // The `Redispatched from` fact, pressed. The same act the callout on the
+    // job this one replaced already performs, from the other end — `#1474`.
+    onOpenJob,
   };
 }
 

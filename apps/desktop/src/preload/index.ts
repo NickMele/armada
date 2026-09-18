@@ -5,6 +5,8 @@ import { ANNOTATE_FLAG, ANNOTATION_CHANNELS } from "../shared/annotations";
 import type { Annotation, AnnotationsDevApi, Box } from "../shared/annotations";
 import { frameStreamUrl } from "../shared/streaming";
 import type { BridgeState, Summons } from "../shared/bridge";
+import type { CaptureAimed, CaptureHeld, CaptureWheel, CaptureWindowState } from "../shared/capture-window";
+import type { CaptureOpened } from "@armada/protocol";
 import type { BridgeApi, CommandExplainedRead } from "../shared/api";
 import type { Pattern } from "../shared/haptics";
 import type {
@@ -530,6 +532,30 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.startStudioRun, studioId, name, position),
   startStudioServer: (studioId: string, name: string, position: StudioPosition): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.startStudioServer, studioId, name, position),
+
+  // The capture window — #1294. A server id and one of that server's own links;
+  // main resolves the address off the live holder, as `openServerLink` does.
+  openCaptureWindow: (serverId: string, url: string): Promise<CaptureOpened> =>
+    ipcRenderer.invoke(CHANNELS.openCaptureWindow, serverId, url),
+  // **This half is the capture window's own bar talking to its own window.**
+  // Main answers each for the window the call came from, so nothing here names
+  // one — and the page below the bar holds no preload and reaches none of it.
+  captureWindow: {
+    read: (onChanged: (state: CaptureWindowState) => void): (() => void) => {
+      const handler = (_event: unknown, state: CaptureWindowState): void => onChanged(state);
+      ipcRenderer.on(CHANNELS.captureWindowChanged, handler);
+      void ipcRenderer.invoke(CHANNELS.captureWindowRead);
+      return () => ipcRenderer.removeListener(CHANNELS.captureWindowChanged, handler);
+    },
+    arm: (on: boolean): Promise<CaptureWindowState | null> => ipcRenderer.invoke(CHANNELS.captureWindowArm, on),
+    aim: (x: number, y: number): Promise<CaptureAimed | null> => ipcRenderer.invoke(CHANNELS.captureWindowAim, x, y),
+    hold: (x: number, y: number): Promise<CaptureHeld | null> => ipcRenderer.invoke(CHANNELS.captureWindowHold, x, y),
+    release: (): Promise<void> => ipcRenderer.invoke(CHANNELS.captureWindowRelease),
+    save: (said: string): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.captureWindowSave, said),
+    reload: (): Promise<void> => ipcRenderer.invoke(CHANNELS.captureWindowReload),
+    followRefused: (): Promise<void> => ipcRenderer.invoke(CHANNELS.captureWindowFollowRefused),
+    scroll: (wheel: CaptureWheel): void => ipcRenderer.send(CHANNELS.captureWindowScroll, wheel),
+  },
 
   // The three decisions on the work, and they are three entries for the reason
   // the two kills are two: one capability taking "which decision" as an

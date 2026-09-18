@@ -179,6 +179,12 @@ impl AgentHarness for FakeHarness {
         Ok(())
     }
 
+    /// Anything, for the same reason: a fake that forbade a command would make
+    /// every test of the permission path a test of this file's opinions.
+    fn runnable(&self, _run: &str) -> Result<(), FakeHarnessRefused> {
+        Ok(())
+    }
+
     fn read(&self, line: &str) -> Vec<DroneEvent> {
         match self.scripted.get(line) {
             Some(events) => events.clone(),

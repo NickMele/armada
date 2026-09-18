@@ -752,9 +752,10 @@ breakpoint.
 Frameless, `titleBarStyle: 'hiddenInset'`, macOS traffic lights inset over
 the **title row** — the bar across the window's top carrying the repository
 picker, search, Dispatch and Helm's reopen control (#1087 moved all four off
-the left column and into this row), and Fleet's status dot for as long as
-the left column is folded. Costs a custom drag region: the whole row is a
-drag region, and every control inside it opts out by hand — the dot included,
+the left column and into this row), and Fleet's status dot. **The dot is
+permanent chrome**, corrected on 18 Sep 2026 from the conditional one #1438
+shipped — see Left column, below. Costs a custom drag region: the whole row is
+a drag region, and every control inside it opts out by hand — the dot included,
 since a drag region swallows the pointer and a tooltip inside one never
 opens.
 
@@ -788,62 +789,85 @@ one handle per panel, and never three panels each resolving their own width.
 nothing else — Helm left it for the dock (#948), so there is no second tier
 beneath it any more.
 
-**The column disappears in one band and nowhere else.** It used to disappear
-nowhere: 48px was cheap, and losing Navigation, Stats and Fleet entirely was
-worse than losing 48px at any width. That held until #1428 gave job detail's
-two columns their floors and left a band the window cannot pay for — between
-`--layout-breakpoint` and `--window-fold-left`, with Helm's dock beside the
-content, the rail, both floors and the dock want more pixels than there are,
-and the step panel sat at 202px on a laptop. The owner ruled on 17 Sep 2026
-that **the left column folds before Helm's dock does**, automatically, and
-comes back when the window grows.
+**The column never disappears. It reaches the rail in two bands, and stops
+there.** 48px is cheap, and losing Navigation, Stats and Fleet entirely is
+worse than losing 48px at any width. #1428 gave job detail's two columns their
+floors and left a band the window cannot pay for — between `--layout-breakpoint`
+and `--window-fold-left`, with Helm's dock beside the content, the column at
+its full width, both floors and the dock want more pixels than there are, and
+the step panel sat at 202px on a laptop. The owner ruled on 17 Sep 2026 that
+**the left column gives way before Helm's dock does**, automatically, and comes
+back when the window grows.
 
-> **Rule.** The left column folds away entirely below `--window-fold-left`,
-> while Helm's dock is beside the content, and at no other width.
-> Why: the fold is arithmetic, not a preference — `--window-fold-left` is the
-> sum of the column, the dock at rest and job detail's two floors, and
-> `spacing.css` carries the addition. With the dock closed or folded to its
-> sheet the window has the room, so the column stays.
+**The 17 Sep wording here said "folds away entirely", and that was wrong.**
+#1435 built it, and the owner corrected it on 18 Sep 2026: *"when I said
+collapse the left panel I didn't mean completely hide it. Thats where we got
+disconnected. yes Helm hides. But the left panels collapse into a single icon
+size column, not hidden away."* Giving way means reaching the rail, which is
+the form the column already takes below `--layout-breakpoint`. The paragraphs
+below are the corrected rule; the sentence they replace is recorded here rather
+than deleted, because the band and its arithmetic are the same and only what
+the column becomes in it changed.
 
-**Everywhere else the column still never disappears**, and at 48px Stats and
-Fleet keep their one status dot each, so a glance still says whether anything
-needs attention.
+> **Rule.** The left column collapses to its 48px rail below
+> `--window-fold-left` while Helm's dock is beside the content, and below
+> `--layout-breakpoint` at any dock state. It is drawn at every width and
+> never absent.
+> Why: the threshold is arithmetic, not a preference — `--window-fold-left` is
+> the sum of the column at its full width, the dock at rest and job detail's
+> two floors, and `spacing.css` carries the addition. With the dock closed or
+> folded to its sheet the window has the room, so the column keeps its width.
 
-**Fleet's liveness survives the fold, as one dot in the title row.** Settled
-by the owner on 17 Sep 2026, after the fold shipped with Fleet's state having
-no home in that band at all.
+**The rail costs 80px against the full column's 232**, so collapsing returns
+152px rather than the 216px that removing the column returned. That is 27px
+short of what job detail's two floors want at the bottom of the band: **between
+`--layout-breakpoint` and 1128px the step panel is under `--w-step-panel-min`**,
+at 305px at the narrowest and reaching its floor at 1128. The band is real, it
+is named rather than papered over, and nothing clips in it — `.armada-inside`'s
+own `min()` is what degrades the panel smoothly there, and the run column holds
+`--w-run-column-min` throughout. 305px against the 202px that started this is
+the trade the owner took for keeping the column on screen.
 
-> **Rule.** A status dot sits at the title row's trailing edge, drawn **only
-> while the left column is folded**, carrying Fleet's own state, its own
-> colour, and its state in words as both an accessible name and a tooltip.
-> It says liveness and nothing else.
-> Why: the two alternatives were shown and rejected. The same dot at every
-> width would draw the Fleet panel's own dot twice, and a mark that appeared
-> only when something was wrong would make silence mean healthy and broken
-> alike.
+**At 48px Stats and Fleet keep their one status dot each**, so a glance still
+says whether anything needs attention, and Navigation keeps its glyphs.
+
+**Fleet's liveness is also one dot in the title row, at every width.** #1438
+drew that dot only while the left column was absent, which was the right shape
+for a column that disappeared and the wrong one for a column that collapses.
+The owner settled it on 18 Sep 2026: keep it, drawn always.
+
+> **Rule.** A status dot sits at the title row's trailing edge at every width,
+> carrying Fleet's own state, its own colour, and its state in words as both an
+> accessible name and a tooltip. It says liveness and nothing else.
+> Why: chrome that appears and disappears on a resize is the cost, and the
+> owner weighed it against the two alternatives and rejected both — removing
+> the dot, and leaving it conditional. **The 17 Sep reasoning that "the same
+> dot at every width would draw the Fleet panel's own dot twice" no longer
+> holds as an objection**: two readings of one mapped fact is what he chose,
+> against a title row whose contents move with the window. A mark that appeared
+> only when something was wrong stays rejected, because silence would mean
+> healthy and broken alike.
 
 The colour is the Fleet panel's, from the one map — the dot and the panel
 cannot disagree, because neither holds a table of its own. Status colour is
 mapped, never chosen; see [Iconography](iconography.md).
 
-**pid, port, protocol and uptime do not follow it.** They stay in the panel
-and come back with the column. A dot cannot carry a figure, and the title row
-is not where a person reads one.
+**pid, port, protocol and uptime do not follow it.** They stay in the panel,
+and at the rail they are behind the column's own expansion. A dot cannot carry
+a figure, and the title row is not where a person reads one.
 
-**Stats gets no equivalent.** Its rows are six counts, and a count has no
-single-dot form that is not a second, quieter place to check.
+**Stats gets no equivalent in the title row.** Its rows are six counts, and a
+count has no single-dot form that is not a second, quieter place to check — its
+rail dot is the reading at 48px.
 
-**The cost, taken knowingly.** A surface that moves on its own is
-disorienting the first time, and while the column is folded Stats is not on
-screen at all — Navigation is still reached by `⌘1`–`⌘8` and from the palette,
-Fleet is the dot above, and Stats has neither. The title row also gains chrome
-that appears and disappears with the window. The two alternatives to the fold
-itself were rejected on 17 Sep 2026:
-correcting `--w-work-min` would cut the dock's drag ceiling on a 1512px
-screen from 868px to about 580 against #1176, and folding the dock to its
-sheet earlier puts Helm behind a scrim at a width that has room for it.
+**The cost, taken knowingly.** A surface that resizes on its own is
+disorienting the first time, and at the rail Stats and Fleet are a dot each
+rather than their rows. The two alternatives to collapsing at all were rejected
+on 17 Sep 2026: correcting `--w-work-min` would cut the dock's drag ceiling on
+a 1512px screen from 868px to about 580 against #1176, and folding the dock to
+its sheet earlier puts Helm behind a scrim at a width that has room for it.
 `⌘\` (`toggle_sidebar`) is registered and stays unbuilt; nothing hides the
-column by hand.
+column by hand, and nothing hides it at all.
 
 **Nav items do not carry escalation or approval counts.** Stats already
 carries both, as its own rows. Duplicating them in Navigation creates two
@@ -870,40 +894,42 @@ exists to show.
 within the detail view — staying in the queue without splitting the
 layout. Not an inspector.
 
-#### The trail
+#### Job detail's own head
 
 **Job detail is the one screen that keeps its own head**, because it has to
 say which Job rather than repeat what Navigation already says — #1090 ended
 the page head every other screen used to spend on its own name. Its head
-carries the trail: where this Job was opened from, then the Job itself.
+carries the Job's name, its badge, the acts that end or replace it, and one
+line of facts beneath.
 
 | | |
 |---|---|
 | Placement | Job detail's own head, leading edge, before the status badge |
-| Type | Prior segment `--text-xs`, `--fg-subtle`; current segment (the Job's title) `--text-base`, `--fg-default`, body weight |
-| Separator | `chevron-right` at 12px in `--fg-subtle` |
-| Segments | Exactly two — where the Job was opened from, then the Job |
+| Type | The Job's title `--text-base`, `--fg-default`, body weight |
+| Facts | One line beneath, `--text-2xs`, `--fg-muted`, labels set back |
 
-> **Rule.** A trail segment is a control, never an `a`.
-> Why: the anchor rule is about addresses leaving the shell, and a trail that
-> was an anchor would be the one control able to break it.
+> **Rule.** No screen carries a breadcrumb trail.
+> Why: Navigation is already the answer to where you are. Job detail carried a
+> two-segment one — `Overview ›` and then the Job — and #1484 took it out: the
+> first segment named the screen Bridge opens on whichever screen you actually
+> came from, and it was never wired, so it read as a way back and was not one.
 
-> **Rule.** A surface reached from Navigation carries no trail.
-> Why: Navigation is already the answer to where you are, and a one-segment
-> trail repeats the title underneath it.
+> **Rule.** Every fact on the head's line is a reading, never a value a person
+> came to fetch.
+> Why: *Where things are* is the region for a value you want — the repository,
+> the branch, the worktree, the Drone — and a value drawn in both is two values
+> that can disagree. The head is what you read on the way past.
 
-> **Rule.** The last segment is the current destination and does not act.
-> Why: a control that returns you where you already are is a control that does
-> nothing.
+> **Rule.** A fact carrying a machine value carries a word naming it.
+> Why: the run was four bare strings, two of them the same string, and the
+> owner read his own branch off it and asked whether it was a branch, a
+> worktree or an id.
 
-> **Rule.** The repository is never a trail segment.
-> Why: it is a fact about the Job, read in the header's own field run one line
-> down, not a place the trail can open.
-
-**It replaces a back control rather than joining one.** A back button names one
-step and says nothing about where that step sits; the trail names the whole
-path, which is what a route reached from a dock rather than from Navigation
-needs.
+> **Rule.** How long a Job ran is `Run time`, wherever it is drawn, and it
+> stops at the instant the Job stopped.
+> Why: the Board column and job detail's head answer the same question off the
+> same two instants. Two spellings read as two figures, and a figure still
+> climbing on a Job that died reads as a Job still working.
 
 ### Responsive behaviour
 
@@ -918,18 +944,19 @@ floors at 390px, which leaves 358px between its gutters.
 > `packages/shell/src/floor.ts` answers whether the window is at it, and a
 > touch client has no window to bound.
 
-**One breakpoint at ~1100px, one fold at ~1280px, and one client boundary at
-the desktop floor:**
+**One breakpoint at ~1100px, one collapse at ~1280px, and one client boundary
+at the desktop floor:**
 
 | | ≥ 1280px | 1100–1280px, dock open | < 1100px | Touch client |
 | --- | --- | --- | --- | --- |
-| Left column | Expanded, user-resizable — Navigation, Stats and Fleet together | **Folds away entirely**, and its 216px go to the content; Fleet's dot moves to the title row | Auto-collapses to the 48px rail; Stats and Fleet each keep one status dot | A bottom tab bar |
+| Left column | Expanded, user-resizable — Navigation, Stats and Fleet together | **Auto-collapses to the 48px rail**, and 152px go to the content; under 1128px the step panel is still short and gives way | Auto-collapses to the 48px rail; Stats and Fleet each keep one status dot | A bottom tab bar |
 | Job row | One shape at every width — a stacked row carrying the badge, the headline sentence and the labelled field run beneath | The same row | The same row. Nothing reshapes | The same row, field run wrapped |
 | Helm's dock | Beside the content when open; closed draws nothing, and the title row's Helm button reopens it | Beside the content, unmoved — it is what the middle column is paying for | An edge strip; open draws it as a sheet over the content instead | Not built |
 
-The middle column is the only one where the column is narrower than the one
-to its right, and that is not a mistake: below 1100 the dock takes itself off
-screen and hands back more than the column costs, so the rail can come back.
+The middle and right columns draw the same rail, and what differs is what the
+rail has to pay for: below 1100 the dock takes itself off screen and hands back
+more than the full column costs, so the window has room to spare, while in the
+middle band the dock is still there and the bottom 27px of that band is short.
 With the dock closed the middle column reads as the first.
 
 The third column is a client and not a window width. Nothing between 390px and
@@ -1861,10 +1888,13 @@ a refused runtime file, a protocol Bridge does not speak — keeps a neutral
 dot and names itself in the label instead. It is not a glyph, so "this panel
 carries no icons" is unaffected; see [Iconography](iconography.md).
 
-**The dot has a second home and the mapping does not.** While the left column
-is folded the title row draws this dot, from the same four-state map and the
-same word — see Left column, above. Two tables would be two things that can
-disagree, which is the whole reason the hue is mapped rather than chosen.
+**The dot has a second home and the mapping does not.** The title row draws
+this dot at every width, from the same four-state map and the same word — see
+Left column, above. It read "while the left column is folded" until 18 Sep
+2026, when the owner made the title row's dot permanent; the two are on screen
+together, which is a duplicated reading and never a second mapping. Two tables
+would be two things that can disagree, which is the whole reason the hue is
+mapped rather than chosen.
 
 ```
 running       --status-completed-success dot

@@ -7,7 +7,7 @@ import tokens from "@armada/tokens/tokens.json";
 import { STUDIO_PROMOTIONS } from "@armada/protocol";
 import { CHANNELS, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState, PickedView, Summons } from "../shared/bridge";
-import type { StudioPromotion } from "@armada/protocol";
+import type { Outcome, StudioPromotion } from "@armada/protocol";
 import type { Draft, HelmContext, StagedAttachment } from "@armada/protocol";
 import type { AddTask, DropTask, FileReport } from "@armada/protocol";
 import type {
@@ -26,6 +26,7 @@ import type { AddKitServer, ManifestReach, ReachesDrones } from "@armada/protoco
 import type { StagedFrame, StudioCapture, StudioNodeByHand, StudioPosition } from "@armada/protocol";
 import { ANNOTATE_FLAG } from "../shared/annotations";
 import { handleAnnotations } from "./annotations";
+import { CaptureWindows } from "./capture/windows";
 import { FleetConnection } from "./connection";
 import { handleTaps } from "./haptics";
 import { installSounds } from "./dev-sounds";
@@ -158,6 +159,27 @@ async function stagedFrame(event: Electron.IpcMainInvokeEvent): Promise<StagedFr
 
 let connection: FleetConnection | null = null;
 
+/** Nothing reached Fleet, because there is no connection to reach it on. */
+const UNSENT: Outcome = { ok: false, why: "not_connected" };
+
+/**
+ * The capture windows open on server Runs — #1294,
+ * `docs/practices/capture-window.md`. Each holds a page with no preload and
+ * Bridge's own bar above it; the Studio a Note lands on is read off the Studio
+ * main is holding, never off a name a renderer sent.
+ */
+const captureWindows = new CaptureWindows({
+  capture: async (studioId, said, capture, frame) =>
+    (await connection?.studios.captureNote(studioId, said, capture, frame)) ?? UNSENT,
+  stage: async (png, width, height) => {
+    const dir = join(app.getPath("temp"), "armada-frames", randomUUID());
+    await mkdir(dir, { recursive: true });
+    const staged = join(dir, "frame.png");
+    await writeFile(staged, png);
+    return { staged_path: staged, width, height };
+  },
+});
+
 /** Whether any window is on screen and not minimized. A closed one is neither. */
 function anyWindowShown(): boolean {
   return BrowserWindow.getAllWindows().some(
@@ -288,6 +310,8 @@ function withView(state: BridgeState, view: PickedView): BridgeState {
 /** Every window sees the same state, save its own pick — `pickedViews`, overlaid here. */
 function publish(state: BridgeState): void {
   published = state;
+  // A Run that has stopped serving ends capture in its own window — #1294.
+  captureWindows.changed(state);
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) window.webContents.send(CHANNELS.changed, withView(state, viewFor(window.id)));
   }
@@ -974,6 +998,40 @@ void app.whenReady().then(() => {
       return (await connection?.studios.startServer(studioId, name, at)) ?? unsent;
     },
   );
+  // The capture window — #1294, `docs/practices/capture-window.md`. **Two ids
+  // and no address main did not already hold**: the server, one of its own
+  // links, and the Studio read off the one main is holding.
+  ipcMain.handle(CHANNELS.openCaptureWindow, (_event, serverId: unknown, url: unknown) => {
+    if (!text(serverId) || !text(url)) return undefined;
+    const studio = connection?.studios.servedBy(serverId) ?? null;
+    return captureWindows.openOn(published, serverId, url, studio);
+  });
+  // The rest are the window's own bar, answered for the window the call came
+  // from. A bar names no window, and the page below it holds no preload.
+  const barred = (event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent) => captureWindows.from(event.sender);
+  ipcMain.handle(CHANNELS.captureWindowRead, (event) => barred(event)?.state() ?? null);
+  ipcMain.handle(CHANNELS.captureWindowArm, (event, on: unknown) =>
+    typeof on === "boolean" ? (barred(event)?.arm(on) ?? null) : null,
+  );
+  ipcMain.handle(CHANNELS.captureWindowAim, async (event, x: unknown, y: unknown) =>
+    typeof x === "number" && typeof y === "number" ? ((await barred(event)?.aim(x, y)) ?? null) : null,
+  );
+  ipcMain.handle(CHANNELS.captureWindowHold, async (event, x: unknown, y: unknown) =>
+    typeof x === "number" && typeof y === "number" ? ((await barred(event)?.hold(x, y)) ?? null) : null,
+  );
+  ipcMain.handle(CHANNELS.captureWindowRelease, (event) => barred(event)?.release());
+  ipcMain.handle(CHANNELS.captureWindowSave, async (event, said: unknown) =>
+    text(said) ? ((await barred(event)?.save(said)) ?? UNSENT) : undefined,
+  );
+  ipcMain.handle(CHANNELS.captureWindowReload, (event) => barred(event)?.reload());
+  ipcMain.handle(CHANNELS.captureWindowFollowRefused, async (event) => {
+    await barred(event)?.followRefused();
+  });
+  ipcMain.on(CHANNELS.captureWindowScroll, (event, wheel: unknown) => {
+    const said = (wheel ?? {}) as Record<string, unknown>;
+    const at = (key: string): number => (typeof said[key] === "number" ? (said[key] as number) : 0);
+    barred(event)?.scroll({ x: at("x"), y: at("y"), deltaX: at("deltaX"), deltaY: at("deltaY") });
+  });
   ipcMain.handle(CHANNELS.promoteOnStudio, async (_event, studioId: unknown, promotion: unknown) => {
     // The tag is checked here because it picks the route; the body Fleet
     // decodes and refuses on its own, as every other act's body is.

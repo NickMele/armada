@@ -348,6 +348,19 @@ where
                 job_id: ipc::JobId::from(&found.job_id),
                 handle: core_model::handle_of(found.number, &found.title),
             });
+        // The same column followed forwards, so the header can name what this
+        // Job replaced rather than print its id — `#1474`. One handle, composed
+        // here beside the other one.
+        detail.replaces = self
+            .store()
+            .lock()
+            .await
+            .replaces(job.id())
+            .map_err(|why| self.refusal(Adrift::Reading(why)))?
+            .map(|found| ipc::Replaces {
+                job_id: ipc::JobId::from(&found.job_id),
+                handle: core_model::handle_of(found.number, &found.title),
+            });
         // The way back to the Studio that dispatched it — `#1362`. Derived
         // from the `produced` edge, so a deleted Studio answers nothing here
         // and `job.origin` is what still says the Job came off one.

@@ -356,6 +356,8 @@ pub fn detail(job: JobSummary) -> JobDetail {
         replaced_by: None,
         // The fake keeps no Studio, so no Job it serves came off one.
         from_studio: None,
+        // And the other end of that one column, for the same reason.
+        replaces: None,
     }
 }
 

@@ -41,17 +41,19 @@
 // `JobSummary` now, so the switch is a field the row already holds. A Job at
 // the approval gate has no worktree and keeps the workflow.
 //
-// **Elapsed is measured from `started_at`, not `created_at`.** Waiting for
+// **Run time is measured from `started_at`, not `created_at`.** Waiting for
 // approval and waiting in the queue for a slot must not count, so a Job that
-// has never run — `started_at` absent — draws no elapsed at all. Once running
-// it runs to now, and stops at the Job's own last movement once it is over —
-// a terminal Job whose elapsed kept climbing would read as still running.
+// has never run — `started_at` absent — draws no run time at all. Once running
+// it runs to now, and it stops at `ended_at` once the Job is over — a terminal
+// Job whose figure kept climbing would read as still running.
 //
-// **The same track carries when a Job was created, once it has run.** Once
-// terminal, elapsed has nothing left to answer, and that slot — blank until
-// now — draws the creation time itself rather than staying empty. A Job that
-// never ran has nothing to draw there either: a creation time in a Run time
-// column would read as a run that happened.
+// **A Job that is over draws how long it ran, since #1484.** It drew the
+// instant it ended instead, because the column predates `ended_at` being on
+// the wire: a Job that ran twelve minutes and died read `Sep 18, 9:41 AM`
+// beside running Jobs reading durations, which is two kinds of answer in one
+// column. The creation time survives as the fallback for a record older than
+// the field, and a Job that never ran still draws nothing — a date in a Run
+// time column would read as a run that happened.
 //
 // **Spend stays out of the row entirely.** Nothing measures it — not on the
 // wire, not in the store, not computed — and a labelled gap on every row reads
@@ -269,11 +271,11 @@ export function Row({
     {
       label: "Run time",
       // **A Job that has never run draws nothing here, not `endedAt`.** The
-      // fallback is for a terminal Job whose elapsed has nothing left to
-      // answer; a Job still waiting for approval or a slot has never run at
-      // all, and an end time in this column would read as a run that
-      // happened. `endedAt` already falls back to `createdAt` itself, for a
-      // row old enough to predate the field — see where it is computed.
+      // fallback is for a Job from a Fleet that served no `ended_at`, which
+      // leaves `elapsedOf` with nothing to stop against; a Job still waiting
+      // for approval or a slot has never run at all, and a date in this column
+      // would read as a run that happened. `endedAt` already falls back to
+      // `createdAt` itself, for a row older still — see where it is computed.
       value: elapsedNow ?? (isTerminal(job) ? endedAt : undefined) ?? "—",
       mono: true,
       quiet: elapsedNow === undefined,
@@ -407,17 +409,24 @@ export function Row({
 }
 
 /**
- * How long this Job has been running.
+ * How long this Job ran. **One definition, read by the Board row and by job
+ * detail's header alike** — the two draw the same figure, and two subtractions
+ * of the same pair of instants is how one screen comes to say a Job is still
+ * going while the other says it stopped.
  *
- * **A working Job runs to now; a Job that is over stops.** `JobSummary` carries
- * no ended-at, so a terminal Job would otherwise keep counting and read as
- * still running. There is nothing on the row to stop it against, so a terminal
- * Job shows no elapsed at all rather than a figure that is wrong every second
- * after it is drawn. Reported: the row wants the instant the Job stopped.
+ * **A working Job runs to now; a Job that is over stops at `ended_at`.** The
+ * instant a Job reached a terminal status has been on the wire since protocol
+ * 14.1; before it was, a terminal Job had nothing to stop against and drew no
+ * figure at all rather than one that was wrong a second after it was drawn.
+ *
+ * **A terminal Job with no `ended_at` still draws nothing**, which is a record
+ * from a Fleet older than the field rather than a Job with no end. The caller
+ * decides what stands in that gap — the Board row draws when it was created.
  *
  * **`undefined` too where `started_at` is absent** — a Job at `needs approval`,
  * or approved and waiting in the queue, has never run and shows no run time.
  */
 export function elapsedOf(job: JobSummary, now: number): string | undefined {
+  if (job.ended_at !== undefined) return elapsedSince(job.started_at, job.ended_at);
   return JOB_LIFECYCLE[job.status]?.terminal === false ? elapsedSince(job.started_at, now) : undefined;
 }

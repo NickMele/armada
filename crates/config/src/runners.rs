@@ -135,7 +135,7 @@ mod tests {
         let vitest = shipped("vitest").expect("vitest ships");
         let run_changed = vitest.run_changed().expect("vitest narrows");
         assert!(run_changed.contains("{files}"), "{run_changed}");
-        assert!(run_changed.contains("{pkg}"), "{run_changed}");
+        assert!(run_changed.contains("{dir}"), "{run_changed}");
         // The two properties #1205 and #1204 cost, written into the data
         // rather than into whoever reads it.
         assert!(

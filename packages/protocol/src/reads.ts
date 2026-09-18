@@ -459,6 +459,18 @@ export type Outcome =
    * saves the round trip.
    */
   | { ok: false; why: "already_showing" }
+  /**
+   * A capture press in the capture window with nothing held — #1294. Bridge's
+   * own, and Fleet never sees it: a Note with no capture is not the act.
+   */
+  | { ok: false; why: "nothing_held" }
+  /**
+   * A capture in the capture window after the Run stopped serving — #1294.
+   * **Refused before it is sent**: a loopback port is not an identity, so a
+   * Note taken against whatever replaced the Run would be a record of
+   * something other than what it names. `docs/practices/capture-window.md`.
+   */
+  | { ok: false; why: "run_ended" }
   | { ok: false; why: "refused"; error: WireError }
   | { ok: false; why: "transport"; detail: string; fault: TransportFault };
 

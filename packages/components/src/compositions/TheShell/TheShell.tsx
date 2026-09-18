@@ -42,24 +42,19 @@ export type TheShellProps = {
   dispatchDisabled?: boolean;
   surfaces: SidebarItem[];
   activeId?: string;
-  /** The 48px icon rail. The surface decides, from the window's width. */
-  collapsed?: boolean;
   /**
-   * The column's third width, after its drag range and the rail: gone. No
-   * panels, no rail, no handle, and the content takes its 216px. The surface
-   * decides, from the window's width and whether Helm's dock is beside the
-   * content — `--window-fold-left`.
+   * The 48px icon rail — the column's narrowest, and the narrowest it ever
+   * gets. The surface decides, from the window's width and from whether
+   * Helm's dock is taking the room: `--layout-breakpoint` at any dock state,
+   * and `--window-fold-left` while the dock is beside the content.
    *
-   * **This is the one state where Navigation, Stats and Fleet are not on
-   * screen**, decided by the owner on 17 Sep 2026 over narrowing the dock or
-   * folding it to its sheet earlier. `collapsed` is read first where both are
-   * set, since a folded column has no rail to collapse to.
-   *
-   * Fleet's liveness does not go with them: the title row draws its dot for
-   * as long as this holds, and gives it back to the panel when it does not
-   * (#1437). Stats has no such stand-in — its rows are counts, not one fact.
+   * **There is no third width.** #1435 added one — the column absent
+   * altogether under `--window-fold-left` — and the owner corrected it on
+   * 18 Sep 2026: the panels collapse into a single icon-size column, they are
+   * not hidden away. Navigation, Stats and Fleet are on screen at every
+   * width, each reading down to a glyph or a dot.
    */
-  leftFolded?: boolean;
+  collapsed?: boolean;
   onSelect?: (id: string) => void;
   /** The panel body. The one region that scrolls. No head above it: #1090
    *  ended the panel head every screen used to spend on its own name — the
@@ -124,6 +119,15 @@ export type TheShellDock = {
    * same way `open` is.
    */
   onResize?: (width: number) => void;
+  /**
+   * The dock's own act, beside Close — Helm's *Start fresh*, put there by the
+   * owner on 18 Sep 2026: it ends the conversation the dock holds, which is
+   * the head's business rather than the composer's, and the composer's own row
+   * had run out of width for it. **One control**, and the head is the same
+   * layout without it. Drawn in the folded sheet's head too, through `Sheet`'s
+   * own `controls` slot — folding the dock must not take an act away.
+   */
+  action?: ReactNode;
   /** Absent draws one quiet line until the questions (#935) and the conversation (#944) arrive. */
   children?: ReactNode;
 };
@@ -137,7 +141,6 @@ export function TheShell({
   surfaces,
   activeId,
   collapsed,
-  leftFolded = false,
   onSelect,
   children,
   dock,
@@ -159,32 +162,31 @@ export function TheShell({
           onDispatch={onDispatch}
           dispatchDisabled={dispatchDisabled}
           helm={helmButtonOf(dock)}
-          // Folded only. The panel below is the reading everywhere else, and
-          // this row draws the same state from the same two fields — #1437.
-          fleet={leftFolded ? { state: fleet.state, label: fleet.label } : undefined}
+          // Every width. The panel carries the same state from the same two
+          // fields; the owner settled the duplication on 18 Sep 2026 — keep
+          // it, drawn always, rather than mounting chrome on a resize.
+          fleet={{ state: fleet.state, label: fleet.label }}
         />
         <div className="armada-shell__body">
-          {leftFolded ? null : (
-            <div
-              className="armada-shell__left"
-              style={collapsed || leftWidth === undefined ? undefined : { width: `${leftWidthValue}px` }}
-            >
-              <Sidebar
-                header={railHeader}
-                sectionLabel={null}
-                surfaces={surfaces}
-                activeId={activeId}
-                collapsed={collapsed}
-                // The column holds the width. Left to its own 200px default, the
-                // nav stayed put while Stats and Fleet followed a drag.
-                width="100%"
-                onSelect={onSelect}
-              />
-              <StatsPanel {...stats} narrow={collapsed} />
-              <FleetPanel {...fleet} narrow={collapsed} />
-            </div>
-          )}
-          {leftFolded || collapsed || onResizeLeft === undefined ? null : (
+          <div
+            className="armada-shell__left"
+            style={collapsed || leftWidth === undefined ? undefined : { width: `${leftWidthValue}px` }}
+          >
+            <Sidebar
+              header={railHeader}
+              sectionLabel={null}
+              surfaces={surfaces}
+              activeId={activeId}
+              collapsed={collapsed}
+              // The column holds the width. Left to its own 200px default, the
+              // nav stayed put while Stats and Fleet followed a drag.
+              width="100%"
+              onSelect={onSelect}
+            />
+            <StatsPanel {...stats} narrow={collapsed} />
+            <FleetPanel {...fleet} narrow={collapsed} />
+          </div>
+          {collapsed || onResizeLeft === undefined ? null : (
             <LeftHandle width={leftWidthValue} onResize={onResizeLeft} />
           )}
           <div className="armada-shell__work">
@@ -477,6 +479,7 @@ function Dock({
   width,
   onResize,
   onOpen,
+  action,
   children,
   leftWidth,
 }: TheShellDock & { leftWidth: number }) {
@@ -506,6 +509,7 @@ function Dock({
           <div className="armada-shell__dock-head">
             <span className="armada-shell__dock-chip" aria-hidden><MessageSquare size={16} strokeWidth={2} /></span>
             <h2 className="armada-shell__dock-title">{DOCK_TITLE}</h2>
+            {action}
             <Button variant="secondary" size="sm" ground="card" onClick={() => onOpen(false)}>
               Close
               {binding === undefined ? null : <KbdCmd shortcut={binding} />}
@@ -534,7 +538,13 @@ function Dock({
         <MessageSquare size={16} strokeWidth={2} aria-hidden />
         {questions > 0 ? <span className="armada-shell__strip-count">{questions}</span> : null}
       </button>
-      <HelmSheet open={open && folded} title={DOCK_TITLE} binding={binding} onClose={() => onOpen(false)}>
+      <HelmSheet
+        open={open && folded}
+        title={DOCK_TITLE}
+        binding={binding}
+        controls={action}
+        onClose={() => onOpen(false)}
+      >
         {body}
       </HelmSheet>
     </>

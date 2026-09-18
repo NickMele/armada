@@ -58,9 +58,23 @@ async fn a_replaced_jobs_detail_names_the_job_that_took_the_work_on() {
         Some(killed.as_str()),
         "the replacement names where it came from"
     );
+    // The other half of that id, and the whole of `#1474`: what the header
+    // draws is a handle a person has read before, not the ULID beside it.
+    let from = replacement
+        .replaces
+        .expect("the replacement names what it replaced");
+    assert_eq!(from.job_id.as_str(), killed.as_str());
+    assert_eq!(
+        from.handle, replaced.job.handle,
+        "the predecessor's own handle, composed by core-model and not twice"
+    );
     assert!(
         replacement.replaced_by.is_none(),
         "nothing has replaced the replacement, so it is not a dead end"
+    );
+    assert!(
+        replaced.replaces.is_none(),
+        "the first dispatch replaced nothing"
     );
 }
 
@@ -84,10 +98,10 @@ async fn a_killed_job_nobody_redispatched_says_nothing_extra() {
 
     assert_eq!(whole.job.status.domain(), JobStatus::Killed);
     assert!(whole.replaced_by.is_none());
+    assert!(whole.replaces.is_none());
+    let encoded = ipc::encode(&whole).expect("it encodes");
     assert!(
-        !ipc::encode(&whole)
-            .expect("it encodes")
-            .contains("replaced_by"),
+        !encoded.contains("replaced_by") && !encoded.contains("\"replaces\""),
         "absent, never present-and-null"
     );
 }

@@ -19,12 +19,15 @@ export function HelmSheet({
   open,
   title,
   binding,
+  controls,
   onClose,
   children,
 }: {
   open: boolean;
   title: string;
   binding?: string;
+  /** The dock's own act, beside the close — `Sheet`'s header slot, so a folded dock keeps it. */
+  controls?: ReactNode;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -39,6 +42,7 @@ export function HelmSheet({
           </span>
         }
         contained
+        controls={controls}
         closeLabel="Close"
         closeBinding={binding}
         onClose={onClose}

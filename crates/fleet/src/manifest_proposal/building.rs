@@ -183,7 +183,7 @@ fn check_driven_by(
         // The root workspace is the repository, and a template naming a
         // package has nothing to put there — which reads as a Check that
         // runs whole, not as one narrowed to the repository.
-        pkg: (dir != ".").then(|| dir.to_string()),
+        dir: (dir != ".").then(|| dir.to_string()),
     });
     proposed
 }

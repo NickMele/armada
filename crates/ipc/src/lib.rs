@@ -185,8 +185,8 @@ pub use attempt::{ended_at, first_started_at, Move, StepAttempt};
 pub use breakage::{ClaimedBreakage, WaitingOnFix};
 pub use capacity::{AdmissionHold, FleetCapacity};
 pub use capturing::{
-    CaptureBounds, CaptureElement, CaptureFrame, CaptureStudioNote, CaptureWindow, StagedFrame,
-    StudioCapture,
+    CaptureBounds, CaptureElement, CaptureFrame, CaptureServed, CaptureStudioNote, CaptureWindow,
+    StagedFrame, StudioCapture,
 };
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
@@ -203,8 +203,8 @@ pub use detail::{
 };
 pub use detail::{
     Criterion, Currency, Dependency, FromStudio, JobDelivery, JobDetail, JobReview, JobSpend,
-    JudgeInFlight, PullRequestChecks, PullRequestDetail, Refusal, ReplacedBy, ReviewedBy, Settled,
-    StepDetail, StepFacts, StepPass, Stuck, Verdict,
+    JudgeInFlight, PullRequestChecks, PullRequestDetail, Refusal, ReplacedBy, Replaces, ReviewedBy,
+    Settled, StepDetail, StepFacts, StepPass, Stuck, Verdict,
 };
 pub use drift::{Declaration, Drift, ManifestDrift, PackageScripts, Unfollowed};
 pub use drones::{DroneDetail, DroneList, DroneSummary};

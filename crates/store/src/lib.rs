@@ -140,7 +140,7 @@ pub use fold::{Moved, RecordedEvent};
 pub use footprint::Footprinted;
 pub use forget::Forgotten;
 pub use limits::SavedLimits;
-pub use lineage::ReplacedBy;
+pub use lineage::{ReplacedBy, Replaces};
 pub use migrations::KNOWN_SCHEMA_VERSION;
 pub use open::Store;
 pub use pending_evidence::PendingEvidence;

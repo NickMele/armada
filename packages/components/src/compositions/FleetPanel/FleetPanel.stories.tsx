@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
-import { FleetPanel } from "./FleetPanel";
+import { FleetPanel, fleetSaid } from "./FleetPanel";
 
 /**
  * Fleet — the left column's third panel, replacing the status bar's own
@@ -165,6 +165,40 @@ export const Collapsed: Story = {
   args: { state: "running", label: "Running", rows: [{ label: "pid", value: "61372" }], open: false },
 };
 
+/**
+ * The left column at its 48px rail — the whole of Fleet, as one dot. That is
+ * every width below `--window-fold-left` with Helm's dock beside the content
+ * since 18 Sep 2026, rather than the rare width it used to be.
+ *
+ * What a rendering cannot show: that the dot is not silent. It was — an
+ * `aria-hidden` mark inside a region named "Fleet", so nothing said which
+ * state — and the words are `fleetSaid`, the producer the title row's own dot
+ * reads, rather than a second sentence composed here.
+ */
 export const Narrow: Story = {
   args: { state: "running", label: "Running", open: true, narrow: true },
+  play: async ({ args, canvas }) => {
+    const said = fleetSaid(args.label);
+    const dot = canvas.getByRole("img", { name: said });
+    await expect(dot).toHaveAttribute("title", said);
+  },
+};
+
+/** Not running, at the rail: the one thing the dot says is the one thing that changed. */
+export const NarrowNotRunning: Story = {
+  args: { state: "not-running", label: "Not running", open: true, narrow: true },
+  play: Narrow.play,
+};
+
+/**
+ * Expanded, and unchanged: the state is in words in the panel's own body, so
+ * nothing here is named `Fleet — Running`. The rail's name is for the width
+ * that has no room for those words, not a second reading beside them.
+ */
+export const ExpandedSaysItInWords: Story = {
+  args: { state: "running", label: "Running", rows: [{ label: "pid", value: "61372" }], open: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole("img", { name: /^Fleet — / })).not.toBeInTheDocument();
+    await expect(canvas.getByText("Running")).toBeVisible();
+  },
 };

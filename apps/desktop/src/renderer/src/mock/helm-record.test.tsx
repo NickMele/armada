@@ -68,7 +68,10 @@ test("one press in the dock copies the record, and the reading beside it is the 
   await expect.poll(() => written).toHaveLength(1);
   await expect.element(page.getByText("The debug info is on the clipboard.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Details" }).click();
+  // The reading is behind the split button's caret since 18 Sep 2026 — the
+  // composer's head had no width for both acts side by side.
+  await page.getByRole("button", { name: "More ways to report this answer" }).click();
+  await page.getByRole("menuitem", { name: "Details" }).click();
   const sheet = page.getByRole("dialog", { name: "Session record" });
   await entered(sheet);
 
@@ -93,4 +96,6 @@ test("Helm pointed at no repository offers neither control, because there is no 
   await expect.element(dock()).toBeVisible();
   expect(page.getByRole("button", { name: "Copy debug info" }).query()).toBeNull();
   expect(page.getByRole("button", { name: "Details" }).query()).toBeNull();
+  // Not the caret either: with neither act there is no control to split.
+  expect(page.getByRole("button", { name: "More ways to report this answer" }).query()).toBeNull();
 });

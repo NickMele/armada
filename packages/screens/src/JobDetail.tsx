@@ -62,7 +62,17 @@ import { StepActs } from "./StepActs";
 import { refusedAsideOf, type Deciding } from "./flag-held";
 import { whyNoNotes } from "./notes";
 import { entriesOf, hideUnread, whyNotWatching } from "./story";
-import { LOOK_FAILED, NOTHING_HAPPENED_YET, latestOf, movesOf, nothingToAsk, summarised, whyNoReading } from "./resources";
+import {
+  LOOK_FAILED,
+  NOTHING_HAPPENED_YET,
+  latestOf,
+  movesOf,
+  nothingToAsk,
+  spentOn,
+  summarised,
+  turnsTaken,
+  whyNoReading,
+} from "./resources";
 import { briefOf, whyNoBrief, workOf, workRehearsalOf } from "./work";
 
 export type { ConfirmableAct, HeldAct, JobAct } from "./Acts";
@@ -169,7 +179,6 @@ function OneJob({
   onOpenRemarkLink,
   onCopied,
   onSaid,
-  onLeave,
   onAddTask,
   onDropTask,
   rehearsal,
@@ -624,9 +633,9 @@ function OneJob({
     onRaisingTurns: setRaisingTurns,
     onOpenSettings: () => openSheet("settings"),
     onOpenPullRequest,
+    onOpenJob,
     onCopied,
     onSaid,
-    onLeave,
   });
 
   // The badge is the header, so a Job the registry has no glyph or verb for
@@ -676,6 +685,12 @@ function OneJob({
       // but the run is what they opened the Job to read, so the reading is on
       // the sheet and what stays here is what changes the answer.
       //
+      // **What it is spending reads here too, since #1484.** Spend and Turns
+      // were the header's second line, above everything a person opened the
+      // Job for; the question they answer is this region's, so they are drawn
+      // in it. They come off `whole` rather than off a look, so they are there
+      // whether or not anyone has looked.
+      //
       // **Fleet's last lines are the tail of it.** They had a region of their
       // own above the run — #437 — and both regions answered *what is happening
       // on this machine right now*, which is one region too many. Drawn at
@@ -687,6 +702,8 @@ function OneJob({
           latestNote={whyNoNotes(journalled) ?? NOTHING_HAPPENED_YET}
           figures={summarised(holding, examinedNow)}
           note={whyNoReading(resources)}
+          spend={spentOn(whole)}
+          turns={turnsTaken(whole)}
           age={holding === null ? undefined : (span(holding.read_at, now) ?? undefined)}
         />
       }
