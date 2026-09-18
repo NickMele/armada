@@ -8,6 +8,9 @@ import { SendKbd, sendsOn } from "../../send-message";
 /** One repository the switch may point Helm at — id is the Manifest id. */
 export type HelmRepositoryOption = { id: string; label: string };
 
+/** No Manifest id is empty, so this value is never a repository. `AskRepository` reads the same way. */
+const UNPOINTED = "";
+
 /** The open Job chipped above the message box — `#1075`. */
 export type HelmComposerChip = { jobHandle: string; title: string };
 
@@ -88,9 +91,25 @@ export function HelmComposer({
         {onSwitch === undefined || repositories.length < 2 ? null : (
           <Select
             aria-label="Point Helm at a different repository"
-            value={current ?? ""}
-            onChange={(event) => onSwitch(event.target.value)}
+            value={current ?? UNPOINTED}
+            onChange={(event) => {
+              if (event.target.value !== UNPOINTED) onSwitch(event.target.value);
+            }}
           >
+            {/* Pointed at nothing, the switch needs an entry of its own to
+                stand at — the same disabled placeholder the repository asks
+                elsewhere draw (`AskRepository`), in the same words. Without
+                one, a `value` matching no `<option>` left Chromium displaying
+                the first repository: the switch disagreed with the chip beside
+                it, and that first repository could not be chosen at all,
+                because picking the entry already displayed fires no `change`.
+                Once Helm is pointed at one, there is nothing to stand in for
+                and the entry is gone. */}
+            {current === undefined ? (
+              <option value={UNPOINTED} disabled>
+                Choose a repository
+              </option>
+            ) : null}
             {repositories.map((one) => (
               <option key={one.id} value={one.id}>
                 {one.label}
