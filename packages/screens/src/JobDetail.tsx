@@ -624,6 +624,7 @@ function OneJob({
     onRaisingTurns: setRaisingTurns,
     onOpenSettings: () => openSheet("settings"),
     onOpenPullRequest,
+    onOpenJob,
     onCopied,
     onSaid,
     onLeave,

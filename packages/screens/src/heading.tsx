@@ -63,6 +63,8 @@ export type Heading = {
   /** Open the Job settings panel. The sheet is the screen's, so the screen opens it. */
   onOpenSettings: () => void;
   onOpenPullRequest: OpenPullRequest;
+  /** Land on another Job. The `Redispatched from` fact is the header's one. */
+  onOpenJob?: ((jobId: string) => void) | undefined;
   onCopied: (value: string) => void;
   /** Say a sentence to the person. Only ever a failure — see `opening.ts`. */
   onSaid: (sentence: string) => void;
@@ -99,6 +101,7 @@ export function headingOf({
   onRaisingTurns,
   onOpenSettings,
   onOpenPullRequest,
+  onOpenJob,
   onCopied,
   onSaid,
   onLeave,
@@ -167,6 +170,9 @@ export function headingOf({
         if (because !== null) onSaid(because);
       });
     },
+    // The `Redispatched from` fact, pressed. The same act the callout on the
+    // job this one replaced already performs, from the other end — `#1474`.
+    onOpenJob,
   };
 }
 

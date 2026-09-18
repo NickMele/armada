@@ -298,6 +298,66 @@ export const BothKillsMenuOpen: Story = {
 };
 
 /**
+ * A job minted by a redispatch, naming the one it replaced. **The handle, and
+ * pressable** — it drew a bare ULID, which was the one fact on the screen about
+ * where the job came from and the one fact a person could not use. `#1474`.
+ *
+ * **`opensJob` rather than `href`.** The destination is inside Armada, so the
+ * value is a job id and the press goes to `onOpenJob`; an address would make
+ * `onFollowed` answer two questions and send this one to a browser.
+ *
+ * The drawing is the link's, because the affordance a person reads is the
+ * same. What differs is the element: a button, because there is nowhere to go
+ * without the app.
+ */
+export const ItReplacedAnEarlierJob: Story = {
+  args: {
+    ...AFinishedJob.args,
+    fields: [
+      { label: "Branch", value: "fix/poke-ceiling", mono: true, copyValue: "fix/poke-ceiling" },
+      { label: "Ran", value: "18m 22s", mono: true },
+      { label: "Dispatched by you" },
+      {
+        label: "Redispatched from",
+        value: "118-add-a-retry-ceiling-to-the-poke-loop",
+        mono: true,
+        opensJob: "01M2C1TJ8G0099REDISPATCHED",
+      },
+    ],
+    onOpenJob: fn(),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const handle = "118-add-a-retry-ceiling-to-the-poke-loop";
+    const said = canvas.getByRole("button", { name: handle });
+
+    // What is on screen is the handle, and no id is anywhere near it.
+    await expect(said).toHaveTextContent(handle);
+    await expect(said).not.toHaveTextContent("01M2C1TJ8G0099REDISPATCHED");
+
+    // The press sends the id, and this component navigates nowhere.
+    await userEvent.click(said);
+    await expect(args.onOpenJob).toHaveBeenCalledWith("01M2C1TJ8G0099REDISPATCHED");
+  },
+};
+
+/**
+ * The same fact with nowhere to go. **No control where nothing opens** — the
+ * rule the callout on the replaced job already keeps, rather than a link that
+ * looks pressable and is not.
+ */
+export const ItReplacedAJobNothingCanOpen: Story = {
+  args: {
+    ...ItReplacedAnEarlierJob.args,
+    onOpenJob: undefined,
+  },
+  play: async ({ canvas }) => {
+    const handle = "118-add-a-retry-ceiling-to-the-poke-loop";
+    await expect(canvas.queryByRole("button", { name: handle })).toBeNull();
+    await expect(canvas.getByText(handle)).toBeVisible();
+  },
+};
+
+/**
  * A stopped job, with the one recovery. **The label says what happens** — a
  * redispatch mints a replacement and kills this job, so "retry" or "run again"
  * would name an act Fleet does not perform.

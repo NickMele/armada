@@ -72,22 +72,28 @@ export function factsOf(job: JobSummary, whole: JobWhole | null, now: number): J
     ...turnsFact(whole),
     ...dispatchedByFact(job),
     ...studioGoneFact(job, whole),
-    ...redispatchedFromFact(job),
+    ...redispatchedFromFact(whole),
   ];
 }
 
 /**
  * Which job this one replaced, where a redispatch minted it — the quiet half
- * of the callout on the job it replaced. `#1439`.
+ * of the callout on the job it replaced. `#1439`, `#1474`.
  *
- * **By its id, the way `sub_dispatched` names its parent**, and for that
- * field's reason: `redispatched_from` is the predecessor's id and nothing else
- * of the lineage, so the line says which job and leaves the walk to the reader.
- * The board's own `foldLineages` is what counts a chain; this is one edge.
+ * **The handle, and pressable.** It drew `job.redispatched_from`, a raw ULID:
+ * the one fact on the screen about where this job came from was the one fact
+ * a person could neither read nor use. `replaces` is that id looked up.
+ *
+ * **One edge and no walk.** `foldLineages` counts a chain; this names the
+ * direct predecessor and leaves the climb to the reader.
+ *
+ * Nothing until the read lands, and nothing where it comes back empty —
+ * `studioGoneFact`'s rule. The ULID is not a fallback: drawing it was the bug.
  */
-function redispatchedFromFact(job: JobSummary): JobDetailField[] {
-  if (job.redispatched_from === undefined) return [];
-  return [{ label: "Redispatched from", value: job.redispatched_from, mono: true }];
+function redispatchedFromFact(whole: JobWhole | null): JobDetailField[] {
+  const from = whole?.replaces;
+  if (from === undefined) return [];
+  return [{ label: "Redispatched from", value: from.handle, mono: true, opensJob: from.job_id }];
 }
 
 /**
