@@ -39,4 +39,8 @@ pub struct Reconciled {
     /// Jobs whose Drone submitted evidence and did not survive the restart —
     /// ruled on anyway, from the durable row it left. #796.
     pub recovered_evidence: Vec<JobId>,
+    /// Links on a Studio whose address an adapter recognised, written back as
+    /// the Issue, Pull request or Epic they name. `#1394`. Nought on every
+    /// boot after the one that converted them.
+    pub recognised: usize,
 }

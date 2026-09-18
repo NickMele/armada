@@ -527,6 +527,14 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
             admitted => format!(", admitted {}", admitted.len()),
         }
     );
+    // Said only where it happened: every boot after the one that converted
+    // them prints nought, and a line saying so every time would be noise.
+    if reconciled.recognised > 0 {
+        println!(
+            "  {} Link on a Studio is now the Issue, Pull request or Epic its address names",
+            reconciled.recognised
+        );
+    }
     for job in &reconciled.adopted {
         // Named rather than counted, because an adopted Drone is a Job whose
         // record has a hole in it: what it did while Fleet was away is not in

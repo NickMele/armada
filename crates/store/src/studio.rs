@@ -21,9 +21,9 @@ mod scouting;
 mod sweeping;
 
 use core_model::{
-    ManifestId, Rewritten, Studio, StudioAuthor, StudioEdge, StudioEdgeId, StudioEdgeKind,
-    StudioEdgeStanding, StudioGraph, StudioId, StudioName, StudioNode, StudioNodeId,
-    StudioPosition, Timestamp,
+    ManifestId, Recognised, Rewritten, Studio, StudioAuthor, StudioEdge, StudioEdgeId,
+    StudioEdgeKind, StudioEdgeStanding, StudioGraph, StudioId, StudioName, StudioNode,
+    StudioNodeId, StudioPosition, Timestamp,
 };
 use rusqlite::{OptionalExtension, Transaction};
 
@@ -95,6 +95,72 @@ ALTER TABLE studio_nodes ADD COLUMN added_by TEXT
     CHECK (added_by IS NULL OR added_by IN ('person', 'helm'));
 ALTER TABLE studio_edges ADD COLUMN added_by TEXT
     CHECK (added_by IS NULL OR added_by IN ('person', 'helm'));
+"#;
+
+/// Version 79 — an Issue, a Pull request and an Epic are node kinds. `#1394`.
+///
+/// **Both tables are rebuilt and no `ALTER TABLE` is used.** SQLite cannot
+/// widen a `CHECK`, and a rename rewrites `studio_edges`' `REFERENCES
+/// studio_nodes` to follow it — measured, an edge written afterwards failed on
+/// *no such table: studio_nodes_narrow*, and `PRAGMA legacy_alter_table` did
+/// not hold inside the migration's transaction.
+///
+/// **The edges go first.** Their foreign keys cascade and cannot be turned off
+/// inside a transaction, so dropping the nodes under them would take them.
+///
+/// Every column and every other constraint is V77's and V78's. No row is
+/// reclassified — a host is a literal the gate refuses in this crate, so Fleet
+/// converts the Links it recognises on boot, `fleet::recognising`.
+pub(crate) const V79: &str = r#"
+CREATE TABLE studio_nodes_parked AS SELECT * FROM studio_nodes;
+CREATE TABLE studio_edges_parked AS SELECT * FROM studio_edges;
+
+DROP TABLE studio_edges;
+DROP TABLE studio_nodes;
+
+CREATE TABLE studio_nodes (
+    id         TEXT PRIMARY KEY,
+    studio_id  TEXT NOT NULL REFERENCES studios (id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL CHECK (kind IN ('run', 'note', 'cluster', 'finding',
+               'contradiction', 'sketch', 'link', 'issue', 'pull_request', 'epic',
+               'deferral', 'outline', 'issue_draft', 'job')),
+    state      TEXT CHECK (state IS NULL OR state IN ('proposed', 'gathering', 'frozen',
+               'reported', 'issue_draft', 'deferral', 'not_a_problem', 'resolved_here', 'open',
+               'answered', 'draft')),
+    content    TEXT NOT NULL,
+    x          INTEGER NOT NULL,
+    y          INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    added_by   TEXT CHECK (added_by IS NULL OR added_by IN ('person', 'helm')),
+    UNIQUE (studio_id, id)
+) STRICT;
+
+CREATE TABLE studio_edges (
+    id         TEXT PRIMARY KEY,
+    studio_id  TEXT NOT NULL REFERENCES studios (id) ON DELETE CASCADE,
+    from_node  TEXT NOT NULL,
+    to_node    TEXT NOT NULL,
+    kind       TEXT NOT NULL CHECK (kind IN ('produced', 'same_as', 'blocks', 'answers')),
+    standing   TEXT NOT NULL CHECK (standing IN ('proposed', 'accepted')),
+    created_at TEXT NOT NULL,
+    added_by   TEXT CHECK (added_by IS NULL OR added_by IN ('person', 'helm')),
+    FOREIGN KEY (studio_id, from_node) REFERENCES studio_nodes (studio_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (studio_id, to_node) REFERENCES studio_nodes (studio_id, id) ON DELETE CASCADE,
+    UNIQUE (from_node, to_node, kind),
+    CHECK (from_node <> to_node),
+    CHECK (kind <> 'produced' OR standing = 'accepted')
+) STRICT;
+
+INSERT INTO studio_nodes (id, studio_id, kind, state, content, x, y, created_at, added_by)
+SELECT id, studio_id, kind, state, content, x, y, created_at, added_by
+FROM studio_nodes_parked;
+
+INSERT INTO studio_edges (id, studio_id, from_node, to_node, kind, standing, created_at, added_by)
+SELECT id, studio_id, from_node, to_node, kind, standing, created_at, added_by
+FROM studio_edges_parked;
+
+DROP TABLE studio_nodes_parked;
+DROP TABLE studio_edges_parked;
 "#;
 
 /// Why a Studio read or write did not happen.
@@ -402,6 +468,70 @@ impl Store {
     /// `core_model`'s own two transitions make**, the way `keep_scouted` takes
     /// [`Scouted`](core_model::Scouted) — so no call here can hand a Note new
     /// words. The row is matched on its kind as well as its id.
+    /// Every Link on every Studio, each with the Studio it is on — what a
+    /// conversion has to look at. `#1394`.
+    ///
+    /// **Links alone.** A row already one of the three forge kinds was
+    /// converted or written as one, so nothing here needs to see it.
+    pub fn every_link(&self) -> Result<Vec<(StudioId, StudioNode)>, StudioError> {
+        let mut asking = self
+            .conn
+            .prepare(
+                "SELECT studio_id FROM studio_nodes WHERE kind = ?1 GROUP BY studio_id \
+                 ORDER BY studio_id",
+            )
+            .map_err(database("reading every Studio holding a Link"))?;
+        let studios: Vec<String> = asking
+            .query_map([core_model::StudioNodeKind::Link.as_wire()], |row| {
+                row.get::<_, String>(0)
+            })
+            .map_err(database("reading every Studio holding a Link"))?
+            .collect::<rusqlite::Result<Vec<String>>>()
+            .map_err(database("reading one Studio holding a Link"))?;
+        let mut links = Vec::new();
+        for studio in studios {
+            let id = StudioId::carried(core_model::Ulid::carried(studio));
+            for node in self.nodes_on(&id)? {
+                if node.kind() == core_model::StudioNodeKind::Link {
+                    links.push((id.clone(), node));
+                }
+            }
+        }
+        Ok(links)
+    }
+
+    /// A Link written back as the kind its address turned out to name.
+    /// `#1394`.
+    ///
+    /// **Takes [`Recognised`], which only a Link becoming one of the three
+    /// makes**, so the one write on a Studio that changes a node's kind cannot
+    /// reach a Note and cannot move an address.
+    ///
+    /// **The Studio is not touched.** A conversion is nobody's write: it is
+    /// what this build reads the record as, and touching every Studio holding
+    /// a Link would reorder the list the first time Fleet started.
+    pub fn recognise_studio_node(
+        &mut self,
+        studio_id: &StudioId,
+        recognised: &Recognised,
+    ) -> Result<(), StudioError> {
+        let node = recognised.node();
+        self.conn
+            .execute(
+                "UPDATE studio_nodes SET kind = ?3, content = ?4 \
+                 WHERE studio_id = ?1 AND id = ?2 AND kind = ?5",
+                (
+                    studio_id.as_str(),
+                    node.id().as_str(),
+                    node.kind().as_wire(),
+                    content::written(node.content()),
+                    core_model::StudioNodeKind::Link.as_wire(),
+                ),
+            )
+            .map(|_| ())
+            .map_err(database("recognising what a Link's address names"))
+    }
+
     pub fn keep_rewritten(
         &mut self,
         studio_id: &StudioId,

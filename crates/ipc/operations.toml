@@ -241,7 +241,7 @@ A node starts in its kind's first state and nothing in the request sets one. `pr
 
 **From Helm, only a kind that starts `proposed`** — a Finding today — and anything else is refused as `fleet.studio_node_not_helms`: Helm adds proposed nodes, and a Note is what a person pointed at. A blank field is refused as `fleet.studio_node_blank`.
 
-**From Bridge, only a kind a person makes**: a Note typed, a Link pasted, a Sketch placed, decided with the owner on #1364. Anything else is refused as `fleet.studio_node_not_a_persons` — a Finding comes from a scout, a Run from a run, a Cluster or a Deferral from promotion, an Issue draft from writing up, a Job from dispatch. So the two refusals meet over the kinds neither side mints by hand, and the route carries a person's `+ Node` as well as Helm's proposal.
+**From Bridge, only a kind a person makes**: a Note typed, an address pasted, a Sketch placed, decided with the owner on #1364. An address arrives as a Link and Fleet writes what it is — an Issue, a Pull request, an Epic, or the Link it stays — because which host is the forge is `crates/adapters`' to know and nothing on this seam may name a kind an address did not earn (`#1394`). Anything else is refused as `fleet.studio_node_not_a_persons` — a Finding comes from a scout, a Run from a run, a Cluster or a Deferral from promotion, an Issue draft from writing up, a Job from dispatch. So the two refusals meet over the kinds neither side mints by hand, and the route carries a person's `+ Node` as well as Helm's proposal.
 
 **No act writes a node's content afterwards**, which is what fixes a Note at capture.
 
@@ -337,7 +337,7 @@ description = "Write a Note, Cluster, Contradiction or Outline up as an Issue dr
 notes = """
 The draft is a node like any other, added Draft with a `produced` edge from what it was written up from. **Nothing is filed**: `docs/concepts/studio.md` makes an issue on a forge a person's own act, so no operation here reaches a forge and this one does not either.
 
-Any other kind is refused as `fleet.studio_not_writable_up` — a Link is read in, a Finding is asked for, and a draft written up again would be a copy of itself. Written up from a Contradiction that is still Reported, it also ends that Contradiction as *Issue draft*; one already ended is `fleet.studio_contradiction_settled`.
+Any other kind is refused as `fleet.studio_not_writable_up` — an address is read in, a Finding is asked for, and a draft written up again would be a copy of itself. Written up from a Contradiction that is still Reported, it also ends that Contradiction as *Issue draft*; one already ended is `fleet.studio_contradiction_settled`.
 
 `agent_access` is `Helm only` because writing up is one of the two acts Helm may take on a person's ask. **It never dispatches**: "write it up" alone is a draft and nothing more, and `dispatch_studio_draft` is the separate act. From Helm it also publishes `studio.helm_acted`.
 """
@@ -357,11 +357,11 @@ notes = """
 kind = "command"
 transport = "HTTP"
 agent_access = "Bridge only"
-description = "Replace the line a person keeps beside a Link's address with what they left, and answer with the Studio"
+description = "Replace the line a person keeps beside an address with what they left, and answer with the Studio"
 notes = """
-**The address is not on this request.** `docs/concepts/studio.md` keeps a Link as its address, and `#1378` adds a line of a person's own beside it saying why it was kept — so what the node draws is that line over the address, and what is editable is the line. Nothing on this seam rewrites an address: a Link that pointed somewhere else would be a different Link.
+**The address is not on this request.** `docs/concepts/studio.md` keeps an address node as its address, and `#1378` adds a line of a person's own beside it saying why it was kept — so what the node draws is that line over the address, and what is editable is the line. Nothing on this seam rewrites an address: a Link that pointed somewhere else would be a different Link.
 
-A blank `said` clears the line, which is how somebody takes back what they typed; it is not refused, because a Link with no line is what pasting an address alone already makes. `Bridge only`, for the reason `edit_studio_draft` is: a person's own words are not Helm's to rewrite. Any kind but a Link is refused as `fleet.studio_not_a_link`.
+A blank `said` clears the line, which is how somebody takes back what they typed; it is not refused, because a node with no line is what pasting an address alone already makes. `Bridge only`, for the reason `edit_studio_draft` is: a person's own words are not Helm's to rewrite. **Every kind that keeps an address takes it** — a Link, an Issue, a Pull request and an Epic (`#1394`) — and any other is refused as `fleet.studio_not_a_link`.
 """
 
 [operations.settle_contradiction]
@@ -381,19 +381,19 @@ A node that is not a Contradiction is `fleet.studio_not_a_contradiction`, and on
 kind = "command"
 transport = "HTTP"
 agent_access = "Helm only"
-description = "Send what a node dispatches as — an Issue draft's text, or the address of a Link naming an issue, a pull request or a milestone — through the Job proposer to the dispatch gate, and answer with the Studio carrying a Job node for each Job"
+description = "Send what a node dispatches as — an Issue draft's text, or the address of an Issue, a Pull request or an Epic — through the Job proposer to the dispatch gate, and answer with the Studio carrying a Job node for each Job"
 notes = """
 **The same call `propose_from_request` makes, with what the node dispatches as the request.** The gate is unchanged: every Job stands at `awaiting_approval` and is approved where any other proposal is. Nothing summarises, trims or re-fetches it on the way — a write-up is made from the nodes feeding it, and a lossy hop would hand a Drone something other than what the person saw.
 
-**Two kinds reach it.** An Issue draft sends its title and body, which is Armada's own unfiled text; a Link whose `forge` names anything — an issue, a pull request or a milestone — sends its address alone, because what it names is already filed and the proposer has taken a ticket link as a request since it shipped (`#1379`).
+**Four kinds reach it.** An Issue draft sends its title and body, which is Armada's own unfiled text; an Issue, a Pull request and an Epic send their address alone, because what it names is already filed and the proposer has taken such a link as a request since it shipped (`#1379`, `#1394`). A Link is an address no adapter recognised and dispatches nothing.
 
-**Nothing on this route names a workflow.** The three are three asks, and which workflow each runs under is the proposer's answer off the request and each definition's `for_requests` line. `code-review.json` gained one for `#1379`: `adapters::IssueLookup` resolves an issue link and no other shape, so a pull request reaches the call as a bare URL, which is the position `epic` was in when `#424` measured a milestone being declined with `epic` on the list. A milestone also *reads in*, and the two are different asks rather than rivals: reading one in puts its issues on the board, dispatching one asks for the wave.
+**Nothing on this route names a workflow.** The three are three asks — a change to make, work already written that wants a judgement, a wave to split — and which workflow each runs under is the proposer's answer off the request and each definition's `for_requests` line. `code-review.json` gained one for `#1379`: `adapters::IssueLookup` resolves an issue link and no other shape, so a pull request reaches the call as a bare URL, which is the position `epic` was in when `#424` measured a milestone being declined with `epic` on the list. An Epic also *reads in*, and the two are different asks rather than rivals: reading one in puts its issues on the board, dispatching one asks for the wave.
 
 Each Job the proposal became is added as a Job node with a `produced` edge from the draft, the first at `position` and the rest below it, so the whiteboard shows where the work went without a person moving anything. A Job node holds the Job's id and no status: the Board's row is where its status is read.
 
 **No issue is filed anywhere.** Filing on a forge is optional and a person's own act, so the draft's text reaches the proposer with nothing to point at.
 
-`origin` is **who pressed it** — `manual` for a person's, `helm_drafted` for Helm's — and not the `auto_detected` every other request through the proposer takes. That value renders as *Found by Fleet*, which is what a row says about work Armada noticed by itself; a dispatch from a Studio is somebody sending work they picked. **No value says "from a Studio"**: the `produced` edge from the node it came from is where that is recorded, and `job-fields.toml` writes `origin` from `dispatched_by`. A node that dispatches nothing is refused as `fleet.studio_not_a_draft`, and a Link naming nothing on the forge is refused with the same code naming its address; where no workflow resolves, the proposer's own refusal is returned and no node is added.
+`origin` is **who pressed it** — `manual` for a person's, `helm_drafted` for Helm's — and not the `auto_detected` every other request through the proposer takes. That value renders as *Found by Fleet*, which is what a row says about work Armada noticed by itself; a dispatch from a Studio is somebody sending work they picked. **No value says "from a Studio"**: the `produced` edge from the node it came from is where that is recorded, and `job-fields.toml` writes `origin` from `dispatched_by`. A node that dispatches nothing is refused as `fleet.studio_not_a_draft`, and a Link is refused with the same code naming its address; where no workflow resolves, the proposer's own refusal is returned and no node is added.
 
 `agent_access` is `Helm only`, the second of the two acts Helm takes on a person's ask, and only where the ask names sending the work as well as writing it up. From Helm it also publishes `studio.helm_acted`.
 """
@@ -437,17 +437,17 @@ The answer is the Studio before the Finding freezes; the frozen one arrives on `
 kind = "command"
 transport = "HTTP"
 agent_access = "Helm only"
-description = "Read a Link on a Studio in — the source fetched by Fleet, what comes back hung off the Link, and the Studio answered"
+description = "Read an address on a Studio in — the source fetched by Fleet, what comes back hung off the node, and the Studio answered"
 notes = """
-**A person's act on Bridge, or Helm's on a person's ask.** The Link survives and keeps its address whatever comes back; every node this makes carries a `produced` edge from it.
+**A person's act on Bridge, or Helm's on a person's ask.** The node survives and keeps its address whatever comes back; every node this makes carries a `produced` edge from it. **Every kind that keeps an address has this rung** — a Link, an Issue, a Pull request and an Epic — because the Link somebody pasted and the Issue it turned out to be are the same node (`#1394`).
 
 **Fleet fetches, and the scout is handed text.** A scout's launch denies every tool that could reach a source and comes up with no MCP server (`docs/concepts/scout.md`, spike 017), so the fetch runs in Fleet's own process — the forge's CLI for an issue, a pull request or a milestone, an HTTP read for a page, the transcript file for a session, and Fleet's own read of `<records_root>/helm/` for a thread, which `observe_helm` refuses every agent. **Reading a source in widens nothing a scout may do.**
 
-**The fetch is before the write.** A source that will not fetch is refused as `fleet.studio_source_unreadable` and no node is added; a Link to a board, a wiki or anything else no scout reads is `fleet.studio_link_stays_a_link`; a node that is not a Link is `fleet.studio_not_a_link`.
+**The fetch is before the write.** A source that will not fetch is refused as `fleet.studio_source_unreadable` and no node is added; a Link to a board, a wiki or anything else no scout reads is `fleet.studio_link_stays_a_link`; a node that keeps no address is `fleet.studio_not_a_link`.
 
-**An issue, a pull request, a page, a session or a thread** adds a Finding Gathering and a scout reads the text on its one turn, `docs/contracts/agent-prompt.md` section 5c. What it asked for — Notes, Clusters, Contradictions and proposed relations — is written when the Finding freezes, each `produced` by the Link, and arrives on `studio.changed`. An answer that is not the shape leaves the Finding and no node beside it. A source is bounded before it is handed over and the Finding's `sources` says how much was cut.
+**An issue, a pull request, a page, a session or a thread** adds a Finding Gathering and a scout reads the text on its one turn, `docs/contracts/agent-prompt.md` section 5c. What it asked for — Notes, Clusters, Contradictions and proposed relations — is written when the Finding freezes, each `produced` by the node read in, and arrives on `studio.changed`. **An Issue or a Pull request also gains its title and where it stands**, off the first line the fetch printed, in the same write. An answer that is not the shape leaves the Finding and no node beside it. A source is bounded before it is handed over and the Finding's `sources` says how much was cut.
 
-**A milestone is read in by Fleet alone**, with no scout and no Finding: one Link node per issue, carrying its address and a line naming its number, title and state. Bounded at 50; the milestone's own Link then says how many of how many were read in. A model asked to echo a list back would be cost spent on a transcription.
+**An Epic is read in by Fleet alone**, with no scout and no Finding: one Issue node per issue, each carrying its address, number, title and state as fields. Bounded at 50; the Epic then says how many of how many were read in, as two numbers. A model asked to echo a list back would be cost spent on a transcription.
 
 `agent_access` is `Helm only`, so Helm reads one in on a person's ask and no other agent reaches it. From Helm it also publishes `studio.helm_acted`.
 """

@@ -54,32 +54,48 @@ export type StudioNodeContent =
   | { kind: "contradiction"; first: string; second: string; answer?: string }
   | { kind: "sketch"; body: string }
   /**
-   * A board, document, issue, page or session, kept as its address, the line
-   * a person wrote beside it (`said`, since 14.15, #1378), and what the source
-   * calls itself where a read-in learned one (`named`, since 14.16, #1293 — an
-   * issue's number, title and state on one line). **Both are additional, never
-   * a replacement**: a Link never stops being its address.
+   * A board, document, page or session — **an address no adapter recognised**
+   * — kept with the line a person wrote beside it (`said`, since 14.15,
+   * #1378) and what the source calls itself where a read-in learned one
+   * (`named`, since 14.16, #1293). Both are additional, never a replacement:
+   * a Link never stops being its address.
    *
-   * `forge` is what Fleet read the address as, since 14.17, #1379, and absent
-   * where it names nothing on the forge. **Never worked out here**: which host
-   * is the forge is `crates/adapters`' to know, and the gate refuses its name
-   * anywhere else — so what a surface offers on a Link is decided by this.
+   * An address that *is* recognised is one of the three below instead, since
+   * 14.18, #1394. A Link offers no Dispatch.
    */
-  | { kind: "link"; address: string; said?: string; named?: string; forge?: StudioLinkForge }
+  | { kind: "link"; address: string; said?: string; named?: string }
+  /**
+   * An issue on a forge. Since 14.18, #1394.
+   *
+   * `address` and `number` were read off the address when the node was made;
+   * `title` and `state` are the forge's and are absent until it is read in.
+   * **Never worked out here**: which host is the forge is `crates/adapters`'
+   * to know and the gate refuses its name anywhere else, so what a surface
+   * offers on an address is decided by the kind Fleet wrote.
+   */
+  | { kind: "issue"; address: string; number: string; said?: string; title?: string; state?: ForgeState }
+  /** A pull request on a forge. An Issue's fields; `state` also holds `merged`. Since 14.18. */
+  | { kind: "pull_request"; address: string; number: string; said?: string; title?: string; state?: ForgeState }
+  /**
+   * What a forge calls a set of issues under one address. **No state and a
+   * count instead**: what matters is how much of it is on the Studio, which is
+   * what reading it in answers. Since 14.18, #1394.
+   */
+  | { kind: "epic"; address: string; number: string; said?: string; title?: string; read_in?: EpicRead }
   | { kind: "deferral"; what: string }
   | { kind: "outline"; body: string }
   | { kind: "issue_draft"; title: string; body: string }
   /** A reference to the Job, never its status. */
   | { kind: "job"; job_id: string };
 
+/** Where something on a forge stands. Since 14.18, #1394. */
+export type ForgeState = "open" | "closed" | "merged";
+
 /**
- * What a Link's address names on the repository's forge. Since 14.17, #1379.
- *
- * **Three, and no page or session among them.** An issue is work already filed
- * and is dispatched against; a milestone is a list and is read in. Everything
- * else names nothing there and carries no value at all.
+ * How much of an Epic is on the Studio: how many of its issues are here, of
+ * how many it holds. Absent until it is read in. Since 14.18, #1394.
  */
-export type StudioLinkForge = "issue" | "pull_request" | "milestone";
+export type EpicRead = { issues: number; total: number };
 
 /**
  * What a Run node kept of its run once retention swept it: the result, and the
@@ -194,7 +210,15 @@ export type AddStudioNode = StudioNodeContent & {
 export type StudioNodeByHand =
   /** Typed here rather than pointed at, so it carries no `capture`: that is `capture_studio_note`'s. */
   | { kind: "note"; said: string }
-  /** `said` is the line taken at paste time, absent where none was typed. Since 14.15, #1378. */
+  /**
+   * An address, whatever it turns out to name. `said` is the line taken at
+   * paste time, absent where none was typed. Since 14.15, #1378.
+   *
+   * **Still `link`, and never one of the three kinds it may become.** Which
+   * host is the forge is `crates/adapters`' to know, so Bridge cannot read an
+   * address and nothing here may claim what one names: Fleet asks the adapter
+   * and writes the kind that follows. #1394.
+   */
   | { kind: "link"; address: string; said?: string }
   | { kind: "sketch"; body: string };
 
