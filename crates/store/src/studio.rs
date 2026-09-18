@@ -19,6 +19,7 @@ mod reading;
 mod reading_in;
 mod scouting;
 mod sweeping;
+mod tracing;
 
 use core_model::{
     ManifestId, Recognised, Rewritten, Studio, StudioAuthor, StudioEdge, StudioEdgeId,
@@ -32,6 +33,7 @@ use crate::open::Store;
 
 pub use content::UnreadableContent;
 pub use reading::Unreadable;
+pub use tracing::DispatchedFrom;
 
 use reading::studio_row;
 

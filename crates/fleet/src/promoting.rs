@@ -85,14 +85,18 @@ const WRITABLE_UP: &[StudioNodeKind] = &[
 /// node's height and a gap, so a split reads as a column.
 const JOB_APART: i64 = 200;
 
-/// The origin a Job dispatched from a Studio carries: **who pressed it**.
-/// `crates/core-model/domain/enum-verbs.toml` renders these as *Dispatched by
-/// you* and *Drafted in Helm*, and a Studio takes no value of its own — the
-/// `produced` edge from the Issue draft is where the Studio is recorded.
+/// The origin a Job dispatched from a Studio carries: **where from, and who
+/// pressed it**. `crates/core-model/domain/enum-verbs.toml` renders these as
+/// *From a Studio, dispatched by you* and *From a Studio, drafted in Helm* —
+/// one value carrying both clauses, because one column answers one question
+/// and the row has to keep answering both. `#1362`.
+///
+/// *Which* Studio is not here and is not a column: the `produced` edge from
+/// the Issue draft records it, and `store::studio::tracing` reads it back.
 fn pressed(by: Redirector) -> TopLevelOrigin {
     match by {
-        Redirector::Person => TopLevelOrigin::Manual,
-        Redirector::Helm => TopLevelOrigin::HelmDrafted,
+        Redirector::Person => TopLevelOrigin::StudioDispatched,
+        Redirector::Helm => TopLevelOrigin::StudioHelmDrafted,
     }
 }
 

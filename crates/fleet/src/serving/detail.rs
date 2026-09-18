@@ -348,6 +348,20 @@ where
                 job_id: ipc::JobId::from(&found.job_id),
                 handle: core_model::handle_of(found.number, &found.title),
             });
+        // The way back to the Studio that dispatched it — `#1362`. Derived
+        // from the `produced` edge, so a deleted Studio answers nothing here
+        // and `job.origin` is what still says the Job came off one.
+        detail.from_studio = self
+            .store()
+            .lock()
+            .await
+            .dispatched_from(job.id())
+            .map_err(|why| self.studio_refusal(why))?
+            .map(|found| ipc::FromStudio {
+                studio_id: ipc::StudioId::from(&found.studio_id),
+                name: found.name.map(|name| name.as_str().to_string()),
+                node_id: ipc::StudioNodeId::from(&found.node_id),
+            });
         // After the constructor, because it is read off the worktree and the
         // Manifest as well as the record — `crate::showing_again`.
         detail.show_again = Some(

@@ -57,6 +57,7 @@ mod studio_forge;
 mod studio_runs;
 mod timings;
 mod tmp;
+mod tracing;
 mod work_plan;
 
 use std::collections::BTreeMap;

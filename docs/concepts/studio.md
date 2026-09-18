@@ -234,8 +234,8 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 > **Rule.** An Issue draft carries its title and body whole to the proposer, in that order, and nothing between the two summarises, trims or re-fetches it.
 > Why: a write-up is made from the nodes feeding it, and a lossy hop would hand a [Drone](drone.md) something other than what the person read.
 
-> **Rule.** A Job dispatched from a Studio carries the origin of whoever pressed it, and no value of the Studio's own. The `Produced` edge from the Issue draft is where a Job's Studio is recorded.
-> Why: `origin` is written from `dispatched_by`, and who dispatched is a person or Helm here as everywhere else. What it is not is *Found by Fleet*, which names work Armada noticed by itself.
+> **Rule.** A Job dispatched from a Studio carries an origin that says both where it came from and who pressed it — `studio_dispatched` or `studio_helm_drafted`. The `Produced` edge from the Issue draft is still the only record of *which* Studio.
+> Why: the [Board](job-board.md) row has to say it came off a Studio, and it cannot stop saying whether you or Helm sent it, so one value carries both clauses. What it is not is *Found by Fleet*, which names work Armada noticed by itself. See #1362.
 
 > **Rule.** An Issue draft's title and body are a person's to edit, and nobody else's, whatever is asked.
 > Why: an agent rewriting a draft a person edited is an agent reorganising a person's work, and what is dispatched has to be what they read.
@@ -256,6 +256,25 @@ A Contradiction ends in one of four ways, and a person picks which. The four are
 
 > **Rule.** Two of the four outcomes are the rungs that make a node, and the other two are their own act.
 > Why: one way to make an Issue draft and one way to make a Deferral. A second route to either would be a second place the `Produced` edge is drawn.
+
+## The way back from a Job
+
+A Job is the thing in front of a person long after the Studio that produced it
+has scrolled out of mind, and the notes, the finding and the draft that made it
+worth doing are all still there. **Job detail names the Studio and opens it**,
+under *Where things are* with the worktree and the branch — the region for a
+value you want to reach rather than one you are reading.
+
+> **Rule.** Opening a Studio from a Job selects the Job's own node on it.
+> Why: the person is going back to the part of the graph the work came from, not to a whiteboard with nothing picked. The node is the edge's own end, so the read that finds the Studio has already found it.
+
+> **Rule.** Which Studio produced a Job is read off the `Produced` edge into its Job node, and is written nowhere on the Job.
+> Why: a forward column would be a second write that can disagree with the edge and outlive what it points at — the argument a redispatch's replacement is read as a predicate for, `#1439`. See `../practices/protocol.md`, Protocol 16.4.
+
+> **Rule.** A Job whose Studio has been deleted still says it came off one, and says the Studio is no longer there rather than offering a control that opens nothing.
+> Why: the origin is stored and survives; the edge cascades with the Studio and does not. A dead press is worse than a plain sentence — [Job Board](job-board.md)'s *A Board outlives its Workspace*.
+
+> **Rule.** One Job, one Studio. A Job reaches the Board from one Issue draft, so the detail names one and never a list.
 
 ## Helm on a Studio
 
