@@ -1184,10 +1184,11 @@ arrival to move a digit other than its own, and the first to join anywhere but
 the end: Settings moved to `⌘9`. The owner's decision, and his reason is that
 Kit is what he brings and Settings is what this machine is, so the machine reads
 last. It is a rail row rather than a view on one repository's Manifest because
-Kit is his and not a repository's. Its glyph is `settings`, whose own registry
-row has meant Kit since it was written; the Settings surface took
-`sliders-horizontal` in the same change, because two rail rows cannot both be a
-cog.
+Kit is his and not a repository's. Its glyph is `briefcase` — the tool set you
+bring, and the only Navigation glyph whose handle stands above its body.
+`icons.settings` had said `means = "Kit"` since it was written, with two other
+rows citing it, while the Settings surface wore the cog; the owner settled it
+the other way, so Settings keeps the cog and those three rows were corrected.
 
 **`1`–`5` and `⌘1`–`⌘9` are different acts on one row of keys.** One is
 modified and one is not, which is the whole separation. It was drawn

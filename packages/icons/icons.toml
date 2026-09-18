@@ -75,6 +75,14 @@
   status = "Specified"
   notes = "Escalations interrupt, and the bell is the interrupt metaphor. Deliberately not octagon-alert, which belongs to stalled."
 
+[icons.briefcase]
+  means = "Kit — a case with a handle above its body, which is the tool set you bring"
+  group = "Navigation"
+  size = "16px"
+  status = "Proposed"
+  reserved = "The Kit surface only. Never a Job, a workspace, a package or an export, and never a generic settings or configuration glyph — that is `settings`, and a Manifest is `file-cog`."
+  notes = "Added 2026-09-18 with Kit's rail row (#1275), after the owner settled that Settings keeps the cog. Kit is the tool set a person brings from machine to machine — skills, MCP servers, plugins, agent files, commands — and a case with a handle is that object rather than a second way of drawing configuration. The only Navigation glyph with a handle standing above its body: clipboard-list is an upright board with a clip on it, presentation a board on legs, layout-dashboard a grid of panes, hard-drive a horizontal vessel, and bell, stethoscope, file-cog and settings are each an outline with something drawn on or inside it. Nothing else here breaks its own top edge, which is what tells it apart at 16px and would at 12. Refused before it was proposed: `package` and `archive` are both lidded boxes and `archive`'s own row claims that outline as unique in the badge set; `backpack` carries straps and pockets, which is the interior detail rule 3 refuses; `puzzle` reads as one extension rather than a set, and would be the wrong promise on a surface that is to hold skills and commands too; `wrench` is reserved to job_status.awaiting_repair by its own row, which names settings as the collision that reservation exists to refuse."
+
 [icons.check]
   means = "A bare checkmark"
   group = "Job state"
@@ -186,7 +194,7 @@
 
 [icons.file-cog]
   status = "Specified"
-  reserved = "Manifest only — the surface and the file. Never a generic settings or config glyph; Kit uses `settings`."
+  reserved = "Manifest only — the surface and the file. Never a generic settings or config glyph; Settings uses `settings` and Kit uses `briefcase`."
 
   [[icons.file-cog.usage]]
     means = "Manifest — Bridge's seventh surface"
@@ -424,21 +432,12 @@
   notes = "Survives as: dispatched."
 
 [icons.settings]
-  means = "Kit — the tool set you bring, and the surface it is edited on"
+  means = "The Settings surface — this machine's own settings, Fleet's four limits and Helm's action authority"
   group = "Navigation"
   size = "16px"
   status = "Specified"
-  reserved = "The Kit surface only. Never a generic settings or preferences glyph, and never the Settings surface — that is this machine's, and `sliders-horizontal` is its row."
-  notes = "This row has said `means = \"Kit\"` since it was written, and `file-cog` and `wrench` each cite it in their own reservations — three rows naming the cog as Kit's before Kit had anywhere to be drawn. Bridge's Settings surface had been wearing it in the meantime, which was the collision that bit the moment Kit took a rail row (#1275): two rail rows cannot both be a cog, and the registry had already said whose it was. Kit took it and Settings moved. Promoted from 12px to 16px with the move — the rail draws at 16, and the cog's teeth are interior detail that rule 3 will not have at 12."
-
-
-[icons.sliders-horizontal]
-  means = "This machine's own settings — three horizontal rules, each with a handle set along it"
-  group = "Navigation"
-  size = "16px"
-  status = "Proposed"
-  reserved = "The Settings surface only. Never Kit, which is `settings`, and never a Manifest, which is `file-cog`. Never a filter or a sort control."
-  notes = "Added 2026-09-18 when Kit took its own rail row (#1275) and reclaimed `settings`, whose own row has meant Kit since it was written. Settings is Fleet's four limits, Helm's action authority and this machine's own settings — values a person slides to a number, which is what the glyph draws. The only line-based silhouette in the Navigation set: clipboard-list is an upright board, presentation a board on legs, layout-dashboard a grid of panes, hard-drive a horizontal vessel, and bell, stethoscope and file-cog are each an outline with something drawn on or inside it. Nothing here is a bounded shape at all, which is what keeps it clear of every one of them at 16px. Refused before it was proposed: `cpu` is a square with legs and collides with layout-dashboard's pane grid at 16px; `gauge` reads as a measurement, which is `get_capacity`'s subject and not this screen's; `wrench` is reserved to job_status.awaiting_repair by its own row, which names settings as the collision that reservation exists to refuse."
+  reserved = "The Settings surface only. Never Kit, which is `briefcase`, and never a Manifest, which is `file-cog`."
+  notes = "This row said `means = \"Kit\"` from the day it was written until 2026-09-18, and `file-cog` and `wrench` each cited it — three rows calling the cog Kit's while Bridge's Settings surface wore it, which nobody noticed until Kit took a rail row of its own (#1275). The owner settled it the other way on 18 Sep: Settings keeps the cog, and Kit is `briefcase`. Promoted from 12px to 16px with the correction, because the rail draws at 16 and the cog's teeth are interior detail rule 3 will not have at 12."
 
 [icons.signpost]
   means = "A post with one horizontal blade pointing off it"
@@ -541,7 +540,7 @@
   group = "Job state"
   size = "12px"
   status = "Specified"
-  reserved = "job_status.awaiting_repair only. Never a settings or configuration glyph — Kit is `settings` and a Manifest is `file-cog`, and a wrench meaning preferences is the collision this reservation exists to refuse. Never an action: repairing is what a person does off this badge, not a button Armada draws."
+  reserved = "job_status.awaiting_repair only. Never a settings or configuration glyph — Settings is `settings`, Kit is `briefcase` and a Manifest is `file-cog`, and a wrench meaning preferences is the collision this reservation exists to refuse. Never an action: repairing is what a person does off this badge, not a button Armada draws."
   notes = "Added 2026-09-03 with job_status.awaiting_repair, minted rather than borrowed. It renders `--status-escalated`, so rule 4 asks it to differ from the seven escalation-reason outlines that share that hue — octagon, closed loop, page-and-question, shield, Y-split, broken plug, ascender-to-a-line — and a diagonal shaft with an open jaw is none of them. It survives rule 3 because the jaw is a break in the outline itself rather than a mark drawn inside a stable shape, which is `circle-dashed`'s argument for the same test. What settles the choice is the family it joins: `stamp` means attest, `eye` means review, `terminal` means pilot, and each is the object for the act a person owes. A wrench means repair, which is the verb this status renders. What was refused: `user-check` is reserved to human-required and is `awaiting_approval`'s in this same group, so a second status wearing it would undo the one distinction that group's own note says the glyphs carry; `shield-x` is a failed Check and this badge is deliberately not saying what went wrong; `x` is reserved to system failure and the Job has not failed; `octagon-alert` is `stalled`'s by its own note; `circle-help` and `life-buoy` are ring outlines and collide with `circle-dot` at 12px. The status was not left wordless the way `[no-report-glyph]` and `[drone-killed-glyph]` were: those are escalation reasons, where iconography sanctions drawing a verb alone, and this is a Job status, where *Every badge carries an icon* holds because hue is a single channel and several statuses share one."
 
 [icons.x]

@@ -18,13 +18,13 @@
 
 import { useEffect, useRef } from "react";
 import {
+  Briefcase,
   ClipboardList,
   FileCog,
   HardDrive,
   LayoutDashboard,
   Presentation,
-  Settings as KitIcon,
-  SlidersHorizontal,
+  Settings as SettingsIcon,
 } from "lucide-react";
 
 import type { PaletteSurface } from "./Palette";
@@ -134,7 +134,7 @@ export const SURFACES: readonly PaletteSurface[] = [
     // is Armada's word for the set, and the thing they came to connect has
     // its own name in every other tool they use.
     aliases: ["mcp", "servers", "mcp servers"],
-    icon: KitIcon,
+    icon: Briefcase,
   },
   {
     id: SURFACE.settings,
@@ -142,7 +142,7 @@ export const SURFACES: readonly PaletteSurface[] = [
     shortcut: digitOf(SURFACE.settings),
     // No alias: `fleet_settings` is the palette's own row, in its own
     // section, and it names an id rather than a word somebody already knows.
-    icon: SlidersHorizontal,
+    icon: SettingsIcon,
   },
 ];
 
