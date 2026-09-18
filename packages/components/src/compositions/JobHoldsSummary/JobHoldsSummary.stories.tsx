@@ -75,6 +75,8 @@ async function everyRowSharesItsEdges(canvasElement: HTMLElement, line: HoldsLin
 export const HoldingALiveWorktree: Story = {
   args: {
     latest: LATEST,
+    spend: "at least ~$1.96",
+    turns: "82 of 300",
     figures: { processes: 2, worktree: "healthy", size: "1.2 GiB" },
     age: "3s",
   },
@@ -94,9 +96,39 @@ export const HoldingALiveWorktree: Story = {
 export const TheReadHasNotAnswered: Story = {
   args: {
     latest: LATEST,
+    spend: "~$0.84",
+    turns: "31 of 300",
     figures: null,
     note: "Fleet did not answer, so what this Job holds is unknown.",
     age: "3s",
+  },
+  /**
+   * **What the Job is spending does not wait on the look.** Spend and Turns
+   * come off the Job itself; a silent machine read is a fact about the machine
+   * and says nothing about either figure.
+   */
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("~$0.84")).toBeVisible();
+    await expect(canvas.getByText("31 of 300")).toBeVisible();
+    await expect(canvas.queryByText("Processes")).toBeNull();
+  },
+};
+
+/**
+ * **A Fleet that does not price, on a Job that has taken turns.** Spend draws
+ * no row rather than `~$0.00` — a Job that cost nothing and a Fleet with no
+ * figure are two different facts, and a zero says the first about the second.
+ */
+export const NothingIsPriced: Story = {
+  args: {
+    latest: LATEST,
+    turns: "7 of 300",
+    figures: { processes: 1, worktree: "healthy", size: "640 MiB" },
+    age: "5s",
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText("Spend")).toBeNull();
+    await expect(canvas.getByText("7 of 300")).toBeVisible();
   },
 };
 
@@ -111,6 +143,8 @@ export const TheReadHasNotAnswered: Story = {
 export const HoldingNothing: Story = {
   args: {
     latest: { at: "09:22:04", actor: "Fleet", said: "Worktree reclaimed" },
+    spend: "~$3.10",
+    turns: "144 of 300",
     figures: { processes: 0, worktree: "none on disk" },
     age: "11s",
   },
@@ -138,6 +172,8 @@ export const HoldingNothing: Story = {
 export const TheWorktreeIsInTrouble: Story = {
   args: {
     latest: { at: "09:16:47", actor: "Fleet", said: "A preparation command failed", wrong: true },
+    spend: "at least ~$5.28",
+    turns: "300 of 300",
     figures: {
       processes: 0,
       nothingRunningIsWrong: true,
@@ -152,6 +188,8 @@ export const TheWorktreeIsInTrouble: Story = {
 export const APersonActedLast: Story = {
   args: {
     latest: { at: "14:40:12", actor: "You", said: "Approved dispatch" },
+    spend: "~$0.12",
+    turns: "3 of 300",
     figures: { processes: 1, worktree: "healthy", size: "1.2 GiB" },
     age: "2s",
   },

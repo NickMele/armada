@@ -28,7 +28,17 @@
 
 import type { HoldsFigures, HoldsLine, NothingToAsk } from "@armada/components";
 import { JOB_STATUS, nothingRunningIsAFault, sized } from "@armada/components";
-import type { History, Holds, JobExamined, JobResources as Held, Noted, Recorded, Turn } from "@armada/protocol";
+import type {
+  History,
+  Holds,
+  JobDetail as JobWhole,
+  JobExamined,
+  JobResources as Held,
+  Noted,
+  Recorded,
+  Turn,
+} from "@armada/protocol";
+import { spent } from "./facts";
 import type { LogRow } from "./story";
 import { entriesOf, hideUnread } from "./story";
 import { clock } from "./duration";
@@ -146,6 +156,49 @@ export function summarised(
           ? NOT_MEASURED
           : sized(reading.worktree.bytes),
   };
+}
+
+// # What the Job is spending, which used to be read above the run
+//
+// Spend and Turns were two of the header's facts until #1481. They are worth
+// knowing and they are not what a person opens a Job to read, and Pulse is
+// already the region that answers *is this working and what is it taking* —
+// so they sit with the processes and the worktree rather than above them.
+//
+// **They do not wait on the machine reading and are not qualified by it.**
+// `Read 4s ago` is about `summarised`'s figures, which a look produces; these
+// two come off `GET /jobs/:job_id` and are there whether or not anyone has
+// looked, which is why they are their own props and are drawn above it.
+
+/**
+ * What the Job has cost so far, or nothing where the Fleet does not count.
+ *
+ * **Hedged, always.** The design contract spells an estimated value `~$2.40`
+ * and never `$2.40`, and the figure is notional besides — it is what the run
+ * would have cost at list price, which is not what a subscription account is
+ * billed. A Fleet with no figure draws nothing rather than a zero: a Job that
+ * cost nothing and a Fleet that does not price are two different facts.
+ */
+export function spentOn(whole: JobWhole | null): string | undefined {
+  const spend = whole?.spend;
+  return spend === undefined ? undefined : spent(spend.cost_micros, spend.unpriced);
+}
+
+/**
+ * How many turns the Job has taken, against how many it may take.
+ *
+ * **Never hedged, unlike the spend beside it.** P4 hedges by source: a cost is
+ * derived from list prices and wears a tilde, and a turn is counted. Writing
+ * the two alike would lend the estimate the authority of the count.
+ *
+ * **The cap is drawn with it and not on a line of its own.** It is the second
+ * of the two ceilings `over_budget` folds, and it stops a Job that has passed
+ * every Check — so the number a person is deciding a raise against has to be
+ * beside the number they are deciding about.
+ */
+export function turnsTaken(whole: JobWhole | null): string | undefined {
+  const spend = whole?.spend;
+  return spend === undefined ? undefined : `${spend.turns} of ${spend.turn_cap}`;
 }
 
 /**
