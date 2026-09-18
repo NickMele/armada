@@ -34,7 +34,13 @@ test("repositories set up and Helm pointed at none: the dock counts them, and th
     .toBeVisible();
   expect(page.getByText(ONCE_SAID).query()).toBeNull();
   // The act the sentence names is the dock's own switch, under the thread it is written in.
-  await expect.element(page.getByRole("combobox", { name: "Point Helm at a different repository" })).toBeVisible();
+  const switcher = page.getByRole("combobox", { name: "Point Helm at a different repository" });
+  await expect.element(switcher).toBeVisible();
+  // And the switch agrees with the sentence: it stands at an entry of its own,
+  // not at whichever repository is listed first. It read *armada* here — a
+  // `<select>` whose value matches no option displays the first one — so the
+  // dock said Helm was pointed at nothing while the control said armada.
+  await expect.element(switcher).toHaveDisplayValue("Choose a repository");
 });
 
 test("nothing set up: the dock says so in the words the rail and Setup use, and names the way out", async () => {
