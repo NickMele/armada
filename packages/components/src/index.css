@@ -302,6 +302,10 @@
 @import "./compositions/StudioName/StudioName.css";
 @import "./compositions/StudioAddNode/StudioAddNode.css";
 @import "./compositions/StudioPicked/StudioPicked.css";
+/* One Helm session as one quotable record, on the layer wide enough to read
+   it. #1367. */
+@import "./compositions/HelmRecord/HelmRecord.css";
+@import "./compositions/PlanTaskSheet/PlanTaskSheet.css";
 
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */

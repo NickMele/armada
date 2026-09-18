@@ -234,6 +234,9 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
     },
 
     askHelm: async () => OK,
+    // No session behind a mock Fleet, so the record is the refusal a window
+    // with nothing connected already draws — never an invented record.
+    helmDebugInfo: async () => refused("/helm/debug"),
     startHelmFresh: async () => OK,
     pointHelm: async () => undefined,
     // The mock provides no haptics, so nothing calls this; answered for the type.

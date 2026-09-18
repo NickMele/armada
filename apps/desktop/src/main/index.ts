@@ -744,6 +744,7 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.askHelm, (_event, text: string, context?: HelmContext) =>
     connection?.askHelm(text, context),
   );
+  ipcMain.handle(CHANNELS.helmDebugInfo, () => connection?.helmDebugInfo());
   ipcMain.handle(CHANNELS.startHelmFresh, () => connection?.startHelmFresh());
   ipcMain.handle(CHANNELS.pointHelm, (_event, manifestId: string) => connection?.pointHelm(manifestId));
   ipcMain.handle(CHANNELS.startCheckoutVerify, (event, workspace: unknown) =>

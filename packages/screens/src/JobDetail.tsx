@@ -402,7 +402,7 @@ function OneJob({
    * the sheet itself is what holds once a person scrolls away from it, through
    * `onFollowingChange` in `Sheets.tsx`.
    */
-  function openSheet(which: Exclude<OpenSheet, null | "check">, attempt?: number): void {
+  function openSheet(which: Exclude<OpenSheet, null | "check" | "task">, attempt?: number): void {
     // Held on open only where there is a tail and nothing is watching it: a run
     // that has ended does not grow, so the strip would offer a jump to nothing,
     // and a live run starts following instead of holding from the first paint.
@@ -416,6 +416,12 @@ function OneJob({
       ...(attempt === undefined ? {} : { attempt }),
       ...(holding === undefined ? {} : { held: holding }),
     });
+  }
+
+  /** Open one plan task's reading. The rail draws a title and a count; `#1421`'s
+   *  fields are this sheet's. */
+  function openTask(taskId: string): void {
+    move({ move: "open", which: "task", taskId });
   }
 
   /**
@@ -683,6 +689,7 @@ function OneJob({
       openSteps={keys.openSteps}
       onOpenStep={keys.onOpenStep}
       plan={plan}
+      onOpenTask={openTask}
       // `after` is always the end: reordering is not in this milestone, the
       // owner's own call — `#897`. Absent where there is no plan to add to —
       // no plan step at all, or the placeholder before its step has recorded
@@ -786,6 +793,8 @@ function OneJob({
             held={held}
             now={now}
             checkId={openCheckId}
+            {...(onSheet.which === "task" ? { taskId: onSheet.taskId } : {})}
+            planTasks={plan?.recorded === true ? plan.tasks : undefined}
             outputs={outputs}
             following={following}
             onHold={(to) => move({ move: "hold", held: to })}

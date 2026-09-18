@@ -73,10 +73,39 @@ type Story = StoryObj<typeof HelmComposer>;
  * is**, so the line names the repository instead and the handler goes unused.
  */
 export const AtRest: Story = {
-  args: { current: repositories[0]!.id, repositories: [repositories[0]!], onSwitch: fn(), onStartFresh: fn() },
+  args: {
+    current: repositories[0]!.id,
+    repositories: [repositories[0]!],
+    onSwitch: fn(),
+    onStartFresh: fn(),
+    onCopyRecord: fn(),
+    onOpenRecord: fn(),
+  },
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole("combobox")).not.toBeInTheDocument();
     await expect(canvas.getByText(repositories[0]!.label)).toBeInTheDocument();
+  },
+};
+
+/**
+ * How a bad answer is carried to somebody who could fix it — `#1367`. **The
+ * banner form**: *Copy debug info* acts on one press and *Details*
+ * opens the same artifact to read. The dock is a standing surface, which is
+ * what that row is for.
+ */
+export const RecordCopiedAndRead: Story = {
+  args: {
+    current: repositories[0]!.id,
+    repositories: [repositories[0]!],
+    onCopyRecord: fn(),
+    onOpenRecord: fn(),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Copy debug info" }));
+    await expect(args.onCopyRecord).toHaveBeenCalled();
+    await expect(args.onOpenRecord).not.toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole("button", { name: "Details" }));
+    await expect(args.onOpenRecord).toHaveBeenCalled();
   },
 };
 

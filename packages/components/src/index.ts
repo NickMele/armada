@@ -41,6 +41,7 @@ export * from "./compositions/ChangedFiles/ChangedFiles";
 export * from "./compositions/CriterionVerdicts/CriterionVerdicts";
 export * from "./compositions/DroneQuestion/DroneQuestion";
 export * from "./compositions/DockQuestions/DockQuestions";
+export * from "./compositions/HelmRecord/HelmRecord";
 export * from "./compositions/HelmThread/HelmThread";
 export * from "./compositions/HelmComposer/HelmComposer";
 export * from "./compositions/JudgeQuestion/JudgeQuestion";
@@ -269,6 +270,7 @@ export * from "./compositions/JobHoldsSummary/JobHoldsSummary";
 // That reading, on a trailing sheet. `JobResources` unchanged inside it — a
 // new home rather than an edit.
 export * from "./compositions/JobHoldsSheet/JobHoldsSheet";
+export * from "./compositions/PlanTaskSheet/PlanTaskSheet";
 
 // Every setting a person can change on a running Job, on the same layer, and
 // the header's way into it.

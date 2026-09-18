@@ -98,6 +98,36 @@ impl Conversations for FakeDaemon {
         })
     }
 
+    /// The thread this fake holds, with the facts a record needs around it.
+    /// **Nothing is assembled from a session**, for this module's reason.
+    async fn get_helm_debug_info(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> Result<ipc::HelmDebugInfo, Refusal> {
+        let manifest_id = self.serving(manifest_id)?;
+        Ok(ipc::HelmDebugInfo {
+            manifest_id,
+            checkout: String::from("/repos/armada"),
+            authority: ipc::HelmActionAuthority::Acting,
+            model: String::from("a-model"),
+            brief: String::from("You are Helm, in Armada."),
+            door: String::from(ipc::door::SERVER),
+            tools: vec![String::from("list_jobs")],
+            servers: Some(19),
+            session: Some(String::from("a-session")),
+            thread: Vec::new(),
+            cut: 0,
+            polled: self.helm_polled.lock().expect("not poisoned").clone(),
+            run_id: run_id().as_str().to_string(),
+            protocol_version: ipc::PROTOCOL_VERSION,
+            at: Instant::carried("2026-09-17T09:00:00.000Z"),
+        })
+    }
+
+    async fn helm_polled(&self, _manifest_id: ManifestId, counted: ipc::EventsSince) {
+        *self.helm_polled.lock().expect("not poisoned") = Some(counted);
+    }
+
     async fn start_helm_fresh(
         &self,
         manifest_id: Option<ManifestId>,

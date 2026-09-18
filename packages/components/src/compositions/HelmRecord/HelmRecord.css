@@ -1,0 +1,34 @@
+/* The Helm session record, on the layer wide enough to read it.
+
+   The text is the error payload's own treatment — sunken, mono, --text-2xs,
+   pre — because it is the same artifact on a different subject, and a reader
+   who has quoted one has read the other. It scrolls in both directions rather
+   than wrapping: a wrapped brief is a brief nobody can diff against the one
+   Fleet sent. */
+.armada-helm-record {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-helm-record__text {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--fg-default);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.armada-helm-record__safety,
+.armada-helm-record__note {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}

@@ -84,6 +84,8 @@ mod health;
 mod helm;
 /// A call a Helm session made that its person's settings do not cover.
 mod helm_call;
+/// One repository's Helm session as one quotable record. `#1367`.
+mod helm_debug;
 mod history;
 /// What Fleet is holding disk for, and the test each one did not pass.
 /// **A piloted worktree is not on this wire at all** — `#367`.
@@ -230,6 +232,7 @@ pub use helm_call::{
     AnswerHelmCall, AskingToRun, HelmAskingToRun, HelmCallAnswer, HelmCallAnswered,
     HelmCallInFlight, HelmCallSettled, HelmCallsWaiting, RunOrNot,
 };
+pub use helm_debug::{HelmDebugInfo, HelmDebugLine, HelmDebugSaid, HelmDebugText};
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};
 pub use ids::{
