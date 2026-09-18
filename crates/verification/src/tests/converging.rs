@@ -27,8 +27,8 @@ fn workflow() -> ResolvedWorkflow {
 /// check names it, and it changes nothing git tracks.
 fn written() -> ResolvedWorkflow {
     testkit::resolved(&[Sketch {
-        id: "scope",
-        label: "Scope the change",
+        id: "plan",
+        label: "Plan the change",
         evidence_type: Some("facts_note"),
         gates: &[Gate::ArtifactExists { target: ARTIFACT }],
         judged_on: &[],

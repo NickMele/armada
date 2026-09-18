@@ -19,12 +19,12 @@ use crate::{
 /// the request.
 fn workflow() -> ResolvedWorkflow {
     testkit::resolved(&[Sketch {
-        id: "scope",
+        id: "plan",
         label: "Scope the work",
         evidence_type: Some("facts_note"),
         gates: &[],
         judged_on: &[(
-            "scope",
+            "plan",
             "Does this scope note address what was actually requested, without \
              expanding beyond it?",
         )],

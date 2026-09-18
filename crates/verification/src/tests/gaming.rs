@@ -22,7 +22,7 @@ fn workflow() -> ResolvedWorkflow {
         judged_on: &[],
         scope: None,
         gaming: Some(Gaming {
-            baseline: Some("scope.evidence"),
+            baseline: Some("plan.evidence"),
             flag_if: &[
                 "assertion_weakened",
                 "test_scope_narrowed",
@@ -223,9 +223,9 @@ fn about(pattern: GamingPattern, text: &str, baseline: Option<Baseline<'_>>) -> 
 #[test]
 fn a_brief_names_the_earlier_step_it_is_measured_against() {
     let evidence = baseline_evidence();
-    let brief = brief(Some(Baseline::of("scope", &evidence)));
+    let brief = brief(Some(Baseline::of("plan", &evidence)));
     let question = brief.question();
-    assert!(question.contains("`scope`"), "{question}");
+    assert!(question.contains("`plan`"), "{question}");
     assert!(
         question.contains("the window boundary is fixed"),
         "the yardstick is in the brief: {question}"
@@ -250,7 +250,7 @@ fn a_brief_with_no_baseline_says_there_is_none() {
 #[test]
 fn a_brief_has_no_parameter_for_what_the_drone_said() {
     let evidence = baseline_evidence();
-    let question = brief(Some(Baseline::of("scope", &evidence)))
+    let question = brief(Some(Baseline::of("plan", &evidence)))
         .question()
         .to_string();
     assert!(!question.contains("shown_by"), "{question}");
@@ -260,7 +260,7 @@ fn a_brief_has_no_parameter_for_what_the_drone_said() {
 #[test]
 fn a_flag_carries_its_citation_and_a_clearance_carries_nothing() {
     let evidence = baseline_evidence();
-    let brief = brief(Some(Baseline::of("scope", &evidence)));
+    let brief = brief(Some(Baseline::of("plan", &evidence)));
     assert_eq!(
         brief
             .read(
@@ -301,7 +301,7 @@ fn a_flag_carries_its_citation_and_a_clearance_carries_nothing() {
 #[test]
 fn an_unreadable_answer_is_neither_a_flag_nor_a_clearance() {
     let evidence = baseline_evidence();
-    let brief = brief(Some(Baseline::of("scope", &evidence)));
+    let brief = brief(Some(Baseline::of("plan", &evidence)));
     assert_eq!(
         brief.read("I had a look and it seems fine", &patch(A_TRIVIAL_DIFF)),
         Err(Unreadable::NoFlag)
@@ -329,7 +329,7 @@ fn about_the_loosened_assertion(evidence: &StepEvidence) -> GamingBrief {
     about(
         GamingPattern::AssertionWeakened,
         A_LOOSENED_ASSERTION,
-        Some(Baseline::of("scope", evidence)),
+        Some(Baseline::of("plan", evidence)),
     )
 }
 
@@ -444,7 +444,7 @@ fn an_unquoted_citation_is_a_whole_flag() {
     let flag = about(
         GamingPattern::NoFindingsOnSubstantialDiff,
         A_LOOSENED_ASSERTION,
-        Some(Baseline::of("scope", &evidence)),
+        Some(Baseline::of("plan", &evidence)),
     )
     .read(
         "flag: yes\ncited: REVIEW.md reports nothing against a hunk that loosens an assertion",
@@ -530,7 +530,7 @@ fn where_a_moved_assertion_went_is_in_the_same_brief_as_the_place_it_left() {
     let brief = about(
         GamingPattern::AssertionWeakened,
         A_TEST_SPLIT_IN_TWO,
-        Some(Baseline::of("scope", &evidence)),
+        Some(Baseline::of("plan", &evidence)),
     );
     let question = brief.question();
 
@@ -565,7 +565,7 @@ fn an_assertion_this_change_only_copied_is_readable_as_one_it_did_not_write() {
     let brief = about(
         GamingPattern::TautologicalTest,
         A_TEST_SPLIT_IN_TWO,
-        Some(Baseline::of("scope", &evidence)),
+        Some(Baseline::of("plan", &evidence)),
     );
     let question = brief.question();
 
