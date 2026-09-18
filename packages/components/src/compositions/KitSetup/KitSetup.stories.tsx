@@ -18,7 +18,7 @@ type Story = StoryObj<typeof KitSetup>;
 
 const FULL: KitSetupRead = {
   harness: "An agent CLI",
-  home: "/Users/someone/.agent",
+  home: "/Users/user/.agent",
   present: true,
   kinds: [
     {
@@ -29,12 +29,12 @@ const FULL: KitSetupRead = {
           {
             name: "humanizer",
             says: "Rewrite AI-sounding text so it reads like the writer without changing what it says.",
-            source: "/Users/someone/.agent/skills/humanizer",
+            source: "/Users/user/.agent/skills/humanizer",
           },
           {
             name: "impact-analysis",
             says: "Use when the user wants to know what will break if they change something.",
-            source: "/Users/someone/.agent/skills/impact-analysis",
+            source: "/Users/user/.agent/skills/impact-analysis",
           },
         ],
         unreadable: [],
@@ -48,7 +48,7 @@ const FULL: KitSetupRead = {
           {
             name: "code-simplifier@official",
             says: "version 1.0.0",
-            source: "/Users/someone/.agent/plugins/cache/code-simplifier/1.0.0",
+            source: "/Users/user/.agent/plugins/cache/code-simplifier/1.0.0",
           },
         ],
         unreadable: [],
@@ -62,7 +62,7 @@ const FULL: KitSetupRead = {
           {
             name: "AGENTS.md",
             says: "21 lines, opening # Global Instructions",
-            source: "/Users/someone/.agent/AGENTS.md",
+            source: "/Users/user/.agent/AGENTS.md",
           },
         ],
         unreadable: [],
@@ -78,7 +78,7 @@ const FULL: KitSetupRead = {
           {
             name: "tracker",
             says: "a program this machine starts",
-            source: "/Users/someone/.agent.json",
+            source: "/Users/user/.agent.json",
           },
         ],
         unreadable: [],
@@ -132,7 +132,7 @@ export const SomethingWillNotRead: Story = {
             items: [],
             unreadable: [
               {
-                source: "/Users/someone/.agent/skills/broken/SKILL.md",
+                source: "/Users/user/.agent/skills/broken/SKILL.md",
                 why: "front matter opens and never closes",
               },
             ],

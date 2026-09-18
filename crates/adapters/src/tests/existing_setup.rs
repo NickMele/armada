@@ -55,7 +55,7 @@ impl SetupFiles for Held {
 }
 
 fn read(files: &[(&str, &str)]) -> adapter_traits::Inventory {
-    ExistingSetup::over(Held::of(files), "/home/someone").read()
+    ExistingSetup::over(Held::of(files), "/home/user").read()
 }
 
 fn items(files: &[(&str, &str)], kind: SetupKind) -> Vec<SetupItem> {
@@ -85,7 +85,7 @@ fn a_skill_is_named_and_described_by_its_own_front_matter() {
     assert_eq!(read.len(), 1);
     assert_eq!(read[0].name, "humanizer");
     assert_eq!(read[0].says.as_deref(), Some("Rewrite text"));
-    assert_eq!(read[0].source, "/home/someone/.claude/skills/humanizer");
+    assert_eq!(read[0].source, "/home/user/.claude/skills/humanizer");
 }
 
 #[test]
@@ -113,7 +113,7 @@ fn a_skill_whose_front_matter_will_not_parse_is_named_rather_than_skipped() {
     assert_eq!(items(&files, SetupKind::Skills).len(), 1);
     assert_eq!(
         unreadable(&files, SetupKind::Skills),
-        vec!["/home/someone/.claude/skills/broken/SKILL.md"]
+        vec!["/home/user/.claude/skills/broken/SKILL.md"]
     );
 }
 
@@ -148,13 +148,13 @@ fn plugins_come_off_the_file_the_harness_keeps_them_in() {
     let read = items(
         &[(
             ".claude/plugins/installed_plugins.json",
-            r#"{"version":2,"plugins":{"github@official":[{"scope":"user","version":"1.0.0","installPath":"/home/someone/.claude/plugins/cache/github"}]}}"#,
+            r#"{"version":2,"plugins":{"github@official":[{"scope":"user","version":"1.0.0","installPath":"/home/user/.claude/plugins/cache/github"}]}}"#,
         )],
         SetupKind::Plugins,
     );
     assert_eq!(read[0].name, "github@official");
     assert_eq!(read[0].says.as_deref(), Some("version 1.0.0"));
-    assert_eq!(read[0].source, "/home/someone/.claude/plugins/cache/github");
+    assert_eq!(read[0].source, "/home/user/.claude/plugins/cache/github");
 }
 
 #[test]

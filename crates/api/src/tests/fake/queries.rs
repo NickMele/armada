@@ -303,7 +303,7 @@ impl Queries for FakeDaemon {
     async fn get_kit_inventory(&self) -> Result<ipc::KitInventory, Refusal> {
         Ok(ipc::KitInventory {
             harness: "a harness".to_string(),
-            home: "/home/someone/.setup".to_string(),
+            home: "/home/user/.setup".to_string(),
             present: true,
             kinds: Vec::new(),
         })
