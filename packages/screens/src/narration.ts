@@ -31,9 +31,11 @@ export type Beat = {
 export type TaskWork = {
   /** Absent is the work outside any task. */
   task?: PlanTask;
+  /** The sentences drawn. A bound can leave this empty on a task fully worked. */
   beats: Beat[];
+  /** Every call it held, counted whether or not its beat survived the bound. */
   calls: number;
-  /** First row to last, where both instants read. */
+  /** First row to last, where both instants read. Bounded or not, the whole of it. */
   took?: string;
   /** Holds the step's newest row, so it is the one drawn open. */
   newest: boolean;
@@ -44,6 +46,11 @@ export type Narration = {
   plan?: { done: number; total: number; states: ("open" | "working" | "done")[] };
   /** The work outside any task first, then every task in plan order. */
   sections: TaskWork[];
+  /**
+   * Entries the bound left out, every one of them older than what is drawn.
+   * Zero where nothing was left out, which is every reading with no bound.
+   */
+  earlier: number;
 };
 
 /**
@@ -67,12 +74,27 @@ export function taskAt(ts: string, tasks: readonly PlanTask[]): string | undefin
   return best?.id;
 }
 
-/** The step's rows as sentences, under the task each belongs to. */
+/**
+ * The step's rows as sentences, under the task each belongs to.
+ *
+ * `mostEntries` bounds what is drawn to that many of the step's own entries,
+ * newest last — the log chapter's entries, the same ones its header counts.
+ * **The bound is over the whole reading and not over one section**, because it
+ * stands for what a person sees on the page: a cap applied per task would be
+ * that many rows times however many tasks the step has touched. Absent draws
+ * every row, which is the log sheet.
+ *
+ * **What is counted is only what is drawn; what is said is counted over
+ * everything.** A task's heading still reads the calls and the time of all the
+ * work it holds, because that figure is the task's, not the window's — only the
+ * beats under it are trimmed.
+ */
 export function narrationOf(
   rows: readonly LogRow[],
   turns: readonly Turn[],
   stepId: string,
   plan: WorkPlan | undefined,
+  mostEntries?: number,
 ): Narration {
   const turnOf = new Map(turns.map((turn) => [String(turn.seq), turn]));
   const wrong = new Set<string>();
@@ -88,12 +110,17 @@ export function narrationOf(
     tasks.map((task) => [task.id, { task, beats: [], calls: 0, newest: false }]),
   );
 
+  // The first entry the bound keeps. Everything before it is walked for the
+  // headings' own figures and then dropped.
+  const from = mostEntries === undefined ? 0 : Math.max(0, rows.length - mostEntries);
+
   // Walked in row order, so every row is placed exactly once. A row whose
   // instant will not read stays where the row before it went.
   let placed: TaskWork = outside;
   let beat: Beat | undefined;
   const spans = new Map<TaskWork, { from?: string; to?: string }>();
-  for (const row of rows) {
+  for (const [index, row] of rows.entries()) {
+    const drawn = index >= from;
     const turn = turnOf.get(row.id);
     if (turn !== undefined) {
       const id = taskAt(turn.ts, tasks);
@@ -104,6 +131,12 @@ export function narrationOf(
       spans.set(placed, { from: span.from ?? turn.ts, to: turn.ts });
     }
     if (row.kind === "said" && row.actor !== "armada") {
+      // **A sentence older than the bound takes its heading with it.** The
+      // calls it still owns start a beat of their own, so they draw under
+      // their own fold line rather than under a sentence a reader cannot see
+      // — and the sentence is one press away in the log.
+      beat = undefined;
+      if (!drawn) continue;
       beat = {
         id: row.id,
         ...(turn === undefined ? {} : { ts: turn.ts }),
@@ -116,6 +149,10 @@ export function narrationOf(
       placed.beats.push(beat);
       continue;
     }
+    // The section's own figure, counted over every row it holds and not over
+    // the ones that survived the bound.
+    if (turn?.saw.event === "called") placed.calls += 1;
+    if (!drawn) continue;
     if (beat === undefined) {
       beat = {
         id: row.id,
@@ -131,7 +168,6 @@ export function narrationOf(
     if (wrong.has(row.id)) beat.wrong = true;
     if (turn?.saw.event === "called") {
       beat.calls += 1;
-      placed.calls += 1;
       if (!beat.tools.includes(turn.saw.tool)) beat.tools.push(turn.saw.tool);
     }
   }
@@ -147,9 +183,14 @@ export function narrationOf(
   return {
     ...(bar === undefined ? {} : { plan: bar }),
     sections: [
+      // **The outside row goes when it has no beats, and the bound can be what
+      // took them.** Unlike a task it has no heading to stand on its own, so a
+      // row saying `Outside any task` over nothing would be a label for work
+      // that is only in the log.
       ...(outside.beats.length === 0 ? [] : [outside]),
       ...tasks.map((task) => byTask.get(task.id) as TaskWork),
     ],
+    earlier: from,
   };
 }
 
@@ -174,9 +215,15 @@ export function callsSaid(beat: Beat, live: boolean): string {
   return [count, beat.tools.join(", ")].join(" · ");
 }
 
-/** `31 calls · 5m 02s`, a task's heading. Nothing on a task not worked here. */
+/**
+ * `31 calls · 5m 02s`, a task's heading. Nothing on a task not worked here.
+ *
+ * **Read off what the task held and not off what is drawn.** It was the beats,
+ * which said the same thing until a bound could take every one of them: a task
+ * worked for five minutes then drew as a task nobody had touched.
+ */
 export function workSaid(work: TaskWork): string | undefined {
-  if (work.beats.length === 0) return undefined;
+  if (work.took === undefined && work.calls === 0) return undefined;
   const calls = `${work.calls} ${work.calls === 1 ? "call" : "calls"}`;
   return work.took === undefined ? calls : `${calls} · ${work.took}`;
 }

@@ -240,10 +240,39 @@ spelled! {
 }
 
 spelled! {
+    /// Which of an Epic's issues a read-in takes. `#1405`.
+    ///
+    /// **Asked, never assumed.** A person reading a milestone to plan work
+    /// wants the open ones and a person reading one to see what shipped wants
+    /// all of them, and a read-in that picked for them fills a Studio with work
+    /// that is already done — which is what this replaced.
+    EpicTake {
+        /// Every issue the Epic holds, whatever state it is in.
+        Everything => "everything",
+        /// Only what the forge says is open.
+        Open => "open",
+    }
+}
+
+spelled! {
     /// Whether a person has accepted an edge. A proposed edge is drawn dashed.
     StudioEdgeStanding {
         Proposed => "proposed",
         Accepted => "accepted",
+    }
+}
+
+impl EpicTake {
+    /// Whether an issue in this state is one this answer takes.
+    ///
+    /// **`Open` takes what the forge said is open, and nothing else.** An issue
+    /// whose state did not come back is not known to be open, so it is left out
+    /// — and left out is a number the Epic says, never a silence.
+    pub fn admits(&self, state: Option<ForgeState>) -> bool {
+        match self {
+            EpicTake::Everything => true,
+            EpicTake::Open => state == Some(ForgeState::Open),
+        }
     }
 }
 

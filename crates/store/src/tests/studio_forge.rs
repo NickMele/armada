@@ -74,6 +74,10 @@ fn a_studio_written_before_the_forge_kinds_keeps_every_node_and_edge() {
         read_in: Some(EpicRead {
             issues: 12,
             total: 30,
+            took: Some(core_model::EpicTake::Open),
+            left_out: 18,
+            kept: 2,
+            laid_out_from: Some(core_model::StudioPosition { x: 400, y: 0 }),
         }),
     })
     .expect("an Epic takes a count");

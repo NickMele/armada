@@ -23,9 +23,17 @@ function planOf(tasks: PlanTask[]): WorkPlan {
   };
 }
 
-function read(turns: Turn[], plan?: WorkPlan) {
+function read(turns: Turn[], plan?: WorkPlan, mostEntries?: number) {
   const { rows } = hideUnread(entriesOf(turns, STEP));
-  return narrationOf(rows, turns, STEP, plan);
+  return narrationOf(rows, turns, STEP, plan, mostEntries);
+}
+
+/** Every row of every section, which is what the preview would draw. */
+function drawn(narration: ReturnType<typeof read>): number {
+  return narration.sections.reduce(
+    (count, work) => count + work.beats.reduce((rows, beat) => rows + beat.rows.length, 0),
+    0,
+  );
 }
 
 /** Said, then two calls, twice over — ten seconds apart. */
@@ -137,6 +145,83 @@ describe("work groups under the task marked working when it happened", () => {
     ];
     const closed = tasks().map((task) => ({ ...task, working_windows: [] }));
     expect(read(turns, planOf(closed)).sections[0]?.task).toBeUndefined();
+  });
+});
+
+describe("the bound is in entries, across the whole reading", () => {
+  /** A sentence, then that many `Read` calls — each one entry, its answer folded in. */
+  function reading(calls: number): Turn[] {
+    const turns = [said(STEP, at(0), "Reading the reducer to find the selector.")];
+    for (let one = 0; one < calls; one += 1) {
+      turns.push(called(STEP, at(one * 2 + 1), `r${one}`, "Read", `src/file${one}.ts`));
+      turns.push(answered(STEP, at(one * 2 + 2), `r${one}`));
+    }
+    return turns;
+  }
+
+  it("draws ten of a dozen consecutive calls of one tool", () => {
+    // The case the group counting was introduced to avoid, taken deliberately:
+    // twelve `Read` calls fill the preview and the last ten are what is drawn.
+    const narration = read(reading(12), undefined, 10);
+    expect(drawn(narration)).toBe(10);
+    expect(narration.earlier).toBe(3);
+  });
+
+  it("cuts inside a run, and the sentence over it goes with the rows it lost", () => {
+    const [only] = read(reading(12), undefined, 10).sections;
+    const [beat] = only?.beats ?? [];
+    expect(only?.beats).toHaveLength(1);
+    expect(beat?.said).toBeUndefined();
+    // Counted over what is in hand, so the fold line cannot say twelve over ten.
+    expect(beat?.calls).toBe(10);
+    expect(callsSaid(beat!, false)).toBe("10 calls · Read");
+  });
+
+  it("counts a sentence as one of them", () => {
+    // Six sentences with one call each is twelve entries, so the bound keeps
+    // five sentences and the five calls under them — never ten sentences.
+    const turns = Array.from({ length: 6 }, (_, one) => [
+      said(STEP, at(one * 3), `Step ${one}.`),
+      called(STEP, at(one * 3 + 1), `c${one}`, "Edit", "crates/fleet/src/evidence.rs"),
+      answered(STEP, at(one * 3 + 2), `c${one}`),
+    ]).flat();
+    const narration = read(turns, undefined, 10);
+    const beats = narration.sections[0]?.beats ?? [];
+    expect(beats.map((beat) => beat.said)).toEqual(["Step 1.", "Step 2.", "Step 3.", "Step 4.", "Step 5."]);
+    expect(drawn(narration)).toBe(5);
+    expect(narration.earlier).toBe(2);
+  });
+
+  it("leaves every task's own figure over the work it holds, drawn or not", () => {
+    const plan = planOf([
+      {
+        id: "T1",
+        title: "Read it first",
+        state: "done",
+        working_windows: [{ entered: at(0), left: at(25) }],
+      },
+      { id: "T2", title: "Then edit it", state: "working", working_windows: [{ entered: at(25) }] },
+    ]);
+    const edits = Array.from({ length: 9 }, (_, one) => [
+      called(STEP, at(31 + one * 2), `e${one}`, "Edit", "crates/fleet/src/evidence.rs"),
+      answered(STEP, at(32 + one * 2), `e${one}`),
+    ]).flat();
+    const narration = read([...reading(12), said(STEP, at(30), "Now the edits."), ...edits], plan, 10);
+    const [t1, t2] = narration.sections;
+    // T1's sentence and its twelve reads are all outside the bound, so it draws
+    // none of them — and still says what it did, because that figure is the
+    // task's rather than the window's.
+    expect(t1?.beats).toHaveLength(0);
+    expect(workSaid(t1!)).toBe("12 calls · 23s");
+    expect(t2?.beats.map((beat) => beat.said)).toEqual(["Now the edits."]);
+    expect(drawn(narration)).toBe(9);
+    expect(narration.earlier).toBe(13);
+  });
+
+  it("draws everything with no bound at all, which is the log sheet", () => {
+    const narration = read(reading(12));
+    expect(drawn(narration)).toBe(12);
+    expect(narration.earlier).toBe(0);
   });
 });
 

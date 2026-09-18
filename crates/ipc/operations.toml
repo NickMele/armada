@@ -495,7 +495,11 @@ notes = """
 
 **An issue, a pull request, a page, a session or a thread** adds a Finding Gathering and a scout reads the text on its one turn, `docs/contracts/agent-prompt.md` section 5c. What it asked for — Notes, Clusters, Contradictions and proposed relations — is written when the Finding freezes, each `produced` by the node read in, and arrives on `studio.changed`. **An Issue or a Pull request also gains its title and where it stands**, off the first line the fetch printed, in the same write. An answer that is not the shape leaves the Finding and no node beside it. A source is bounded before it is handed over and the Finding's `sources` says how much was cut.
 
-**An Epic is read in by Fleet alone**, with no scout and no Finding: one Issue node per issue, each carrying its address, number, title and state as fields. Bounded at 50; the Epic then says how many of how many were read in, as two numbers. A model asked to echo a list back would be cost spent on a transcription.
+**An Epic is read in by Fleet alone**, with no scout and no Finding: one Issue node per issue, each carrying its address, number, title and state as fields. Bounded at 50, and the bound lands after the answer rather than before it. A model asked to echo a list back would be cost spent on a transcription.
+
+**An Epic is asked which of its issues to take** — every issue, or only what is open — and `take` carries the answer (`#1405`). Nothing else is asked: every other kind has one thing to read. The Epic keeps what it took, and **reading it in again with the other answer widens or narrows what is on the Studio**: it makes what the answer wants and is not there, and takes back the Issue nodes it made that the answer no longer wants. The Epic then says how many of how many are on the board, which state it took, how many that left out and how many it kept.
+
+**Narrowing takes back nothing a person has touched.** An Issue this Epic `produced` is a read-in's; one carrying an edge beyond that, a line of a person's own, or a position off the block it was laid out in is one they have worked on, and it stays. So a Note written against a closed issue, a Deferral raised on it and a Job dispatched from it all survive, and the Epic's `kept` says how many stayed. An older peer that sends no `take` is read as taking everything, which is what this used to do.
 
 `agent_access` is `Helm only`, so Helm reads one in on a person's ask and no other agent reaches it. From Helm it also publishes `studio.helm_acted`.
 """

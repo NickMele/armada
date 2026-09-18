@@ -61,7 +61,7 @@ flowchart LR
 | Link | A board, document, page or session — an address no adapter recognised — kept with a line of the person's own, and what the source calls itself where a read-in learned one | None | None |
 | Issue | An issue on a forge: its address, its number, a line of the person's own, and its title and state where it has been read in | None | None |
 | Pull request | A pull request on a forge, with an Issue's fields. Its state also holds *merged* | None | None |
-| Epic | What a forge calls a set of issues under one address, with its title and how many of its issues are on this Studio | None | None |
+| Epic | What a forge calls a set of issues under one address, with its title, how many of its issues are on this Studio, which of them the read took and what that left out | None | None |
 | Deferral | Something a person put off, against what it blocks | Open, Answered | None |
 | Outline | An ordered reading of the nodes feeding it | Draft, Frozen | None |
 | Issue draft | An issue's title and body, never filed by Armada | Draft | None |
@@ -200,7 +200,7 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 | Rung | From | To | Who acts |
 |---|---|---|---|
 | Run | Any node, or nothing | Run | A person, or Helm on their ask |
-| Read in | A Link, an Issue, a Pull request or an Epic | Notes, Clusters, Contradictions, proposed edges — or an Issue per issue, from an Epic | A scout, on a person's ask. An Epic, Fleet alone |
+| Read in | A Link, an Issue, a Pull request or an Epic | Notes, Clusters, Contradictions, proposed edges — or an Issue per issue, from an Epic, as many as the answer took | A scout, on a person's ask. An Epic, Fleet alone |
 | Capture | A person using an app | Note | The person |
 | Ask | Any node | Finding | A scout, on a person's ask |
 | Cluster | Notes | Cluster | A person accepts |
@@ -217,6 +217,21 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 
 > **Rule.** An Epic read-in is bounded, and the Epic itself says how many of how many were read in.
 > Why: a Studio is laid out by hand, and a hundred nodes landing at once is a board nobody can arrange — but a bound nothing says is a board claiming to be a milestone.
+
+> **Rule.** Reading an Epic in asks which of its issues to take: every issue, or only what is open. The bound is applied to what it took, never before.
+> Why: a person reading a milestone to plan work wants the open ones and a person reading one to see what shipped wants all, and a read-in that picked for them fills a Studio with work that is already done. A bound applied first would take fifty issues and show whichever of them happened to be open, which is a bound on the wrong set. See #1405.
+
+> **Rule.** The Epic keeps the answer, and reading it in again with the other answer widens or narrows what is on the Studio. Nothing re-reads on its own.
+> Why: an issue that closes later is not a node that should disappear. Which of its issues are worth looking at is a person's judgement, and it changes as the work does.
+
+> **Rule.** An Epic says which of its issues it took, how many that left out and how many it kept, beside how many of how many are on the Studio. An Epic read in before the answer existed says nothing about one.
+> Why: a board narrower than the milestone and a board that is the milestone read the same otherwise. A count drawn as an answer nobody gave is a claim.
+
+> **Rule.** Narrowing takes back only the Issue nodes the read-in made, and never one a person has worked on: one carrying an edge beyond the `Produced` edge that made it, a line of their own beside its address, or a position off the block it was laid out in. The Epic counts what it kept.
+> Why: a person's own work is not the read-in's to remove, and a Note written against a closed issue, a Deferral raised on it and a Job dispatched from it are all that work. An Issue is never added by hand — a person pastes an address — so an Issue hanging off an Epic is that Epic's read-in's and nothing else is.
+
+> **Rule.** An Epic's issues sit in one block for the Epic's life, and a read-in fills that block's gaps rather than starting a second one.
+> Why: a widening that laid a second grid wherever the person was looking would leave one milestone drawn in two places — and where a node was put is only readable as a person's own act against a block that is still where it was laid out.
 
 > **Rule.** An Epic takes no scout and leaves no Finding.
 > Why: nothing was learned; a list was copied. A model asked to echo one back is cost spent on a transcription, and a Finding that cost nothing and read nothing says nothing.

@@ -15,7 +15,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use adapter_traits::LookupCall;
-use core_model::{EpicRead, ForgeFacts, ForgeState, StudioNodeContent, StudioNodeKind};
+use core_model::{EpicRead, EpicTake, ForgeFacts, ForgeState, StudioNodeContent, StudioNodeKind};
 use serde::Deserialize;
 
 /// The forge this workspace already assumes, as its host appears in a link.
@@ -45,6 +45,11 @@ const MOST_BYTES: u64 = 4_000_000;
 ///
 /// **A bound, because a milestone is unbounded and a Studio is laid out by
 /// hand.** A hundred nodes landing at once is a board nobody can arrange.
+///
+/// **Applied after the answer, never before it** — `#1405`. A milestone read
+/// front-first and then filtered would take fifty issues and show whichever of
+/// them happened to be open, so "only what is open" would be a bound on the
+/// wrong set.
 pub const MOST_ISSUES: usize = 50;
 
 /// What a Link's address names, where it names something a scout may be handed
@@ -485,33 +490,58 @@ impl AnIssue {
     }
 }
 
-/// A milestone as it was read: what it is called, every issue that fits, and
-/// how many it holds in all.
+/// A milestone as it was read: what it is called, every issue the fetch
+/// printed, and how many it holds in all.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MilestoneRead {
     pub title: String,
+    /// Every issue the fetch printed, in the forge's own order and **not yet
+    /// bounded**: the answer about which to take is applied first, and
+    /// [`MilestoneRead::taking`] is where [`MOST_ISSUES`] lands. `#1405`.
     pub issues: Vec<AnIssue>,
-    /// Every issue on it, whether or not it fits in [`MilestoneRead::issues`].
+    /// Every issue on it, whether or not it is in [`MilestoneRead::issues`].
     pub total: u64,
 }
 
+/// Which of a milestone's issues one answer takes, and how many it did not.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Taken<'a> {
+    /// What to put on the Studio, bounded at [`MOST_ISSUES`].
+    pub issues: Vec<&'a AnIssue>,
+    /// How many the answer left out, before the bound. **Said on the Epic**,
+    /// so narrowing a milestone is never a silent loss. `#1405`.
+    pub left_out: u64,
+}
+
 impl MilestoneRead {
-    /// What the Epic node itself now says: its title, and how many of its
-    /// issues are on the board. `#1394`.
-    pub fn facts(&self) -> ForgeFacts {
+    /// The issues `take` asks for, bounded, and how many it left out.
+    pub fn taking(&self, take: EpicTake) -> Taken<'_> {
+        let wanted: Vec<&AnIssue> = self
+            .issues
+            .iter()
+            .filter(|issue| take.admits(issue.state))
+            .collect();
+        let left_out = (self.issues.len() - wanted.len()) as u64;
+        Taken {
+            issues: wanted.into_iter().take(MOST_ISSUES).collect(),
+            left_out,
+        }
+    }
+
+    /// What the Epic node itself now says: its title, and how the read left it.
+    /// `#1394`, `#1405`.
+    pub fn facts(&self, read_in: EpicRead) -> ForgeFacts {
         ForgeFacts {
             title: Some(self.title.clone()),
             state: None,
-            read_in: Some(EpicRead {
-                issues: self.issues.len() as u64,
-                total: self.total,
-            }),
+            read_in: Some(read_in),
         }
     }
 }
 
 /// What [`fetching`] printed for a milestone: its own line, then an issue per
-/// line. **Bounded at [`MOST_ISSUES`]**, and `total` is what says so.
+/// line. **Every line, and `total` is how many the milestone holds** — what
+/// fits is [`MilestoneRead::taking`]'s answer, once the person's own is known.
 pub fn milestone_read(printed: &str, number: &str) -> MilestoneRead {
     let mut lines = printed.lines().filter(|line| !line.trim().is_empty());
     let head = lines.next().unwrap_or_default();
@@ -538,7 +568,7 @@ pub fn milestone_read(printed: &str, number: &str) -> MilestoneRead {
             true => format!("Milestone {number}"),
             false => title.trim().to_string(),
         },
-        issues: issues.into_iter().take(MOST_ISSUES).collect(),
+        issues,
         total,
     }
 }

@@ -22,7 +22,11 @@ export type HelmComposerChip = { jobHandle: string; title: string };
 export type HelmComposerProps = {
   /** The repository Helm answers for right now, by its Manifest id. Absent where nothing is servable yet. */
   current?: string;
-  /** Every repository the switch may choose. Fewer than two draws no control — there is nothing to switch to. */
+  /**
+   * Every repository the switch may choose. **Pointed at one of them, fewer
+   * than two draws no control** — there is nothing to switch to. Pointed at
+   * nothing, one is enough: it is somewhere to go. None is still nothing.
+   */
   repositories?: HelmRepositoryOption[];
   /** The dock's own switch, on All repositories. The rail's pick never moves for it. */
   onSwitch?: (manifestId: string) => void;
@@ -65,7 +69,17 @@ export function HelmComposer({
   const blank = value.trim() === "";
   const available = !blank && !disabled;
   const label = repositories.find((one) => one.id === current)?.label;
-  const switching = onSwitch !== undefined && repositories.length > 1;
+  /**
+   * Somewhere to point Helm that it is not pointed at already. **Pointed at a
+   * repository, one repository is nothing to switch between**, which is all
+   * this used to say. Pointed at nothing, that one repository is somewhere to
+   * go, and the dock says so in words — *Helm is not pointed at a repository.
+   * Pick armada to ask about it.* — so the control it names has to be here to
+   * pick with. With none set up there is still nothing to draw either way, and
+   * the dock's own sentence carries that moment on its own.
+   */
+  const somewhere = current === undefined ? repositories.length > 0 : repositories.length > 1;
+  const switching = onSwitch !== undefined && somewhere;
   /**
    * What Helm is pointed at, said once on this line. Pointed at nothing with
    * the switch drawn, the switch's own entry is what says it — and says what to
@@ -99,7 +113,11 @@ export function HelmComposer({
         )}
         {onSwitch === undefined || !switching ? null : (
           <Select
-            aria-label="Point Helm at a different repository"
+            // Named for what it does from where Helm is standing. *A different
+            // repository* is a lie while it is pointed at none, and since this
+            // change that is the switch's commonest moment — every unpointed
+            // dock with anything set up draws it, one repository included.
+            aria-label={current === undefined ? "Point Helm at a repository" : "Point Helm at a different repository"}
             value={current ?? UNPOINTED}
             onChange={(event) => {
               if (event.target.value !== UNPOINTED) onSwitch(event.target.value);
