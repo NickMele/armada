@@ -30,7 +30,7 @@ import { handleTaps } from "./haptics";
 import { installSounds } from "./dev-sounds";
 import { resolvedFolder } from "./locating";
 import { openArtifact } from "./open";
-import { openFindingIssue, openPullRequest, openRemarkLink } from "./forge";
+import { openFindingIssue, openPullRequest, openRemarkLink, openStudioNode } from "./forge";
 import { RemarksPoll } from "./remarks-poll";
 import { openServerLink } from "./servers";
 import { frameStream, FRAME_SCHEME } from "./streaming";
@@ -1011,6 +1011,11 @@ void app.whenReady().then(() => {
   );
   ipcMain.handle(CHANNELS.openFindingIssue, (_event, jobId: string, finding: string) =>
     openFindingIssue(published, jobId, finding),
+  );
+  // A Studio node's own address, `openPullRequest`'s reason: read here off the
+  // Studio main published, never off a string the renderer sent. #1406.
+  ipcMain.handle(CHANNELS.openStudioNode, (_event, studioId: string, nodeId: string) =>
+    openStudioNode(published, studioId, nodeId),
   );
 
   createWindow();

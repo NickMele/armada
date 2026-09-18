@@ -799,6 +799,13 @@ export type BridgeApi = {
    */
   promoteOnStudio: (studioId: string, promotion: StudioPromotion) => Promise<Outcome>;
   /**
+   * Open what one Studio node points at, in whatever browses the web on this
+   * machine — #1406. **A Studio id and a node id, never an address**, which is
+   * `openPullRequest`'s rule: main reads the address off the Studio it
+   * published and refuses anything that is not `https:`.
+   */
+  openStudioNode: (studioId: string, nodeId: string) => Promise<Followed>;
+  /**
    * Take the work. **The counterpart to `approveDispatch`, at the other end of
    * the Job.** On the workflow's last step Fleet commits and delivers before
    * recording the Job done. Legal only at `awaiting_review`, like the two below.

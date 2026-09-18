@@ -616,6 +616,7 @@ export const CHANNELS = {
   // One rung of promotion — #1291. One channel across six operations: what a
   // person does on a Studio is one capability, and `act` picks the route.
   promoteOnStudio: "bridge:promote-on-studio",
+  openStudioNode: "bridge:open-studio-node",
   // A press Fleet answered, felt on the trackpad. Sent, never invoked: nothing waits on it.
   tap: "bridge:tap",
 } as const;
