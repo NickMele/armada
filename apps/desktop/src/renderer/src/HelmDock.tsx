@@ -38,7 +38,6 @@ export type HelmDockProps = {
   context: HelmContext;
   /** The open Studio and its selected node, by name, for the footer. #1287. */
   studio?: StudioNamed;
-  onStartFresh: () => void;
   onSwitch: (manifestId: string) => void;
   /** The session as one record, read once when a person opens it — #1367. */
   onReadRecord: () => Promise<HelmDebugRead>;
@@ -67,7 +66,6 @@ export function HelmDock({
   onAsk,
   context,
   studio,
-  onStartFresh,
   onSwitch,
   onReadRecord,
   onCopied,
@@ -85,7 +83,7 @@ export function HelmDock({
     .map((one) => ({ id: one.manifest.id, label: one.manifest.repository }));
   const folded = helm.state === "open" || helm.state === "failed" ? helmRowsOf(helm.items) : [];
   const rows = folded.map((row) => withCards(row, jobs, workflows, pressed, onApprove, setPressed));
-  const replying = helm.state === "open" && helm.replying;
+  const replying = helmReplying(helm);
 
   const notice = !live
     ? "Fleet is not connected. What Helm already said is still here."
@@ -152,8 +150,6 @@ export function HelmDock({
         onSwitch={onSwitch}
         onCopyRecord={current === undefined ? undefined : copyRecord}
         onOpenRecord={current === undefined ? undefined : openRecord}
-        onStartFresh={onStartFresh}
-        startFreshDisabled={replying}
         value={draft}
         onChange={setDraft}
         onSend={send}
@@ -169,6 +165,17 @@ export function HelmDock({
       />
     </div>
   );
+}
+
+/**
+ * A reply is being written, or a message is waiting for one — the one rule
+ * *Start fresh* is refused by, and Fleet's rather than a guess drawn here.
+ * **Exported because the act left this component**: the head of the dock now
+ * carries it (`App.tsx`), and the thread below still reads the same fact, so
+ * the two must not be able to disagree about it.
+ */
+export function helmReplying(helm: BridgeState["helm"]): boolean {
+  return helm.state === "open" && helm.replying;
 }
 
 /** The record sheet's own state, held for as long as it is open and no longer. */

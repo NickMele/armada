@@ -14,9 +14,29 @@
 import { expect, test } from "vitest";
 import { page } from "vitest/browser";
 
+import { MANIFEST_ID, repository, workflow } from "@armada/screens/src/fixtures/build/base";
+import { connected } from "./moment";
+import type { Scenario } from "./moment";
 import { mount, unmountAfterEach } from "./testing";
 
 unmountAfterEach();
+
+/**
+ * Helm pointed at a repository, with a reply either out or finished — the one
+ * fact *Start fresh* is refused by.
+ */
+function talking(replying: boolean): Scenario {
+  return {
+    name: `helm-${replying ? "replying" : "idle"}`,
+    says: replying ? "Helm is writing a reply" : "Helm is pointed at a repository and idle",
+    state: {
+      ...connected([], [workflow()], [repository()]),
+      helm: { state: "open", manifestId: MANIFEST_ID, replying, skipped: 0, missed: 0, items: [] },
+    },
+    reads: {},
+    behaves: () => ({}),
+  };
+}
 
 /** The sentence that stood for every unpointed state, and was true in one of them. */
 const ONCE_SAID = "No repository has a Manifest yet for Helm to answer about.";
@@ -77,4 +97,43 @@ test("nothing set up: the dock says so in the words the rail and Setup use, and 
   // Helm at nothing is a reason to offer a repository, not a reason to offer none. The
   // sentence above is the whole of what this moment has to say.
   expect(page.getByRole("combobox", { name: /^Point Helm at a/ }).query()).toBeNull();
+});
+
+// Where Start fresh is drawn, and when Fleet refuses it — the owner's note of
+// 18 Sep 2026. It ends the conversation the whole dock is showing, so it sits
+// in the dock's own head beside Close rather than in the row above the message
+// box, where it was one of three controls that wrapped onto a second line.
+
+test("Start fresh sits in the dock's head, beside Close and above the conversation", async () => {
+  mount(talking(false));
+  await expect.element(dock()).toBeVisible();
+
+  const fresh = page.getByRole("button", { name: "Start fresh" });
+  await expect.element(fresh).toBeVisible();
+  await expect.element(fresh).toBeEnabled();
+
+  // Beside Close, on the head's one line and ahead of it: the exit stays at
+  // the trailing edge. No role carries where a control was drawn, and where
+  // this one is drawn is the whole of the note.
+  const act = fresh.element().getBoundingClientRect();
+  const close = page.getByRole("button", { name: /^Close/ }).element().getBoundingClientRect();
+  expect(Math.abs(act.top - close.top)).toBeLessThan(2);
+  expect(act.right).toBeLessThanOrEqual(close.left);
+
+  // And above the composer it left — the head of the dock, not the head of the
+  // composer, which is the length of the conversation further down.
+  const field = page.getByRole("textbox", { name: "Ask Helm" }).element().getBoundingClientRect();
+  expect(act.bottom).toBeLessThan(field.top);
+});
+
+test("a reply is being written: Start fresh is refused, in the head where it now lives", async () => {
+  mount(talking(true));
+  await expect.element(dock()).toBeVisible();
+
+  const fresh = page.getByRole("button", { name: "Start fresh" });
+  await expect.element(fresh).toBeDisabled();
+  // Still the head's control while refused: a disabled act does not move.
+  const act = fresh.element().getBoundingClientRect();
+  const close = page.getByRole("button", { name: /^Close/ }).element().getBoundingClientRect();
+  expect(Math.abs(act.top - close.top)).toBeLessThan(2);
 });

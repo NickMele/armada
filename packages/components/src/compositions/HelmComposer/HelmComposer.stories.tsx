@@ -20,6 +20,9 @@ const POINT = "Point Helm at a repository";
 /** And once it is pointed at one. */
 const REPOINT = "Point Helm at a different repository";
 
+/** The caret's own name on the record's split button — what is behind it, in words. */
+const MORE = "More ways to report this answer";
+
 /**
  * Picking an entry the way a person's mouse does, which is not what
  * `selectOptions` does on its own: **a native `<select>` fires `change` only
@@ -77,7 +80,6 @@ export const AtRest: Story = {
     current: repositories[0]!.id,
     repositories: [repositories[0]!],
     onSwitch: fn(),
-    onStartFresh: fn(),
     onCopyRecord: fn(),
     onOpenRecord: fn(),
   },
@@ -88,10 +90,11 @@ export const AtRest: Story = {
 };
 
 /**
- * How a bad answer is carried to somebody who could fix it — `#1367`. **The
- * banner form**: *Copy debug info* acts on one press and *Details*
- * opens the same artifact to read. The dock is a standing surface, which is
- * what that row is for.
+ * How a bad answer is carried to somebody who could fix it — `#1367`, as one
+ * control since 18 Sep 2026. **The banner form, split**: *Copy debug info*
+ * acts on one press from the face, and *Details* opens the same artifact to
+ * read from behind the caret. Each act still calls its own handler and neither
+ * calls the other's.
  */
 export const RecordCopiedAndRead: Story = {
   args: {
@@ -104,8 +107,96 @@ export const RecordCopiedAndRead: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Copy debug info" }));
     await expect(args.onCopyRecord).toHaveBeenCalled();
     await expect(args.onOpenRecord).not.toHaveBeenCalled();
+
+    // The reading is behind the caret, which is the whole of what the caret is
+    // for: nothing else in this row discloses anything.
+    await userEvent.click(canvas.getByRole("button", { name: MORE }));
+    await userEvent.click(canvas.getByRole("menuitem", { name: "Details" }));
+    await expect(args.onOpenRecord).toHaveBeenCalled();
+    await expect(args.onCopyRecord).toHaveBeenCalledTimes(1);
+  },
+};
+
+/**
+ * One handler, and there is nothing to split. **A caret over an empty menu is
+ * a control that does not answer**, so the act is drawn as the plain button it
+ * already was — whichever of the two the dock could offer.
+ */
+export const OnlyOneActToReportWith: Story = {
+  args: { current: repositories[0]!.id, repositories: [repositories[0]!], onCopyRecord: fn() },
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.queryByRole("button", { name: MORE })).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "Copy debug info" }));
+    await expect(args.onCopyRecord).toHaveBeenCalled();
+  },
+};
+
+/**
+ * The same, with the reading as the only act: the plain button carries
+ * *Details* rather than a face with a dead caret beside it.
+ */
+export const OnlyTheReadingToReportWith: Story = {
+  args: { current: repositories[0]!.id, repositories: [repositories[0]!], onOpenRecord: fn() },
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.queryByRole("button", { name: MORE })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: "Copy debug info" })).not.toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "Details" }));
     await expect(args.onOpenRecord).toHaveBeenCalled();
+  },
+};
+
+/**
+ * **The row holds one line at the dock's own width** — the owner's note of
+ * 18 Sep 2026, where three controls beside the repository wrapped it onto a
+ * second line 72px tall. Every control this row can hold is present: the
+ * switch, and the record's split button with both acts.
+ *
+ * A rendering cannot state this, and neither can a role: the fact is that
+ * every control shares one line and none of them is pushed past the row's
+ * trailing edge.
+ */
+export const HeadHoldsOneLineAtDockWidth: Story = {
+  args: {
+    current: repositories[0]!.id,
+    repositories,
+    onSwitch: fn(),
+    onCopyRecord: fn(),
+    onOpenRecord: fn(),
+  },
+  play: async ({ canvas, canvasElement }) => {
+    async function onOneLine(): Promise<void> {
+      const head = canvasElement.querySelector(".armada-helm-composer__head");
+      if (!(head instanceof HTMLElement)) throw new Error("the composer drew no head row");
+      const row = head.getBoundingClientRect();
+      const controls = [
+        canvas.getByRole("combobox", { name: REPOINT }),
+        canvas.getByRole("button", { name: "Copy debug info" }),
+        canvas.getByRole("button", { name: MORE }),
+      ].map((one) => one.getBoundingClientRect());
+
+      // One line: the row is no taller than the tallest control standing in it.
+      const tallest = Math.max(...controls.map((one) => one.height));
+      await expect(row.height).toBeLessThanOrEqual(tallest);
+      // And every control is on it, within its edges — a row that does not wrap
+      // is only an improvement if nothing has been pushed out of sight instead.
+      for (const control of controls) {
+        await expect(control.top).toBeGreaterThanOrEqual(row.top - 1);
+        await expect(control.bottom).toBeLessThanOrEqual(row.bottom + 1);
+        await expect(control.left).toBeGreaterThanOrEqual(row.left - 1);
+        await expect(control.right).toBeLessThanOrEqual(row.right + 1);
+      }
+    }
+
+    await onOneLine();
+
+    // And again at the floor of the dock's drag range, which is where the
+    // owner's own dock was standing when he wrote the note: 286px of head is
+    // --w-dock-min, not --w-dock. A row that only holds at rest holds nowhere
+    // a person actually drags to.
+    const dock = canvasElement.querySelector(".armada-glass");
+    if (!(dock instanceof HTMLElement)) throw new Error("the story drew no dock around the composer");
+    dock.style.width = "var(--w-dock-min)";
+    await onOneLine();
   },
 };
 
@@ -120,7 +211,7 @@ export const RecordCopiedAndRead: Story = {
  * at its own entry with that one repository under it to choose.
  */
 export const UnpointedWithOneRepository: Story = {
-  args: { repositories: [repositories[0]!], onSwitch: fn(), onStartFresh: fn(), disabled: true },
+  args: { repositories: [repositories[0]!], onSwitch: fn(), disabled: true },
   play: async ({ args, canvas, userEvent }) => {
     const switcher = canvas.getByRole("combobox", { name: POINT });
     // Its own entry, not the one repository: Helm is not pointed at that yet,
@@ -140,7 +231,7 @@ export const UnpointedWithOneRepository: Story = {
 
 /** On All repositories, the dock's own switch — the rail's pick never moves for it. */
 export const SwitchOnAll: Story = {
-  args: { current: repositories[0]!.id, repositories, onSwitch: fn(), onStartFresh: fn() },
+  args: { current: repositories[0]!.id, repositories, onSwitch: fn() },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const switcher = canvas.getByRole("combobox", { name: REPOINT });
@@ -165,7 +256,7 @@ export const SwitchOnAll: Story = {
  * play that only picks the second repository passes either way.
  */
 export const UnpointedStandsAtItsOwnEntry: Story = {
-  args: { repositories, onSwitch: fn(), onStartFresh: fn(), disabled: true },
+  args: { repositories, onSwitch: fn(), disabled: true },
   play: async ({ args, canvas, userEvent }) => {
     const switcher = canvas.getByRole("combobox", { name: POINT });
     await expect(switcher).toHaveDisplayValue(UNPOINTED);
@@ -177,19 +268,6 @@ export const UnpointedStandsAtItsOwnEntry: Story = {
     // The first repository in the list, which is the one that could not be chosen.
     await pick(switcher, repositories[0]!.id, userEvent);
     await expect(args.onSwitch).toHaveBeenCalledWith(repositories[0]!.id);
-  },
-};
-
-/** A reply is being written — Fleet refuses Start fresh until it finishes. */
-export const StartFreshRefusedWhileReplying: Story = {
-  args: {
-    current: repositories[0]!.id,
-    repositories: [repositories[0]!],
-    onStartFresh: fn(),
-    startFreshDisabled: true,
-  },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("button", { name: "Start fresh" })).toBeDisabled();
   },
 };
 

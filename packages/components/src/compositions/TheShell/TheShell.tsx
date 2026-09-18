@@ -119,6 +119,15 @@ export type TheShellDock = {
    * same way `open` is.
    */
   onResize?: (width: number) => void;
+  /**
+   * The dock's own act, beside Close — Helm's *Start fresh*, put there by the
+   * owner on 18 Sep 2026: it ends the conversation the dock holds, which is
+   * the head's business rather than the composer's, and the composer's own row
+   * had run out of width for it. **One control**, and the head is the same
+   * layout without it. Drawn in the folded sheet's head too, through `Sheet`'s
+   * own `controls` slot — folding the dock must not take an act away.
+   */
+  action?: ReactNode;
   /** Absent draws one quiet line until the questions (#935) and the conversation (#944) arrive. */
   children?: ReactNode;
 };
@@ -470,6 +479,7 @@ function Dock({
   width,
   onResize,
   onOpen,
+  action,
   children,
   leftWidth,
 }: TheShellDock & { leftWidth: number }) {
@@ -499,6 +509,7 @@ function Dock({
           <div className="armada-shell__dock-head">
             <span className="armada-shell__dock-chip" aria-hidden><MessageSquare size={16} strokeWidth={2} /></span>
             <h2 className="armada-shell__dock-title">{DOCK_TITLE}</h2>
+            {action}
             <Button variant="secondary" size="sm" ground="card" onClick={() => onOpen(false)}>
               Close
               {binding === undefined ? null : <KbdCmd shortcut={binding} />}
@@ -527,7 +538,13 @@ function Dock({
         <MessageSquare size={16} strokeWidth={2} aria-hidden />
         {questions > 0 ? <span className="armada-shell__strip-count">{questions}</span> : null}
       </button>
-      <HelmSheet open={open && folded} title={DOCK_TITLE} binding={binding} onClose={() => onOpen(false)}>
+      <HelmSheet
+        open={open && folded}
+        title={DOCK_TITLE}
+        binding={binding}
+        controls={action}
+        onClose={() => onOpen(false)}
+      >
         {body}
       </HelmSheet>
     </>

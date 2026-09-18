@@ -687,8 +687,10 @@
   --w-dock: 380px;
   /* The dock's own drag range, from the owner's request to make the dock
      resizable. 320px is the narrowest that keeps the composer's head row —
-     the repository label, its switch and Start fresh — on one line before the
-     switch is forced to clip; the label already ellipsizes for room.
+     the repository label or its switch, and the record's own control — on one
+     line before the switch is forced to clip; the label already ellipsizes for
+     room. **Three controls were on that row until 18 Sep 2026** and it wrapped
+     to two lines at this width; the row is one control fewer now, and holds.
 
      There is no fixed ceiling any more. The dock used to carry --w-dock-max
      at --w-dialog-wide's own 640px, "to cap the dock under half a 1280px
