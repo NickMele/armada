@@ -4,7 +4,7 @@
 
    **Two rows, not one that wraps.** One row for identity and acts and a
    second, quieter one for the facts — the crowding the header existed to fix.
-   #1093 got there by folding the title into a trail; #1481 took the trail out
+   #1093 got there by folding the title into a trail; #1484 took the trail out
    and left the title where it stood. */
 .armada-job-head {
   display: flex;
@@ -68,7 +68,7 @@
 /* The job id, leading the facts rather than trailing the title: it
    identifies and does not describe, so it recedes into the run of things a
    person did not open the Job to read. Its own word in front of it, since
-   #1481 — an unlabelled handle beside an unlabelled branch was read as
+   #1484 — an unlabelled handle beside an unlabelled branch was read as
    neither. */
 .armada-job-head__id {
   color: var(--fg-subtle);

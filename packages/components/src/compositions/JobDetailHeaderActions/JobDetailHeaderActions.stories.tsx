@@ -34,7 +34,7 @@ type Story = StoryObj<typeof JobDetailHeaderActions>;
  * A running job. The badge is static: the rail's current step is the running
  * mark, so it carries the loop and the badge does not.
  *
- * **The id is behind a word and the run is readings only**, since #1481. The
+ * **The id is behind a word and the run is readings only**, since #1484. The
  * repository and the branch were on this line and are drawn a second time by
  * *Where things are*, one column down; Spend and Turns went to Pulse. What is
  * left is what a person reads rather than what they came to fetch.
@@ -76,7 +76,7 @@ export const ARunningJob: Story = {
     await expect(canvas.getByRole("heading", { name: "Split the settings reducer" })).toBeVisible();
     await expect(canvas.getByText("Job")).toBeVisible();
 
-    // And no way back that does not go anywhere — #1481.
+    // And no way back that does not go anywhere — #1484.
     await expect(canvas.queryByRole("button", { name: "Overview" })).toBeNull();
   },
 };

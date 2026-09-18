@@ -47,7 +47,7 @@
 // it runs to now, and it stops at `ended_at` once the Job is over — a terminal
 // Job whose figure kept climbing would read as still running.
 //
-// **A Job that is over draws how long it ran, since #1481.** It drew the
+// **A Job that is over draws how long it ran, since #1484.** It drew the
 // instant it ended instead, because the column predates `ended_at` being on
 // the wire: a Job that ran twelve minutes and died read `Sep 18, 9:41 AM`
 // beside running Jobs reading durations, which is two kinds of answer in one
