@@ -1,36 +1,25 @@
 //! The turn lock: one runner at a time may act on the merge line.
 //!
-//! **`create_new`, not `flock`.** No `fs4`/`fs2`/`fslock` crate is in this
-//! workspace's dependency graph, and `unsafe_code = "forbid"` rules out a
-//! hand-rolled `libc::flock` call. `OpenOptions::create_new`
-//! (`O_CREAT|O_EXCL`) gives the one property `flock` was chosen for: two
-//! racing callers can never both believe they hold the turn, because only
-//! the first to create the file can.
-//!
-//! **Staleness by `holder_of`, not by the kernel.** `flock` releases itself
-//! when its holder dies; nothing here holds a kernel lock to release, so a
-//! file left by a killed runner is reclaimed by asking
-//! `fleet::process::holder_of` whether the pid it names is still the same
-//! process — the same check `fleet::runtime` already trusts for its own
-//! runtime file.
+//! **`flock`, by way of `fd-lock`.** No other crate here already wrapped it,
+//! and `unsafe_code = "forbid"` rules out a hand-rolled `libc::flock` call.
+//! The kernel releases the lock the moment its holder's file descriptor
+//! closes — a killed process does that unconditionally, so nothing here
+//! reads a pid back to decide whether a lock is stale. There is no
+//! staleness question left to answer, and the code that used to answer it
+//! — `fleet::process::holder_of`, `StartedAt` — is gone with it.
 
-//! **Release is [`Drop`]; staleness is the backstop.** A clean exit removes
-//! the file; a killed one leaves it, naming a pid the next caller finds
-//! dead — reclaimed by retrying `create_new`, so the same atomicity that
-//! protects the first acquisition protects the second.
-//!
-//! **Flagged, not pre-approved.** No new dependency is added, but this
-//! substitutes `holder_of` for a kernel primitive nothing here reaches; see
-//! this stage's own report for the alternative (a small `fd-lock` crate).
+//! **A `'static` guard, by [`Box::leak`], stands in for a self-referential
+//! struct.** [`RwLockWriteGuard`] borrows the [`RwLock`] it locked, and this
+//! type hands that guard to a caller who holds it far longer than any stack
+//! frame in this module. Leaking one small `RwLock<File>` per acquisition
+//! is bounded by how many turns a runner — a short-lived process by design
+//! — takes, and is a safe, ordinary use of `Box::leak`, not an oversight.
 
-use std::fmt;
-use std::fs::OpenOptions;
-use std::io;
+use std::fs::{File, OpenOptions};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
-
-use fleet::process::{holder_of, Holder, ProbeFailed, StartedAt};
+use fd_lock::{RwLock, RwLockWriteGuard};
 
 use super::dir::StateDir;
 
@@ -38,61 +27,74 @@ use super::dir::StateDir;
 /// `scripts/land`'s own `runner.lock`.
 const FILE_NAME: &str = "runner.lock";
 
-/// One held turn, as written to the lock file.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-struct LockFile {
-    pid: u32,
-    started_at: StartedAt,
-}
-
 /// A held turn. Held for the life of the value — dropping it releases the
-/// lock.
+/// `flock` and removes the file.
 #[derive(Debug)]
 pub struct TurnLock {
+    // Order matters for `Drop`: fields drop in declaration order after the
+    // explicit `drop` body runs, and the guard (which unlocks) must still be
+    // alive when that body removes the file, so it is declared after `path`.
     path: PathBuf,
+    // Never read; held only so its `Drop` unlocks when `TurnLock` does.
+    #[allow(dead_code)]
+    guard: RwLockWriteGuard<'static, File>,
 }
 
 impl TurnLock {
     /// Acquire the turn, or find it genuinely held.
     ///
-    /// `Ok(None)` means a live process holds it. `Ok(Some(_))` means this
-    /// call now holds it, whether the file was fresh or was a stale one
-    /// reclaimed first.
+    /// `Ok(None)` means a live process holds it — `flock` says so directly,
+    /// with no reading of who that process is. `Ok(Some(_))` means this call
+    /// now holds it.
     pub fn try_acquire(state: &StateDir) -> Result<Option<TurnLock>, LockError> {
         let path = lock_path(state);
-        let mine = this_process()?;
-        let body = ipc::encode(&mine).map_err(LockError::Unencodable)?;
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&path)
+            .map_err(|cause| LockError::Unwritable {
+                path: path.clone(),
+                cause,
+            })?;
 
-        match create(&path, body.as_bytes()) {
-            Ok(()) => return Ok(Some(TurnLock { path })),
-            Err(cause) if cause.kind() == io::ErrorKind::AlreadyExists => {}
-            Err(cause) => return Err(LockError::Unwritable { path, cause }),
-        }
-
-        if !reclaim_if_stale(&path)? {
-            return Ok(None);
-        }
-        match create(&path, body.as_bytes()) {
-            Ok(()) => Ok(Some(TurnLock { path })),
-            // Lost the retry to whoever reclaimed it first — the same
-            // outcome as losing the first race.
-            Err(cause) if cause.kind() == io::ErrorKind::AlreadyExists => Ok(None),
+        // Leaked deliberately — see the module doc. `lock` is never read
+        // back through this binding again; it exists only so `try_write`
+        // has somewhere `'static` to borrow from.
+        let lock: &'static mut RwLock<File> = Box::leak(Box::new(RwLock::new(file)));
+        match lock.try_write() {
+            Ok(mut guard) => {
+                // Best-effort and purely informational — nothing here reads
+                // this back to decide anything, unlike the pid the previous
+                // version staked correctness on.
+                let _ = write!(guard, "{}", std::process::id());
+                Ok(Some(TurnLock { path, guard }))
+            }
+            Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => Ok(None),
             Err(cause) => Err(LockError::Unwritable { path, cause }),
         }
     }
 
     /// Whether the turn is currently held, without acquiring it — for
     /// `runner_alive`-style polling.
+    ///
+    /// Opens its own file descriptor and tries the lock itself; a successful
+    /// try releases again immediately (the guard is dropped at the end of
+    /// the match arm), so this never actually holds anything.
     pub fn held(state: &StateDir) -> Result<bool, LockError> {
         let path = lock_path(state);
-        match read_lock_file(&path) {
-            Ok(None) => Ok(false),
-            Ok(Some(found)) => is_live(&found),
-            // Exists but will not decode: evidence the path is claimed, not
-            // evidence it is free.
-            Err(LockError::Undecodable { .. }) => Ok(true),
-            Err(other) => Err(other),
-        }
+        let file = match OpenOptions::new().write(true).open(&path) {
+            Ok(file) => file,
+            Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(false),
+            Err(cause) => return Err(LockError::Unwritable { path, cause }),
+        };
+        let mut lock = RwLock::new(file);
+        let result = match lock.try_write() {
+            Ok(_) => Ok(false),
+            Err(cause) if cause.kind() == io::ErrorKind::WouldBlock => Ok(true),
+            Err(cause) => Err(LockError::Unwritable { path, cause }),
+        };
+        result
     }
 
     pub fn path(&self) -> &Path {
@@ -102,6 +104,10 @@ impl TurnLock {
 
 impl Drop for TurnLock {
     fn drop(&mut self) {
+        // The file goes first, while `self.guard` is still alive and the
+        // lock still held, so nothing else can observe a path that exists
+        // but is unlocked. `self.guard`'s own `Drop` runs immediately after
+        // this function returns and is what actually calls `flock(Unlock)`.
         let _ = std::fs::remove_file(&self.path);
     }
 }
@@ -110,125 +116,17 @@ fn lock_path(state: &StateDir) -> PathBuf {
     state.path().join(FILE_NAME)
 }
 
-fn create(path: &Path, body: &[u8]) -> io::Result<()> {
-    use std::io::Write;
-    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
-    file.write_all(body)
-}
-
-/// This process's own pid and start time, the way `fleet::runtime::publish`
-/// reads its own identity before writing the runtime file.
-fn this_process() -> Result<LockFile, LockError> {
-    let pid = std::process::id();
-    match holder_of(pid).map_err(LockError::ProbeFailed)? {
-        Holder::Held(started_at) => Ok(LockFile { pid, started_at }),
-        Holder::Vacant => Err(LockError::OwnPidNotHeld { pid }),
-    }
-}
-
-/// Reclaim `path` if the pid it names is dead or has been reused, so the
-/// caller may retry `create_new`. `Ok(true)` means retry; `Ok(false)` means
-/// a live process genuinely holds it.
-fn reclaim_if_stale(path: &Path) -> Result<bool, LockError> {
-    match read_lock_file(path) {
-        // Released between the failed create and this read.
-        Ok(None) => Ok(true),
-        Ok(Some(found)) => {
-            if is_live(&found)? {
-                Ok(false)
-            } else {
-                remove_if_present(path)?;
-                Ok(true)
-            }
-        }
-        // Cannot prove it stale, so it is not touched.
-        Err(LockError::Undecodable { .. }) => Ok(false),
-        Err(other) => Err(other),
-    }
-}
-
-fn is_live(found: &LockFile) -> Result<bool, LockError> {
-    match holder_of(found.pid).map_err(LockError::ProbeFailed)? {
-        Holder::Vacant => Ok(false),
-        Holder::Held(started_at) => Ok(started_at == found.started_at),
-    }
-}
-
-fn read_lock_file(path: &Path) -> Result<Option<LockFile>, LockError> {
-    let bytes = match std::fs::read(path) {
-        Ok(bytes) => bytes,
-        Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(cause) => {
-            return Err(LockError::Unreadable {
-                path: path.to_path_buf(),
-                cause,
-            })
-        }
-    };
-    ipc::decode("turn lock", &bytes)
-        .map(Some)
-        .map_err(|cause| LockError::Undecodable {
-            path: path.to_path_buf(),
-            cause,
-        })
-}
-
-fn remove_if_present(path: &Path) -> Result<(), LockError> {
-    match std::fs::remove_file(path) {
-        Ok(()) => Ok(()),
-        Err(cause) if cause.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(cause) => Err(LockError::Unwritable {
-            path: path.to_path_buf(),
-            cause,
-        }),
-    }
-}
-
-/// Why the turn lock could not be acquired, checked, or written.
+/// Why the turn lock could not be acquired or checked.
 #[derive(Debug)]
 pub enum LockError {
-    Unwritable {
-        path: PathBuf,
-        cause: io::Error,
-    },
-    Unreadable {
-        path: PathBuf,
-        cause: io::Error,
-    },
-    Undecodable {
-        path: PathBuf,
-        cause: ipc::Undecodable,
-    },
-    Unencodable(ipc::Unencodable),
-    ProbeFailed(ProbeFailed),
-    /// The process asking is not the process it asks about. Unreachable in
-    /// practice, and named the way `fleet::runtime::PublishError` names it,
-    /// rather than unwrapped.
-    OwnPidNotHeld {
-        pid: u32,
-    },
+    Unwritable { path: PathBuf, cause: io::Error },
 }
 
-impl fmt::Display for LockError {
-    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for LockError {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LockError::Unwritable { path, .. } => {
-                write!(out, "{} could not be written", path.display())
-            }
-            LockError::Unreadable { path, .. } => {
-                write!(out, "{} could not be read", path.display())
-            }
-            LockError::Undecodable { path, .. } => {
-                write!(
-                    out,
-                    "{} is not a turn lock armada land wrote",
-                    path.display()
-                )
-            }
-            LockError::Unencodable(why) => write!(out, "{why}"),
-            LockError::ProbeFailed(why) => write!(out, "{why}"),
-            LockError::OwnPidNotHeld { pid } => {
-                write!(out, "this process reports pid {pid}, which nothing holds")
+            LockError::Unwritable { path, cause } => {
+                write!(out, "{} could not be locked: {cause}", path.display())
             }
         }
     }
@@ -238,11 +136,6 @@ impl std::error::Error for LockError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             LockError::Unwritable { cause, .. } => Some(cause),
-            LockError::Unreadable { cause, .. } => Some(cause),
-            LockError::Undecodable { cause, .. } => Some(cause),
-            LockError::Unencodable(why) => Some(why),
-            LockError::ProbeFailed(why) => Some(why),
-            LockError::OwnPidNotHeld { .. } => None,
         }
     }
 }
@@ -251,7 +144,7 @@ impl std::error::Error for LockError {
 mod tests {
     use crate::tests::TempDir;
 
-    use super::{LockFile, TurnLock, FILE_NAME};
+    use super::TurnLock;
 
     #[test]
     fn try_acquire_succeeds_when_nothing_holds_it() {
@@ -296,37 +189,65 @@ mod tests {
         );
     }
 
-    /// The backstop this whole module exists for: a lock naming a pid that
-    /// has since exited is reclaimed rather than treated as held forever.
+    /// The property this file now gets from the kernel rather than from
+    /// reading a pid back: a lock held by a process that is killed (never
+    /// runs its own `Drop`) is released the instant its file descriptors
+    /// close, with no staleness check anywhere here deciding whether to
+    /// believe it.
     #[test]
-    fn a_lock_naming_a_dead_pid_is_reclaimed() {
+    fn a_lock_whose_holder_was_killed_is_released_by_the_kernel_not_by_this_code() {
         let dir = TempDir::new();
         let state = crate::land::StateDir::for_testing(dir.path().join("armada-land"));
+        let state_path = state.path().to_path_buf();
 
-        let mut child = std::process::Command::new("/bin/echo")
-            .arg("done")
+        // A child process that acquires the lock and then waits to be
+        // killed — standing in for a runner that never reaches its own
+        // `Drop`.
+        let mut child = std::process::Command::new(std::env::current_exe().expect("current_exe"))
+            .env("ARMADA_LAND_LOCK_TEST_HOLD", &state_path)
+            .arg("--exact")
+            .arg("land::lock::tests::held_by_a_child_until_killed")
+            .arg("--ignored")
+            .arg("--nocapture")
             .spawn()
-            .expect("echo runs");
-        let pid = child.id();
-        child.wait().expect("echo exits");
-        assert!(
-            matches!(
-                fleet::process::holder_of(pid),
-                Ok(fleet::process::Holder::Vacant)
-            ),
-            "the child must actually be gone, or reclaiming it proves nothing"
-        );
+            .expect("the holder process spawns");
 
-        let stale = LockFile {
-            pid,
-            started_at: fleet::process::StartedAt::carried("Mon Jan  1 00:00:00 2001"),
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !TurnLock::held(&state).unwrap_or(false) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the child never acquired the lock"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+
+        child.kill().expect("the child can be killed");
+        child.wait().expect("the child's exit is observable");
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while TurnLock::held(&state).unwrap_or(true) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the kernel never released a killed holder's lock"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+
+    /// Not a scenario in its own right — the child process the test above
+    /// spawns, standing in for a runner killed mid-turn. `#[ignore]` keeps
+    /// an ordinary run from executing it directly; it runs only because the
+    /// parent test names it with `--exact --ignored`.
+    #[test]
+    #[ignore]
+    fn held_by_a_child_until_killed() {
+        let Ok(state_path) = std::env::var("ARMADA_LAND_LOCK_TEST_HOLD") else {
+            return;
         };
-        let body = ipc::encode(&stale).expect("a lock file encodes");
-        std::fs::write(state.path().join(FILE_NAME), body).expect("a hand-written stale lock");
-
-        let reclaimed = TurnLock::try_acquire(&state)
+        let state = crate::land::StateDir::for_testing(state_path.into());
+        let _lock = TurnLock::try_acquire(&state)
             .expect("try_acquire")
-            .expect("a lock naming a dead pid is reclaimed, not treated as held");
-        drop(reclaimed);
+            .expect("nothing held it yet");
+        std::thread::sleep(std::time::Duration::from_secs(60));
     }
 }
