@@ -424,10 +424,21 @@
   notes = "Survives as: dispatched."
 
 [icons.settings]
-  means = "Kit"
-  group = "Git and config"
-  size = "12px"
+  means = "Kit — the tool set you bring, and the surface it is edited on"
+  group = "Navigation"
+  size = "16px"
   status = "Specified"
+  reserved = "The Kit surface only. Never a generic settings or preferences glyph, and never the Settings surface — that is this machine's, and `sliders-horizontal` is its row."
+  notes = "This row has said `means = \"Kit\"` since it was written, and `file-cog` and `wrench` each cite it in their own reservations — three rows naming the cog as Kit's before Kit had anywhere to be drawn. Bridge's Settings surface had been wearing it in the meantime, which was the collision that bit the moment Kit took a rail row (#1275): two rail rows cannot both be a cog, and the registry had already said whose it was. Kit took it and Settings moved. Promoted from 12px to 16px with the move — the rail draws at 16, and the cog's teeth are interior detail that rule 3 will not have at 12."
+
+
+[icons.sliders-horizontal]
+  means = "This machine's own settings — three horizontal rules, each with a handle set along it"
+  group = "Navigation"
+  size = "16px"
+  status = "Proposed"
+  reserved = "The Settings surface only. Never Kit, which is `settings`, and never a Manifest, which is `file-cog`. Never a filter or a sort control."
+  notes = "Added 2026-09-18 when Kit took its own rail row (#1275) and reclaimed `settings`, whose own row has meant Kit since it was written. Settings is Fleet's four limits, Helm's action authority and this machine's own settings — values a person slides to a number, which is what the glyph draws. The only line-based silhouette in the Navigation set: clipboard-list is an upright board, presentation a board on legs, layout-dashboard a grid of panes, hard-drive a horizontal vessel, and bell, stethoscope and file-cog are each an outline with something drawn on or inside it. Nothing here is a bounded shape at all, which is what keeps it clear of every one of them at 16px. Refused before it was proposed: `cpu` is a square with legs and collides with layout-dashboard's pane grid at 16px; `gauge` reads as a measurement, which is `get_capacity`'s subject and not this screen's; `wrench` is reserved to job_status.awaiting_repair by its own row, which names settings as the collision that reservation exists to refuse."
 
 [icons.signpost]
   means = "A post with one horizontal blade pointing off it"

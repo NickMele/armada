@@ -40,7 +40,21 @@ export type HelmContext = {
 };
 
 /** Which screen is showing. `App.tsx` is the one place that decides between them. */
-export type HelmScreen = "overview" | "board" | "manifest" | "cleanup" | "studio" | "job_detail";
+export type HelmScreen =
+  | "overview"
+  | "board"
+  | "manifest"
+  | "cleanup"
+  | "studio"
+  /** Kit: the MCP servers a drone is handed. Since 15.1, #1275. */
+  | "kit"
+  /**
+   * This machine's own settings. **Added with `kit` and not before it**:
+   * #1287 added `studio` and left this one out, so a person on Settings was
+   * reported to Helm as being on the Board.
+   */
+  | "settings"
+  | "job_detail";
 
 /**
  * What `POST /helm/ask` and `POST /helm/start_fresh` answer with. **Not the

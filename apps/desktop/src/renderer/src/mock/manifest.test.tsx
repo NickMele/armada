@@ -165,31 +165,6 @@ test("a repository-wide always-allow is listed, and removed from here", async ()
   await expect.element(page.getByText("Nothing always allowed yet.")).toBeVisible();
 });
 
-/**
- * The whole of #1275's own claim, through `App`: a person adds an MCP server
- * without a terminal, sees that it reaches no Drone, allows it for this
- * repository, and the row says a Drone dispatched here gets it.
- */
-test("a server added in Bridge reaches no Drone until this repository allows it", async () => {
-  await manifest();
-  await page.getByRole("tab", { name: "Servers" }).click();
-  await expect.element(page.getByText(/Nothing in your Kit yet/)).toBeVisible();
-
-  await userEvent.fill(page.getByRole("textbox", { name: "Name" }), "nexus");
-  await userEvent.fill(page.getByRole("textbox", { name: "Program" }), "npx -y @scope/server");
-  await page.getByRole("button", { name: "Add" }).click();
-
-  await expect.element(page.getByText("npx -y @scope/server")).toBeVisible();
-  await expect.element(page.getByText("Does not")).toBeVisible();
-
-  await userEvent.selectOptions(page.getByRole("combobox", { name: "Here: nexus" }), "extended");
-  await expect.element(page.getByText("Gets it")).toBeVisible();
-
-  // And taking the server out takes this repository's word with it.
-  await page.getByRole("button", { name: "Remove nexus" }).click();
-  await expect.element(page.getByText(/Nothing in your Kit yet/)).toBeVisible();
-});
-
 test("the file sits behind a tab named by its path, and the head moves with the tab", async () => {
   await manifest();
   await page.getByRole("tab", { name: "armada.yml" }).click();

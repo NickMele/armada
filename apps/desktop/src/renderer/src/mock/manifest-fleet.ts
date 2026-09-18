@@ -304,13 +304,18 @@ export type Manifesting = {
   setUp?: boolean;
   onEdits?: (body: EditManifest) => void;
   onStartRun?: (body: StartCheckoutRun) => void;
+  /** `false` leaves the rail on All repositories, which every per-repository surface has a state for. */
+  picked?: boolean;
 };
 
 /** A connected Fleet serving this repository, picked, with its Manifest as the options say. */
 export function manifesting(options: Manifesting = {}): Scenario {
   const one = repository();
   const served = options.setUp === false ? { root: one.root, records_root: one.records_root } : one;
-  const base = onBoard([], { repositories: [served], picked: served.root });
+  const base = onBoard([], {
+    repositories: [served],
+    picked: options.picked === false ? null : served.root,
+  });
   return {
     ...base,
     name: "manifest",

@@ -32,6 +32,7 @@ fn word(spelling: &str) -> ipc::ManifestReach {
 
 /// The document the next Drone was spawned against, read off the spawn the
 /// harness recorded rather than off a path this test composed.
+
 async fn what_a_drone_was_handed(home: &TempDir, fleet: &Fixture) -> String {
     let job = fleet
         .propose(a_proposal("a Job that spawns a Drone"))

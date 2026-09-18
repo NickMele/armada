@@ -1038,7 +1038,7 @@ is the back-fill by hand that this section existed to prevent.
 
 ```
 ⌘K       command palette
-⌘1–⌘8    Bridge surfaces, in rail order
+⌘1–⌘9    Bridge surfaces, in rail order
 ⌘J       Helm, toggles the dock on every surface
 ⌥⌘C      capture a note onto the open Studio
 ⌘\       toggle sidebar
@@ -1145,8 +1145,8 @@ the design drew are all spoken for: `n` is dispatch and its scope is
 `anywhere`, `v` is observe and `s` is restart step, so an unshifted key
 would answer twice on one press. See [Studio](../concepts/studio.md).
 
-**`⌘1`–`⌘8` follow the rail** — Overview, Job Board, Studios, Alerts,
-Doctor, Manifest, Cleanup, Settings — since Active Jobs, Reviews and the Activity
+**`⌘1`–`⌘9` follow the rail** — Overview, Job Board, Studios, Alerts,
+Doctor, Manifest, Cleanup, Kit, Settings — since Active Jobs, Reviews and the Activity
 Feed folded into the Board and Cleanup joined at the end of it.
 The digits shift if the rail does; the rule is rail order, not the
 numbers.
@@ -1179,7 +1179,17 @@ belongs beside the work it becomes rather than after the settings; Alerts,
 Doctor, Manifest, Cleanup and Settings each moved down one, Settings from `⌘7`
 to `⌘8`. The rule is still rail order — only the arrival was the exception.
 
-**`1`–`5` and `⌘1`–`⌘8` are different acts on one row of keys.** One is
+**Kit joined before Settings, on 2026-09-18 (#1275), taking `⌘8`** — the third
+arrival to move a digit other than its own, and the first to join anywhere but
+the end: Settings moved to `⌘9`. The owner's decision, and his reason is that
+Kit is what he brings and Settings is what this machine is, so the machine reads
+last. It is a rail row rather than a view on one repository's Manifest because
+Kit is his and not a repository's. Its glyph is `settings`, whose own registry
+row has meant Kit since it was written; the Settings surface took
+`sliders-horizontal` in the same change, because two rail rows cannot both be a
+cog.
+
+**`1`–`5` and `⌘1`–`⌘9` are different acts on one row of keys.** One is
 modified and one is not, which is the whole separation. It was drawn
 that way deliberately rather than by omission.
 

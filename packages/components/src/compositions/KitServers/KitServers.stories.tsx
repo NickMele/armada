@@ -11,6 +11,7 @@ import { KitServers, type KitServerRowProps } from "./KitServers";
 const meta: Meta<typeof KitServers> = {
   title: "Compositions/Kit servers",
   component: KitServers,
+  args: { here: "armada" },
 };
 export default meta;
 

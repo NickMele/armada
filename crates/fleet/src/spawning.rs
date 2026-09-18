@@ -419,13 +419,14 @@ where
     ///
     /// **Written per Manifest at every spawn**, so a person's change reaches
     /// the next Drone with no restart and a running one keeps what it started
-    /// with. Beside the machine-wide file rather than in the worktree, for
-    /// `adapters::mcp`'s reason: a Drone that could write its own MCP
-    /// configuration could name a different server.
+    /// with. Beside the machine-wide file and never in the worktree, for
+    /// `adapters::mcp`'s reason. One resolving nothing still gets its own,
+    /// identical though it is: skipping the write was tried and reverted,
+    /// because it makes a spawn depend on a file `serve` wrote at boot.
     ///
     /// **A Job whose repository Fleet cannot name falls back to that file**,
-    /// which holds the Evidence server alone. The safe answer to not knowing
-    /// where a Job is, is the narrowest document rather than the widest.
+    /// which holds the Evidence server alone: the safe answer to not knowing
+    /// where a Job is is the narrowest document, not the widest.
     async fn mcp_config(&self, job: &Job) -> Result<McpConfig, SpawnConfigRefused> {
         let machine = &self.host().mcp_config;
         let Ok(served) = self.served_by(job) else {

@@ -34,8 +34,10 @@ import { CopiedToast, SaidToast, useCopied, useSaid } from "@armada/shell";
 import { FailureBlock } from "@armada/shell";
 import { jobFailure } from "@armada/shell";
 import { BoardActions } from "@armada/shell";
+import { repositoryLabel } from "@armada/shell";
 import { AskRepository } from "@armada/screens";
 import { BridgeSettings } from "@armada/screens";
+import { Kit } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { Composing } from "./Composing";
 import { Overview } from "./Overview";
@@ -177,6 +179,9 @@ export function App() {
   // Whether Settings is open — a rail surface since #1089, the sheet it
   // replaced having lost its own opener when the status bar went (#1088).
   const [settingsShowing, setSettingsShowing] = useState(false);
+  // Whether Kit is open — a rail surface since #1275, at `⌘8`. Machine-wide,
+  // and the rail's pick is what names its second tier.
+  const [kitting, setKitting] = useState(false);
   // Whether the Manifest surface is open — Journey 9's *Running one*. **Its
   // own view, and it needs no Job to draw**: it is read off the file Fleet
   // already holds, which is what lets a person run this project's lint with
@@ -472,6 +477,7 @@ export function App() {
     setManifesting(surfaceId === SURFACE.manifest);
     setOverviewing(surfaceId === SURFACE.overview);
     setSettingsShowing(surfaceId === SURFACE.settings);
+    setKitting(surfaceId === SURFACE.kit);
     setStudying(surfaceId === SURFACE.studios);
     setOpenStudio(null);
     setStudioNode(null);
@@ -497,7 +503,15 @@ export function App() {
   // Where the person is, for Helm — #1075. `cursorRowFor` picks the Board's
   // or Overview's row by which screen is showing, so neither's stale row
   // reaches an ask made on the other.
-  const helmScreen = screenOf({ reading: reading !== null, clearing, manifesting, overviewing, studying });
+  const helmScreen = screenOf({
+    reading: reading !== null,
+    clearing,
+    manifesting,
+    overviewing,
+    studying,
+    kitting,
+    settling: settingsShowing,
+  });
   const chippedJob = state.jobs.find((job) => job.id === chippedJobId(chip));
   const helmContext: HelmContext = contextOf({
     screen: helmScreen,
@@ -606,9 +620,11 @@ export function App() {
                 ? SURFACE.overview
                 : settingsShowing
                   ? SURFACE.settings
-                  : studying
-                    ? SURFACE.studios
-                    : SURFACE.board
+                  : kitting
+                    ? SURFACE.kit
+                    : studying
+                      ? SURFACE.studios
+                      : SURFACE.board
         }
         onSurface={goTo}
       >
@@ -840,11 +856,6 @@ export function App() {
                 onGetRunDiff={getCheckoutRunDiff}
                 onListRepositoryAllowedCommands={listRepositoryAllowedCommands}
                 onRemoveRepositoryAllowedCommand={removeRepositoryAllowedCommand}
-                onListKitServers={listKitServers}
-                onAddKitServer={addKitServer}
-                onForgetKitServer={forgetKitServer}
-                onSetKitServerReach={setKitServerReach}
-                onSetManifestServerReach={setManifestServerReach}
                 // The one call this surface shares with a Job's own sheet:
                 // `start_server` has taken an optional Job since it landed,
                 // and no Job means the main checkout.
@@ -926,6 +937,33 @@ export function App() {
               onOpenJob={setOpenJob}
               onCopied={setCopied}
             />
+          ) : kitting && all ? (
+            <AskRepository
+              repositories={repositories}
+              title="Pick a repository to see what its Drones are handed"
+              next="Kit is this machine's, and the same set everywhere. Which servers a Drone gets is a repository's own word over it, so Kit is read against one."
+              onPick={pick}
+            />
+          ) : kitting ? (
+            /* Kit's servers, both tiers, and what a Drone dispatched against
+               the picked repository resolves. #1275. */
+            <Boundary region="Kit" {...guarded}>
+              <Kit
+                // Another repository is another second tier. The machine-wide
+                // half is the same; what it resolves to is not.
+                key={state.repository ?? ""}
+                repository={
+                  pickedRepository === null
+                    ? "this repository"
+                    : repositoryLabel(pickedRepository, repositories)
+                }
+                onListKitServers={listKitServers}
+                onAddKitServer={addKitServer}
+                onForgetKitServer={forgetKitServer}
+                onSetKitServerReach={setKitServerReach}
+                onSetManifestServerReach={setManifestServerReach}
+              />
+            </Boundary>
           ) : settingsShowing ? (
             <Boundary region="Settings" {...guarded}>
               <BridgeSettings

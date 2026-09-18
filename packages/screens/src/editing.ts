@@ -55,11 +55,10 @@ export type ManifestEditAnswer =
 export type ManifestSpendRead = { ok: true; spend: ManifestSpend } | { ok: false; outcome: Outcome };
 
 /**
- * Which of the surface's views is showing: running, the forms, the file, or
- * the MCP servers a drone here is handed (#1275). The toggle named by the path
- * goes on switching to `file`.
+ * Which of the surface's views is showing: running, the forms, or the file.
+ * The toggle named by the path goes on switching to `file`.
  */
-export type ManifestView = "run" | "form" | "file" | "servers";
+export type ManifestView = "run" | "form" | "file";
 
 /** What the file view is holding. */
 export type HeldFile =

@@ -27,6 +27,13 @@ import {
  */
 export type KitServersProps = {
   /**
+   * The repository the rail has picked, as a person reads it. **Named on the
+   * column and in the lead**, because "here" is a second tier over a
+   * machine-wide set and a person has to know which repository they are
+   * narrowing.
+   */
+  here: string;
+  /**
    * Every server in kit, by name. `undefined` is not yet read, and draws
    * "Reading." rather than an empty table — which would say a person's kit is
    * empty before anybody asked.
@@ -73,6 +80,7 @@ const HERE_LABEL: Record<"kit" | "extended" | "restricted", string> = {
 };
 
 export function KitServers({
+  here,
   servers,
   onAdd,
   onForget,
@@ -148,7 +156,7 @@ A server reaches no drone until you allow it — in Kit, for every repository, o
               <TableHeaderCell>Server</TableHeaderCell>
               <TableHeaderCell>Where it is</TableHeaderCell>
               <TableHeaderCell>In Kit</TableHeaderCell>
-              <TableHeaderCell>Here</TableHeaderCell>
+              <TableHeaderCell>{here}</TableHeaderCell>
               <TableHeaderCell>A drone here</TableHeaderCell>
               <TableHeaderCell>{""}</TableHeaderCell>
             </TableRow>
