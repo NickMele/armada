@@ -38,6 +38,15 @@ since it was last built). He is reading the prompt to decide, not you.
 
 - After merging a fix to Fleet (`crates/`) or Bridge (`apps/desktop/`,
   `packages/`) that the owner is about to rely on.
+- **After merging a change to `.armada/workflows/`**, which is neither of
+  those and still needs one. Fleet reads the catalogue once at boot and freezes
+  a copy onto every Job at creation, so a running Fleet dispatches the
+  definitions it started with however long ago the file changed. Confirmed
+  18 Sep 2026: a Judge criterion merged at 11:32 and a Job dispatched at 16:37
+  ran the three criteria the step had before it, on a Fleet up since 11:24.
+  The owner had been told no restart was needed, on the strength of
+  `WorkflowSource::Repository` meaning read from the repository — which says
+  where, not when.
 - Not after every merge. A change nobody is watching for can wait for the
   owner's own next restart, and running it needlessly is one more prompt he
   has to read.

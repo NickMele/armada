@@ -805,6 +805,12 @@ hand against one call.
 with a different input, never a no carrying a result it did not earn, so a
 reader of the record is never shown a refusal whose body is a passing test.
 
+**The harness runs the substitute, and the Drone sees that it did.** Measured in
+[spike 15](../spikes/015-can-a-person-answer-a-blocked-command.md) — the asked
+command never runs, and an agent asked to report what its command printed says
+unprompted that a different one ran. Nothing has to hide the substitution for
+the answer to be honest, which is why it is a yes.
+
 **Handed over only where a command is the whole of what is needed.** The harness
 runs one string and knows nothing about what Fleet would have put around it, so
 a Check with a prerequisite, a command still naming a placeholder only Fleet's
