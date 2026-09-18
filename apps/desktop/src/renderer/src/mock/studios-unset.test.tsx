@@ -1,5 +1,6 @@
-// Studios on All repositories, through `App`, when no repository has a Manifest — the dead end the
-// surface used to draw as a picker with nothing pickable in it.
+// Studios on All repositories, through `App`, against what is set up and what is not: no
+// repository with a Manifest, which is the dead end the surface used to draw as a picker with
+// nothing pickable in it, and the mixture, where the picker holds both halves at once.
 //
 // **Beside `studios.test.tsx` rather than in it**: that file is #1287's and #1341's definition of
 // done, and this is one state neither of them names.
@@ -55,4 +56,34 @@ test("every-state has repositories with Manifests, so Studios keeps its picker",
   await expect.element(page.getByText("Pick a repository to open its Studios")).toBeVisible();
   await expect.element(picker()).toBeVisible();
   expect(page.getByText("No repository is set up yet, so none of them keeps Studios.").query()).toBeNull();
+});
+
+test("every-state serves one repository nobody set up, so the picker draws it greyed beside the pickable ones", async () => {
+  // The state the greyed-out half was written for, and until `every-state` served an unset
+  // repository nobody browsing the mock reached it: the two groups in one open picker.
+  const scenario = scenarioNamed("every-state")!;
+  mount({ ...scenario, state: { ...scenario.state, repository: null } });
+  await openStudios();
+  await expect.element(picker()).toBeVisible();
+
+  // The greyed half, read by what its rows say. **Not by the Not set up group itself**: Chromium
+  // gives a closed select's `optgroup` no accessible role, so `getByRole("group")` finds nothing
+  // here — `packages/screens/src/AskRepository.test.tsx` is where the grouping is held. Every row
+  // in it carries the same instruction and nothing else on the surface does, and an unset
+  // repository's own label is its folder, which the scenario is free to change.
+  const unset = picker()
+    .getByRole("option")
+    .elements()
+    .filter((one) => (one.textContent ?? "").includes("Set it up first"));
+  expect(unset.length).toBeGreaterThan(0);
+  for (const option of unset) expect(option).toBeDisabled();
+
+  // The pickable half, in the same picker — which is the whole point of the moment. Past the
+  // placeholder, which is disabled too and is not a repository.
+  const pickable = picker()
+    .getByRole("option")
+    .elements()
+    .filter((one) => !unset.includes(one) && one.textContent?.trim() !== "Choose a repository");
+  expect(pickable.length).toBeGreaterThan(0);
+  for (const option of pickable) expect(option).toBeEnabled();
 });
