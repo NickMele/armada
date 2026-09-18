@@ -237,7 +237,7 @@ checks:
     run: pnpm --dir apps/desktop exec vitest run --maxWorkers=${width}
     runner:
       name: vitest
-      pkg: apps/desktop
+      dir: apps/desktop
     # One test by exact name, which Fleet runs against a checkout of main
     # before a Drone's `draft_fix` drafts anything — same shape as the two
     # Rust one_test lines above, `vitest -t` in place of `nextest -E`. #1203.
@@ -261,7 +261,7 @@ checks:
     run: pnpm --dir packages/screens exec vitest run --maxWorkers=${width}
     runner:
       name: vitest
-      pkg: packages/screens
+      dir: packages/screens
     # See desktop_test's one_test above. #1203.
     one_test:
       run: pnpm --dir packages/screens exec vitest run -t {}
@@ -283,7 +283,7 @@ checks:
     run: pnpm --dir packages/components exec vitest run --maxWorkers=${width}
     runner:
       name: vitest
-      pkg: packages/components
+      dir: packages/components
     runs_at: gate
     # See desktop_test's one_test above. The Storybook interaction tests'
     # own names (a story's `name`, not its export) are what a Drone names
