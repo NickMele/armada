@@ -402,7 +402,7 @@ export function chaptersOf({
             stepId={step.step_id}
             plan={whole?.work_plan}
             live={live}
-            most={PREVIEWED}
+            mostEntries={PREVIEWED_ENTRIES}
             {...(produced === undefined ? {} : { diff: produced.files })}
             {...(ended !== undefined || jobTurns === undefined ? {} : { jobTurns })}
             emptyNote={transcript ?? NOTHING_YET_ON_THIS_STEP}
@@ -657,13 +657,19 @@ function summarised(files: Parameters<typeof changeSummaryOf>[0]) {
 const SUMMARISED = 12;
 
 /**
- * How many groups the log's collapsed preview shows.
+ * How much of the log the chapter's preview draws: the last ten entries, the
+ * same entries the header above it counts.
  *
- * **Counted in groups now, not in entries.** It was the drawing's own five
- * rows, and five rows of a real step is five consecutive `Read` calls — the
- * same height in groups is eight different things the Drone did.
+ * **Counted in entries, by the owner's decision of 18 Sep 2026.** It was eight
+ * sentences, and eight groups before that, both bounding a stand-in for the
+ * rows rather than the rows — so a preview under a bound of eight ran to
+ * thousands of pixels on a step making a hundred calls, and the owner asked for
+ * the log to be limited again. He was shown what counting entries costs, in his
+ * own words: ten consecutive `Read` calls fill this, which is the case the
+ * group counting was introduced to avoid. He took it: the preview is the tail,
+ * and *Open the log* is where everything is read.
  */
-const PREVIEWED = 8;
+const PREVIEWED_ENTRIES = 10;
 
 /** What chapter one says before Armada has opened the step. */
 /**
