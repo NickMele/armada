@@ -60,6 +60,28 @@ test("a working drone takes a message, and the field clears once it is sent", as
   await expect.element(field).toHaveValue("");
 });
 
+// The binding is `send_message` in the registry and the box's own keydown; what
+// this adds is that it reaches the redirect and clears the field, which is the
+// wiring rather than the key.
+test("⌘Enter sends the redirect, and plain Enter writes a second line", async () => {
+  const sent: [string, string][] = [];
+  mount(
+    <DroneMessageControl
+      job={job()}
+      whole={whole()}
+      onRedirect={(jobId, instruction) => sent.push([jobId, instruction])}
+    />,
+  );
+  const field = page.getByRole("textbox", { name: "Message the drone" });
+  await userEvent.fill(field, "Check the second failing test too");
+  await userEvent.keyboard("{Enter}");
+  expect(sent).toEqual([]);
+
+  await userEvent.keyboard("{Meta>}{Enter}{/Meta}");
+  expect(sent).toEqual([[JOB_ID, "Check the second failing test too\n"]]);
+  await expect.element(field).toHaveValue("");
+});
+
 test("no drone on the step disables the box and says why", async () => {
   mount(
     <DroneMessageControl

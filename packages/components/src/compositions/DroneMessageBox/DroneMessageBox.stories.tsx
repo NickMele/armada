@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
+import { ShortcutRevealProvider } from "../../shortcut-reveal";
 import { DroneMessageBox } from "./DroneMessageBox";
 
 /** The width a step's chapter or the log sheet gives the box — every story
@@ -95,6 +96,54 @@ export const SendSitsInsideTheField: Story = {
   },
 };
 
+/**
+ * `⌘Enter` sends and plain `Enter` does not — a keyboard contract no rendering
+ * carries. The field keeps the paragraph break `Enter` made, which is the
+ * reason the send takes a modifier at all.
+ */
+export const CmdEnterSends: Story = {
+  render: (args) => <Typed onSend={args.onSend} />,
+  // The play's own `userEvent`, not the imported one: a hold that spans two
+  // calls needs the instance that remembers `⌘` is down between them.
+  play: async ({ args, canvas, userEvent }) => {
+    const field = canvas.getByRole("textbox");
+    await userEvent.type(field, "Check the second failing test too");
+
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onSend).not.toHaveBeenCalled();
+    await expect(field).toHaveValue("Check the second failing test too\n");
+
+    await userEvent.keyboard("{Meta>}{Enter}{/Meta}");
+    await expect(args.onSend).toHaveBeenCalledTimes(1);
+  },
+};
+
+/**
+ * Held `⌘` puts `⌘Enter` on Send and releasing takes it away, through the one
+ * `ShortcutRevealProvider` `TheShell` mounts in the running app. Send is still
+ * named `Send` with the badge up: the keycap is `aria-hidden`.
+ */
+export const RevealedOnHold: Story = {
+  render: (args) => (
+    <ShortcutRevealProvider>
+      <Typed onSend={args.onSend} />
+    </ShortcutRevealProvider>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const badge = () =>
+      canvas.queryByText((_, el) => el?.tagName === "KBD" && el.textContent === "⌘Enter");
+    await userEvent.type(canvas.getByRole("textbox"), "Check the second failing test too");
+    await expect(badge()).not.toBeInTheDocument();
+
+    await userEvent.keyboard("{Meta>}");
+    await expect(badge()).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Send" })).toBeInTheDocument();
+
+    await userEvent.keyboard("{/Meta}");
+    await expect(badge()).not.toBeInTheDocument();
+  },
+};
+
 /** Whitespace is not a message: Send stays off, and a press sends nothing. */
 export const BlankNeverSends: Story = {
   render: (args) => <Typed onSend={args.onSend} />,
@@ -105,6 +154,8 @@ export const BlankNeverSends: Story = {
     await userEvent.type(canvas.getByRole("textbox"), "   ");
     await expect(send).toBeDisabled();
     await userEvent.click(send, { pointerEventsCheck: 0 });
+    await expect(args.onSend).not.toHaveBeenCalled();
+    await userEvent.keyboard("{Meta>}{Enter}{/Meta}");
     await expect(args.onSend).not.toHaveBeenCalled();
   },
 };
@@ -117,6 +168,10 @@ export const DisabledWithNoDrone: Story = {
     const send = canvas.getByRole("button", { name: "Send" });
     await expect(send).toBeDisabled();
     await userEvent.click(send, { pointerEventsCheck: 0 });
+    await expect(args.onSend).not.toHaveBeenCalled();
+    // A disabled field takes no focus, so the press lands on the document —
+    // which is the point: nothing else in the tree answers ⌘Enter.
+    await userEvent.keyboard("{Meta>}{Enter}{/Meta}");
     await expect(args.onSend).not.toHaveBeenCalled();
     await expect(
       canvas.getByText("No drone is on this step, so there's nothing to send this to."),
