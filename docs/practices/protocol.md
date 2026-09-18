@@ -1298,13 +1298,19 @@ one — which is the same rule `title` and `state` already follow at 14.18.
 `laid_out_from` is Fleet's own bookkeeping on the wire: the corner of the block an Epic's issues sit
 in, so a widening fills that block's gaps and a node dragged out of it is readable as dragged.
 
-## Protocol 15.0: one delete on a Studio's nodes, one node or eighteen
+## Protocol 16.0: one delete on a Studio's nodes, one node or eighteen
 
 `#1411`. `remove_studio_node` is gone — the route, the DTO, the `Studios` method, the store write
 and the capability Bridge reached it by. `remove_studio_nodes` replaces it, `POST
 /studios/:studio_id/remove_nodes` carrying `RemoveStudioNodes { node_ids }`, `Bridge only`.
 **Removing an operation is a major bump by this document's own table**, as at 14.0, so the major
 moves and the minor resets.
+
+**This was written as 15.0 and is 16.0**, because 15.0 landed underneath it while the branch was
+open. Both files read `major = 15, minor = 0`, so git merged them clean and the collision was
+invisible — two changes claiming one version, which is the failure this file's own numbering
+exists against. A version taken on a branch is a claim about the base it was taken from, and it is
+re-read at every merge of `main`.
 
 **Two routes for one act is two paths that drift, and these had.** The single-node write left a
 captured Note's frame on disk; the selection write deletes it. Retiring the first closes that leak
