@@ -301,9 +301,10 @@ fn a_checks_call_carries_which_of_the_two_runs_was_asked_for() {
         assert!(
             matches!(
                 called,
-                Incoming::RunChecks {
-                    only_what_changed, ..
-                } if only_what_changed == expected
+                Incoming::RunChecks { ref ask, .. }
+                    if ask.only_what_changed == expected
+                        && ask.check.is_none()
+                        && ask.files.is_empty()
             ),
             "{called:?}"
         );
@@ -374,26 +375,65 @@ fn a_checks_call_whose_answer_is_not_a_boolean_is_refused() {
     );
 }
 
-/// **A Drone cannot choose which bar it is measured against**, so an invented
-/// Check name has no field to arrive in — and it is refused by name rather than
-/// dropped, because a Drone that named one believed it would be honoured.
+/// **This asserted the opposite until 18 Sep 2026**, when the owner reversed it
+/// in `#1456`: a Check name was refused by name, and told the Drone the set had
+/// been settled when the Job was approved. It still is settled — a name that
+/// the part does not gate on is refused by `fleet::dry_run`, which is the half
+/// that knows the step — and what changed is that choosing one *out of* that
+/// set is not choosing a bar, because the gate runs every Check whole at
+/// submission whatever was asked here.
+///
+/// The flag stays required beside it: a name without it is still a call that
+/// did not say which of the two runs it wanted.
 #[test]
-fn a_checks_call_naming_a_check_is_refused_and_told_who_decides() {
+fn a_checks_call_may_name_one_check_and_the_files_to_run_it_against() {
     use crate::mcp::{read, Incoming};
 
     let called = read(
         br#"{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"run_checks",
-            "arguments":{"check":"tests"}}}"#,
+            "arguments":{"only_what_changed":false,"check":"tests","files":["src/parse.rs"]}}}"#,
+    );
+    let Incoming::RunChecks { ask, .. } = called else {
+        panic!("a named ask reaches the daemon: {called:?}");
+    };
+    assert_eq!(ask.check.as_deref(), Some("tests"));
+    assert_eq!(ask.files, ["src/parse.rs"]);
+    assert!(!ask.only_what_changed);
+}
+
+/// Naming nothing is what the call was before it could be told otherwise, and
+/// it still has to say which of the two runs it wants.
+#[test]
+fn a_checks_call_naming_neither_is_the_call_it_always_was() {
+    use crate::mcp::{read, Incoming};
+
+    let called = read(
+        br#"{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"run_checks",
+            "arguments":{"only_what_changed":true}}}"#,
+    );
+    let Incoming::RunChecks { ask, .. } = called else {
+        panic!("{called:?}");
+    };
+    assert_eq!(ask.check, None);
+    assert!(ask.files.is_empty());
+    assert!(ask.only_what_changed);
+}
+
+/// A name that is not text is refused rather than read as absent: absent means
+/// every Check, which is the opposite of what a Drone writing `"check": 3` was
+/// reaching for.
+#[test]
+fn a_check_name_that_is_not_text_is_refused() {
+    use crate::mcp::{read, Incoming};
+
+    let called = read(
+        br#"{"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"run_checks",
+            "arguments":{"only_what_changed":false,"check":3}}}"#,
     );
     let Incoming::NotASubmission { why, .. } = called else {
-        panic!("a field this tool does not take is refused as a tool error");
+        panic!("{called:?}");
     };
-    let said = why.to_string();
-    assert!(said.contains("`check` is not a field"), "{said}");
-    assert!(
-        said.contains("when this Job was approved"),
-        "and is told who settled it: {said}"
-    );
+    assert!(why.to_string().contains("check"), "{why}");
 }
 
 /// The refusal for a fourth tool names every real one, so a Drone that guessed

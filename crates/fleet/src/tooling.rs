@@ -184,10 +184,10 @@ where
     async fn run_checks(
         self: std::sync::Arc<Self>,
         caller: api::Caller,
-        only_what_changed: bool,
+        ask: ipc::mcp::ChecksAsk,
     ) -> Result<ChecksStarted, NotRecorded> {
         let job = self.placed(&caller)?;
-        Fleet::run_checks(&self, &job, only_what_changed).await?;
+        Fleet::run_checks(&self, &job, ask).await?;
         Ok(ChecksStarted)
     }
 

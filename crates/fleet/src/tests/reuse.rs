@@ -334,7 +334,10 @@ async fn an_edit_while_the_dry_run_is_in_flight_means_every_check_runs_fresh_at_
     let home = crate::tests::tmp::TempDir::new();
     let (fleet, job) = dispatched_onto(&home).await;
 
-    let underway = fleet.run_checks(&job, false).await.expect("the run starts");
+    let underway = fleet
+        .run_checks(&job, ipc::mcp::ChecksAsk::everything(false))
+        .await
+        .expect("the run starts");
     for _ in 0..400 {
         if fleet
             .the_only_slot()
@@ -387,7 +390,10 @@ async fn a_submission_that_stops_the_dry_run_means_every_check_runs_fresh_at_the
     let home = crate::tests::tmp::TempDir::new();
     let (fleet, job) = dispatched_onto(&home).await;
 
-    let underway = fleet.run_checks(&job, false).await.expect("the run starts");
+    let underway = fleet
+        .run_checks(&job, ipc::mcp::ChecksAsk::everything(false))
+        .await
+        .expect("the run starts");
     for _ in 0..400 {
         if fleet
             .the_only_slot()

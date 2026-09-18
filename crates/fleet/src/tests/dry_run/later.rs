@@ -213,7 +213,10 @@ async fn a_submission_mid_run_stops_the_checks_and_nothing_is_told() {
     started(&fleet, &home).await;
     let (job, drone) = the_one_drone(&fleet).await.expect("a Drone at work");
 
-    let underway = fleet.run_checks(&job, false).await.expect("the run starts");
+    let underway = fleet
+        .run_checks(&job, ipc::mcp::ChecksAsk::everything(false))
+        .await
+        .expect("the run starts");
     wait_until_checking(&fleet).await;
     submit(&app).await;
     assert_eq!(fleet.evidence_waiting(), 1, "the submission was taken");
@@ -245,7 +248,10 @@ async fn a_drone_killed_mid_run_stops_the_checks_and_nothing_is_told() {
     started(&fleet, &home).await;
     let (job, drone) = the_one_drone(&fleet).await.expect("a Drone at work");
 
-    let underway = fleet.run_checks(&job, false).await.expect("the run starts");
+    let underway = fleet
+        .run_checks(&job, ipc::mcp::ChecksAsk::everything(false))
+        .await
+        .expect("the run starts");
     wait_until_checking(&fleet).await;
     fleet.kill_drone(&job).await.expect("the Drone is killed");
 

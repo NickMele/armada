@@ -48,8 +48,8 @@ pub use report::{CheckExcerpt, CheckRan, CheckReport, ChecksStarted};
 pub use reviewing::{ReviewArgument, SubmittedReview, REVIEW_FIELDS};
 pub use serving::{ServerReport, SERVER_FIELDS, SERVER_TOOL};
 pub use tools::{
-    DeclareScope, NotAnArgument, SubmitEvidence, CHECKS_FIELDS, CHECKS_TOOL, EVIDENCE_FIELDS,
-    SCOPE_FIELDS, SCOPE_TOOL, TOOL,
+    ChecksAsk, DeclareScope, NotAnArgument, SubmitEvidence, CHECKS_FIELDS, CHECKS_TOOL,
+    EVIDENCE_FIELDS, SCOPE_FIELDS, SCOPE_TOOL, TOOL,
 };
 pub use widening::{RequestScope, WIDEN_FIELDS, WIDEN_TOOL};
 
@@ -133,11 +133,11 @@ pub enum Incoming {
     /// printed, and no step moves on it in either direction.
     RunChecks {
         id: CallId,
-        /// Whether each Check is run against the worktree's own diff rather
-        /// than the whole tree, where the Manifest declared a narrower way to
-        /// run it. **Fleet reads the diff** — the Drone answers yes or no and
-        /// names nothing.
-        only_what_changed: bool,
+        /// Which Checks, against what. **A Drone may now name one Check and
+        /// the files to run it against**, which `#504` and this module both
+        /// refused until the owner reversed it on 18 Sep 2026 — see
+        /// [`ChecksAsk`]. Naming neither is what the call used to be.
+        ask: ChecksAsk,
     },
     /// A call of the server tool: one name. **Which port, which worktree and
     /// whether one is already up are the daemon's** — this carries a name.
@@ -394,10 +394,7 @@ fn called(id: CallId, params: Option<&Value>) -> Incoming {
     // ordinary refusal every other tool gives and says what to send.
     if tool == CHECKS_TOOL {
         return match tools::checking(arguments) {
-            Ok(only_what_changed) => Incoming::RunChecks {
-                id,
-                only_what_changed,
-            },
+            Ok(ask) => Incoming::RunChecks { id, ask },
             Err(why) => Incoming::NotASubmission { id, why },
         };
     }
