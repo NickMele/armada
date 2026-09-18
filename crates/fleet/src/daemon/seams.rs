@@ -395,6 +395,14 @@ where
     pub(crate) fn rechecked(&self, at_once: crate::places::ChecksAtOnce) {
         self.places.limit(at_once);
     }
+
+    /// Put a width in force after a saved Jobs bound moved — the two are one
+    /// number, so `crate::limits` sets this wherever it rebounds the roster.
+    /// #1444.
+    pub(crate) fn rewidened(&self, bound: crate::slots::Concurrency) {
+        self.places
+            .widen(checks_runner::CheckWidth::read(bound.jobs()));
+    }
     /// A room in the machine's one line of places, for whoever is `asking`,
     /// with the headroom as it stands now. #284, #1063.
     pub(crate) fn room(&self, asking: crate::places::Asking) -> crate::places::Room {
@@ -403,6 +411,7 @@ where
             asking,
             Arc::clone(&self.machine),
             self.headroom(),
+            self.places.width(),
         )
     }
     /// [`Fleet::room`], knowing how long this Job's repository's Checks took

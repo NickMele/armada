@@ -424,6 +424,7 @@ fn lifted(name: String, declared: &Check, expect_exit_code: i64) -> ResolvedChec
         one_test: declared.one_test().map(str::to_string),
         runs_at: declared.runs_at(),
         places: declared.places(),
+        width: declared.width(),
     }
 }
 

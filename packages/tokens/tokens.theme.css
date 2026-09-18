@@ -107,6 +107,8 @@
   --color-run-passed: var(--run-passed);
   --color-run-failed: var(--run-failed);
   --color-run-stopped: var(--run-stopped);
+  --color-run-starting: var(--run-starting);
+  --color-run-serving: var(--run-serving);
   --color-error: var(--error);
   --color-degraded: var(--degraded);
   --color-degraded-dot: var(--degraded-dot);

@@ -136,7 +136,9 @@ what you added, and what running it would cost where you can tell.
 Everything else on a Studio waits for a person's ask, as every other act does: \
 starting a scout on a proposed Finding with start_scout, starting a run with \
 start_studio_run, which runs one Manifest entry in the checkout and puts a Run \
-node on the Studio for it, writing up an Issue draft with \
+node on the Studio for it, starting a server with start_studio_server, which \
+holds a Command declaring serve in the same checkout until something stops it, \
+writing up an Issue draft with \
 write_up_studio_node, dispatching from one with dispatch_studio_draft. \
 Writing up and dispatching are two \
 acts. Dispatch only where the ask names sending the work as \

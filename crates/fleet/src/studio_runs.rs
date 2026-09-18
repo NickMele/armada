@@ -35,11 +35,11 @@ use crate::daemon::Fleet;
 /// Studio itself, which crosses the wire whole on every write to it and is
 /// kept until a person deletes it — so it is bounded like the excerpt that
 /// rides in a tool call rather than like a file somebody opened.
-const LAST_LINES: usize = 200;
+pub(crate) const LAST_LINES: usize = 200;
 
 /// The byte bound paired with [`LAST_LINES`], for the reason `check_output`
 /// pairs one with its own: a single minified line can be a whole bundle.
-const LAST_BYTES: usize = 16 * 1024;
+pub(crate) const LAST_BYTES: usize = 16 * 1024;
 
 /// What a Run node keeps of a run that is about to be swept: its result, and
 /// the tail of what it printed.
@@ -122,7 +122,7 @@ where
         let node = StudioNode::added(
             StudioNodeId::carried(self.mint().ulid()),
             StudioNodeContent::Run {
-                run_id: run.id.clone(),
+                run: core_model::StudioRun::Checkout(run.id.clone()),
                 kept: None,
             },
             asked.position.to_domain(),

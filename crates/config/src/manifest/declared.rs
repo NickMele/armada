@@ -31,6 +31,7 @@ pub struct Check {
     pub(super) one_test: Option<String>,
     pub(super) runs_at: RunsAt,
     pub(super) places: NonZeroU32,
+    pub(super) width: Option<NonZeroU32>,
 }
 
 impl Check {
@@ -114,6 +115,18 @@ impl Check {
     /// build or a lint costs what any other command costs. #1102.
     pub fn places(&self) -> NonZeroU32 {
         self.places
+    }
+
+    /// How many concurrent workers this Check may start. **`None` where the
+    /// file declares no `width`**, and then the machine's own number stands.
+    ///
+    /// **Not [`places`](Check::places), and the two are easy to read as one.**
+    /// `places` is how much of Fleet's own line this Check occupies, which is
+    /// how Fleet decides what may run beside it. This is what the Check hands
+    /// its runner once it is running, and nothing enforces it: the repository
+    /// spells the flag its runner reads. #1444.
+    pub fn width(&self) -> Option<NonZeroU32> {
+        self.width
     }
 }
 

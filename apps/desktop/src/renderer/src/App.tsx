@@ -591,7 +591,10 @@ export function App() {
                 ? undefined
                 : {
                     name: studioName(shownStudio),
-                    ...(studioNode === null ? {} : { node: nodeNamed(shownStudio, studioNode, state.jobs) }),
+                    ...(studioNode === null ? {} : { node: nodeNamed(shownStudio, studioNode, state.jobs, {
+                          servers: state.servers.servers,
+                          now,
+                        }) }),
                   }
             }
             onStartFresh={() => void startHelmFresh()}
@@ -942,6 +945,9 @@ export function App() {
               // opens one over the list — and Escape comes back here, because
               // `close` clears the Job and leaves the surface alone.
               onOpenJob={setOpenJob}
+              // A server node reads the live holder and counts its uptime on
+              // the clock the rest of the app already ticks on — #1345.
+              now={now}
               onCopied={setCopied}
             />
           ) : kitting && all ? (

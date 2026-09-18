@@ -18,7 +18,7 @@ fn content_of(kind: core_model::StudioNodeKind) -> core_model::StudioNodeContent
     let text = || "said".to_string();
     match kind {
         K::Run => C::Run {
-            run_id: text(),
+            run: core_model::StudioRun::Checkout(text()),
             kept: None,
         },
         K::Note => C::Note {

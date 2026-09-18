@@ -142,6 +142,11 @@ where
         slots.rebound(limits.concurrency);
         self.rehoused(limits.headroom);
         self.rechecked(limits.checks_at_once);
+        // **Beside `rebound`, because it is derived from it.** A person who
+        // raised the Jobs bound narrowed every Check on the machine by the same
+        // act, and a width still divided by the old bound would hand out more
+        // of the machine than the new one allows. #1444.
+        self.rewidened(limits.concurrency);
         Ok(FleetLimits {
             values: limits.values(),
             shipped: self.shipped().values(),

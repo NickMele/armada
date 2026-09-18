@@ -224,7 +224,20 @@ pub(crate) fn history(log: &Path, to_the_end: bool) -> Option<(Vec<String>, u64,
 /// command's output is whatever it printed, and a log that ended at the
 /// first bad byte would hide the rest.
 pub(crate) fn output(root: &str, handle: &str, id: &str, name: String) -> Option<RunOutput> {
-    let bytes = std::fs::read(dir_of(root, handle, id)?.join(LOG)).ok()?;
+    let log = dir_of(root, handle, id)?.join(LOG);
+    output_of(&log, id.to_string(), name, relative_log(handle, id))
+}
+
+/// [`output`] against a log wherever it is, so a **server**'s — which sits
+/// under `.armada/servers` and not under a run's handle — is read by the one
+/// function that holds the eviction rule. `crate::studio_servers`, `#1345`.
+pub(crate) fn output_of(
+    log: &std::path::Path,
+    id: String,
+    name: String,
+    path: String,
+) -> Option<RunOutput> {
+    let bytes = std::fs::read(log).ok()?;
     let mut window: VecDeque<String> = VecDeque::new();
     let (mut held, mut total, mut first) = (0usize, 0u32, 1u32);
     let text = bytes.strip_suffix(b"\n").unwrap_or(&bytes);
@@ -245,9 +258,9 @@ pub(crate) fn output(root: &str, handle: &str, id: &str, name: String) -> Option
         }
     }
     Some(RunOutput {
-        id: id.to_string(),
+        id,
         name,
-        path: relative_log(handle, id),
+        path,
         lines: window.into(),
         from_line: first,
         total_lines: total,

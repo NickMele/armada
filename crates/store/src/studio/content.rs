@@ -7,11 +7,16 @@
 use core_model::{
     CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, EpicRead, EpicTake, ForgeFacts,
     ForgeState, JobId, ScoutCheckout, ScoutEnded, ScoutOutcome, ScoutSource, ScoutSourceKind,
-    StudioCapture, StudioFinding, StudioNodeContent, StudioNodeKind, StudioPosition, StudioRunKept,
-    Ulid,
+    StudioCapture, StudioFinding, StudioNodeContent, StudioNodeKind, StudioPosition, StudioRun,
+    StudioRunKept, Ulid,
 };
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
+
+/// What a Run node's `held` says when the id names a server Fleet holds rather
+/// than a run under `.armada/runs`. **Absent is a checkout run**, so no row
+/// written before `#1345` has to be rewritten to keep saying what it said.
+const HELD_SERVER: &str = "server";
 
 /// Why a stored content object does not read back.
 #[derive(Debug)]
@@ -35,23 +40,33 @@ pub enum UnreadableContent {
 /// The object written for `content`.
 pub(super) fn written(content: &StudioNodeContent) -> String {
     let object = match content {
-        StudioNodeContent::Run { run_id, kept } => match kept {
-            None => json!({ "run_id": run_id }),
-            Some(kept) => json!({
-                "run_id": run_id,
-                "kept": {
-                    "name": kept.name,
-                    "command": kept.command,
-                    "exit_code": kept.exit_code,
-                    "expect_exit_code": kept.expect_exit_code,
-                    "stopped": kept.stopped,
-                    "duration_ms": kept.duration_ms,
-                    "lines": kept.lines,
-                    "total_lines": kept.total_lines,
-                    "whole": kept.whole,
-                },
-            }),
-        },
+        // **`held` is absent on a checkout run**, which is every row written
+        // before `#1345`: a node saying nothing about who holds it is one whose
+        // id names a directory under `.armada/runs`.
+        StudioNodeContent::Run { run, kept } => {
+            let mut node = Map::new();
+            node.insert("run_id".into(), json!(run.id()));
+            if let StudioRun::Server(_) = run {
+                node.insert("held".into(), json!(HELD_SERVER));
+            }
+            if let Some(kept) = kept {
+                node.insert(
+                    "kept".into(),
+                    json!({
+                        "name": kept.name,
+                        "command": kept.command,
+                        "exit_code": kept.exit_code,
+                        "expect_exit_code": kept.expect_exit_code,
+                        "stopped": kept.stopped,
+                        "duration_ms": kept.duration_ms,
+                        "lines": kept.lines,
+                        "total_lines": kept.total_lines,
+                        "whole": kept.whole,
+                    }),
+                );
+            }
+            Value::Object(node)
+        }
         StudioNodeContent::Note { said, capture } => match capture {
             None => json!({ "said": said }),
             Some(capture) => json!({ "said": said, "capture": capture_written(capture) }),
@@ -163,7 +178,16 @@ pub(super) fn read(kind: &str, stored: &str) -> Result<StudioNodeContent, Unread
     };
     Ok(match kind {
         StudioNodeKind::Run => StudioNodeContent::Run {
-            run_id: text("run_id")?,
+            run: match object.get("held").and_then(Value::as_str) {
+                None => StudioRun::Checkout(text("run_id")?),
+                Some(HELD_SERVER) => StudioRun::Server(text("run_id")?),
+                Some(held) => {
+                    return Err(UnreadableContent::UnknownValue {
+                        field: "held",
+                        value: held.to_string(),
+                    })
+                }
+            },
             kept: match object.get("kept") {
                 None | Some(Value::Null) => None,
                 Some(kept) => Some(run_kept(kept)?),

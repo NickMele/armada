@@ -244,6 +244,8 @@ mod spending;
 mod stuck;
 /// Runs a Studio holds, and what a node keeps of one past retention. `#1289`.
 pub mod studio_runs;
+/// Servers a Studio holds: started from one, and kept when they end. `#1345`.
+pub mod studio_servers;
 /// A repository's Studios, through the store and onto the stream. `#1285`.
 mod studios;
 pub mod sub_dispatch;

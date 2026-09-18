@@ -44,6 +44,16 @@
   color: var(--run-stopped);
 }
 
+/* A server's two, #1345. Both alias running in `status.css`: a server that is
+   up is Armada still working, and neither is a pass. */
+.armada-studio-node__state[data-run="starting"] {
+  color: var(--run-starting);
+}
+
+.armada-studio-node__state[data-run="serving"] {
+  color: var(--run-serving);
+}
+
 .armada-studio-node__kind {
   font-weight: var(--weight-medium);
 }

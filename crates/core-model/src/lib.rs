@@ -76,5 +76,5 @@ pub use studio::{
     ScoutSource, ScoutSourceKind, Scouted, StateDoesNotFit, Studio, StudioAuthor, StudioCapture,
     StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioFinding, StudioGraph,
     StudioId, StudioName, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeKind,
-    StudioNodeState, StudioPosition, StudioRelation, StudioRunKept, ToItself,
+    StudioNodeState, StudioPosition, StudioRelation, StudioRun, StudioRunKept, ToItself,
 };

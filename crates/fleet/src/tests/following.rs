@@ -92,6 +92,7 @@ fn only_a_log_a_running_check_is_writing_can_be_followed() {
         requires: Vec::new(),
         narrow: None,
         one_test: None,
+        width: None,
         runs_at: core_model::RunsAt::Everywhere,
         places: std::num::NonZeroU32::MIN,
     };

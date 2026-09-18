@@ -37,6 +37,7 @@ export * from "./studio-frames";
 export * from "./studio-clearing";
 export * from "./studio-promotion";
 export * from "./studio-reads";
+export * from "./studio-starting";
 export * from "./pending";
 export * from "./board";
 // On All repositories, the question a surface that needs one repository asks first.

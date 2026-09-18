@@ -312,9 +312,10 @@ pub use studio::{
     AddStudioNode, ContradictionSettled, CreateStudio, DecideStudioEdge, DeferOnStudio,
     DispatchStudioDraft, EditStudioDraft, EditStudioLink, EpicRead, EpicTake, ForgeState,
     GroupStudioNodes, HelmStudioAct, MoveStudioNode, ProposeStudioEdge, RemoveStudioNodes,
-    RenameStudio, SettleContradiction, StartStudioRun, Studio, StudioDeleted, StudioEdge,
-    StudioHelmActed, StudioList, StudioNode, StudioNodeContent, StudioPosition, StudioRunKept,
-    StudioRunStarted, StudioSummary, WriteUpStudioNode,
+    RenameStudio, SettleContradiction, StartStudioRun, StartStudioServer, Studio, StudioDeleted,
+    StudioEdge, StudioHelmActed, StudioList, StudioNode, StudioNodeContent, StudioPosition,
+    StudioRunHeld, StudioRunKept, StudioRunStarted, StudioServerStarted, StudioSummary,
+    WriteUpStudioNode,
 };
 pub use turn::{
     BlockKind, CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage,

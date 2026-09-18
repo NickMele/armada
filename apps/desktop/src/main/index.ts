@@ -958,6 +958,22 @@ void app.whenReady().then(() => {
       ? ((await connection?.studios.frameOf(studioId, nodeId)) ?? { ok: false, outcome: unsent })
       : undefined,
   );
+  // Starting one entry from a Studio — #1289, #1345. **The position is checked
+  // here**, as `addStudioNode`'s is: a node lands where the person is looking,
+  // and a body without one would put it at the origin.
+  ipcMain.handle(CHANNELS.startStudioRun, async (_event, studioId: unknown, name: unknown, position: unknown) => {
+    const at = whole(position);
+    if (!text(studioId) || !text(name) || at === null) return undefined;
+    return (await connection?.studios.startRun(studioId, name, at)) ?? unsent;
+  });
+  ipcMain.handle(
+    CHANNELS.startStudioServer,
+    async (_event, studioId: unknown, name: unknown, position: unknown) => {
+      const at = whole(position);
+      if (!text(studioId) || !text(name) || at === null) return undefined;
+      return (await connection?.studios.startServer(studioId, name, at)) ?? unsent;
+    },
+  );
   ipcMain.handle(CHANNELS.promoteOnStudio, async (_event, studioId: unknown, promotion: unknown) => {
     // The tag is checked here because it picks the route; the body Fleet
     // decodes and refuses on its own, as every other act's body is.

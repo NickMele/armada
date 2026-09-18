@@ -6,6 +6,7 @@ import type {
   EpicRead,
   JobSummary,
   ScoutSource,
+  ServerState,
   Studio,
   StudioNode,
   StudioRunKept,
@@ -14,6 +15,22 @@ import type {
 import { STUDIO_EDGE_LABEL, STUDIO_NODE_KIND } from "@armada/components";
 
 import { runOutcomeOf } from "./rehearsal";
+import { span } from "./duration";
+
+/**
+ * What the window knows that the Studio's own record does not — #1345.
+ *
+ * **A Run node holding a server reads the live holder**, so the instance has to
+ * reach the card from somewhere: Fleet holds one instance per checkout in
+ * memory, `list_servers` publishes them, and this window already keeps that
+ * list. Nothing about a server is copied onto the node while it is up.
+ */
+export type StudioLive = {
+  /** Every server Fleet holds, and the last of each that ended. */
+  servers?: readonly ServerState[];
+  /** The clock this window ticks on, for how long a server has been up. */
+  now?: number;
+};
 
 /**
  * What an untitled Studio is called wherever it is named. A name is optional on the wire and
@@ -38,6 +55,78 @@ function runFacts(kept: StudioRunKept): string[] {
   return kept.exit_code === undefined
     ? [kept.command, took]
     : [kept.command, `exit ${kept.exit_code} (expects ${kept.expect_exit_code})`, took];
+}
+
+/**
+ * What a kept **server** says beside its name: the `serve` line, how it ended,
+ * and how long it was up.
+ *
+ * **Never "expects"**, which every other run's result carries. A server that
+ * exits on its own has failed whatever its code (`docs/concepts/manifest.md`),
+ * so there was no code it was expected to reach and printing one would say
+ * there was.
+ */
+function serverKeptFacts(kept: StudioRunKept): string[] {
+  const up = `up ${(kept.duration_ms / 1000).toFixed(1)}s`;
+  return kept.exit_code === undefined ? [kept.command, up] : [kept.command, `exit ${kept.exit_code}`, up];
+}
+
+/**
+ * How a kept server reads: **stopped, or failed, and never passed**. Staying up
+ * is the whole of what a server is for, so the only good ending is a person
+ * ending it.
+ */
+export function serverOutcomeOf(kept: Pick<StudioRunKept, "stopped">): "stopped" | "failed" {
+  return kept.stopped ? "stopped" : "failed";
+}
+
+/** Where a server is, as one chip: the first port it declared, else its line. */
+function serverAddress(instance: ServerState): string {
+  const first = instance.ports[0];
+  return first === undefined ? instance.serve : `localhost:${first.port}`;
+}
+
+/**
+ * A Run node holding a server — #1345. **The live instance, then what the node
+ * kept, then neither.**
+ *
+ * The order is the rule: while Fleet holds it the card is drawn off the holder,
+ * and a node that kept a result is one whose server is gone. A node that has
+ * neither says so rather than drawing its id as a title, which is what a Run
+ * node holding a run nobody read already does.
+ */
+function serverCard(
+  node: Extract<StudioNode, { kind: "run" }>,
+  live: StudioLive,
+): StudioWhiteboardNode["node"] {
+  const instance = (live.servers ?? []).find((one) => one.id === node.run_id);
+  if (instance !== undefined && instance.phase !== "exited") {
+    return instance.phase === "starting"
+      ? { kind: "run", state: "starting", title: instance.name, facts: [instance.serve] }
+      : {
+          kind: "run",
+          state: "serving",
+          title: instance.name,
+          facts: [upFor(instance, live.now), serverAddress(instance)].filter((fact) => fact !== ""),
+        };
+  }
+  if (node.kept !== undefined) {
+    return {
+      kind: "run",
+      state: serverOutcomeOf(node.kept),
+      title: node.kept.name,
+      facts: serverKeptFacts(node.kept),
+    };
+  }
+  return { kind: "run", title: "Not read yet", facts: [node.run_id] };
+}
+
+/** How long it has been up. **Nothing ticks on the wire**, so the window's own
+ * clock is what counts it — `serverStatusOf`'s rule on the run sheet. */
+function upFor(instance: ServerState, now: number | undefined): string {
+  if (instance.serving_since === undefined || now === undefined) return "";
+  const lasting = span(instance.serving_since, now);
+  return lasting === null ? "" : `up ${lasting}`;
 }
 
 /** What a scout was handed, as one chip: what it was read as, and what was cut. */
@@ -162,9 +251,13 @@ function cardOf(
   node: StudioNode,
   jobs: readonly JobSummary[],
   frameOf: FrameOf,
+  live: StudioLive,
 ): StudioWhiteboardNode["node"] | null {
   switch (node.kind) {
     case "run":
+      // A server is a Run node whose id names an instance Fleet holds rather
+      // than a directory under `.armada/runs` — #1345, and two readers.
+      if (node.held === "server") return serverCard(node, live);
       // What was run, the way the run sheet names it — the Check's name, its command and its
       // result. **A run whose record the Studio has not kept says so** rather than drawing its
       // id as a title: the id names the run to Fleet and says nothing to a person, and the run
@@ -256,9 +349,10 @@ export function whiteboardNodes(
   studio: Studio,
   jobs: readonly JobSummary[],
   frameOf: FrameOf = NO_FRAME_HELD,
+  live: StudioLive = {},
 ): StudioWhiteboardNode[] {
   return studio.nodes.flatMap((node) => {
-    const card = cardOf(node, jobs, frameOf);
+    const card = cardOf(node, jobs, frameOf, live);
     return card === null ? [] : [{ id: node.id, position: node.position, node: card }];
   });
 }
@@ -281,10 +375,15 @@ export function whiteboardEdges(studio: Studio): StudioWhiteboardEdge[] {
 }
 
 /** How a node is named in a sentence: its kind, then its title. */
-export function nodeNamed(studio: Studio, nodeId: string, jobs: readonly JobSummary[]): string {
+export function nodeNamed(
+  studio: Studio,
+  nodeId: string,
+  jobs: readonly JobSummary[],
+  live: StudioLive = {},
+): string {
   const node = studio.nodes.find((one) => one.id === nodeId);
   if (node === undefined) return nodeId;
-  const card = cardOf(node, jobs, NO_FRAME_HELD);
+  const card = cardOf(node, jobs, NO_FRAME_HELD, live);
   if (card === null) return nodeId;
   return `${STUDIO_NODE_KIND[card.kind]} ${card.title}`;
 }

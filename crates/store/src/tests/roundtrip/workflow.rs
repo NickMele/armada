@@ -67,6 +67,7 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
                 one_test: Some("cargo nextest run -E test(={})".to_string()),
                 runs_at: core_model::RunsAt::Handoff,
                 places: std::num::NonZeroU32::MIN,
+                width: std::num::NonZeroU32::new(3),
             },
             ResolvedCheck::DiffNonempty,
             ResolvedCheck::ArtifactExists {

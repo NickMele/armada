@@ -627,6 +627,11 @@ export const CHANNELS = {
   // One rung of promotion — #1291. One channel across six operations: what a
   // person does on a Studio is one capability, and `act` picks the route.
   promoteOnStudio: "bridge:promote-on-studio",
+  // Starting one entry from a Studio — #1289, #1345. **Two channels and not
+  // one**, because they are two operations: a run ends and a server is held,
+  // and a single channel taking "which" as an argument would make that a flag.
+  startStudioRun: "bridge:start-studio-run",
+  startStudioServer: "bridge:start-studio-server",
   openStudioNode: "bridge:open-studio-node",
   // A press Fleet answered, felt on the trackpad. Sent, never invoked: nothing waits on it.
   tap: "bridge:tap",

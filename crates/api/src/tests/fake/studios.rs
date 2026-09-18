@@ -8,10 +8,11 @@ use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CheckoutRunUnderway, ContradictionSettled,
     CreateStudio, DecideStudioEdge, DeferOnStudio, DispatchStudioDraft, EditStudioDraft,
     EditStudioLink, GroupStudioNodes, Instant, ManifestId, MoveStudioNode, ProposeStudioEdge,
-    RemoveStudioNodes, RenameStudio, SettleContradiction, StartScout, StartStudioRun, StopScout,
-    Studio, StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId,
-    StudioList, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeState, StudioPosition,
-    StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
+    RemoveStudioNodes, RenameStudio, SettleContradiction, StartScout, StartStudioRun,
+    StartStudioServer, StopScout, Studio, StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind,
+    StudioEdgeStanding, StudioId, StudioList, StudioNode, StudioNodeContent, StudioNodeId,
+    StudioNodeState, StudioPosition, StudioRunStarted, StudioServerStarted, StudioSummary,
+    WireError, WriteUpStudioNode,
 };
 
 use super::FakeDaemon;
@@ -26,6 +27,9 @@ const AT: &str = "2026-09-17T09:00:00.000Z";
 
 /// The run a Studio's own start answers with.
 pub const THE_RUN: &str = "01STUDIORUN";
+
+/// The server instance a Studio's own start answers with. `#1345`.
+pub const THE_SERVER: &str = "01STUDIOSERVER";
 
 /// What a frame's bytes are here. A PNG's own first eight bytes and nothing
 /// after them: the route answers what it was given, and a whole image would
@@ -446,6 +450,7 @@ impl Studios for FakeDaemon {
                 id: node_id.clone(),
                 content: StudioNodeContent::Run {
                     run_id: String::from(THE_RUN),
+                    held: None,
                     kept: None,
                 },
                 state: None,
@@ -463,6 +468,55 @@ impl Studios for FakeDaemon {
                     started_at: Instant::carried(AT),
                     workspace: run.workspace.clone(),
                 },
+            })
+        })
+    }
+
+    /// The instance is `THE_SERVER`, serving, and the node holds it. `#1345`.
+    async fn start_studio_server(
+        self: std::sync::Arc<Self>,
+        studio_id: StudioId,
+        server: StartStudioServer,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> Result<StudioServerStarted, Refusal> {
+        self.added_by.lock().expect("not poisoned").push(by);
+        self.changing(&studio_id, within, |studio| {
+            let node_id = StudioNodeId::carried(format!("01NODE{}", studio.nodes.len()));
+            studio.nodes.push(StudioNode {
+                id: node_id.clone(),
+                content: StudioNodeContent::Run {
+                    run_id: String::from(THE_SERVER),
+                    held: Some(ipc::StudioRunHeld::Server),
+                    kept: None,
+                },
+                state: None,
+                position: server.position,
+                created_at: Instant::carried(AT),
+                added_by: None,
+            });
+            Ok(StudioServerStarted {
+                studio: studio.clone(),
+                node_id,
+                server: ipc::ServerState {
+                    id: String::from(THE_SERVER),
+                    name: server.name.clone(),
+                    job_id: None,
+                    manifest_id: None,
+                    phase: ipc::ServerPhase::Serving,
+                    serve: format!("serve {}", server.name),
+                    ports: Vec::new(),
+                    links: Vec::new(),
+                    started_by: ipc::StartedBy::Person,
+                    started_at: Instant::carried(AT),
+                    serving_since: Some(Instant::carried(AT)),
+                    ended_at: None,
+                    exit_code: None,
+                    ended: None,
+                    stopped: false,
+                    log: String::from(".armada/servers/main/01SERVER/output.log"),
+                },
+                already_up: false,
             })
         })
     }
