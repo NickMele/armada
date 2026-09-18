@@ -273,6 +273,16 @@ format-drift contract test, per `testkit`'s doc comment — a fixture's shape
 has to track what the real output format actually looks like, not drift from
 it over time as the format changes upstream.
 
+**A test never reads a value across a seam its production code writes on a
+task nothing awaits.** `fleet`'s transcript is that seam — rows go to a writer
+task on a bounded queue, deliberately, so watching a Job cannot change its
+outcome — and three tests read it once each, passing idle and failing on the
+merge line. They read through `tests::transcript::reading::Transcript` now,
+which has no bare read in it, and `xtask`'s
+`no_bare_transcript_read_in_a_test` refuses the way round. The reasoning is in
+that module and in the rule; this paragraph only says where to look, because a
+paragraph is what did not reach the second and third authors.
+
 ## 6. The 500/1200 line rule
 
 Warn at 500 lines, fail at 1200 — `xtask` rule three, and the same thresholds
