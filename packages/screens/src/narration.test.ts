@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { PlanTask, Turn, WorkPlan } from "@armada/protocol";
 
 import { answered, called, said } from "./fixtures/build/base";
-import { callsSaid, narrationOf, planBarOf, taskAt, workSaid } from "./narration";
+import { callsSaid, declaredBy, narrationOf, planBarOf, taskAt, workSaid } from "./narration";
 import { entriesOf, hideUnread } from "./story";
 
 const STEP = "implement";
@@ -145,6 +145,123 @@ describe("work groups under the task marked working when it happened", () => {
     ];
     const closed = tasks().map((task) => ({ ...task, working_windows: [] }));
     expect(read(turns, planOf(closed)).sections[0]?.task).toBeUndefined();
+  });
+});
+
+// `#1498`. The owner read Job `3-show-what-s-running-in-the-drones-stat` while
+// it ran: T5 declared two files, edited both, moved `open` → `done` without
+// ever being marked `working`, and its edits drew outside every task.
+describe("an edit no window covers draws under the task that declared its path", () => {
+  const TREE = "~/Development/armada/.armada/worktrees/01K5/";
+  const OVERVIEW = "packages/screens/src/overview.ts";
+  const SPEC = "packages/screens/src/overview.test.ts";
+
+  /** T5 is never marked working, so Fleet rightly sends it no window. T1 is. */
+  const declaring = (): PlanTask[] => [
+    {
+      id: "T1",
+      title: "Give the left column its own reading",
+      state: "working",
+      scope: ["packages/screens/src/left-column.ts"],
+      working_windows: [{ entered: at(60) }],
+    },
+    { id: "T5", title: "Show what is running", state: "done", scope: [OVERVIEW, SPEC] },
+  ];
+
+  /** Every call row of a section, as `[tool, what it named]`. */
+  function calls(work: { beats: { rows: { called?: { tool: string; detail: string } }[] }[] }) {
+    return work.beats
+      .flatMap((beat) => beat.rows)
+      .filter((row) => row.called !== undefined)
+      .map((row) => [row.called?.tool, row.called?.detail]);
+  }
+
+  it("draws all three edits under it, and leaves the sentence where the clock put it", () => {
+    const turns = [
+      said(STEP, at(0), "Now the overview reading."),
+      called(STEP, at(1), "a", "Edit", `${TREE}${OVERVIEW} +8 -3`),
+      answered(STEP, at(2), "a"),
+      called(STEP, at(3), "b", "Edit", `${TREE}${SPEC} +30`),
+      answered(STEP, at(4), "b"),
+      called(STEP, at(5), "c", "Edit", `${TREE}${SPEC} +10`),
+      answered(STEP, at(6), "c"),
+    ];
+    const [outside, t1, t5] = read(turns, planOf(declaring())).sections;
+    expect(t5?.task?.id).toBe("T5");
+    expect(calls(t5!)).toEqual([
+      ["Edit", OVERVIEW],
+      ["Edit", SPEC],
+      ["Edit", SPEC],
+    ]);
+    expect(t5?.calls).toBe(3);
+    expect(calls(outside!)).toEqual([]);
+    expect(outside?.beats.map((beat) => beat.said)).toEqual(["Now the overview reading."]);
+    expect(t1?.beats).toEqual([]);
+  });
+
+  it("leaves a Read of the same file outside, because it names no task it was for", () => {
+    const turns = [
+      called(STEP, at(1), "a", "Read", `${TREE}${OVERVIEW}`),
+      answered(STEP, at(2), "a"),
+      called(STEP, at(3), "b", "Edit", `${TREE}${OVERVIEW} +8 -3`),
+      answered(STEP, at(4), "b"),
+      called(STEP, at(5), "c", "Bash", `pnpm -C packages/screens test ${OVERVIEW}`),
+      answered(STEP, at(6), "c"),
+    ];
+    const [outside, , t5] = read(turns, planOf(declaring())).sections;
+    expect(calls(outside!)).toEqual([
+      ["Read", OVERVIEW],
+      ["Bash", `pnpm -C packages/screens test ${OVERVIEW}`],
+    ]);
+    expect(calls(t5!)).toEqual([["Edit", OVERVIEW]]);
+  });
+
+  it("does not let a declaration take an edit a window already covers", () => {
+    const turns = [
+      called(STEP, at(61), "a", "Edit", `${TREE}${OVERVIEW} +2`),
+      answered(STEP, at(62), "a"),
+    ];
+    const [t1, t5] = read(turns, planOf(declaring())).sections;
+    expect(t1?.task?.id).toBe("T1");
+    expect(calls(t1!)).toEqual([["Edit", OVERVIEW]]);
+    expect(t5?.beats).toEqual([]);
+  });
+});
+
+describe("the task a declared path names", () => {
+  const TREE = "~/Development/armada/.armada/worktrees/01K5/";
+
+  it("matches at a path segment and not on a shared spelling", () => {
+    const tasks: PlanTask[] = [{ id: "T1", title: "a", state: "open", scope: ["crates/ipc"] }];
+    expect(declaredBy(`${TREE}crates/ipc/operations.toml`, tasks)).toBe("T1");
+    expect(declaredBy(`${TREE}crates/ipc-extra/x.rs`, tasks)).toBeUndefined();
+  });
+
+  it("reads a declared directory as holding the files under it", () => {
+    const tasks: PlanTask[] = [{ id: "T1", title: "a", state: "open", scope: ["crates/ipc/"] }];
+    expect(declaredBy(`${TREE}crates/ipc/src/lib.rs`, tasks)).toBe("T1");
+  });
+
+  it("gives the file to the exact declaration over the directory holding it", () => {
+    const tasks: PlanTask[] = [
+      { id: "T1", title: "a", state: "open", scope: ["crates/ipc"] },
+      { id: "T2", title: "b", state: "open", scope: ["crates/ipc/operations.toml"] },
+    ];
+    expect(declaredBy(`${TREE}crates/ipc/operations.toml`, tasks)).toBe("T2");
+  });
+
+  it("gives a tie to plan order, and says nothing where no task named the path", () => {
+    const same: PlanTask[] = [
+      { id: "T1", title: "a", state: "open", scope: ["crates/ipc/operations.toml"] },
+      { id: "T2", title: "b", state: "open", scope: ["crates/ipc/operations.toml"] },
+    ];
+    expect(declaredBy(`${TREE}crates/ipc/operations.toml`, same)).toBe("T1");
+    expect(declaredBy(`${TREE}crates/store/src/lib.rs`, same)).toBeUndefined();
+  });
+
+  it("says nothing for a task that declared nothing", () => {
+    const bare: PlanTask[] = [{ id: "T1", title: "a", state: "open" }];
+    expect(declaredBy(`${TREE}crates/ipc/x.rs`, bare)).toBeUndefined();
   });
 });
 
