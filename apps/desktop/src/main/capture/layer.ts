@@ -6,12 +6,12 @@
 // `renderer/src/annotate/fiber.ts`'s reading, which is renderer code only
 // because there the page is Bridge.
 //
-// **Every ask carries its own source and leaves nothing behind**, where the
-// review describes a layer injected once with listeners while armed. Narrower,
-// not looser: no global, no listener, nothing to re-inject after a navigation,
-// and the promise `executeJavaScript` answers on is the only channel the page
-// has. The pointer is tracked by Bridge's own view over the page, so a listener
-// in the page would read what it could never send. Raised with the owner.
+// **Every ask carries its own source and leaves nothing behind**: no global, no
+// listener, nothing to re-inject after a navigation, and the promise
+// `executeJavaScript` answers on is the page's only channel. The pointer is
+// tracked by Bridge's own view over the page, so a listener here could only
+// read what it had no way to send. The review was narrowed to this on 18 Sep
+// 2026 — its *The injected layer* section records what it gave up and why.
 
 /** The most markup one Note keeps. `capture/note.ts`'s figure, which this matches. */
 export const MOST_MARKUP = 2000;
