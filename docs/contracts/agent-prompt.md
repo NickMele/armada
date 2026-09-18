@@ -791,9 +791,24 @@ answered, and from whether the command can be allowed at all.
 
 **A command that runs a Check is withheld under every `when_blocked`**, as a
 destructive one is: no person's setting widens what the repository already
-declared. Its refusal names the Check that covers what was typed and says to
-ask for it instead, and says that asking by name costs nothing — a Drone that
-believes asking is rationed runs the command itself, which is [#1174](https://github.com/NickMele/armada/issues/1174).
+declared.
+
+**And the question it asked is answered anyway.** Fleet runs the Check that
+covers what was typed, against what the Drone has changed, and the report is the
+text the denial carries. A Drone typing a test command wants to know whether its
+work holds up; being told to call a tool instead leaves it to go and call that
+tool, and across six Drones none ever did — thirty-two commands by hand against
+one call. The answer now arrives through the door it already reaches for.
+
+Three things that answer has to say, and does. That the command did not run.
+Which Check ran in its place and against what. And that asking by name through
+`run_checks` costs nothing and lets it name the files — because a Drone that
+believes asking is rationed runs the command itself, which is
+[#1174](https://github.com/NickMele/armada/issues/1174).
+
+**Bounded, and a run that outlasts the bound is answered with the plain
+refusal.** A Drone waiting on this is not marked as checking, so its silence
+clock runs; the bound sits under the poke that clock produces.
 
 The already-asking and ungrantable forms follow the same two sentences: what
 is happening, then what not to do. Neither is a final refusal of the first
