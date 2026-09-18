@@ -11,6 +11,9 @@
 
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
+import { FLEET_DOT_TONE } from "@armada/components";
+import type { Connection } from "@armada/protocol";
+import { SHORT_LABEL } from "@armada/shell";
 import { workingAPlan } from "@armada/screens/src/fixtures/build/index";
 
 import { onJob } from "./scenario";
@@ -170,7 +173,9 @@ test.each([1101, 1150, 1250, 1279])(
 
 // The fold is the window's arithmetic, so it is on every surface and not only
 // the one that needs it — the same way `--layout-breakpoint` collapses the rail
-// everywhere. Navigation, Stats and Fleet go together; nothing stands in.
+// everywhere. Navigation, Stats and Fleet go together; only Fleet's own
+// liveness stands in, as the title row's dot (#1437) — the panel itself, with
+// its pid, port, protocol and uptime, is gone with the rest.
 test("while folded, Navigation, Stats and Fleet are absent rather than hidden", async () => {
   await atWidth(1150);
   await expect.poll(leftColumn).toBe(null);
@@ -178,6 +183,44 @@ test("while folded, Navigation, Stats and Fleet are absent rather than hidden", 
   expect(document.querySelector(".armada-sidebar")).toBe(null);
   // Helm's dock is what the band is paying for, and it is untouched.
   await expect.element(page.getByLabelText("Helm").first()).toBeVisible();
+});
+
+// ---- Fleet's dot, the one thing the fold leaves behind -------------------
+//
+// The dot is drawn from the window's width, which is exactly what a story
+// cannot see — so it is measured here, through the same `App` the fold is,
+// and the two widths are the band and one above it.
+
+/** The title row's Fleet dot, or `null`. Its own class, because absence is what the wide case asserts. */
+const fleetDot = (): Element | null => document.querySelector(".armada-title-bar__fleet");
+
+// The mock answers, so the reading is a connected Fleet's. Both words come
+// from the producers Bridge itself uses — `shortLabelOf` for the panel's own
+// word and `FLEET_DOT_TONE` for the hue — rather than the two strings retyped
+// here, so a rename in either place fails this rather than passing a stale copy.
+const RUNNING = "connected" satisfies Connection["state"];
+const SAID = `Fleet — ${SHORT_LABEL[RUNNING]}`;
+
+test("at 1150 the title row carries Fleet's state, named and toned", async () => {
+  await atWidth(1150);
+  await expect.poll(leftColumn).toBe(null);
+  // Found by its accessible name, never its class: the name is the assertion,
+  // and it is what a person who cannot see the hue is left with.
+  const dot = page.getByRole("img", { name: SAID }).first();
+  await expect.element(dot).toBeVisible();
+  await expect.element(dot).toHaveAttribute("title", SAID);
+  expect(fleetDot()?.firstElementChild?.getAttribute("data-tone")).toBe(FLEET_DOT_TONE.running);
+  // Liveness only: what the panel carried is not smuggled into the title row.
+  expect(fleetDot()?.textContent).toBe("");
+});
+
+test("at 1512 the panel has the dot and the title row draws none", async () => {
+  await atWidth(1512);
+  await expect.poll(leftColumn).not.toBe(null);
+  await expect.poll(fleetDot).toBe(null);
+  // And the reading it stands in for is back where it belongs, with the facts
+  // a dot could not carry beside it.
+  await expect.element(page.getByText("pid").first()).toBeVisible();
 });
 
 // `--window-fold-left` is the narrowest window that still fits, not the widest
