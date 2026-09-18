@@ -717,15 +717,18 @@ fn assemble(
     let studio_frames_dir = machine.join("studios");
     std::fs::create_dir_all(&studio_frames_dir)?;
 
-    // The document names one server and there is no parameter through which a
-    // second could arrive. The path is `api`'s own constant rather than a
-    // literal: this address is in no route table a gate rule reads, so the one
-    // thing standing between a typo and a Drone that can never report is that
-    // the address written here and the address routed there are one value.
+    // The Evidence server alone, for a spawn that cannot name the Manifest it
+    // is serving — `fleet::spawning` writes this file's Manifest-resolved
+    // sibling for every spawn that can. The path is `api`'s own constant rather
+    // than a literal: this address is in no route table a gate rule reads, so
+    // the one thing standing between a typo and a Drone that can never report
+    // is that the address written here and the address routed there are one
+    // value.
     let mcp_config = machine.join(MCP_FILE);
-    adapters::only_the_evidence_server(
+    adapters::the_drones_servers(
         &mcp_config,
         &format!("http://127.0.0.1:{port}{}", api::MCP_PATH),
+        &[],
     )?;
 
     // The Judge and Helm's host both run the program the Drone runs, so a

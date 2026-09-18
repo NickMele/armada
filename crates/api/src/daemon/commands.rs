@@ -945,6 +945,38 @@ pub trait Commands: Send + Sync + 'static {
         manifest_id: Option<ipc::ManifestId>,
     ) -> impl Future<Output = Result<ipc::RepositoryAllowedCommands, Refusal>> + Send;
 
+    /// `add_kit_server` — put an MCP server in Kit. It reaches no Drone until
+    /// a person says so, on one of the two below. `#1275`.
+    fn add_kit_server(
+        &self,
+        adding: ipc::AddKitServer,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> impl Future<Output = Result<ipc::KitServers, Refusal>> + Send;
+
+    /// `forget_kit_server` — take one out of Kit, and every Manifest's word
+    /// about it with it. **Read by the next spawn**, so nothing running moves.
+    fn forget_kit_server(
+        &self,
+        forgetting: ipc::ForgetKitServer,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> impl Future<Output = Result<ipc::KitServers, Refusal>> + Send;
+
+    /// `set_kit_server_reach` — Kit's own tier, for every Manifest that has
+    /// not said otherwise.
+    fn set_kit_server_reach(
+        &self,
+        setting: ipc::SetKitServerReach,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> impl Future<Output = Result<ipc::KitServers, Refusal>> + Send;
+
+    /// `set_manifest_server_reach` — this Manifest's own word over a Kit
+    /// server, or `null` to take it back and leave Kit's default answering.
+    fn set_manifest_server_reach(
+        &self,
+        setting: ipc::SetManifestServerReach,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> impl Future<Output = Result<ipc::KitServers, Refusal>> + Send;
+
     /// `add_task` — a person adds a task to the Job's plan, and the plan it
     /// leaves comes back. `#897`. Refused where the Job has no plan, or
     /// `after` names no task the plan holds — `crates/ipc/operations.toml`.

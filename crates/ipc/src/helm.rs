@@ -70,6 +70,12 @@ pub enum HelmScreen {
     Cleanup,
     /// The Studios surface: a repository's list, or one Studio open. Since 14.7.
     Studio,
+    /// Kit: the MCP servers a Drone is handed. Since 15.1, `#1275`.
+    Kit,
+    /// This machine's own settings. **Added with `Kit` and not before it**:
+    /// `#1287` added `Studio` and left this one out, so a person on Settings
+    /// was reported to Helm as being on the Board.
+    Settings,
     JobDetail,
 }
 

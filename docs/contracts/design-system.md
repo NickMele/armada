@@ -1098,7 +1098,7 @@ is the back-fill by hand that this section existed to prevent.
 
 ```
 ⌘K       command palette
-⌘1–⌘8    Bridge surfaces, in rail order
+⌘1–⌘9    Bridge surfaces, in rail order
 ⌘J       Helm, toggles the dock on every surface
 ⌥⌘C      capture a note onto the open Studio
 ⌘\       toggle sidebar
@@ -1205,8 +1205,8 @@ the design drew are all spoken for: `n` is dispatch and its scope is
 `anywhere`, `v` is observe and `s` is restart step, so an unshifted key
 would answer twice on one press. See [Studio](../concepts/studio.md).
 
-**`⌘1`–`⌘8` follow the rail** — Overview, Job Board, Studios, Alerts,
-Doctor, Manifest, Cleanup, Settings — since Active Jobs, Reviews and the Activity
+**`⌘1`–`⌘9` follow the rail** — Overview, Job Board, Studios, Alerts,
+Doctor, Manifest, Cleanup, Kit, Settings — since Active Jobs, Reviews and the Activity
 Feed folded into the Board and Cleanup joined at the end of it.
 The digits shift if the rail does; the rule is rail order, not the
 numbers.
@@ -1239,7 +1239,18 @@ belongs beside the work it becomes rather than after the settings; Alerts,
 Doctor, Manifest, Cleanup and Settings each moved down one, Settings from `⌘7`
 to `⌘8`. The rule is still rail order — only the arrival was the exception.
 
-**`1`–`5` and `⌘1`–`⌘8` are different acts on one row of keys.** One is
+**Kit joined before Settings, on 2026-09-18 (#1275), taking `⌘8`** — the third
+arrival to move a digit other than its own, and the first to join anywhere but
+the end: Settings moved to `⌘9`. The owner's decision, and his reason is that
+Kit is what he brings and Settings is what this machine is, so the machine reads
+last. It is a rail row rather than a view on one repository's Manifest because
+Kit is his and not a repository's. Its glyph is `briefcase` — the tool set you
+bring, and the only Navigation glyph whose handle stands above its body.
+`icons.settings` had said `means = "Kit"` since it was written, with two other
+rows citing it, while the Settings surface wore the cog; the owner settled it
+the other way, so Settings keeps the cog and those three rows were corrected.
+
+**`1`–`5` and `⌘1`–`⌘9` are different acts on one row of keys.** One is
 modified and one is not, which is the whole separation. It was drawn
 that way deliberately rather than by omission.
 
@@ -1563,6 +1574,53 @@ collapses onto one pending rendering — `--bg-sunken`, `--border-strong`,
 pressed is the one control in its group that is not greyed out. It stays
 focusable and refuses a second press. Disabling alone was the treatment
 before, and it drew the pressed control exactly like its siblings.
+
+### Tabs
+
+Sections of one object, drawn as a segmented control: one track, and the
+chosen tab filled inside it.
+
+```
+track      --bg-sunken · --border-default · --radius-md · 2px inner padding
+tab        32px · 12px horizontal padding · --text-sm · --fg-muted
+chosen     --accent-muted fill · --fg-default · weight 500 · --radius-sm
+hover      --fg-default
+count      trailing mono --text-2xs in --fg-subtle, never a filled pill
+```
+
+**The chosen tab is filled, not underlined.** The rail's own selected row is
+`--accent-muted` filled, and a panel's tabs sit in the same eyeline as it — an
+underline made one selection read as a different idea from the other, which is
+what the owner saw on Manifest on 17 Sep 2026. The fill is the contract's own
+for a selected row, with `--fg-default` on it because `--accent` measures
+4.06:1 there and would not clear as body text.
+
+**Still the `tabs` primitive.** A segmented control is how the strip is
+painted, not a new base component — hard rule 2 stands.
+
+**The run sheet's scope control is segmented too, and deliberately different.**
+*Changed / All* is a choice made before pressing Run, so it is built from
+`radio` and fills the chosen segment solid `--accent` with `--fg-inverse`, the
+way a pressed control reads; hairlines divide its segments because nothing
+travels across them. A tab is a view already open, which is the rail's own
+`--accent-muted`, and the fill travels, so it carries no dividers to slide
+over. **Two renderings of one shape, told apart by whether the press has
+happened yet** — and said here so the next strip does not pick one at random.
+
+**One fill that travels**, at `--duration-base`: the eye follows the selection
+from the tab it left, where an edge per tab can only swap. It travels by
+transform and width so nothing reflows, does not travel on first placement,
+and under reduced motion it simply lands.
+
+**A counted strip is the same control.** A count and the key that selects a
+tab sit either side of the label, inside the segment; a tab carrying both is
+the widest thing the strip holds, and the Job Board is where that is measured.
+
+**Suspended steps the whole strip back** — every tab to `--fg-subtle`, and the
+chosen one gives up its fill rather than its selection. A fill reads as *this
+is what you are looking at*, and while something else on the surface is
+narrowing the list that is not true. Nothing is disabled: pressing a tab is
+the way out of the state, so the way out has to work.
 
 ### Input
 

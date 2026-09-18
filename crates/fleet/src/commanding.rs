@@ -482,6 +482,59 @@ where
         })
     }
 
+    /// Put an MCP server in Kit — `crate::kit`. It reaches no Drone until a
+    /// person says so on one of the two acts below.
+    async fn add_kit_server(
+        &self,
+        adding: ipc::AddKitServer,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::KitServers, Refusal> {
+        let served = self.served_named(manifest_id.as_ref())?;
+        Fleet::add_kit_server(self, adding)
+            .await
+            .map_err(|why| self.kit_refusal(why))?;
+        Ok(self.kit_servers_listed(&served).await)
+    }
+
+    /// Take one out of Kit, and every Manifest's word about it with it.
+    async fn forget_kit_server(
+        &self,
+        forgetting: ipc::ForgetKitServer,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::KitServers, Refusal> {
+        let served = self.served_named(manifest_id.as_ref())?;
+        Fleet::forget_kit_server(self, forgetting)
+            .await
+            .map_err(|why| self.kit_refusal(why))?;
+        Ok(self.kit_servers_listed(&served).await)
+    }
+
+    /// Kit's own tier for one server.
+    async fn set_kit_server_reach(
+        &self,
+        setting: ipc::SetKitServerReach,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::KitServers, Refusal> {
+        let served = self.served_named(manifest_id.as_ref())?;
+        Fleet::set_kit_server_reach(self, setting)
+            .await
+            .map_err(|why| self.kit_refusal(why))?;
+        Ok(self.kit_servers_listed(&served).await)
+    }
+
+    /// This Manifest's own word over one Kit server.
+    async fn set_manifest_server_reach(
+        &self,
+        setting: ipc::SetManifestServerReach,
+        manifest_id: Option<ipc::ManifestId>,
+    ) -> Result<ipc::KitServers, Refusal> {
+        let served = self.served_named(manifest_id.as_ref())?;
+        Fleet::set_manifest_server_reach(self, &served, setting)
+            .await
+            .map_err(|why| self.kit_refusal(why))?;
+        Ok(self.kit_servers_listed(&served).await)
+    }
+
     /// Serve one more repository, from a folder — `crate::repositories`.
     async fn add_repository(
         &self,

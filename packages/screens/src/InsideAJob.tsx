@@ -287,6 +287,13 @@ export type InsideAJobProps = {
    */
   onAddTask?: (title: string, detail: string) => Promise<PlanEditAnswer>;
   /**
+   * Open one task's whole reading on the sheet layer. **The rail draws the
+   * title, the state and a file count and nothing else** — a task's note, its
+   * paths and both ends of its evidence are `#1421`'s fields and the rail is
+   * 380px wide.
+   */
+  onOpenTask?: (taskId: string) => void;
+  /**
    * Drop a task from the Job's plan, with a reason. Offered only on an `open`
    * or `working` row — `docs/concepts/plan.md`'s rule that a dropped task
    * stays dropped for a Drone, and a person's own add is what brings the work
@@ -383,6 +390,7 @@ export function InsideAJob({
   onOpenChapter,
   plan,
   onAddTask,
+  onOpenTask,
   onDropTask,
   onSaid,
   where,
@@ -446,6 +454,7 @@ export function InsideAJob({
               approach={plan.approach}
               tasks={plan.tasks}
               onAddTask={onAddTask}
+              onOpenTask={onOpenTask}
               onDropTask={onDropTask}
               onSaid={onSaid}
             />

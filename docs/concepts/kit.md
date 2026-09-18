@@ -55,6 +55,14 @@ The original four groups split across the two concepts: AI Behavior and the tool
 
 **Kit holds the default allowlist, and a [Manifest](manifest.md) can extend or restrict it per project.** The same inheritance pattern governs Skills, MCP and Plugins. **Extend or restrict, in either direction, is the model wording for every two-tier setting.**
 
+**MCP servers are the first row of this that is built** — `#1275`. Fleet keeps the set, a Manifest's word is a row of its own, and `core_model::a_drone_resolves` is the whole resolution: the Manifest's word where it has one, Kit's default where it has none. Absent is not a third word. The servers a Drone is spawned against are written from that answer and nothing else, so what Bridge draws and what a Drone reads cannot disagree.
+
+**A server added to Kit reaches no Drone.** `KitServer::added` takes no reach and there is no constructor that starts one anywhere else, so turning one on is a second act with its own operation. That is `../scope.md`'s one confinement kept: without `--strict-mcp-config` a v1 Drone came up holding every server the operator had connected, and a Kit whose rows arrived switched on would be the same defect through the front door.
+
+**A scout gets none of them.** [Scout](scout.md) starts with no server at all, and the sources it reads are fetched by Fleet rather than opened by the agent — so "a scout's connections" is a different question from this one, and nothing here widens a scout.
+
+**Helm's set is still the person's own, resolved by the CLI** — `#1373`, and Kit replaces none of it yet. Nothing in Armada reads `~/.claude`; Helm simply launches without the flag a Drone launches with.
+
 **Known cost: allowlist rot.** Two-tier inheritance keeps changes scoped, but upkeep is ongoing as new tools are needed. No automated solution exists; worth monitoring rather than solving now.
 
 **Findings the withdrawn direction rule leaves open**, filed rather than replaced:
@@ -74,6 +82,8 @@ What this surface is called, and whether it is its own journey, is tracked in Op
 
 ## Actions
 
+**Of this surface, one row is built**: the MCP servers a Drone gets, added, removed and allowed per Manifest from the Manifest surface in Bridge (`#1275`). Kit has no rail row of its own — the rail's order is [Bridge](bridge.md)'s, and where this surface finally lives is the `kit-setup-surface-naming` question below.
+
 | Action | What it does |
 | --- | --- |
 | Edit / View | Standard settings editing across the functional groups above |
@@ -88,6 +98,8 @@ What this surface is called, and whether it is its own journey, is tracked in Op
 Keeps your live local Claude environment in step with your Kit's Skills, MCP and Agent files.
 
 **Automatic.** When you edit your Kit, Fleet pushes the change out; you never have to trigger it. Non-conflicting items merge silently.
+
+**Not built, and nothing in `#1275` writes a person's own Claude configuration.** A server added to Kit reaches a Drone and nobody else; a terminal session is unaffected.
 
 **A same-named conflict with config Claude already has outside Armada surfaces for you to resolve**, rather than being silently overwritten. That is the one time you are involved.
 

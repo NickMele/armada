@@ -343,6 +343,29 @@ pub fn read_given(stored: &str) -> Result<Given, Malformed> {
     })
 }
 
+// ------------------------------------------- kit_mcp_servers.args
+
+/// An MCP server's arguments, one column.
+///
+/// **Here rather than beside the table**, because this file's header is the
+/// rule: it is the one place in the workspace that parses untyped JSON, and an
+/// encoder written next to its reader is what keeps the two from drifting.
+pub fn write_server_args(args: &[String]) -> String {
+    Value::Array(args.iter().map(|arg| json!(arg)).collect()).to_string()
+}
+
+pub fn read_server_args(stored: &str) -> Result<Vec<String>, Malformed> {
+    array(&parse(stored)?)?
+        .iter()
+        .map(|entry| {
+            entry
+                .as_str()
+                .map(str::to_string)
+                .ok_or_else(|| String::from("an argument is not a string"))
+        })
+        .collect()
+}
+
 // -------------------------------------------------------------- jobs.workflow
 //
 // The whole WorkflowDef a Job froze, in one column, and the one nested document

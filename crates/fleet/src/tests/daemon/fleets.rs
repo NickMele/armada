@@ -92,7 +92,11 @@ pub fn fitted_over<V>(
             user: String::from("someone"),
             path: "/usr/bin:/bin".to_string(),
             home: root,
-            mcp_config: "/etc/armada/mcp.json".to_string(),
+            // Under the fixture's own home rather than `/etc`, since `#1275`:
+            // a spawn writes this file's Manifest-resolved sibling, and a
+            // fixture pointed at a path nothing can write would exercise the
+            // fallback in every case rather than the path that ships.
+            mcp_config: home.path().join("mcp.json").to_string_lossy().to_string(),
             // Never actually run: a fixture that asks Helm anything swaps this
             // Fleet's host with `hosting_helm_on` first — `crate::tests::helm_conversation`.
             agent_binary: "the-agent".to_string(),

@@ -7,6 +7,8 @@ import type {
   CheckoutRunFollowed,
   CheckoutRunRecord,
   CheckoutRunSheet,
+  Declaration,
+  ManifestDriftRead,
   RunEntry,
   ServerState,
 } from "@armada/protocol";
@@ -19,6 +21,7 @@ import {
   runningEntryOf,
 } from "./checkout-runs";
 import { checkoutStartOf, followedWorkspaceOf } from "./checkout-workspace";
+import { driftGoneOf } from "./verify";
 
 function entry(name: string, run: string, over: Partial<RunEntry> = {}): RunEntry {
   return {
@@ -106,6 +109,68 @@ describe("the entry a run in flight is for", () => {
 
   it("is nothing where nothing is running", () => {
     expect(runningEntryOf(checkoutGroupsOf(SHEET), undefined)).toBeUndefined();
+  });
+});
+
+describe("what a row carries beyond its declaration", () => {
+  const gone = (name: string) => ({
+    section: "checks",
+    name,
+    key: "run",
+    run: "pnpm run bridge-test",
+    drift: { verdict: "gone" as const, missing: ["package.json: scripts.bridge-test"] },
+    unfollowed: [],
+  });
+  const read = (declarations: Declaration[]): ManifestDriftRead => ({
+    state: "read",
+    drift: { path: "/r/armada.yml", checkout: "/r", declarations },
+  });
+  const ran = (name: string, over: Partial<CheckoutRunRecord> = {}) =>
+    ({
+      id: `crun_${name}`,
+      name,
+      started_at: "2026-09-12T14:11:30Z",
+      exit_code: 0,
+      expect_exit_code: 0,
+      ended: "exited",
+      ...over,
+    }) as CheckoutRunRecord;
+
+  it("marks the row whose own line went, and leaves the rest alone", () => {
+    const groups = checkoutGroupsOf(SHEET, false, {
+      gone: driftGoneOf(read([gone("test")])),
+      runs: [],
+    });
+    const rows = groups.flatMap((group) => group.entries);
+    expect(rows.find((row) => row.id === "check:test")?.drifted).toBe(true);
+    expect(rows.find((row) => row.id === "command:fmt")?.drifted).toBeUndefined();
+  });
+
+  it("carries a row's own newest run, short, with what it expected in the title", () => {
+    const groups = checkoutGroupsOf(SHEET, false, {
+      gone: new Set(),
+      runs: [ran("test", { exit_code: 2 }), ran("fmt")],
+    });
+    const test = groups.flatMap((group) => group.entries).find((row) => row.id === "check:test");
+    expect(test?.last?.result).toBe("exit 2");
+    expect(test?.last?.whole).toBe("exit 2 (expects 0)");
+    expect(test?.last?.outcome).toBe("failed");
+  });
+
+  it("says how a run with no code ended, because `exit undefined` is not a reading", () => {
+    const groups = checkoutGroupsOf(SHEET, false, {
+      gone: new Set(),
+      runs: [ran("test", { exit_code: undefined, ended: "killed", stopped: true })],
+    });
+    const test = groups.flatMap((group) => group.entries).find((row) => row.id === "check:test");
+    expect(test?.last?.result).toBe("killed");
+    expect(test?.last?.whole).toBeUndefined();
+  });
+
+  it("leaves a row that has never run with nothing", () => {
+    const groups = checkoutGroupsOf(SHEET, false, { gone: new Set(), runs: [ran("fmt")] });
+    const test = groups.flatMap((group) => group.entries).find((row) => row.id === "check:test");
+    expect(test?.last).toBeUndefined();
   });
 });
 

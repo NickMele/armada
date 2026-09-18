@@ -45,7 +45,7 @@ export const SectionsOfOneObject: Story = {
   },
 };
 
-/** The last section active, so the underline can be read away from the left edge. */
+/** The last section active, so the fill can be read away from the left edge. */
 export const LastActive: Story = {
   args: {
     defaultValue: "log",

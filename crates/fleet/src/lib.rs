@@ -112,6 +112,8 @@ pub mod journal;
 pub mod judging;
 pub mod keeping;
 mod kept_reply;
+/// Kit's MCP servers, resolved for one Manifest. `docs/concepts/kit.md`, `#1275`.
+pub mod kit;
 mod landing;
 /// The Drones-at-once bound, memory share and disk floor a person saves, and
 /// how a save reaches admission without a restart.

@@ -315,7 +315,7 @@ fn a_studio_reads_back_with_every_node_where_it_was_left_and_its_proposal_unacce
 ///
 /// **Fixed at capture is proved on the seam**, which is where a rewrite would
 /// have to arrive: of the routes on a Studio's nodes, one adds, one captures,
-/// one moves and one removes, and none of them names a node and new content.
+/// one moves and two remove, and none of them names a node and new content.
 #[test]
 fn a_captured_note_keeps_where_it_was_pointed_and_no_route_can_rewrite_it() {
     let graph = a_studio_with_a_captured_note();
@@ -381,11 +381,12 @@ fn a_captured_note_keeps_where_it_was_pointed_and_no_route_can_rewrite_it() {
             "capture_studio_note",
             "group_studio_nodes",
             "move_studio_node",
-            "remove_studio_node",
+            "remove_studio_nodes",
             "write_up_studio_node",
         ],
-        "a node is added, captured, grouped into a new one, moved, removed or written up into a \
-         new one — and not one of these writes over a node already there"
+        "a node is added, captured, grouped into a new one, moved, removed — one or the whole \
+         selection — or written up into a new one, and not one of these writes over a node \
+         already there"
     );
 
     // **Every route that does write a node's content names the kind it may
@@ -428,7 +429,8 @@ fn no_agent_is_offered_a_persons_act_on_a_studio() {
     };
     for persons in [
         "decide_studio_edge",
-        "remove_studio_node",
+        // #1411: one node or eighteen, deleting is one act and a person's.
+        "remove_studio_nodes",
         "delete_studio",
         "ask_scout",
         "stop_scout",

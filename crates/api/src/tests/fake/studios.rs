@@ -8,7 +8,7 @@ use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CheckoutRunUnderway, ContradictionSettled,
     CreateStudio, DecideStudioEdge, DeferOnStudio, DispatchStudioDraft, EditStudioDraft,
     EditStudioLink, GroupStudioNodes, Instant, ManifestId, MoveStudioNode, ProposeStudioEdge,
-    RemoveStudioNode, RenameStudio, SettleContradiction, StartScout, StartStudioRun, StopScout,
+    RemoveStudioNodes, RenameStudio, SettleContradiction, StartScout, StartStudioRun, StopScout,
     Studio, StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId,
     StudioList, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeState, StudioPosition,
     StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
@@ -272,17 +272,35 @@ impl Studios for FakeDaemon {
         })
     }
 
-    async fn remove_studio_node(
+    /// **All of them or none**, as Fleet's is: every name is checked before
+    /// anything is dropped, so a name this Studio does not carry leaves it
+    /// whole.
+    async fn remove_studio_nodes(
         &self,
         studio_id: StudioId,
-        removing: RemoveStudioNode,
+        removing: RemoveStudioNodes,
         within: Option<ManifestId>,
     ) -> Result<Studio, Refusal> {
         self.changing(&studio_id, within, |studio| {
-            studio.nodes.retain(|node| node.id != removing.node_id);
+            if removing.node_ids.is_empty() {
+                return Err(Refusal::Unacceptable(refused(
+                    "fake.studio_no_nodes_named",
+                    "a delete names at least one node".to_string(),
+                )));
+            }
+            for wanted in &removing.node_ids {
+                if !studio.nodes.iter().any(|node| &node.id == wanted) {
+                    return Err(Refusal::Unacceptable(refused(
+                        "fake.no_such_studio_node",
+                        format!("no node on this Studio is `{}`", wanted.as_str()),
+                    )));
+                }
+            }
+            let going = |id: &ipc::StudioNodeId| removing.node_ids.iter().any(|one| one == id);
+            studio.nodes.retain(|node| !going(&node.id));
             studio
                 .edges
-                .retain(|edge| edge.from != removing.node_id && edge.to != removing.node_id);
+                .retain(|edge| !going(&edge.from) && !going(&edge.to));
             Ok(studio.clone())
         })
     }

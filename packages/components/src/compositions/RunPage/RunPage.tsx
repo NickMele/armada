@@ -74,6 +74,25 @@ export type RunPageEntry = {
    * happens in the tree you are working in.
    */
   destructive?: boolean;
+  /**
+   * The line this entry declares names something the checkout no longer has —
+   * drift's `gone`, joined to this row by name. A word in caution, never red:
+   * a drifted file is behind rather than broken.
+   */
+  drifted?: boolean;
+  /**
+   * How this entry last ran in this checkout, and when. **In Job colours and
+   * still not a verdict**, `Earlier runs`' own rule: how it looks, not what it
+   * counts for. Absent where nothing kept says it has run.
+   */
+  last?: {
+    /** The code, short — `exit 2`. `whole` carries what it expected. */
+    result: ReactNode;
+    whole?: string;
+    outcome?: FactChipRun;
+    /** The wall clock, formatted by the caller. */
+    at: ReactNode;
+  };
 };
 
 export type RunPageGroup = {
@@ -485,7 +504,15 @@ function RunPageGroupList({
 }) {
   return (
     <div className="armada-run-page__group">
-      <span className="armada-run-page__group-label">{group.label}</span>
+      <span className="armada-run-page__group-label">
+        {group.label}
+        {/* How many the file declares. The rail's own count, machine-derived
+            and mono, so a group reads as a group rather than a rule with rows
+            under it. Never on an empty one: the sentence below says it. */}
+        {group.entries.length === 0 ? null : (
+          <span className="armada-run-page__group-count">{group.entries.length}</span>
+        )}
+      </span>
       {group.says === undefined ? null : <p className="armada-run-page__group-says">{group.says}</p>}
       {group.entries.length === 0 ? (
         <p className="armada-run-page__group-empty">This Manifest declares none.</p>
@@ -499,8 +526,14 @@ function RunPageGroupList({
                 aria-current={entry.id === selectedId ? "true" : undefined}
                 onClick={() => onSelect?.(entry.id)}
               >
-                <span className="armada-run-page__entry-name">{entry.name}</span>
+                <span className="armada-run-page__entry-head">
+                  <span className="armada-run-page__entry-name">{entry.name}</span>
+                  {entry.drifted === true ? (
+                    <span className="armada-run-page__entry-gone">gone</span>
+                  ) : null}
+                </span>
                 <span className="armada-run-page__entry-run">{entry.run}</span>
+                <RunPageEntryFacts entry={entry} />
               </button>
               {entry.note === undefined ? null : (
                 <p className="armada-run-page__entry-note">{entry.note}</p>
@@ -510,6 +543,35 @@ function RunPageGroupList({
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * What a row carries beyond its name and its line: how it last ran, and
+ * whether running it writes.
+ *
+ * **What is already in memory, and nothing more.** The runs are the list
+ * *Earlier runs* is drawn from and drift is the read the surface takes on
+ * opening; whether the gate runs a Check a Drone skips, and the paths that
+ * decide whether it applies at all, are not on the wire — #1437.
+ */
+function RunPageEntryFacts({ entry }: { entry: RunPageEntry }) {
+  if (entry.last === undefined && entry.destructive !== true) return null;
+  return (
+    <span className="armada-run-page__entry-facts">
+      {entry.last === undefined ? null : (
+        <>
+          <FactChip run={entry.last.outcome} title={entry.last.whole}>
+            {entry.last.result}
+          </FactChip>
+          <span className="armada-run-page__entry-at">{entry.last.at}</span>
+        </>
+      )}
+      {/* The word the confirmation uses, so the row and the dialog agree. */}
+      {entry.destructive === true ? (
+        <span className="armada-run-page__entry-writes">writes</span>
+      ) : null}
+    </span>
   );
 }
 
