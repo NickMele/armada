@@ -42,7 +42,9 @@ export type DriftPanelProps = {
 
 export function DriftPanel({ rows, note, titled = true }: DriftPanelProps) {
   // Current lines fold away: the rows a person came for are the gone ones,
-  // and fourteen current lines above the run page would push it off screen.
+  // and fourteen current lines would bury them. That argument was about the
+  // run page this panel used to sit above; on a layer it is about the gone
+  // rows, which is the same fold for a nearer reason.
   const [showingCurrent, setShowingCurrent] = useState(false);
   const gone = (rows ?? []).filter((row) => row.verdict === "gone");
   const current = (rows ?? []).filter((row) => row.verdict === "current");
