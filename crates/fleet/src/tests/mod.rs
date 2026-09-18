@@ -142,6 +142,7 @@ mod rehearsing;
 mod rejecting;
 mod remarks;
 mod repeated_failures;
+mod replaced;
 mod reporting;
 pub(crate) mod repositories;
 mod rerunning;

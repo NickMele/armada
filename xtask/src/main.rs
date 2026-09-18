@@ -34,6 +34,7 @@ mod rules_node;
 mod rules_privacy;
 mod rules_protocol;
 mod rules_stories;
+mod rules_studio;
 mod rules_stylesheets;
 mod rules_tests;
 mod rules_tokens;
@@ -140,6 +141,7 @@ fn verify_foundations() -> ExitCode {
         rules_enums::edges::the_registry_and_the_edge_table_hold_the_same_edges(&root),
         rules_enums::reachability::every_status_declares_the_step_states_it_holds(&root),
         rules_enums::declared::every_status_row_names_the_edges_it_carries(&root),
+        rules_studio::the_kinds_are_one_set_everywhere(&root),
         rules_toolbelt::the_roster_and_the_allowlist_hold_the_same_set(&root),
         rules_vocabulary::the_generated_vocabulary_says_what_the_registries_say(&root),
         rules_vocabulary::readers::every_generated_vocabulary_has_a_reader(&root),

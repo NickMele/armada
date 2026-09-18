@@ -184,7 +184,13 @@ export function fleetStateOf(connection: Connection): FleetState {
   }
 }
 
-const SHORT_LABEL: Record<Connection["state"], string> = {
+/**
+ * The Fleet panel's own word for each connection state. **Exported since
+ * #1437**: the title row's folded dot speaks this word too, in its accessible
+ * name and its tooltip, and a test that retyped "Running" would pass on the
+ * day the panel started saying something else.
+ */
+export const SHORT_LABEL: Record<Connection["state"], string> = {
   reading: "Reading",
   not_running: "Not running",
   runtime_file_refused: "Refused",

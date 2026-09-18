@@ -35,7 +35,11 @@
 .armada-title-bar__picker,
 .armada-title-bar__search,
 .armada-title-bar__helm,
-.armada-title-bar__dispatch {
+.armada-title-bar__dispatch,
+/* Not interactive, but it opts out for the same reason the rest do: a drag
+   region swallows the pointer, and a `title` tooltip inside one never opens.
+   The dot's whole job while the column is folded is to be hovered. */
+.armada-title-bar__fleet {
   -webkit-app-region: no-drag;
 }
 
@@ -174,6 +178,45 @@
    around "Helm" at rest. */
 .armada-title-bar__helmkbd {
   flex: none;
+}
+
+/* Fleet's liveness while the left column is folded — #1437. Drawn nowhere
+   else, so this rule is only ever live in the one band between
+   `--layout-breakpoint` and `--window-fold-left` with Helm's dock beside the
+   content; at every other width the Fleet panel's own dot is the reading and
+   this element is not in the tree.
+
+   The wrapper exists for the hover target, not the drawing: `--dot` is 6px and
+   a 6px `title` target is one a person misses, so `--space-1` around it gives
+   the pointer something the size of the row's other controls to land on. */
+.armada-title-bar__fleet {
+  display: flex;
+  align-items: center;
+  flex: none;
+  padding: var(--space-1);
+}
+
+/* The same 6px circle the panel draws, in the same four tones — the map is
+   `FLEET_DOT_TONE`, imported rather than retyped, so a hue can only change in
+   one place. `--fg-muted` is the neutral the panel's own unknown takes. */
+.armada-title-bar__fleet-dot {
+  width: var(--dot);
+  height: var(--dot);
+  flex: none;
+  border-radius: 50%;
+  background: var(--fg-muted);
+}
+
+.armada-title-bar__fleet-dot[data-tone="success"] {
+  background: var(--status-completed-success);
+}
+
+.armada-title-bar__fleet-dot[data-tone="warn"] {
+  background: var(--status-awaiting-review);
+}
+
+.armada-title-bar__fleet-dot[data-tone="escalated"] {
+  background: var(--status-escalated);
 }
 
 .armada-title-bar > svg,

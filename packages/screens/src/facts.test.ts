@@ -222,3 +222,24 @@ describe("who dispatched it", () => {
     expect(factsOf(job({ origin: "unknown-origin" }), null, now)).toEqual(baseline);
   });
 });
+
+// The quieter half of #1439: the job that took the work on says where it came
+// from, in the slot a sub-dispatched job names its parent in.
+describe("which job it replaced", () => {
+  const now = Date.now();
+
+  it("draws nothing on a job that replaced nothing", () => {
+    expect(factsOf(job(), null, now).some((fact) => fact.label === "Redispatched from")).toBe(
+      false,
+    );
+  });
+
+  it("closes the run with the job it replaced", () => {
+    const drawn = factsOf(job({ redispatched_from: "01FAILED000000000000000000" }), null, now);
+    expect(drawn.at(-1)).toEqual({
+      label: "Redispatched from",
+      value: "01FAILED000000000000000000",
+      mono: true,
+    });
+  });
+});

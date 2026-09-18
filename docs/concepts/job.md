@@ -542,6 +542,18 @@ Three fields, three readers, and none of them substitutes for another.
 
 **A step's declared paths are not on this record.** They are `DeclaredPaths`, set through `declare_scope` by a [Drone](drone.md) that has read the code, kept per run against the step, and measured against the real diff at the gate. Neither list is authoritative over the other, and [Change a Job's scope](../journeys/change-a-jobs-scope.md) holds the pair.
 
+## A redispatch is read from both ends
+
+`redispatched_from` is the whole record of a redispatch, and it is written once — on the replacement, at creation. Read as a column it says which Job this one replaced. Read as a predicate it says which Job replaced *that* one, which is what a person who lands on the Job that was killed needs and had no way to get: Job detail carries it as `replaced_by`, names the Job that took the work on, and opens it in one press. #1439.
+
+**One fact, never two columns.** A stored forward link is a second write that can disagree with the first, and it outlives what it points at — a replacement that has been forgotten would leave the original naming a Job nobody holds. Deriving the reverse means the answer cannot outlive its own row: forgetting the replacement takes the link, and the Job goes back to reading as one that merely stopped, which by then is all anything knows. Giving a replacement's worktree back keeps its record, so it keeps the link.
+
+**The direct successor, never the end of the chain.** A replacement that is itself redispatched answers the same question for itself, so a chain of five is read a hop at a time by the five Jobs on it. Nothing walks it, which is why nothing can loop.
+
+**The Board is not where this is said.** A row says what a Job is, and the chain is already one row there — the [Job Board](job-board.md) folds a lineage and counts which dispatch each is. This is for the person who opened the dead one.
+
+**Two Jobs may name one predecessor**, because a redispatch leaves an escalated Job `killed` and `killed` is itself redispatchable. Fleet refuses no such thing today. The newer replacement is the answer, and whether the second press should be refused is not decided.
+
 ## Other fields
 
 The complete Job field list is in `crates/core-model/domain/job-fields.toml`.

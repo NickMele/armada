@@ -44,6 +44,22 @@ export type TheShellProps = {
   activeId?: string;
   /** The 48px icon rail. The surface decides, from the window's width. */
   collapsed?: boolean;
+  /**
+   * The column's third width, after its drag range and the rail: gone. No
+   * panels, no rail, no handle, and the content takes its 216px. The surface
+   * decides, from the window's width and whether Helm's dock is beside the
+   * content — `--window-fold-left`.
+   *
+   * **This is the one state where Navigation, Stats and Fleet are not on
+   * screen**, decided by the owner on 17 Sep 2026 over narrowing the dock or
+   * folding it to its sheet earlier. `collapsed` is read first where both are
+   * set, since a folded column has no rail to collapse to.
+   *
+   * Fleet's liveness does not go with them: the title row draws its dot for
+   * as long as this holds, and gives it back to the panel when it does not
+   * (#1437). Stats has no such stand-in — its rows are counts, not one fact.
+   */
+  leftFolded?: boolean;
   onSelect?: (id: string) => void;
   /** The panel body. The one region that scrolls. No head above it: #1090
    *  ended the panel head every screen used to spend on its own name — the
@@ -121,6 +137,7 @@ export function TheShell({
   surfaces,
   activeId,
   collapsed,
+  leftFolded = false,
   onSelect,
   children,
   dock,
@@ -142,27 +159,32 @@ export function TheShell({
           onDispatch={onDispatch}
           dispatchDisabled={dispatchDisabled}
           helm={helmButtonOf(dock)}
+          // Folded only. The panel below is the reading everywhere else, and
+          // this row draws the same state from the same two fields — #1437.
+          fleet={leftFolded ? { state: fleet.state, label: fleet.label } : undefined}
         />
         <div className="armada-shell__body">
-          <div
-            className="armada-shell__left"
-            style={collapsed || leftWidth === undefined ? undefined : { width: `${leftWidthValue}px` }}
-          >
-            <Sidebar
-              header={railHeader}
-              sectionLabel={null}
-              surfaces={surfaces}
-              activeId={activeId}
-              collapsed={collapsed}
-              // The column holds the width. Left to its own 200px default, the
-              // nav stayed put while Stats and Fleet followed a drag.
-              width="100%"
-              onSelect={onSelect}
-            />
-            <StatsPanel {...stats} narrow={collapsed} />
-            <FleetPanel {...fleet} narrow={collapsed} />
-          </div>
-          {collapsed || onResizeLeft === undefined ? null : (
+          {leftFolded ? null : (
+            <div
+              className="armada-shell__left"
+              style={collapsed || leftWidth === undefined ? undefined : { width: `${leftWidthValue}px` }}
+            >
+              <Sidebar
+                header={railHeader}
+                sectionLabel={null}
+                surfaces={surfaces}
+                activeId={activeId}
+                collapsed={collapsed}
+                // The column holds the width. Left to its own 200px default, the
+                // nav stayed put while Stats and Fleet followed a drag.
+                width="100%"
+                onSelect={onSelect}
+              />
+              <StatsPanel {...stats} narrow={collapsed} />
+              <FleetPanel {...fleet} narrow={collapsed} />
+            </div>
+          )}
+          {leftFolded || collapsed || onResizeLeft === undefined ? null : (
             <LeftHandle width={leftWidthValue} onResize={onResizeLeft} />
           )}
           <div className="armada-shell__work">

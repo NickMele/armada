@@ -3,7 +3,7 @@ import { useSelectedFill } from "./selected-fill";
 
 /**
  * Sections of one object, drawn as the contract's segmented control: a
- * `--bg-sunken` track, and the chosen tab filled `--accent-muted` inside it.
+ * `--bg-raised` track, and the chosen tab filled `--accent-muted` inside it.
  * Nothing animates in, but the fill travels and a `TabPanel` under the strip
  * crossfades.
  *

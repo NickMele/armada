@@ -55,6 +55,8 @@ mod judged;
 mod kit;
 /// The Fleet limits a person saved, one row or none.
 mod limits;
+/// A redispatch read backwards: which Job replaced this one.
+mod lineage;
 /// Commands a person always-allowed for a whole Manifest, kept here instead
 /// of a commit on some Job's branch.
 mod manifest_allowed;
@@ -138,6 +140,7 @@ pub use fold::{Moved, RecordedEvent};
 pub use footprint::Footprinted;
 pub use forget::Forgotten;
 pub use limits::SavedLimits;
+pub use lineage::ReplacedBy;
 pub use migrations::KNOWN_SCHEMA_VERSION;
 pub use open::Store;
 pub use pending_evidence::PendingEvidence;

@@ -335,6 +335,19 @@ where
                 refused.suggested_rule = offered.suggested_rule;
             }
         }
+        // One indexed read on every open, because a Job that was replaced is
+        // otherwise a dead end — `store::lineage`. The handle is composed here
+        // rather than in the store, `core_model` owning that one string.
+        detail.replaced_by = self
+            .store()
+            .lock()
+            .await
+            .replaced_by(job.id())
+            .map_err(|why| self.refusal(Adrift::Reading(why)))?
+            .map(|found| ipc::ReplacedBy {
+                job_id: ipc::JobId::from(&found.job_id),
+                handle: core_model::handle_of(found.number, &found.title),
+            });
         // After the constructor, because it is read off the worktree and the
         // Manifest as well as the record — `crate::showing_again`.
         detail.show_again = Some(

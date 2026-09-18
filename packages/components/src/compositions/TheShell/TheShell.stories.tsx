@@ -82,8 +82,8 @@ export const Shell: Story = {
 };
 
 /**
- * The 48px icon rail, below the layout breakpoint. The rail never disappears:
- * losing navigation entirely is worse than losing 48px at any width.
+ * The 48px icon rail, below the layout breakpoint — where the dock has taken
+ * itself off screen and the column has room to stand at its narrowest.
  */
 export const CollapsedRail: Story = {
   args: { ...shell, collapsed: true },
@@ -235,6 +235,41 @@ export const LeftColumnCollapsedHasNoHandle: Story = {
   render: LeftColumnResizable.render,
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole("separator", { name: "Resize the left column" })).not.toBeInTheDocument();
+  },
+};
+
+/**
+ * Folded: under `--window-fold-left` with Helm's dock beside the content, the
+ * column is not drawn at all. Not the rail, not a strip, nothing — the one
+ * state where Navigation, Stats and Fleet are off screen together, and the
+ * reason `⌘1`–`⌘8` is the only way to Navigation while it lasts.
+ *
+ * The remembered width is untouched, so the column comes back where it was.
+ */
+export const LeftColumnFolded: Story = {
+  args: {
+    ...shell,
+    leftFolded: true,
+    leftWidth: 200,
+    onResizeLeft: () => {},
+    dock: { open: true, binding: "⌘J", onOpen: () => {} },
+  },
+  render: LeftColumnResizable.render,
+  // What a rendering cannot show: that this is absent rather than hidden, and
+  // that folding the column took nothing else with it — Helm's dock is the
+  // whole point of the band and is still there.
+  //
+  // And that Fleet's own state did not go with the panel: the title row's dot
+  // is the one thing that survives the fold (#1437), carrying the same state
+  // this story hands the panel it just put away.
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvasElement.querySelector(".armada-shell__left")).toBe(null);
+    await expect(canvas.queryByRole("separator", { name: "Resize the left column" })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("navigation")).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: /Job Board/ })).not.toBeInTheDocument();
+    await expect(canvas.queryByText("Awaiting approval")).not.toBeInTheDocument();
+    await expect(canvas.getByLabelText("Helm")).toBeInTheDocument();
+    await expect(canvas.getByRole("img", { name: `Fleet — ${shell.fleet.label}` })).toBeInTheDocument();
   },
 };
 

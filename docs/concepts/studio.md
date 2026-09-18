@@ -50,28 +50,7 @@ flowchart LR
 
 ## Nodes
 
-| Kind | Holds | States | Colour |
-|---|---|---|---|
-| Run | A Manifest command started from the Studio — a Check, a Command or a server — and its log until retention takes it | Run states, and a server's two | Job colours |
-| Note | What a person pointed at and said, fixed at capture | None | None |
-| Cluster | Notes a person accepted as one thing | None | None |
-| Finding | What a scout learned, and everything it read | Proposed, Gathering, Frozen | None |
-| Contradiction | Two sources that disagree, and its outcome | Reported, then its outcome | None |
-| Sketch | A diagram or mockup, as structured content | Frozen | None |
-| Link | A board, document, page or session — an address no adapter recognised — kept with a line of the person's own, and what the source calls itself where a read-in learned one | None | None |
-| Issue | An issue on a forge: its address, its number, a line of the person's own, and its title and state where it has been read in | None | None |
-| Pull request | A pull request on a forge, with an Issue's fields. Its state also holds *merged* | None | None |
-| Epic | What a forge calls a set of issues under one address, with its title, how many of its issues are on this Studio, which of them the read took and what that left out | None | None |
-| Deferral | Something a person put off, against what it blocks | Open, Answered | None |
-| Outline | An ordered reading of the nodes feeding it | Draft, Frozen | None |
-| Issue draft | An issue's title and body, never filed by Armada | Draft | None |
-| Job | A dispatched [Job](job.md), as a reference to it | Job statuses | Job colours |
-
-| State | Means |
-|---|---|
-| Proposed | Suggested and not started. Carries its cost where it can be run |
-| Gathering | Working, and spending |
-| Frozen | Done changing. Still promotable |
+**The kinds are `crates/core-model/domain/studio-kinds.toml`** — each with what it holds, the states it may take, whether it draws in Job colours, whether a person adds one by hand and whether it offers Dispatch. The rules below are what the gate holds that file and its three readers to.
 
 > **Rule.** Run and Job nodes are the only nodes that take status colour, and each Run state aliases a Job status in `packages/tokens/src/status.css`.
 > Why: a run reads the same on a Studio, on the Manifest surface and on a Job's run sheet. See [Run and edit a Manifest](../journeys/run-and-edit-a-manifest.md).
@@ -148,23 +127,14 @@ flowchart LR
 
 ### Names avoid words Armada already uses
 
-| Node | Not called | Because that word already means |
-|---|---|---|
-| Note | Observation | The one flagged inference Helm may add to an answer |
-| Epic | Milestone | A forge's own word for one of several shapes, and a vendor's where the node is a concept |
-| Link | Source | Verification source, in the Design System's hedging rule |
-| Deferral | Question | A Drone's question on the dock, and an open question in `docs/` |
-| Outline | Plan | A Job's own [Plan](plan.md) |
-| Issue draft | Ticket | Banned by the lexicon as a word for a Job |
+> **Rule.** No node is named a word the lexicon in `../contracts/design-system.md` says never to use, and the word each kind was called instead is `not_called` on its registry row, with why that word was already taken.
+> Why: a second name for something Armada already has is a vocabulary splitting, and the split is invisible until two things that mean the same render differently.
+
+**Run is the one exception, and it is scoped.** The lexicon bans `run` under **Job**, where it bans calling a Job a run. A Run node is a run.
 
 ## Edges
 
-| Edge | Means | Drawn by |
-|---|---|---|
-| Produced | The first node made the second | The Studio, always |
-| Same as | Two nodes say one thing | Proposed, and a person accepts |
-| Blocks | One has to land before the other | Proposed, and a person accepts |
-| Answers | A Finding settles a Deferral | Proposed, and a person accepts |
+**The edge kinds and who draws each are `crates/core-model/domain/studio-kinds.toml`.**
 
 > **Rule.** Only a person accepts a relation. Helm and a scout may propose one, drawn dashed until accepted.
 > Why: an agent reorganising a person's work is what separates a drawing surface from a record of decisions.
@@ -209,17 +179,7 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 
 ## Promotion
 
-| Rung | From | To | Who acts |
-|---|---|---|---|
-| Run | Any node, or nothing | Run | A person, or Helm on their ask |
-| Read in | A Link, an Issue, a Pull request or an Epic | Notes, Clusters, Contradictions, proposed edges — or an Issue per issue, from an Epic, as many as the answer took | A scout, on a person's ask. An Epic, Fleet alone |
-| Capture | A person using an app | Note | The person |
-| Ask | Any node | Finding | A scout, on a person's ask |
-| Cluster | Notes | Cluster | A person accepts |
-| Outline | The nodes feeding it | Outline | A person orders |
-| Defer | Anything raised on a node | Deferral | A person, only |
-| Write up | Note, Cluster, Contradiction or Outline | Issue draft | A person, or Helm on their ask |
-| Dispatch | Issue draft, Issue, Pull request or Epic | Job | The dispatch gate |
+**The rungs are `crates/core-model/domain/studio-kinds.toml`** — each with what it starts from, what it makes and who acts. Every rung ends at a node kind, which is *nothing reaches outside Armada on a Studio's behalf* written as something a set lookup can check.
 
 > **Rule.** A node read in keeps its address, and everything that came back hangs off it by `Produced` edges.
 > Why: the address is what a Job is dispatched from, and a Link rewritten by what was read in it would be a record of the reading rather than of the source.
@@ -282,14 +242,14 @@ A Note carries what the annotation layer records, in `apps/desktop/src/shared/an
 
 > **Rule.** The order of an Outline is the order a person put its nodes in, kept as the order of its `Produced` edges.
 
-A Contradiction ends in one of four ways, and a person picks which.
+A Contradiction ends in one of four ways, and a person picks which. The four are its last four states in `crates/core-model/domain/studio-kinds.toml`, which says when each holds; this is the act that reaches each.
 
-| Outcome | When | How |
-|---|---|---|
-| Issue draft | One side is stale, and a file needs fixing | Writing it up, which ends it as it goes |
-| Deferral | It is a real decision, and the person defers it | Deferring on it, which ends it as it goes |
-| Not a problem | Both statements hold, in different contexts | Settling it |
-| Resolved here | The person settles it, and the node records the answer | Settling it, with the answer |
+| Outcome | How |
+|---|---|
+| Issue draft | Writing it up, which ends it as it goes |
+| Deferral | Deferring on it, which ends it as it goes |
+| Not a problem | Settling it |
+| Resolved here | Settling it, with the answer |
 
 > **Rule.** A Contradiction ends once, and the outcome kept is the one that was acted on.
 > Why: two of the four leave a node behind, and re-ending one would leave that node pointing at a Contradiction that no longer says where it came from.
@@ -319,16 +279,15 @@ A Contradiction ends in one of four ways, and a person picks which.
 > **Rule.** Helm reads the runs it can start in the checkout.
 > Why: a run answers at once and ends on an event a Helm session never receives, so a run Helm could start and not read back would be an act it could not report on.
 
-## The vocabulary is a table until code reads it
+## The vocabulary is a file code reads
 
-> **Rule.** Node kinds, edge kinds and promotions live on this page until code reads them, then move to a data file beside `crates/core-model/domain/` with a check over it.
-> Why: a set nobody's code reads stays a table; a set code reads is a data file. See `.claude/skills/armada-documents/SKILL.md`.
+> **Rule.** `crates/core-model/domain/studio-kinds.toml` is the authority on the node kinds, their states, the edge kinds, the forge states, an Epic's take and the promotions. This page states the rules those sets serve and spells none of them again.
+> Why: a set nobody's code reads stays a table; a set code reads is a data file with a check over it. See `.claude/skills/armada-documents/SKILL.md`.
 
-| The check will refuse | Rule it holds |
-|---|---|
-| Status colour on a kind other than Run or Job | Status colour stays tied to declared states |
-| A Run state with no alias in `status.css` | Run nodes take Job colours |
-| A relation drawn by anything but the Studio or a person's acceptance | Only a person accepts a relation |
-| A promotion that writes outside Armada | Scouts read and never write |
-| A node name on a lexicon *Never* list | Names avoid words Armada already uses |
-| A kind offering Dispatch that is not an Issue draft, an Issue, a Pull request or an Epic | Dispatch belongs to what is already filed, and to Armada's own unfiled text |
+> **Rule.** `cargo xtask verify-foundations` holds that file to the enums in `crates/core-model/src/studio.rs`, the `CHECK` constraints in `crates/store/src/studio.rs` and the mirror in `packages/protocol/src/studio.ts`, both ways and on wire spellings. `xtask/src/rules_studio.rs` says what it refuses.
+> Why: the three were spelled separately and nothing compared them, so a kind added to one merged green and failed the first time a person met it. `#1313`.
+
+> **Rule.** Widening a set means a new migration, never an edit to one that has already run. SQLite cannot widen a `CHECK`, so `crates/store/src/studio.rs` rebuilds both tables.
+> Why: `V79` did exactly that for the three forge kinds, and the gate reads the last `CREATE TABLE` for each table — which is the set a fresh database gets.
+
+**What the check does not hold.** Each Run state's alias in `packages/tokens/src/status.css`: those four states are a run's rather than a Studio's, and no enum spells them, so there is nothing yet to compare against.

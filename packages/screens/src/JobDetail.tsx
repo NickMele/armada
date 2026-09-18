@@ -54,6 +54,7 @@ import { openKept } from "./phases";
 import { CHECKS_CHAPTER } from "./checks";
 import { whileReading, whyUnreachable } from "./while-reading";
 import { renderFor } from "./render";
+import { replacedCallout } from "./replaced";
 import { runOf, whyNoSteps } from "./run";
 import { answeringOf, askingOf, commandOf, fieldsOf, noticeOf, questionOf, waitingOf } from "./step";
 import { StepActs } from "./StepActs";
@@ -101,6 +102,7 @@ function OneJob({
   onReadDiff,
   onOpenArtifact,
   onOpenPullRequest,
+  onOpenJob,
   onReadCall,
   onReadCheckOutput,
   followed,
@@ -639,6 +641,9 @@ function OneJob({
   return (
     <InsideAJob
       heading={heading}
+      // Under the header and above everything else, because a job that was
+      // replaced is where a person lands and the run cannot say so. #1439.
+      callout={replacedCallout(whole?.replaced_by, onOpenJob)}
       run={run.map(named)}
       // The name Fleet holds, the id where it does not — a Job older than the
       // check that refuses a workflow-less proposal at creation.
