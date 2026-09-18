@@ -17,6 +17,14 @@
   min-width: 0;
 }
 
+/* Start fresh keeps the trailing edge with nothing naming the repository on
+   this line — pointed at nothing, the switch is the line's leading item and the
+   slack the name used to take is gone. Named, the name takes that slack itself
+   and this margin resolves to nothing. */
+.armada-helm-composer__head > .armada-button {
+  margin-inline-start: auto;
+}
+
 .armada-helm-composer__repository {
   flex: 1;
   min-width: 0;

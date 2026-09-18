@@ -65,6 +65,15 @@ export function HelmComposer({
   const blank = value.trim() === "";
   const available = !blank && !disabled;
   const label = repositories.find((one) => one.id === current)?.label;
+  const switching = onSwitch !== undefined && repositories.length > 1;
+  /**
+   * What Helm is pointed at, said once on this line. Pointed at nothing with
+   * the switch drawn, the switch's own entry is what says it — and says what to
+   * do about it — so this stays empty rather than repeating it: at the dock's
+   * width the two together cut each other down to "No repo…" and "Choose a
+   * rep…". With no switch to draw there is nowhere else for it to be said.
+   */
+  const naming = label ?? (switching ? undefined : "No repository to ask yet");
 
   function submit(event: FormEvent): void {
     event.preventDefault();
@@ -85,10 +94,10 @@ export function HelmComposer({
         <AttachmentChip filename={`Job ${chip.jobHandle} · ${chip.title}`} onRemove={onRemoveChip} />
       )}
       <div className="armada-helm-composer__head">
-        <span className="armada-helm-composer__repository">
-          {label ?? "No repository to ask yet"}
-        </span>
-        {onSwitch === undefined || repositories.length < 2 ? null : (
+        {naming === undefined ? null : (
+          <span className="armada-helm-composer__repository">{naming}</span>
+        )}
+        {onSwitch === undefined || !switching ? null : (
           <Select
             aria-label="Point Helm at a different repository"
             value={current ?? UNPOINTED}

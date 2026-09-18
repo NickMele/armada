@@ -98,7 +98,9 @@ export const UnpointedStandsAtItsOwnEntry: Story = {
     const switcher = canvas.getByRole("combobox", { name: "Point Helm at a different repository" });
     await expect(switcher).toHaveDisplayValue(UNPOINTED);
     await expect(switcher).not.toHaveDisplayValue(repositories[0]!.label);
-    await expect(canvas.getByText("No repository to ask yet")).toBeInTheDocument();
+    // Said once: the entry says it and says what to do, so the line does not
+    // repeat it — at the dock's width the two cut each other down to "No repo…".
+    await expect(canvas.queryByText("No repository to ask yet")).not.toBeInTheDocument();
 
     // The first repository in the list, which is the one that could not be chosen.
     await pick(switcher, repositories[0]!.id, userEvent);
@@ -123,6 +125,10 @@ export const StartFreshRefusedWhileReplying: Story = {
 export const NothingToAskYet: Story = {
   args: { disabled: true },
   play: async ({ args, canvas }) => {
+    // No switch is drawn with nothing to point at, so the line is the only
+    // place the state can be said, and it says it.
+    await expect(canvas.queryByRole("combobox")).not.toBeInTheDocument();
+    await expect(canvas.getByText("No repository to ask yet")).toBeInTheDocument();
     await expect(canvas.getByRole("textbox")).toBeDisabled();
     const send = canvas.getByRole("button", { name: "Send" });
     await expect(send).toBeDisabled();
