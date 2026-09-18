@@ -27,8 +27,8 @@ function job(over: Partial<JobSummary> = {}): JobSummary {
 
 describe("what a row says about where a job came from", () => {
   it("reads a Studio dispatch as where from, then who pressed", () => {
-    expect(originReading(job({ origin: "studio_dispatched" }))).toBe("From a Studio, dispatched by you");
-    expect(originReading(job({ origin: "studio_helm_drafted" }))).toBe("From a Studio, drafted in Helm");
+    expect(originReading(job({ origin: "studio_dispatched" }))).toBe("From a Studio, by you");
+    expect(originReading(job({ origin: "studio_helm_drafted" }))).toBe("From a Studio, via Helm");
   });
 
   it("fills sub_dispatched's slot with the parent's id", () => {

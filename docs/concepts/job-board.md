@@ -243,8 +243,8 @@ Every Job shows a visible tag for where it came from.
 | Workflow-triggered | Created by a finished Job's `on_complete` |
 | Sub-dispatched | Spawned by a step of another Job, carrying `dispatched_by` |
 | Drafted by a Drone | A working Drone reported a test broken on main, Fleet ran that test against main and it failed, and the Drone drafted the fix |
-| From a Studio, dispatched by you | Dispatched off a [Studio](studio.md), by you |
-| From a Studio, drafted in Helm | Dispatched off a Studio, by Helm on your ask |
+| From a Studio, by you | Dispatched off a [Studio](studio.md), by you |
+| From a Studio, via Helm | Dispatched off a Studio, by Helm on your ask |
 
 A Job drafted in Helm still requires your explicit approval, like any other Job dispatch — see [Helm](helm.md).
 
@@ -291,8 +291,8 @@ origin field of its own. The label above is what a row renders.
 | `helm_drafted` | Drafted in Helm |
 | `workflow_triggered` | Workflow-triggered |
 | `sub_dispatched` | Sub-dispatched by `<parent job id>` |
-| `studio_dispatched` | From a Studio, dispatched by you |
-| `studio_helm_drafted` | From a Studio, drafted in Helm |
+| `studio_dispatched` | From a Studio, by you |
+| `studio_helm_drafted` | From a Studio, via Helm |
 
 **Three of the first five read as sentences rather than labels**, settled on the
 drawing and amended 2026-08-21 — see [Monitor active

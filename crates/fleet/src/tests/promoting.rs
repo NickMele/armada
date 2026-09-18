@@ -316,7 +316,7 @@ async fn a_job_dispatched_from_a_draft_stands_at_the_gate_with_the_drafts_own_wo
     assert_eq!(
         job.origin.as_wire(),
         "studio_dispatched",
-        "a person pressed dispatch on a Studio, so the row says From a Studio, dispatched by you"
+        "a person pressed dispatch on a Studio, so the row says From a Studio, by you"
     );
     let detail = api::Queries::get_job(fleet.as_ref(), job.id.clone())
         .await
@@ -587,7 +587,7 @@ async fn a_draft_helm_dispatched_on_an_ask_says_it_was_drafted_in_helm() {
     assert_eq!(
         job.origin.as_wire(),
         "studio_helm_drafted",
-        "Helm sent it off a Studio, so the row says From a Studio, drafted in Helm"
+        "Helm sent it off a Studio, so the row says From a Studio, via Helm"
     );
     assert_eq!(
         job.status.as_wire(),
