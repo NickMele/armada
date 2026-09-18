@@ -318,13 +318,6 @@ export type JobDetailProps = {
   recorded: FoldedReads;
   onCopied: (value: string) => void;
   /**
-   * The header's trail, pressed — leave this Job for the screen it was opened
-   * from. Optional so a caller wiring the rest of this screen before the
-   * shell has a way there does not have to invent one; absent draws the
-   * trail's first segment as plain text rather than a control.
-   */
-  onLeave?: () => void;
-  /**
    * Say a sentence to the person. **Mostly a failure** — an open that did
    * nothing is the defect `#246` is about, and success is usually the file
    * being in front of them — **and, since `#897`, the one pair of successes

@@ -2,9 +2,13 @@
 // current step names *which* step is working where this badge only names the
 // Job's state — so the rail carries the pulse and this badge does not.
 //
-// **The trail is the title, since #1093** — it replaced a title block that
-// said what the badge already did, and never carries the repository, a fact
-// below rather than a place this goes.
+// **The title is the title, since #1481.** It was the last segment of a
+// two-segment trail — `Overview ›` and then the Job — and the first segment
+// was never wired to anything: every caller passed `from` and none passed
+// `onLeave`, so it drew as grey text that looked like a way back and was not.
+// The owner found it by pressing it. The trail went with it rather than being
+// wired, because one segment naming the screen Bridge opens on repeats what
+// Navigation already says.
 //
 // **The facts are a labelled run, not a table**, on screen without a click.
 // They wrap first, and past this file's measured floor the least urgent
@@ -28,11 +32,9 @@
 // page would be a surface that could be steered off the app by a value that
 // arrived on a wire. Where a caller sets `href` and no `onFollowed`, the fact
 // draws as a link and the click does nothing — a caller wiring only half of
-// it, and the one shape to look for when a link goes dead.
-//
-// **The trail's first segment is the one exception**, and it never carries a
-// wire value: `from` is words the caller chose, not an address a Job brought
-// in, so `onLeave` is a plain callback rather than the guarded `onFollowed`.
+// it, and the one shape to look for when a link goes dead. **Nothing here has
+// an exception**, since the trail went: every control this block draws either
+// ends something or hands an address back.
 
 // **What the header offers changes with the state; how it is arranged does
 // not.** The set is the caller's, and which state carries what is written where
@@ -41,7 +43,7 @@
 // destructive group, and the one primary a Job detail ever carries last, at the
 // trailing edge where the shell head puts its own.
 
-import { ChevronRight, type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
 import { Fragment, useCallback } from "react";
 import { conceptSaid } from "../../concepts";
@@ -120,12 +122,17 @@ export type JobDetailHeaderActionsProps = {
   /** The Job's title, in the person's own words. Sans. Truncates in the
    *  trail; the untruncated title is the element's own `title`. */
   headline: ReactNode;
-  /** The job id, in mono and set back. It identifies, it does not describe. */
+  /**
+   * The job id, in mono and set back, behind whatever word names it —
+   * `jobIdLabel`. It identifies, it does not describe.
+   */
   jobId?: ReactNode;
-  /** The trail's first segment. Absent draws no trail. */
-  from?: ReactNode;
-  /** The trail's first segment, pressed. Absent draws `from` as plain text. */
-  onLeave?: () => void;
+  /**
+   * What the id is called. **Drawn, not optional in practice**: the run is a
+   * line of bare values and the first of them was the one nobody could name.
+   * `undefined` draws the id alone, for a caller whose id needs no word.
+   */
+  jobIdLabel?: ReactNode;
   /** The facts, in the order the drawing runs them. */
   fields: JobDetailField[];
   /**
@@ -162,13 +169,12 @@ export function JobDetailHeaderActions({
   statusLabel,
   headline,
   jobId,
+  jobIdLabel,
   fields,
   actions,
   onCopied,
   onFollowed,
   onOpenJob,
-  from,
-  onLeave,
 }: JobDetailHeaderActionsProps) {
   // The anchor is a real one so it reads as a link and carries the address on
   // hover, and its default is cancelled so nothing here can navigate. See
@@ -208,23 +214,11 @@ export function JobDetailHeaderActions({
     <div className="armada-job-head">
       <div className="armada-job-head__top">
         <div className="armada-job-head__lead">
-          {/* The trail: where this Job was opened from, then its name. Never
-              the repository — that is a fact below, not a place this goes. */}
-          <nav className="armada-job-head__trail" aria-label="Where this Job is">
-            {from === undefined ? null : onLeave === undefined ? (
-              <span className="armada-job-head__crumb">{from}</span>
-            ) : (
-              <button type="button" className="armada-job-head__crumb armada-job-head__back" onClick={onLeave}>
-                {from}
-              </button>
-            )}
-            {from === undefined ? null : (
-              <ChevronRight size={12} strokeWidth={2} className="armada-job-head__chevron" aria-hidden="true" />
-            )}
-            <span className="armada-job-head__here" title={typeof headline === "string" ? headline : undefined}>
-              {headline}
-            </span>
-          </nav>
+          {/* The Job's name, and the whole of it on hover where the column is
+              too narrow to hold it. */}
+          <h1 className="armada-job-head__here" title={typeof headline === "string" ? headline : undefined}>
+            {headline}
+          </h1>
           {/* No `pulsing`. The rail's current step is the running mark, so
               it carries the loop and this badge stays still. */}
           <Badge status={status} icon={statusIcon}>
@@ -235,8 +229,13 @@ export function JobDetailHeaderActions({
       </div>
       <div className="armada-job-head__facts">
         {jobId ? (
-          <span className="armada-job-head__fact armada-job-head__id" data-mono>
-            {jobId}
+          <span className="armada-job-head__fact armada-job-head__id">
+            {jobIdLabel ? (
+              <>
+                <FactLabel>{jobIdLabel}</FactLabel>{" "}
+              </>
+            ) : null}
+            <span data-mono>{jobId}</span>
           </span>
         ) : null}
         {runs.map((run, i) => (
