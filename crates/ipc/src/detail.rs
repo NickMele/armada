@@ -314,6 +314,21 @@ pub struct JobDetail {
     /// the detail says so rather than drawing a control that opens nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub from_studio: Option<FromStudio>,
+    /// The Job this one replaced, where a redispatch minted this one.
+    ///
+    /// **The readable half of [`JobSummary::redispatched_from`]**, which is the
+    /// one record and carries an id alone. Filled after [`JobDetail::of`], like
+    /// `replaced_by`. Since 16.5. #1474.
+    ///
+    /// **Absent is two facts, and `redispatched_from` tells them apart.** A Job
+    /// no redispatch minted carries neither; one carrying the id and nothing
+    /// here has a predecessor that has been forgotten.
+    ///
+    /// **The direct predecessor, never the root of a chain.**
+    ///
+    /// [`JobSummary::redispatched_from`]: crate::JobSummary::redispatched_from
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replaces: Option<Replaces>,
 }
 
 /// The Studio a Job came off: what to call it, and where on it to land.
@@ -338,6 +353,18 @@ pub struct FromStudio {
 /// press and one reading name the same Job.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReplacedBy {
+    pub job_id: JobId,
+    pub handle: String,
+}
+
+/// The Job a redispatch replaced: what to call it, and what to open.
+///
+/// **A DTO of its own rather than [`ReplacedBy`] reused**, though the two
+/// fields match. They answer opposite questions of one record and the
+/// direction is the whole content of the answer — one type would let a
+/// predecessor be handed where a successor is meant with nothing to say so.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Replaces {
     pub job_id: JobId,
     pub handle: String,
 }
@@ -712,6 +739,7 @@ impl JobDetail {
             work_plan: None,
             replaced_by: None,
             from_studio: None,
+            replaces: None,
         }
     }
 }
