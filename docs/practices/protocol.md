@@ -1462,7 +1462,7 @@ absent on a Job whose Studio was deleted — the nodes cascade with it — and
 *that Studio is no longer there*, with no control, which is `job-board.md`'s *A
 Board outlives its Workspace* one scope smaller.
 
-## Protocol 16.5: a Note says which server it was captured on
+## Protocol 16.6: a Note says which server it was captured on
 
 `#1294`. `StudioCapture.served`, optional — `{ run, name, address }`: the instance Fleet held, what
 the Manifest calls it, and the origin the capture window was pinned to. Additive: one new optional
@@ -1477,6 +1477,11 @@ truthfully say about a page it has no record of.
 together are the page. The address is not an identity and the field does not claim to be one:
 whatever bound that loopback port owns the origin, which is why capture ends with the Run —
 `docs/practices/capture-window.md`, *What this does not claim*.
+
+**This was written as 16.5 and is 16.6**, because `#1456` took 16.5 underneath it while the branch
+was open — the fourth time this file records that collision. **It was not caught by a conflict**:
+both branches wrote `minor = 5`, so the merge was clean and the two sides agreed on a number that
+meant two different things. The merge is where to re-read this file, not the diff.
 
 ## Open questions
 

@@ -164,7 +164,7 @@ flowchart LR
 > Why: it is how a person annotates Bridge while building it. See `../practices/running-locally.md`, Annotating Bridge.
 
 > **Rule.** A Note captured there records the Run and the origin it was pinned to, beside everything a Note captured on Bridge records.
-> Why: a Studio holds Notes from Bridge and from several servers at once, and a Note that does not say which is a Note about an unnamed page. `StudioCapture.served`, protocol 16.5.
+> Why: a Studio holds Notes from Bridge and from several servers at once, and a Note that does not say which is a Note about an unnamed page. `StudioCapture.served`, protocol 16.6.
 
 > **Rule.** A Note's frame is a file beside the Studio's records, and the Note names it. A frame over 4 MiB is refused.
 > Why: an image in the content column is read back on every graph read and rides every `studio.changed`, for the life of a Studio nothing expires.
