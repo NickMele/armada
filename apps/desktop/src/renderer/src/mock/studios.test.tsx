@@ -411,10 +411,10 @@ test("an issue is read in and an epic fills the board, with each address node le
   await page.getByRole("button", { name: "The Board's legend", exact: true }).click();
   // Reopened read-only, so nothing acts on it until a person continues it.
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect.element(node(/^Issue: Read in: GitHub, web pages, sessions, Helm threads/)).toBeVisible();
+  await expect.element(node(/^Issue: Read a source a person already has/)).toBeVisible();
 
   // One issue: a Finding beside the Notes and the Contradiction its scout asked for.
-  await pick(/^Issue: Read in: GitHub, web pages, sessions, Helm threads/);
+  await pick(/^Issue: Read a source a person already has/);
   await acts().getByRole("button", { name: "Read in" }).click();
   await asked("Read in").click();
   await expect.element(node(/^Finding: Read in https:\/\/example\.invalid\/o\/r\/issues\/1293, frozen/)).toBeVisible();

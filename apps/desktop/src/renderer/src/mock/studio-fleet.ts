@@ -130,7 +130,7 @@ function legend(): Studio {
       // mock has no forge, so it says what a real one would have said: which
       // host is the forge is `crates/adapters`' to know and nothing here may
       // spell one.
-      { id: "legend-issue", kind: "issue", address: "https://example.invalid/o/r/issues/1293", number: "1293", title: "Read in: GitHub, web pages, sessions, Helm threads", state: "open", position: { x: 0, y: 600 }, created_at: at },
+      { id: "legend-issue", kind: "issue", address: "https://example.invalid/o/r/issues/1293", number: "1293", title: "Read a source a person already has into a Studio", state: "open", position: { x: 0, y: 600 }, created_at: at },
       { id: "legend-milestone", kind: "epic", address: "https://example.invalid/o/r/milestone/17", number: "17", title: "Studio", position: { x: 0, y: 1400 }, created_at: at },
       // The pull request the legend's last change landed in, and a page that
       // is still a Link: an address no adapter recognised — #1394.

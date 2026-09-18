@@ -25,7 +25,7 @@ fn a_v78_file(dir: &TempDir) {
         "INSERT INTO armada_meta (key, value) VALUES ('{SCHEMA_VERSION_KEY}', '78');
          INSERT INTO studios VALUES ('01OLD', 'armada', 'Named then', '{AT}', '{AT}', 'person');
          INSERT INTO studio_nodes VALUES ('01ISSUE', '01OLD', 'link', NULL,
-             '{{\"address\":\"https://github.com/NickMele/armada/issues/1379\",\"said\":\"where dispatch landed\"}}',
+             '{{\"address\":\"https://example.invalid/NickMele/armada/issues/1379\",\"said\":\"where dispatch landed\"}}',
              40, 80, '{AT}', 'person');
          INSERT INTO studio_nodes VALUES ('01BOARD', '01OLD', 'link', NULL,
              '{{\"address\":\"https://example.invalid/a-board\"}}', 9, 0, '{AT}', NULL);
@@ -63,7 +63,7 @@ fn a_studio_written_before_the_forge_kinds_keeps_every_node_and_edge() {
     // And a node of a kind V78's `CHECK` refused now writes.
     let content = StudioNodeContent::on_the_forge(
         StudioNodeKind::Epic,
-        String::from("https://github.com/NickMele/armada/milestone/17"),
+        String::from("https://example.invalid/NickMele/armada/milestone/17"),
         String::from("17"),
         None,
     )

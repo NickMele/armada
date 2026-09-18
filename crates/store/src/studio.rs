@@ -99,21 +99,18 @@ ALTER TABLE studio_edges ADD COLUMN added_by TEXT
 
 /// Version 79 — an Issue, a Pull request and an Epic are node kinds. `#1394`.
 ///
-/// **Both tables are rebuilt, because SQLite has no way to widen a `CHECK`
-/// and `ALTER TABLE ... RENAME` is not usable here.** A rename rewrites
-/// `studio_edges`' `REFERENCES studio_nodes` to follow it: measured, an edge
-/// written afterwards failed on *no such table: studio_nodes_narrow*, and
-/// `PRAGMA legacy_alter_table` did not hold inside the migration's
-/// transaction. So no `ALTER TABLE` at all — the rows are parked, both tables
-/// dropped while nothing references either, and both created again.
+/// **Both tables are rebuilt and no `ALTER TABLE` is used.** SQLite cannot
+/// widen a `CHECK`, and a rename rewrites `studio_edges`' `REFERENCES
+/// studio_nodes` to follow it — measured, an edge written afterwards failed on
+/// *no such table: studio_nodes_narrow*, and `PRAGMA legacy_alter_table` did
+/// not hold inside the migration's transaction.
 ///
 /// **The edges go first.** Their foreign keys cascade and cannot be turned off
 /// inside a transaction, so dropping the nodes under them would take them.
 ///
-/// Every column and every other constraint is V77's and V78's, unchanged. No
-/// row is reclassified: which addresses are an issue is `crates/adapters`' to
-/// know and the vendor-literal gate refuses a host in this crate, so Fleet
-/// converts the Links it recognises on boot — `fleet::recognising`.
+/// Every column and every other constraint is V77's and V78's. No row is
+/// reclassified — a host is a literal the gate refuses in this crate, so Fleet
+/// converts the Links it recognises on boot, `fleet::recognising`.
 pub(crate) const V79: &str = r#"
 CREATE TABLE studio_nodes_parked AS SELECT * FROM studio_nodes;
 CREATE TABLE studio_edges_parked AS SELECT * FROM studio_edges;
