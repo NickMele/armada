@@ -58,6 +58,21 @@ pub struct StagedFrame {
     pub height: i64,
 }
 
+/// The server a Note was captured on, where it was captured in the capture
+/// window rather than on Bridge. `#1294`, since protocol 16.5.
+///
+/// **The origin only.** `location` on the capture is the path within it, so the
+/// two together are the page and neither repeats the other.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CaptureServed {
+    /// The instance Fleet held, by its id.
+    pub run: String,
+    /// What the Manifest calls that server.
+    pub name: String,
+    /// Scheme, host and port.
+    pub address: String,
+}
+
 /// Everything a Note keeps about where it was pointed, as `get_studio`
 /// answers it under a `note` node.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,6 +103,10 @@ pub struct StudioCapture {
     /// What Fleet stored. Absent where no frame could be taken.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frame: Option<CaptureFrame>,
+    /// The server it was captured on. **Absent on every Note captured on
+    /// Bridge**, which is every Note before 16.5.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub served: Option<CaptureServed>,
 }
 
 /// `capture_studio_note`: a Note fixed at capture, placed on the Studio.
@@ -144,6 +163,11 @@ impl StudioCapture {
                 width: frame.width,
                 height: frame.height,
             }),
+            served: self.served.map(|served| core_model::CaptureServed {
+                run: served.run,
+                name: served.name,
+                address: served.address,
+            }),
         }
     }
 }
@@ -180,6 +204,11 @@ impl From<&core_model::StudioCapture> for StudioCapture {
                 byte_size: frame.byte_size,
                 width: frame.width,
                 height: frame.height,
+            }),
+            served: capture.served.as_ref().map(|served| CaptureServed {
+                run: served.run.clone(),
+                name: served.name.clone(),
+                address: served.address.clone(),
             }),
         }
     }

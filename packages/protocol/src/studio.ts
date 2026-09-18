@@ -269,7 +269,20 @@ export type StudioCapture = {
   source?: string;
   /** The frame Fleet kept beside the Studio's records. */
   frame?: { filename: string; byte_size: number; width: number; height: number };
+  /**
+   * The server this Note was captured on, in the capture window — #1294, since
+   * 16.5. **Absent on every Note captured on Bridge**, which is every Note
+   * before it. `docs/practices/capture-window.md`.
+   */
+  served?: CaptureServed;
 };
+
+/**
+ * Where a Note captured on another repository's web app was taken: the
+ * instance Fleet held, what the Manifest calls it, and the origin the window
+ * was pinned to. `location` above is the path within that origin.
+ */
+export type CaptureServed = { run: string; name: string; address: string };
 
 /** The PNG Bridge took, written to disk before the request. Never read back. */
 export type StagedFrame = { staged_path: string; width: number; height: number };

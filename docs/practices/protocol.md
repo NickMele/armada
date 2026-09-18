@@ -1462,6 +1462,22 @@ absent on a Job whose Studio was deleted — the nodes cascade with it — and
 *that Studio is no longer there*, with no control, which is `job-board.md`'s *A
 Board outlives its Workspace* one scope smaller.
 
+## Protocol 16.5: a Note says which server it was captured on
+
+`#1294`. `StudioCapture.served`, optional — `{ run, name, address }`: the instance Fleet held, what
+the Manifest calls it, and the origin the capture window was pinned to. Additive: one new optional
+field and one new DTO.
+
+**Absent is a Note captured on Bridge**, which is every Note written before this, so nothing an
+older Bridge already reads changes and no stored row is rewritten. A Bridge that does not know the
+field draws the Note exactly as it draws one taken on Bridge — which is what that build can
+truthfully say about a page it has no record of.
+
+**The origin, and `location` is the path within it.** Neither repeats the other, and the two
+together are the page. The address is not an identity and the field does not claim to be one:
+whatever bound that loopback port owns the origin, which is why capture ends with the Run —
+`docs/practices/capture-window.md`, *What this does not claim*.
+
 ## Open questions
 
 Naming these rather than deciding them, per this document's brief:

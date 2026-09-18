@@ -25,7 +25,9 @@ pub use finding::{
     ScoutOutcome, ScoutSource, Scouted, StudioFinding,
 };
 pub use forge::{EpicRead, ForgeFacts, Recognised};
-pub use note::{CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, StudioCapture};
+pub use note::{
+    CaptureBounds, CaptureElement, CaptureFrame, CaptureServed, CaptureWindow, StudioCapture,
+};
 pub use promotion::{ContradictionOutcome, NotRewritable, Rewritten};
 
 use crate::envelope::{Timestamp, Ulid};
