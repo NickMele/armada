@@ -74,11 +74,11 @@ tier = "Global"
 verb = "Bridge surfaces"
 icon = ""
 icon_absent = "by design"
-shortcut = "⌘1–⌘8"
+shortcut = "⌘1–⌘9"
 scope = "anywhere"
 destructive = false
 confirms = false
-notes = "One binding over the rail rather than six over six destinations — the contract's rule is rail order, not the numbers, and the digits shift if the rail does. They shifted on 2026-09-03: Held worktrees joined the rail as its fifth surface and took ⌘5, so this range grew by a digit and Helm moved off it. They shifted again on 2026-09-13 (#921): Overview joined first rather than last, so it took ⌘1 and every other surface's digit moved down one — the one time a surface's arrival moved a digit other than its own. They shifted again on 2026-09-14 (#1089): Settings joined the rail last, taking ⌘7, once the status bar it used to open from went with #1088. They shifted again on 2026-09-17 (#1287): the owner put Studios third, straight after the Job Board, so it took ⌘3 and Alerts, Doctor, Manifest, Cleanup and Settings each moved down one — the second arrival to move a digit other than its own, after Overview's. Where a Studio is read belongs beside the work it becomes. Each destination carries its own navigation glyph in the icon registry, so a glyph on this row would be a ninth one standing for all of them."
+notes = "One binding over the rail rather than six over six destinations — the contract's rule is rail order, not the numbers, and the digits shift if the rail does. They shifted on 2026-09-03: Held worktrees joined the rail as its fifth surface and took ⌘5, so this range grew by a digit and Helm moved off it. They shifted again on 2026-09-13 (#921): Overview joined first rather than last, so it took ⌘1 and every other surface's digit moved down one — the one time a surface's arrival moved a digit other than its own. They shifted again on 2026-09-14 (#1089): Settings joined the rail last, taking ⌘7, once the status bar it used to open from went with #1088. They shifted again on 2026-09-17 (#1287): the owner put Studios third, straight after the Job Board, so it took ⌘3 and Alerts, Doctor, Manifest, Cleanup and Settings each moved down one — the second arrival to move a digit other than its own, after Overview's. Where a Studio is read belongs beside the work it becomes. They shifted again on 2026-09-18 (#1275): Kit took a rail row of its own at ⌘8 and Settings moved to ⌘9 — the third arrival to move a digit other than its own, and the first to join before the last row rather than after it. Kit is what a person brings and Settings is what this machine is, so the machine reads last; and Kit is machine-wide, which is why it is a rail row rather than a view on one repository's Manifest. Each destination carries its own navigation glyph in the icon registry, so a glyph on this row would be a tenth one standing for all of them."
 
 [actions.helm]
 kind = "Action"
@@ -113,7 +113,7 @@ shortcut = '⌘\'
 scope = "anywhere"
 destructive = false
 confirms = false
-notes = "No panel glyph is registered. The 48px rail is reachable by ⌘-digit without labels, which is why hiding it costs little."
+notes = "No panel glyph is registered. Navigation is reachable by ⌘-digit without labels, which is why hiding it costs little; Stats and Fleet are not, and a hidden column takes both. Bridge folds the column on its own under --window-fold-left and this act is still unbuilt, so nothing hides it by hand."
 
 [actions.history]
 kind = "Action"

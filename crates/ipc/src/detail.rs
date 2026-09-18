@@ -290,7 +290,7 @@ pub struct JobDetail {
     /// **The other end of [`JobSummary::redispatched_from`]**, which is the one
     /// record — read as a predicate rather than a column, so nothing is written
     /// twice and nothing can disagree. Filled after [`JobDetail::of`], like
-    /// `when_blocked`. Since 16.1.
+    /// `when_blocked`. Since 16.2.
     ///
     /// **Absent is nearly every Job**, one killed and left alone included — and
     /// one whose replacement has been forgotten, after which nothing anywhere

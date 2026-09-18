@@ -79,8 +79,8 @@ export const Resting: Story = { render: () => <Live /> };
 
 /**
  * Typing, with the tab suspended. **The strip is bypassed, not changed** — it
- * steps back to `--fg-subtle` and the selected tab gives up its underline,
- * because an underline says "this is what you are looking at" and while a
+ * steps back to `--fg-subtle` and the selected tab gives up its fill,
+ * because a fill says "this is what you are looking at" and while a
  * search runs that is not true. The selection survives, so clearing the field
  * gives the person their filter back.
  *

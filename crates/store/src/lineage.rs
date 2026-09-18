@@ -12,14 +12,14 @@ use crate::error::{fault, LoadJobError, RowError};
 use crate::open::Store;
 use crate::row::{column, malformed, string};
 
-/// Version 81 — find a Job by the Job it replaced, on every open of a Job.
+/// Version 82 — find a Job by the Job it replaced, on every open of a Job.
 ///
 /// Beside the read that needs it, like [`V36`](crate::numbering::V36): the
 /// order of the migration list is `migrations.rs`'s alone.
 ///
 /// Not unique. A second redispatch of one original is legal today, and an
 /// index refusing it would fail the write rather than the act.
-pub(crate) const V81: &str = r#"
+pub(crate) const V82: &str = r#"
 CREATE INDEX jobs_by_redispatched_from ON jobs (redispatched_from);
 "#;
 

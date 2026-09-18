@@ -268,7 +268,7 @@ export type JobDetail = {
   /** Armada's review of the change: confident or not, why, and what needs the person. Since 13.24. */
   confidence?: JobConfidence;
   /**
-   * The job that replaced this one, where a redispatch minted one. Since 16.1.
+   * The job that replaced this one, where a redispatch minted one. Since 16.2.
    *
    * **The other end of `JobSummary.redispatched_from`**, which is the one
    * record: Fleet reads it as a predicate rather than writing a second column,

@@ -187,6 +187,9 @@ Both halves belong on this surface: **drift detection** (re-scan and flag) and t
 
 > **Rule.** Verify is an act — it runs the file, behind its own button, in the working tree.
 
+> **Rule.** Each is reached from its own control on the surface rather than drawn on it, and the control carries that reading's headline — how many lines went, or how the last Verify ended.
+> Why: drawn, the two took 45% of an 817px window to report that nothing had changed and that nobody had pressed Verify, and the Checks this surface exists to run started below them with room for four of nine. The headline on the control is what keeps tucked away different from dismissed. #1383.
+
 Running Verify straight after Write, as [Set Up a Project (Manifest)](set-up-a-project-manifest.md) does, is correct: a brand-new file is exactly the case Verify exists for.
 
 > **Rule.** Drift never reports a script the repo picked up that the file does not yet name.

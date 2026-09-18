@@ -51,6 +51,8 @@ mod gaming;
 mod helm_sessions;
 /// Where a verdict's own question was kept, and the column that points at it.
 mod judged;
+/// Kit's MCP servers, and each Manifest's word over one. `#1275`.
+mod kit;
 /// The Fleet limits a person saved, one row or none.
 mod limits;
 /// A redispatch read backwards: which Job replaced this one.

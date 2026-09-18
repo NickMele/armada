@@ -1318,7 +1318,6 @@ so rather than claiming the session never polled.
 **The thread is bounded and says what it cut**, the way a log tail does, and a long reply is cut
 with its own length beside it. `agent_access` is `No`: a session must not read another session, and
 reading its own brief and roster would be reading a record kept about it.
-
 ## Protocol 16.0: one delete on a Studio's nodes, one node or eighteen
 
 `#1411`. `remove_studio_node` is gone — the route, the DTO, the `Studios` method, the store write
@@ -1348,7 +1347,31 @@ A name given twice removes that node once. A call naming no node at all is refus
 and the record is what names it, so the file is deleted once the row that named it is gone. A
 refused write leaves every picture where the Note that keeps it can still draw it.
 
-## Protocol 16.1: a job that was replaced names the one that replaced it
+## Protocol 16.1: Kit's MCP servers, and what a Drone here is handed
+
+`#1275`. `get_kit_servers`, `add_kit_server`, `forget_kit_server`, `set_kit_server_reach` and
+`set_manifest_server_reach` — five routes under `/kit/servers`, the Manifest riding as
+`?manifest_id=` the way `get_repository_allowed_commands` already carries it. Additive: no existing
+field moved, and an older Bridge reads none of them.
+
+`KitServerRow` carries **both tiers and the answer they come to**. `drones` is Kit's default,
+`manifest` is this repository's word — left out where it has none, which is not a third spelling but
+Kit's default answering — and `resolves` is `core_model::a_drone_resolves` over the two. It crosses
+rather than being computed on the far side because the same call writes the `--mcp-config` document
+a Drone is spawned against, and a surface that recomputed it could draw a server as reaching a Drone
+that no Drone is handed.
+
+`ServerAddress` is tagged by `transport`, so a reader matches one field rather than guessing which
+of two optional keys turned up.
+
+`SetManifestServerReach.reach` is `Option`, **and the key must be present**: `null` is the
+take-back, and `SetModel` is the precedent. A Bridge that dropped the field would throw away a
+person's word about who may reach a server and be answered 200.
+
+Every one of the five is `agent_access = "No"`. What a Drone may reach is the owner's decision, and
+a tool that read the set is a step toward one that changes it.
+
+## Protocol 16.2: a job that was replaced names the one that replaced it
 
 `#1439`. `JobDetail.replaced_by`, additive: `{ job_id, handle }` for the Job a redispatch minted to
 replace this one, and absent on nearly every Job. A killed and redispatched Job was a dead end —

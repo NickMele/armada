@@ -1,0 +1,57 @@
+/* Kit's MCP servers — #1275. The add row, and the one word that says what a
+   drone here is handed. Heights, rules and cell padding are `Table`'s.
+
+   No column tracks. Every cell but the address is a short fixed thing, so the
+   table's own layout settles them; naming four widths here would be four
+   tokens invented for one table. Reported. */
+
+.armada-kit-servers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.armada-kit-servers__lead,
+.armada-kit-servers__reading {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* The add row. Wraps rather than scrolls: both fields are typed into, and a
+   horizontal scroll would hide the one a person is filling. */
+.armada-kit-servers__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  min-width: 0;
+  padding-bottom: var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+/* The address is the only field with anything long in it, so it takes the
+   slack and the name and the kind keep their own measure. */
+.armada-kit-servers__add > :nth-child(3) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* An address has no spaces to break at, and a URL that overflows takes the
+   row's other cells off screen with it. */
+.armada-kit-servers__table td:nth-child(2) {
+  overflow-wrap: anywhere;
+}
+
+/* Provenance-style, per the design contract: plain sans, muted until it is the
+   answer that matters. A badge here would be a Job state that is not one. */
+.armada-kit-servers__resolves {
+  color: var(--fg-subtle);
+}
+
+.armada-kit-servers__resolves[data-resolves] {
+  color: var(--fg-default);
+}

@@ -30,6 +30,15 @@ async function manifest(options: Manifesting = {}): Promise<void> {
   await page.getByRole("button", { name: "Manifest", exact: true }).click();
 }
 
+/**
+ * Open one of the surface's two readings from the tab row — #1383, where both
+ * stopped being resident panels. The name is a prefix because each act carries
+ * its own headline after the word.
+ */
+async function reading(which: "Drift" | "Verify"): Promise<void> {
+  await page.getByRole("button", { name: new RegExp(`^${which}`) }).click();
+}
+
 /** What `fmt` rewrote, as `checkout_run.finished` reported it. */
 const REFORMATTED: CheckoutRunRecord = {
   id: "crun_3ba0",
@@ -206,8 +215,21 @@ test("a save over a file that moved draws both texts, so neither is lost", async
   await expect.element(page.getByRole("textbox", { name: "Your edit" })).toHaveValue(`${MANIFEST_TEXT}# a note\n`);
 });
 
+test("the surface opens on the Checks, and says a file drifted without drawing the reading", async () => {
+  await manifest({ drift: DRIFT_GONE });
+  // Neither reading is on the surface. They took 45% of the window's height
+  // between them, and the Checks this page exists to run started below them.
+  expect(page.getByRole("region", { name: "Drift" }).elements()).toHaveLength(0);
+  expect(page.getByRole("region", { name: "Verify" }).elements()).toHaveLength(0);
+  // Tucked away is not dismissed: the act carries what the read found.
+  await expect.element(page.getByRole("button", { name: "Drift 1 gone" })).toBeVisible();
+  // And the Checks are what the panel under the tabs holds.
+  await expect.element(page.getByRole("button", { name: /^build/ })).toBeVisible();
+});
+
 test("drift with a gone line names what is missing, and offers nothing to press on the row", async () => {
   await manifest({ drift: DRIFT_GONE });
+  await reading("Drift");
   const drift = page.getByRole("region", { name: "Drift" });
   await expect.element(drift.getByText("gone", { exact: true })).toBeVisible();
   await expect.element(drift.getByText("package.json: scripts.bridge-test")).toBeVisible();
@@ -216,6 +238,10 @@ test("drift with a gone line names what is missing, and offers nothing to press 
 
 test("a Verify underway: build streams, and no second Verify can start", async () => {
   await manifest({ sheet: { state: "read", sheet: sheet({ running: BUILD_OUT, verify: VERIFY_UNDERWAY }) }, followed: BUILD_FOLLOWED });
+  // The act says one is out before it is opened, so nothing has to be pressed
+  // to find out.
+  await expect.element(page.getByRole("button", { name: "Verify running" })).toBeVisible();
+  await reading("Verify");
   const verify = page.getByRole("region", { name: "Verify" });
   await expect.element(verify.getByRole("button", { name: "Verify" })).toBeDisabled();
   await expect.element(verify.getByText(/running now/)).toBeVisible();
@@ -224,10 +250,21 @@ test("a Verify underway: build streams, and no second Verify can start", async (
 
 test("a Verify with a failure: the exit code is a fact, and the Check after it still ran", async () => {
   await manifest({ sheet: { state: "read", sheet: sheet({ verify: VERIFY_ENDED }) } });
+  await expect.element(page.getByRole("button", { name: "Verify ran 4 of 4" })).toBeVisible();
+  await reading("Verify");
   const verify = page.getByRole("region", { name: "Verify" });
   await expect.element(verify.getByText("exit 2 (expects 0)")).toBeVisible();
   await expect.element(verify.getByText(/Ran 4 of 4\. 1 ended with a code other than the one it expects\./)).toBeVisible();
   await expect.element(verify.getByRole("button", { name: "Verify" })).toBeEnabled();
+});
+
+test("opening Verify's reading starts nothing — the button inside it is what runs", async () => {
+  const started = vi.fn();
+  await manifest({ onStartVerify: started });
+  await reading("Verify");
+  expect(started).not.toHaveBeenCalled();
+  await page.getByRole("region", { name: "Verify" }).getByRole("button", { name: "Verify" }).click();
+  expect(started).toHaveBeenCalledTimes(1);
 });
 
 test("a frozen repository says so, and the notice leads to the switch that lifts it", async () => {

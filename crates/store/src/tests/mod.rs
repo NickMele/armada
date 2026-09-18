@@ -25,6 +25,7 @@ mod forget;
 mod gaming;
 mod helm_sessions;
 mod iteration;
+mod kit;
 mod limits;
 mod lineage;
 mod manifest_allowed;

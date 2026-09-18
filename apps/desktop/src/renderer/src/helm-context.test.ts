@@ -42,13 +42,50 @@ test("switching from one open Job to another chips and points at the new one", (
 });
 
 test("screenOf follows the precedence App.tsx draws by", () => {
-  const none = { reading: false, clearing: false, manifesting: false, overviewing: false, studying: false };
-  expect(screenOf({ reading: true, clearing: true, manifesting: true, overviewing: true, studying: true })).toBe("job_detail");
-  expect(screenOf({ ...none, clearing: true, manifesting: true, overviewing: true, studying: true })).toBe("cleanup");
-  expect(screenOf({ ...none, manifesting: true, overviewing: true, studying: true })).toBe("manifest");
-  expect(screenOf({ ...none, overviewing: true, studying: true })).toBe("overview");
-  expect(screenOf({ ...none, studying: true })).toBe("studio");
+  const none = {
+    reading: false,
+    clearing: false,
+    manifesting: false,
+    overviewing: false,
+    studying: false,
+    kitting: false,
+    settling: false,
+  };
+  const every = {
+    reading: true,
+    clearing: true,
+    manifesting: true,
+    overviewing: true,
+    studying: true,
+    kitting: true,
+    settling: true,
+  };
+  expect(screenOf(every)).toBe("job_detail");
+  expect(screenOf({ ...every, reading: false })).toBe("cleanup");
+  expect(screenOf({ ...every, reading: false, clearing: false })).toBe("manifest");
+  expect(screenOf({ ...none, overviewing: true, studying: true, kitting: true, settling: true })).toBe("overview");
+  expect(screenOf({ ...none, studying: true, kitting: true, settling: true })).toBe("studio");
+  expect(screenOf({ ...none, kitting: true, settling: true })).toBe("kit");
   expect(screenOf(none)).toBe("board");
+});
+
+/**
+ * **Settings was missing from this enum until #1275**, so a person on it was
+ * reported to Helm as being on the Board — the gap #1287 left when it added
+ * `studio` and stopped. Its own case, because the one above proves precedence
+ * and this proves the value exists at all.
+ */
+test("screenOf names Settings rather than falling through to the Board", () => {
+  const none = {
+    reading: false,
+    clearing: false,
+    manifesting: false,
+    overviewing: false,
+    studying: false,
+    kitting: false,
+    settling: false,
+  };
+  expect(screenOf({ ...none, settling: true })).toBe("settings");
 });
 
 test("cursorRowFor sends the Board's cursor on the Board and Overview's on Overview", () => {

@@ -32,9 +32,15 @@ export type DriftPanelProps = {
   rows?: DriftPanelRow[];
   /** Said instead of the rows while there are none: reading, or why not. */
   note?: ReactNode;
+  /**
+   * Whether the head says `Drift`. **`false` inside `DriftSheet`**, whose own
+   * title says it — two headings for one reading reads as two readings. The
+   * summary under it stays either way.
+   */
+  titled?: boolean;
 };
 
-export function DriftPanel({ rows, note }: DriftPanelProps) {
+export function DriftPanel({ rows, note, titled = true }: DriftPanelProps) {
   // Current lines fold away: the rows a person came for are the gone ones,
   // and fourteen current lines above the run page would push it off screen.
   const [showingCurrent, setShowingCurrent] = useState(false);
@@ -44,7 +50,7 @@ export function DriftPanel({ rows, note }: DriftPanelProps) {
   return (
     <section className="armada-drift-panel" aria-label="Drift">
       <div className="armada-drift-panel__head">
-        <span className="armada-drift-panel__title">Drift</span>
+        {titled ? <span className="armada-drift-panel__title">Drift</span> : null}
         <p className="armada-drift-panel__says">
           {rows === undefined ? note : summaryOf(gone.length, rows.length)}
         </p>
