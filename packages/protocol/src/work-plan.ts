@@ -23,8 +23,28 @@ export type PlanTask = {
   /** `T1`, `T2`, … — stable for the life of the plan, never renumbered. */
   id: string;
   title: string;
-  /** Absent where the task has none. */
-  detail?: string;
+  /**
+   * One line for what the other fields cannot hold — the exact new wording, a
+   * gotcha the planner found. Absent where the task has none. **Was `detail`
+   * before 15.0**, and not the place paths go any more.
+   */
+  note?: string;
+  /**
+   * The repository-relative paths the planner said this task touches, in the
+   * order given. Absent where the task names none. Since 15.0.
+   */
+  scope?: string[];
+  /**
+   * What the planner said should prove this task, written with the plan.
+   * Absent where none was named. Since 15.0.
+   */
+  expects?: string;
+  /**
+   * What the work said actually proved it, written by whoever did it. **Read
+   * beside `expects` rather than in place of it**: the two disagreeing is the
+   * fact worth drawing. Since 15.0.
+   */
+  shown?: string;
   /** `open`, `working`, `done` or `dropped`. A claim, and it gates nothing. */
   state: string;
   /** Present on a dropped task and on nothing else. */
@@ -69,14 +89,17 @@ export type JobPlanChanged = {
 };
 
 /**
- * A person adds a task to a Job's plan — `add_task`. Since 13.30.
+ * A person adds a task to a Job's plan — `add_task`. Since 13.30, and carrying
+ * `scope` and `expects` since 15.0.
  *
- * `detail` and `after` may both be `""`; `after` is the id it comes after, or
- * `""` for the end.
+ * Only `title` has to say anything; `after` is the id it comes after, or `""`
+ * for the end.
  */
 export type AddTask = {
   title: string;
-  detail: string;
+  note: string;
+  scope: string[];
+  expects: string;
   after: string;
 };
 
