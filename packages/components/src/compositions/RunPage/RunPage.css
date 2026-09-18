@@ -68,7 +68,9 @@
 /* A heading, not a band — `RunSheet.css` records why the sunken fill was cut.
    Never uppercase: that treatment is reserved to a 13px table header. */
 .armada-run-page__group-label {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
   padding: 0 var(--space-4) var(--space-2) var(--space-4);
   border-bottom: var(--border-width) solid var(--border-subtle);
   font-family: var(--font-sans);
@@ -76,6 +78,18 @@
   line-height: var(--leading-sm);
   font-weight: var(--weight-heading);
   color: var(--fg-default);
+}
+
+/* How many the file declares, trailing on the group's own line so the label
+   and the number read as one heading. The rail's own count treatment
+   (`Sidebar.css`): mono because it is machine-derived, --fg-subtle so the
+   number never becomes the heading. */
+.armada-run-page__group-count {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-body);
+  color: var(--fg-subtle);
 }
 
 /* A group with nothing in it says so. The three groups are always drawn — a
@@ -144,11 +158,61 @@
   background: var(--accent-muted);
 }
 
+/* The name, and drift's verdict at the trailing edge of the same line. */
+.armada-run-page__entry-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 .armada-run-page__entry-name {
+  flex: 1 1 auto;
+  min-width: 0;
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
   color: var(--fg-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Drift's verdict on the row whose line it is about. Plain sans in
+   --notice-caution, the contract's treatment for a drift state — amber and
+   never red, because a drifted file is behind rather than broken, and never a
+   bordered pill, which is a Job state and nothing else. */
+.armada-run-page__entry-gone {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--notice-caution);
+}
+
+/* How it last ran, and whether running it writes. One line under the command,
+   drawn only where there is something on it: an empty strip on every row would
+   be the list's own padding, doubled.
+
+   The chip is `FactChip`, the same one *Earlier runs* draws on this page and
+   with the same rule — Job colours in the text on a flat --bg-raised surface,
+   how it looks rather than what it counts for. A column of filled green down a
+   240px rail is what that rule exists to prevent. */
+.armada-run-page__entry-facts {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-top: calc(var(--space-1) / 2);
+}
+
+.armada-run-page__entry-at,
+.armada-run-page__entry-writes {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
 }
 
 .armada-run-page__entry-run {

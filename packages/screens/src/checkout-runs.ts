@@ -33,6 +33,7 @@ import type {
   CheckoutRunSheet,
   CheckoutRunSheetRead,
   Followed,
+  ManifestDriftRead,
   Outcome,
   RunEntry,
   RunOutputRead,
@@ -48,6 +49,7 @@ import {
   checkoutStartOf,
   followedWorkspaceOf,
   runningEntryOf,
+  sameCheckoutEntry,
   workspaceEntryOf,
 } from "./checkout-workspace";
 
@@ -80,18 +82,34 @@ export type ManifestSlice = {
 };
 
 /**
+ * What a row carries beyond its own declaration: whether its line drifted, and
+ * how it last ran. **Both already in the window** — drift is the read the
+ * surface holds open and the runs are what *Earlier runs* is drawn from.
+ */
+export type CheckoutSeen = {
+  /** Every entry name whose line names something the checkout no longer has. */
+  gone: ReadonlySet<string>;
+  /** Finished runs in this checkout, newest first. */
+  runs: readonly CheckoutRunRecord[];
+};
+
+/**
  * The three groups the page lists, in the journey's order.
  *
  * **All three are drawn even where one is empty.** A Manifest that declares no
  * Commands is a fact about the file; a group that vanished would read as a
  * surface that failed to list them.
  */
-export function checkoutGroupsOf(sheet: CheckoutRunSheet, rootless = false): RunPageGroup[] {
+export function checkoutGroupsOf(
+  sheet: CheckoutRunSheet,
+  rootless = false,
+  seen?: CheckoutSeen,
+): RunPageGroup[] {
   const commands: RunPageGroup = {
     kind: "commands",
     label: "Commands",
     entries: [
-      ...sheet.commands.map((e) => entryOf(COMMAND_PREFIX, e)),
+      ...sheet.commands.map((e) => entryOf(COMMAND_PREFIX, e, seen)),
       ...(sheet.workspaces ?? []).flatMap((one) => one.commands.map((e) => workspaceEntryOf(one.dir, e))),
       ...(sheet.servers ?? []).map(serverEntryOf),
     ],
@@ -99,12 +117,25 @@ export function checkoutGroupsOf(sheet: CheckoutRunSheet, rootless = false): Run
   // No root file declares Setup or Checks, so empty groups would claim one did.
   if (rootless) return [commands];
   return [
-    { kind: "setup", label: "Setup", ...saying(seedSaid(sheet.seed)), entries: sheet.setup.map((e) => entryOf(SETUP_PREFIX, e)) },
-    { kind: "checks", label: "Checks", entries: sheet.checks.map((e) => entryOf(CHECK_PREFIX, e)) },
+    { kind: "setup", label: "Setup", ...saying(seedSaid(sheet.seed)), entries: sheet.setup.map((e) => entryOf(SETUP_PREFIX, e, seen)) },
+    { kind: "checks", label: "Checks", entries: sheet.checks.map((e) => entryOf(CHECK_PREFIX, e, seen)) },
     commands,
   ];
 }
 
+/**
+ * Which entry names the checkout no longer has what for. **Joined by name, not
+ * by section.** A name already identifies a runnable on its own — it is all
+ * `StartCheckoutRun` carries, and `Fleet::entry_at` resolves a run from it —
+ * while the wire says a drift row's section is rendered and never matched on,
+ * so a registry added later still joins here.
+ */
+export function checkoutGoneOf(read: ManifestDriftRead): ReadonlySet<string> {
+  if (read.state !== "read") return new Set();
+  return new Set(
+    read.drift.declarations.filter((line) => line.drift.verdict === "gone").map((line) => line.name),
+  );
+}
 
 /**
  * One row. **`narrow_run` is never read**, and that is not an oversight: Fleet
@@ -112,13 +143,33 @@ export function checkoutGroupsOf(sheet: CheckoutRunSheet, rootless = false): Run
  * construction — and drawing a scope control off a field that can only ever be
  * absent would be a control that means nothing here.
  */
-function entryOf(prefix: string, entry: RunEntry): RunPageEntry {
+function entryOf(prefix: string, entry: RunEntry, seen?: CheckoutSeen): RunPageEntry {
+  const id = `${prefix}${entry.name}`;
+  const last = seen?.runs.find((record) => sameCheckoutEntry(id, record));
   return {
-    id: `${prefix}${entry.name}`,
+    id,
     name: entry.name,
     run: entry.run,
     note: noteOf(entry.requires),
     ...(entry.destructive ? { destructive: true } : {}),
+    ...(seen?.gone.has(entry.name) === true ? { drifted: true } : {}),
+    ...(last === undefined ? {} : { last: lastOf(last) }),
+  };
+}
+
+/**
+ * The last run on a row: the code alone, with what it expected in the title.
+ * **Short by construction** — the rail is 240px, and `exit 2 (expects 0)`
+ * beside a clock leaves no room for the command above it.
+ */
+function lastOf(record: CheckoutRunRecord): NonNullable<RunPageEntry["last"]> {
+  return {
+    result: record.exit_code === undefined ? record.ended : `exit ${record.exit_code}`,
+    ...(record.exit_code === undefined
+      ? {}
+      : { whole: `exit ${record.exit_code} (expects ${record.expect_exit_code})` }),
+    outcome: runOutcomeOf(record),
+    at: clockOf(record.started_at),
   };
 }
 
@@ -262,6 +313,8 @@ export function useManifestRuns(
     onSaid: (sentence: string) => void;
     /** No root Manifest: only the workspaces' Commands are listed. */
     rootless?: boolean;
+    /** `GET /manifest/drift`, so a row can say its own line went. */
+    drift: ManifestDriftRead;
   },
 ): RunPageProps {
   const {
@@ -341,7 +394,11 @@ export function useManifestRuns(
     if (runningId === undefined) refreshRuns();
   }, [runningId]);
 
-  const groups = data === undefined ? [] : checkoutGroupsOf(data, slice.rootless === true);
+  // What each row carries beyond its declaration. Both readings are already
+  // here: drift is held open by the app for this surface, and the runs are the
+  // list *Earlier runs* draws from.
+  const carried = { gone: checkoutGoneOf(slice.drift), runs };
+  const groups = data === undefined ? [] : checkoutGroupsOf(data, slice.rootless === true, carried);
   // **Nothing picked and a run in flight reads as the running entry picked.**
   // Opening the surface onto a run already underway drew its output under
   // "Pick a Check or a Command" with no row lit — the page describing the run

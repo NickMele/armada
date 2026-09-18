@@ -224,7 +224,7 @@ test("the surface opens on the Checks, and says a file drifted without drawing t
   // Tucked away is not dismissed: the act carries what the read found.
   await expect.element(page.getByRole("button", { name: "Drift 1 gone" })).toBeVisible();
   // And the Checks are what the panel under the tabs holds.
-  await expect.element(page.getByText("Checks", { exact: true })).toBeVisible();
+  await expect.element(page.getByRole("button", { name: /^build/ })).toBeVisible();
 });
 
 test("drift with a gone line names what is missing, and offers nothing to press on the row", async () => {
