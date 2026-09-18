@@ -196,9 +196,23 @@ fn the_offer_names_the_checks_that_gate_this_step() {
         said.contains("These are the checks that gate this part:\n\n  - suite"),
         "the step declares `suite` and the offer says so: {said}"
     );
+    // **This asserted the opposite until 18 Sep 2026.** It read "a list a Drone
+    // could pick from is one it could pick around", which was the 8 Sep
+    // decision in `#504` and the argument in `ipc::mcp::tools`. The owner
+    // reversed it in `#1456`: picking from the list cannot be picking around it
+    // while the gate runs every Check whole at submission, and what the old
+    // shape actually bought was a Drone that did not ask at all.
     assert!(
-        said.contains("One ask runs the whole list and you do not choose from it."),
-        "a list a Drone could pick from is one it could pick around: {said}"
+        said.contains("An ask that names no check runs the whole list."),
+        "the offer says what an unnamed ask does: {said}"
+    );
+    assert!(
+        said.contains("You can also name one check off the list above"),
+        "the offer says a Drone may name one: {said}"
+    );
+    assert!(
+        said.contains("costs you nothing"),
+        "a Drone that does not know a named ask is free will hoard the limit: {said}"
     );
     assert!(
         !said.contains("comes back skipped"),

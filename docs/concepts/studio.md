@@ -61,6 +61,15 @@ flowchart LR
 > **Rule.** A Job node opens its Job, the way a Board row does. The press is an act on the selected node rather than on the card, because the whiteboard is a drag surface.
 > Why: reviewing and deciding happens on Job detail and nowhere else, so a Job on a Studio that could only be looked at would be a dead end. The way back is `#1362`.
 
+> **Rule.** A Job killed and redispatched arrives on every Studio holding it as a Job node of its own, beside the one it replaced, under a `Produced` edge from it. The node it replaced is neither rewritten nor removed, and keeps reading the Job that stopped. `#1440`.
+> Why: one Job made the next and neither waits on the other, which is `Produced` rather than `Blocks`. A Studio is a record: the Job that was killed really ran, and a node repointed at the replacement would lose what it did.
+
+> **Rule.** The replacement is drawn on the redispatch, never on the next read of the Studio.
+> Why: a Studio somebody had open through the redispatch is written to by the act, and learns from the `studio.changed` that follows. Drawn on a read, where a node lands would be decided by whoever read it first — and where a node is is a person's.
+
+> **Rule.** One node per Job, however many times a Job is redispatched. A Job redispatched twice leaves two replacements, each under its own `Produced` edge from the Job they replaced, and no Job appears twice.
+> Why: two Jobs may name one predecessor, because `killed` is itself redispatchable — [Job](job.md), *A redispatch is read from both ends*. Both replacements are Jobs that really exist and really run, so drawing one and hiding the other would be the Studio deciding which work counts; drawing one Job twice would be two nodes claiming to be the same live one.
+
 > **Rule.** Every working node pulses. See `../contracts/design-system.md`, Motion.
 
 > **Rule.** A Run on a Studio writes no Evidence, the same as every run outside a Job.

@@ -86,6 +86,87 @@ async fn ruled_with_ports<'a>(
     .await
 }
 
+/// [`ruled_with_ports`], at a width a case can name rather than the machine's.
+/// #1444.
+async fn ruled_at_width<'a>(gates: &'a [Gate<'a>], width: u32) -> Ruling {
+    let workflow = testkit::resolved(&[Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: Some("diff"),
+        gates,
+        judged_on: &[],
+        scope: None,
+        gaming: None,
+    }]);
+    let worktree = worktree();
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
+    let work = FakeWorkProduct::changed(&[]);
+    rule_on(
+        at_step,
+        Request::of(testkit::asked_for()),
+        &diff_evidence(),
+        None,
+        &Lifted::default(),
+        crate::gate::Began::At(&Footprint::nothing()),
+        &[],
+        &work,
+        CheckBudget::of(Duration::from_secs(10)),
+        &crate::places::Room::ignoring_the_machine(crate::places::ChecksAtOnce::of(4))
+            .wide(checks_runner::CheckWidth::of(width)),
+        &judging(),
+        &keeping_nowhere(),
+        Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
+        &BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
+        &[],
+        None,
+        None,
+    )
+    .await
+}
+
+/// **The substitution reaches the process, which is the whole of #1444.**
+///
+/// `/bin/test 2 = ${width}` exits zero only where the number was put in before
+/// the command was split and spawned. There is no shell here, so a `${width}`
+/// left in place is not expanded late — it is passed to `test` as the literal
+/// three-character-plus argument it is, and the comparison fails. That is what
+/// makes a pass here evidence rather than a coincidence.
+#[tokio::test]
+async fn a_checks_command_is_spawned_with_the_width_already_in_it() {
+    let ruling = ruled_at_width(
+        &[Gate::Check {
+            name: "sized",
+            run: "/bin/test 2 = ${width}",
+            expect_exit_code: 0,
+            when: &[],
+        }],
+        2,
+    )
+    .await;
+    assert_eq!(recorded(&ruling), [("sized", CheckOutcome::Passed)]);
+}
+
+/// The other half of the same claim: a different number is a different command.
+/// Without this, a `resolve_width` that substituted a constant would pass the
+/// case above.
+#[tokio::test]
+async fn a_different_width_is_a_different_command() {
+    let ruling = ruled_at_width(
+        &[Gate::Check {
+            name: "sized",
+            run: "/bin/test 2 = ${width}",
+            expect_exit_code: 0,
+            when: &[],
+        }],
+        7,
+    )
+    .await;
+    assert_eq!(recorded(&ruling), [("sized", CheckOutcome::Failed)]);
+}
+
 fn slow(name: &str) -> Gate<'_> {
     Gate::Check {
         name,

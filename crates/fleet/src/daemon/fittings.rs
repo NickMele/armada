@@ -363,7 +363,10 @@ where
             seeds: Arc::new(std::sync::Mutex::new(crate::seeding::Seeds::default())),
             base_preparing: Arc::new(tokio::sync::Mutex::new(())),
             headroom: std::sync::Mutex::new(in_force.headroom),
-            places: crate::places::Places::of(in_force.checks_at_once),
+            places: crate::places::Places::sized(
+                in_force.checks_at_once,
+                checks_runner::CheckWidth::read(in_force.concurrency.jobs()),
+            ),
             shipped,
             polling: fittings.polling,
             noticing: fittings.noticing,

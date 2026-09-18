@@ -162,7 +162,9 @@ async fn an_adopted_drone_is_refused_the_checks_rather_than_told_they_started() 
         crate::tests::adopting::adopted_on(&home, || one_step("/usr/bin/true")).await;
     let fleet = Arc::new(fleet);
 
-    let refused = fleet.run_checks(&job, false).await;
+    let refused = fleet
+        .run_checks(&job, ipc::mcp::ChecksAsk::everything(false))
+        .await;
     assert!(matches!(refused, Err(NotRun::Unheard)), "{refused:?}");
     let said = refused.err().map(|why| why.to_string()).unwrap_or_default();
     assert!(said.contains("submit"), "told what to do instead: {said}");

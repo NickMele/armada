@@ -117,7 +117,10 @@ async fn a_build_that_fails_reaches_the_drone_at_once_and_stops_the_slower_check
     let (job, drone) = the_one_drone(&fleet).await.expect("a Drone at work");
 
     let asked = Instant::now();
-    let underway = fleet.run_checks(&job, false).await.expect("the run starts");
+    let underway = fleet
+        .run_checks(&job, ipc::mcp::ChecksAsk::everything(false))
+        .await
+        .expect("the run starts");
     let told = told_until_over(&fleet, &home, &job, &drone, 1).await;
     assert!(
         asked.elapsed() < Duration::from_secs(3),
@@ -172,7 +175,10 @@ async fn each_result_that_lands_while_others_run_is_its_own_turn() {
     started(&fleet, &home).await;
     let (job, drone) = the_one_drone(&fleet).await.expect("a Drone at work");
 
-    let underway = fleet.run_checks(&job, false).await.expect("the run starts");
+    let underway = fleet
+        .run_checks(&job, ipc::mcp::ChecksAsk::everything(false))
+        .await
+        .expect("the run starts");
     assert!(matches!(underway.finished().await, Some(Ok(_))));
     let told = told_until_over(&fleet, &home, &job, &drone, 1).await;
     assert_eq!(
@@ -206,7 +212,10 @@ async fn once_the_repository_has_history_the_fastest_check_starts_first() {
     started(&fleet, &home).await;
     let (job, drone) = the_one_drone(&fleet).await.expect("a Drone at work");
 
-    let first = fleet.run_checks(&job, false).await.expect("the first run");
+    let first = fleet
+        .run_checks(&job, ipc::mcp::ChecksAsk::everything(false))
+        .await
+        .expect("the first run");
     assert!(matches!(first.finished().await, Some(Ok(_))));
     let told = told_until_over(&fleet, &home, &job, &drone, 1).await;
     assert!(
@@ -226,7 +235,10 @@ async fn once_the_repository_has_history_the_fastest_check_starts_first() {
         "the run's durations were not kept: {timed:?}"
     );
 
-    let second = fleet.run_checks(&job, false).await.expect("the second run");
+    let second = fleet
+        .run_checks(&job, ipc::mcp::ChecksAsk::everything(false))
+        .await
+        .expect("the second run");
     assert!(matches!(second.finished().await, Some(Ok(_))));
     let told = told_until_over(&fleet, &home, &job, &drone, 2).await;
     assert!(

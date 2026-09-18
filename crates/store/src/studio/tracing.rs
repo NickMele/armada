@@ -13,6 +13,11 @@
 //! than offering a control that opens nothing.
 //!
 //! No foreign key and no index, [`super`]'s own rule: one read per Job opened.
+//!
+//! **Not [`super::carrying_on`], which asks a different question.** That one
+//! finds every Studio a Job's node stands on and where, so a redispatch can be
+//! laid out beside it; this one finds the Studio that *produced* the Job, by
+//! its name, and returns one.
 
 use core_model::{JobId, StudioId, StudioName, StudioNodeId, Ulid};
 use rusqlite::OptionalExtension;

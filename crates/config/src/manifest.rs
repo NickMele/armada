@@ -86,6 +86,7 @@ const CHECK_KEYS: &[&str] = &[
     "one_test",
     "runs_at",
     "places",
+    "width",
 ];
 /// The values `checks.<name>.runs_at` takes, spelled as `core_model::RunsAt`
 /// spells them. #849.
@@ -631,6 +632,7 @@ pub(super) struct DraftCheck {
     one_test: Option<String>,
     runs_at: RunsAt,
     places: std::num::NonZeroU32,
+    width: Option<std::num::NonZeroU32>,
 }
 
 /// `checks.<name>.narrow`, the second question a Check answers about paths.
@@ -766,6 +768,25 @@ fn check_entry(
             std::num::NonZeroU32::new(n).expect("yaml::positive answers only positive values")
         }),
     };
+    // **Absent is the machine's own number, and that is not the same shape as
+    // `places` above.** A Check that says nothing about width gets whatever the
+    // machine hands out, which moves with the hardware and with how many Jobs
+    // share it; a Check that declares one may only lower that. So absent has to
+    // survive as `None` rather than collapse to a default here, where nothing
+    // knows the machine. Zero, negative and non-integer are refused by
+    // `yaml::positive`, the same reader `places` uses. #1444.
+    let width_key = table.at("width");
+    let width = match table.optional("width") {
+        None => Ok(None),
+        Some(value) => yaml::positive(&width_key, value, out)
+            .map(|n| {
+                Some(
+                    std::num::NonZeroU32::new(n)
+                        .expect("yaml::positive answers only positive values"),
+                )
+            })
+            .ok_or(()),
+    };
     table.close(known, out);
     Some(DraftCheck {
         run: run?,
@@ -776,6 +797,7 @@ fn check_entry(
         one_test,
         runs_at: runs_at?,
         places: places?,
+        width: width.ok()?,
     })
 }
 

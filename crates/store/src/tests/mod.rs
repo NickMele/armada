@@ -16,6 +16,7 @@
 mod allowing;
 pub(crate) mod attempt;
 mod breakages;
+mod carrying_on;
 mod corrupt;
 mod cursor;
 mod delivery;
@@ -164,6 +165,11 @@ pub fn workflow() -> FrozenWorkflow {
                         // Not the default, so the round trip carries a word. #849.
                         runs_at: core_model::RunsAt::Handoff,
                         places: std::num::NonZeroU32::MIN,
+                        // Declared rather than absent, so the round trip walks
+                        // a Check that says how wide it runs — and absent is
+                        // the case every other fixture here already covers.
+                        // #1444.
+                        width: std::num::NonZeroU32::new(3),
                     },
                     ResolvedCheck::DiffNonempty,
                     // Carried on the shared fixture for `when`'s reason: every

@@ -13,9 +13,21 @@
 //! call carrying one is refused **by name** — a field nothing reads is a promise
 //! the call makes and the system does not keep.
 //!
-//! [`CHECKS_TOOL`] takes no Check name and no path list: the step's Checks were
-//! frozen at approval, so either would be a Drone choosing the bar it is
-//! measured against. [`checks_tool`] carries what its one boolean does choose.
+//! [`CHECKS_TOOL`] is the exception, and it did not used to be. It took no
+//! Check name and no path list, because the step's Checks were frozen at
+//! approval and either was read as a Drone choosing the bar it is measured
+//! against. The owner reversed that on 18 Sep 2026 (`#1456`): an ask settles
+//! nothing, the gate runs every Check whole at submission whatever was asked
+//! mid-step, and `fleet::reuse::KeptDryRun` drops a narrowed Check so no
+//! narrowed pass reaches a gate. Which Checks a part has is still not the
+//! Drone's — a name it does not gate on is refused by `fleet::dry_run`, which
+//! is the half that knows the step. [`ChecksAsk`] carries all three fields.
+//!
+//! **Over 500 lines**, and it is the schemas: every tool's arguments carry
+//! their own prose, because a Drone reads the description and nothing else
+//! before deciding whether to spend a call. Splitting by tool would put
+//! [`closed`] and the shared readers behind a module boundary they are called
+//! across on every one of them.
 //!
 //! # Why declaring is a different call from submitting
 //!
@@ -63,7 +75,51 @@ pub const SCOPE_FIELDS: &[&str] = &["context_paths"];
 /// and the transcript decoder now has an argument to put on the row: which of
 /// the two runs a Drone asked for is the whole of what a person reading it back
 /// wants to know.
-pub const CHECKS_FIELDS: &[&str] = &["only_what_changed"];
+pub const CHECKS_FIELDS: &[&str] = &["only_what_changed", "check", "files"];
+
+/// What a Drone asked the checks tool for.
+///
+/// **Naming a Check and naming files are a Drone choosing what to learn, not
+/// what bar to clear.** `tools.rs` used to refuse both, and `#504` refused the
+/// file list again by name when it shipped `only_what_changed`. The owner
+/// reversed both on 18 Sep 2026, and the reason the old argument does not hold
+/// is that an ask decides nothing: the gate runs every Check whole when the
+/// Drone submits, whatever was asked mid-step, and `reuse::KeptDryRun` already
+/// drops a narrowed Check so no narrowed pass can be reused. What was actually
+/// happening under the old shape is in `#1456` — a Drone buying a workspace
+/// build to learn whether one test file passed, and going around the tool.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ChecksAsk {
+    /// Whether each Check opens only what the worktree changed.
+    pub only_what_changed: bool,
+    /// One Check the step gates on, by name. **`None` is every one of them**,
+    /// which is what the tool did before it could be told otherwise.
+    pub check: Option<String>,
+    /// The paths to run against, in place of the worktree's own diff. **Empty
+    /// is the diff**, which Fleet reads for itself.
+    pub files: Vec<String>,
+}
+
+impl ChecksAsk {
+    /// Every Check the part runs mid-step, which is what this tool did before
+    /// it could be told otherwise.
+    pub fn everything(only_what_changed: bool) -> ChecksAsk {
+        ChecksAsk {
+            only_what_changed,
+            check: None,
+            files: Vec::new(),
+        }
+    }
+
+    /// One Check, whole.
+    pub fn just(check: &str) -> ChecksAsk {
+        ChecksAsk {
+            only_what_changed: false,
+            check: Some(check.to_string()),
+            files: Vec::new(),
+        }
+    }
+}
 /// What a Drone hands over. **The Agent Copy Contract's Work submission
 /// fields, spelled as the Drone is asked for them**, and nothing else.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -343,9 +399,42 @@ pub(crate) fn submission(arguments: &Map<String, Value>) -> Result<SubmitEvidenc
 /// Drone never chose, and the whole of what went wrong on `#496` is a Drone
 /// that did not know there was a choice. Absent is refused by name, which puts
 /// the choice in front of every call.
-pub(crate) fn checking(arguments: &Map<String, Value>) -> Result<bool, NotAnArgument> {
+pub(crate) fn checking(arguments: &Map<String, Value>) -> Result<ChecksAsk, NotAnArgument> {
     closed(arguments, CHECKS_TOOL, CHECKS_FIELDS)?;
-    flag(arguments, "only_what_changed")
+    let only_what_changed = flag(arguments, "only_what_changed")?;
+    // **Absent and empty are the same answer here, unlike the flag above.**
+    // A Drone that names no Check is asking about all of them, which is a
+    // sentence a Drone can mean; a Drone that omits the flag has not chosen
+    // between two values that read identically in a transcript.
+    let check = match arguments.get("check") {
+        None | Some(Value::Null) => None,
+        Some(value) => Some(
+            value
+                .as_str()
+                .filter(|named| !named.trim().is_empty())
+                .ok_or(NotAnArgument::NotText { field: "check" })?
+                .trim()
+                .to_string(),
+        ),
+    };
+    let files = match arguments.get("files") {
+        None | Some(Value::Null) => Vec::new(),
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .filter(|path| !path.trim().is_empty())
+                    .map(|path| path.trim().to_string())
+                    .ok_or(NotAnArgument::NotText { field: "files" })
+            })
+            .collect::<Result<Vec<String>, NotAnArgument>>()?,
+        Some(_) => return Err(NotAnArgument::NotAList { field: "files" }),
+    };
+    Ok(ChecksAsk {
+        only_what_changed,
+        check,
+        files,
+    })
 }
 
 /// One field that is `true` or `false`. Absent is [`NotAnArgument::Missing`]
@@ -566,7 +655,20 @@ pub(crate) fn listed() -> Vec<Value> {
 /// is free to cache past the boundary it was true at. `fleet::terms::Checking`
 /// names them, per step, in the same session. Two places naming them would be
 /// two places to disagree; this one says where the list is, which is the answer
-/// a Drone deciding whether to spend a call actually needs.
+/// a Drone deciding whether to spend a call actually needs. That is still true
+/// now the tool takes a name: the Drone names one off the brief's list, and
+/// this description does not restate the list to do it.
+///
+/// **It used to argue that a Check name could only be a Drone choosing its own
+/// bar, and that a path list could only be a Drone choosing its own scope.**
+/// Reversed by the owner on 18 Sep 2026, `#1456`. Neither is a bar and neither
+/// is a scope, because an ask settles nothing: the gate runs every Check whole
+/// at submission whatever was asked mid-step, and `reuse::KeptDryRun` drops a
+/// narrowed Check so no narrowed pass reaches a gate at all. What the old shape
+/// actually produced is a Drone paying for a workspace build, an acceptance
+/// suite and an Electron build to learn whether one test file passed — and
+/// then not asking. On 17 Sep one loaded this tool's schema nineteen seconds
+/// into its step, never called it, and ran eighteen build commands by hand.
 ///
 /// **It says what a brief naming none means.** A part with no Checks is offered
 /// no block at all, so a Drone sent looking for a list that is not there would
@@ -585,15 +687,16 @@ fn checks_tool() -> Value {
              names under FINDING OUT WHERE YOU STAND — in your worktree. The call \
              comes back at once, and what each one did and where its output was \
              written arrives as a later turn when they finish, however long they \
-             take: wait for it rather than running the checks yourself. It runs \
-             all of them; which checks they are was settled when this Job was \
-             approved and there is nothing to choose. Call it when you want to \
-             know whether the work holds up, before you submit. It is not a \
-             verdict and it advances nothing — the checks are run again when you \
-             submit, and only that run decides anything. Submitting while they \
-             run stops them, and no report comes. There is a limit on how many \
-             times one part may ask, a second call while one is still running is \
-             refused, and a part whose brief names no checks has none to run.",
+             take: wait for it rather than running the checks yourself. Name one \
+             check and the files you changed and the answer is seconds rather \
+             than minutes, and asking that way costs you nothing — only a run of \
+             every check counts against the limit your brief states. Call it \
+             whenever you want to know whether the work holds up. It is not a \
+             verdict and it advances nothing — the checks are run again whole \
+             when you submit, and only that run decides anything. Submitting \
+             while they run stops them, and no report comes. A second call while \
+             one is still running is refused, and a part whose brief names no \
+             checks has none to run.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -603,12 +706,35 @@ fn checks_tool() -> Value {
                         "True to run each check against what you have changed \
                          rather than the whole repository, which is faster and \
                          says less. Fleet reads your worktree to find out what \
-                         that is; you do not name files. A check the project has \
-                         given no narrower way to run still runs whole, and a \
-                         check that narrows to nothing you touched is not run at \
-                         all. A pass under true says the parts you changed hold, \
-                         not that the repository does. Use false when you want \
-                         the same run the gate will make.",
+                         that is unless you name files below. A check the \
+                         project has given no narrower way to run still runs \
+                         whole, and a check that narrows to nothing you touched \
+                         is not run at all. A pass under true says the parts you \
+                         changed hold, not that the repository does. Use false \
+                         when you want the same run the gate will make.",
+                },
+                "check": {
+                    "type": "string",
+                    "description":
+                        "One check by name, from the list your brief gives under \
+                         FINDING OUT WHERE YOU STAND. Leave it out to run every \
+                         one of them, which is what this tool did before it could \
+                         be told otherwise. Naming one does not lower the bar you \
+                         are measured against — the gate runs all of them whole \
+                         when you submit — so it costs nothing against your \
+                         limit. A name the part does not gate on is refused and \
+                         says which names it has.",
+                },
+                "files": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description":
+                        "Repository-relative paths to run against, in place of \
+                         the worktree diff Fleet would read for itself. Leave it \
+                         out and it reads the diff. Naming files narrows what a \
+                         check opens where the project declared a narrower way to \
+                         run it, and a pass under it is never carried to the gate \
+                         — it tells you where you stand and nothing more.",
                 },
             },
             "required": ["only_what_changed"],

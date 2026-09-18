@@ -41,6 +41,8 @@ pub mod briefing;
 /// Racing a plain command's work against [`commanding::CommandBudget`],
 /// split out of `commanding` at the 900-line refusal, `#897`.
 mod budget;
+/// A redispatch, drawn on the Studios that dispatched the Job it replaced.
+mod carrying_on;
 mod check_output;
 mod checking;
 /// One Manifest as Fleet resolved it, for the caller asking what a Job here

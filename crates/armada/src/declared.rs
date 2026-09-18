@@ -27,7 +27,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use checks_runner::Attempt;
+use checks_runner::{resolve_width, Attempt, CheckWidth};
 use config::Manifest;
 use verification::{Exit, NeverRan};
 
@@ -93,6 +93,18 @@ pub async fn execute(
     let Some(command) = command else {
         return Err(unknown(&manifest, registry, name));
     };
+    // **`${width}` resolves here too, and to the same number a gate reaches.**
+    // A Check a person runs is the Check a Drone is measured by, per this
+    // module's own rule, and one left holding the literal `${width}` would be a
+    // different command from the one the gate runs — it would not even start,
+    // since there is no shell here to expand it.
+    //
+    // **The shipped Jobs bound, not a saved one.** There is no store open here
+    // and nothing to ask; a person who saved a different bound gets the shipped
+    // number at the terminal and the gate stays the authority. #1444.
+    let width = CheckWidth::read(crate::serve::PROVISIONAL_CONCURRENCY.jobs())
+        .narrowed_to(manifest.check(name).and_then(config::Check::width));
+    let command = resolve_width(&command, width);
 
     // **A Check's prerequisites run here too**, for this module's own reason: a
     // Check a person runs is the Check a Drone is measured by. `armada check
@@ -110,7 +122,7 @@ pub async fn execute(
         .iter()
         .map(|needed| needed.name().to_string())
         .collect();
-    if let Some(blocked) = first_unmet(requires, root, budget).await {
+    if let Some(blocked) = first_unmet(requires, root, budget, width).await {
         return Ok(Ran {
             name: name.to_string(),
             command,
@@ -163,9 +175,10 @@ async fn first_unmet(
     requires: &[core_model::Prerequisite],
     root: &Path,
     budget: Duration,
+    width: CheckWidth,
 ) -> Option<Attempt> {
     for needed in requires {
-        let attempt = checks_runner::run(needed.run(), root, budget).await;
+        let attempt = checks_runner::run(&resolve_width(needed.run(), width), root, budget).await;
         if attempt.exit != Exit::Code(0) {
             return Some(Attempt {
                 exit: Exit::NeverRan(NeverRan::PrerequisiteFailed {

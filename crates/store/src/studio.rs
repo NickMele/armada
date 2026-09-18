@@ -14,6 +14,7 @@
 //! **Every write touches its Studio**, in the same transaction, so the list a
 //! person reads orders by the last thing that happened on each.
 
+mod carrying_on;
 mod content;
 mod reading;
 mod reading_in;
@@ -31,6 +32,7 @@ use rusqlite::{OptionalExtension, Transaction};
 use crate::error::{fault, DatabaseFault};
 use crate::open::Store;
 
+pub use carrying_on::JobOnStudio;
 pub use content::UnreadableContent;
 pub use reading::Unreadable;
 pub use tracing::DispatchedFrom;

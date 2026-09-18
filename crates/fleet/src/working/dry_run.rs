@@ -29,11 +29,18 @@ impl Working {
     /// for — `#58` suspends the silence clock while evidence sits at the gate
     /// for the same reason, and this is the same mechanism on a different
     /// trigger.
-    pub(crate) fn checking(&mut self, at: Timestamp, run: u64, going: Going) {
+    /// **`spends` is whether this run is charged against the step's
+    /// allowance.** The clocks suspend either way — a Drone waiting on Fleet is
+    /// waiting whatever it asked for — and only the count moves with it, so a
+    /// Drone asking about one Check as often as it likes never runs out.
+    /// `crate::dry_run::spends` is where that is decided. #1456.
+    pub(crate) fn checking(&mut self, at: Timestamp, run: u64, going: Going, spends: bool) {
         self.dry_run_shown = None;
         self.checking_since = Some(at);
         self.in_flight = Some((run, going));
-        self.dry_runs += 1;
+        if spends {
+            self.dry_runs += 1;
+        }
     }
 
     /// Run `run` has finished, at this instant. **The clocks start again from

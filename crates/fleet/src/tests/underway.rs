@@ -39,6 +39,7 @@ fn named(name: &str, run: &str) -> ResolvedCheck {
         one_test: None,
         runs_at: core_model::RunsAt::Everywhere,
         places: std::num::NonZeroU32::MIN,
+        width: None,
     }
 }
 
@@ -365,8 +366,20 @@ async fn checks_waiting_for_room_other_work_holds_say_how_much() {
     let repo = TempDir::new();
     let places = Places::of(ChecksAtOnce::of(1));
     let headroom = Headroom::of(Spare::percent(0), Bytes::gibibytes(0));
-    let elsewhere = Room::sharing(&places, Asking::DronesRun, Arc::new(Plentiful), headroom);
-    let room = Room::sharing(&places, Asking::Gate, Arc::new(Plentiful), headroom);
+    let elsewhere = Room::sharing(
+        &places,
+        Asking::DronesRun,
+        Arc::new(Plentiful),
+        headroom,
+        checks_runner::CheckWidth::read(1),
+    );
+    let room = Room::sharing(
+        &places,
+        Asking::Gate,
+        Arc::new(Plentiful),
+        headroom,
+        checks_runner::CheckWidth::read(1),
+    );
     let held = elsewhere.place().await;
     let underway = Underway::default();
     let events = api::Broadcaster::new();

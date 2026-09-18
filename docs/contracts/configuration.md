@@ -321,6 +321,58 @@ Rules that follow:
   step and no handoff, only the whole tree.
 - **It is frozen with the workflow**, beside the Check's command.
 
+## How wide a Check runs
+
+Added 18 September 2026, with `checks.<name>.width`, `${width}` and `#1444`.
+Every test runner defaults to the width of the machine it finds, and Fleet runs
+several Jobs at once, so a Job at a test step claimed the machine as many times
+over as there were Jobs at one. Nothing in a Manifest could say otherwise.
+
+| Key | Required | What it says |
+| --- | --- | --- |
+| `width` | no | How many concurrent workers this Check may start. Absent is the machine's own number; a declared one may only lower it |
+
+`${width}` in a Check's `run`, in its `narrow.run` and in its `one_test.run` is
+replaced with that number before the command is split. A command without one is
+returned unchanged. The same number reaches the Check's environment as
+`ARMADA_CHECK_WIDTH`, for a `run` that reaches its runner through a script and
+so has nowhere to write the substitution.
+
+```yaml
+checks:
+  test:
+    run: cargo nextest run --workspace --test-threads ${width}
+  screens_test:
+    run: pnpm -C packages/screens test -- --maxWorkers=${width}
+    width: 2
+```
+
+Rules that follow:
+
+- **A number handed to a runner, never a cap imposed on one.** Nothing enforces
+  it; the repository spells the flag its runner reads. A Check that writes no
+  `${width}` and reads no environment sizes itself, as every Check did before.
+- **Absent is not a default written here.** It is the machine's: half its cores
+  divided by the Jobs bound in force, floored at two and capped at eight.
+  Nothing that reads a Manifest knows a machine, so absent stays absent through
+  parsing, freezing and the store, and the number is applied where a command is
+  about to run.
+- **Lower only.** `width` above the machine's number is clamped to it. A width
+  is a claim on a machine the repository does not own, unlike a timeout, which
+  is patience the repository may spend.
+- **Zero, a negative number and anything that is not a whole number are refused
+  at load**, as `places` is. A width that cannot be read fails the Manifest
+  rather than leaving the Check with a default, because absent and unreadable
+  mean different numbers.
+- **The Jobs bound and the width move together.** A person who changes how many
+  Jobs run at once has narrowed every Check on the machine by the same act, and
+  it counts from the next batch that starts.
+- **`armada check` resolves it the same way**, from the shipped Jobs bound,
+  since there is no store open at a terminal. Where a saved bound differs, the
+  gate is the authority.
+- **It is frozen with the workflow**, and `after_merge` keeps it, for the reason
+  it keeps `places`.
+
 ## Running one test by name
 
 Added 13 September 2026, with `checks.<name>.one_test` and `#999`. A Drone that
