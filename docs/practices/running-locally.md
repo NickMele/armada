@@ -265,6 +265,7 @@ back to the first scenario and says so in the browser console.
 | `setting-up` | A set-up repository and a folder nobody set up, over a Fleet that scans, proposes, applies each Setup edit and Write, and adds or clones a repository |
 | `manifest` | This repository's own Manifest, on a Fleet that saves the file, applies the forms' edits, and lists runs, drift and an always-allowed command |
 | `studios` | This repository's Studios, on a Fleet that keeps them and takes the writes Helm makes on one |
+| `helm-talking` | Helm pointed at a repository, with an answer given about the Job on the Board and a second ask that never came back — the dock's thread, its composer, *Start fresh* and the record's split button, all reachable without building the state in a test |
 | `job/<builder>` | One Job, already open, for each builder `packages/screens/src/fixtures/build/index.ts` exports |
 | `recorded/<slug>` | One recorded Job, already open, for each recording under `packages/screens/src/fixtures/recorded/` |
 
@@ -292,6 +293,13 @@ fails typecheck there until the fake answers it.
 scenario naming none keeps an empty list and draws its empty state, never a read
 failure — the defect #1341 fixed. `every-state` keeps one Studio holding a node
 of every kind and an edge of every kind, and a second nobody has named.
+
+**Helm can be pointed, and answers nothing once it is.** The dock's switch and
+*Discuss with Helm* move the fake the way main does — which repository Helm
+answers for is main's own decision — and what they reach is a conversation with
+nothing in it, the same as a fresh connection whose backfill found none. Asking
+still moves nothing, because a reply is Fleet's. `helm-talking` is the scenario
+that opens with a conversation already in the dock.
 
 **Anything a Fleet would have to decide moves nothing.** A redispatch makes no
 new Job, a review approval does not advance the Job, and a proposal comes back
