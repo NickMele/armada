@@ -13,6 +13,7 @@ import type { AddTask, DropTask, FileReport } from "@armada/protocol";
 import type {
   Artifact,
   CommandAnswer,
+  HelmCallAnswer,
   JudgeAnswer,
   SaveLimits,
   SavePreference,
@@ -29,7 +30,7 @@ import { handleTaps } from "./haptics";
 import { installSounds } from "./dev-sounds";
 import { resolvedFolder } from "./locating";
 import { openArtifact } from "./open";
-import { openFindingIssue, openPullRequest, openRemarkLink } from "./forge";
+import { openFindingIssue, openPullRequest, openRemarkLink, openStudioNode } from "./forge";
 import { RemarksPoll } from "./remarks-poll";
 import { openServerLink } from "./servers";
 import { frameStream, FRAME_SCHEME } from "./streaming";
@@ -544,6 +545,13 @@ void app.whenReady().then(() => {
       rule?: string,
     ) => connection?.commands.answerCommand(jobId, call, answer, note, rule),
   );
+  // One call helm was held on, answered in the dock. No job id: the session is
+  // waiting inside its own tool call, and nothing on the board moves. #1389.
+  ipcMain.handle(
+    CHANNELS.answerHelmCall,
+    (_event, call: string, answer: HelmCallAnswer, note?: string) =>
+      connection?.commands.answerHelmCall(call, answer, note),
+  );
   // What that command does, read for the person deciding. It moves nothing and
   // decides nothing — the answers above stay live while it is out.
   ipcMain.handle(CHANNELS.explainCommand, (_event, jobId: string, callId: string) =>
@@ -1003,6 +1011,11 @@ void app.whenReady().then(() => {
   );
   ipcMain.handle(CHANNELS.openFindingIssue, (_event, jobId: string, finding: string) =>
     openFindingIssue(published, jobId, finding),
+  );
+  // A Studio node's own address, `openPullRequest`'s reason: read here off the
+  // Studio main published, never off a string the renderer sent. #1406.
+  ipcMain.handle(CHANNELS.openStudioNode, (_event, studioId: string, nodeId: string) =>
+    openStudioNode(published, studioId, nodeId),
   );
 
   createWindow();

@@ -7,10 +7,108 @@
 
 use std::path::PathBuf;
 
+use core_model::{ForgeState, StudioNodeContent, StudioNodeKind};
+
 use crate::reading_in::{
-    bounded, fetching, milestone_read, source_of, text_of_a_page, text_of_a_session, Fetch, Source,
-    FORGE_HOST, MOST_ISSUES,
+    bounded, fetching, forge_facts, forge_node, milestone_read, source_of, text_of_a_page,
+    text_of_a_session, Fetch, Source, FORGE_HOST, MOST_ISSUES,
 };
+
+/// **The adapter decides the kind, and nothing else may.** `#1394`: a pasted
+/// address is an Issue, a Pull request or an Epic where this crate recognises
+/// it, and stays a Link where it does not — which is what keeps a board, a
+/// page and a session Links without a rule about them anywhere.
+#[test]
+fn an_address_this_crate_recognises_is_the_node_kind_it_names() {
+    let kind = |address: &str| forge_node(address, None).map(|node| node.kind());
+    assert_eq!(
+        kind(&at("NickMele/armada/issues/1394")),
+        Some(StudioNodeKind::Issue)
+    );
+    assert_eq!(
+        kind(&at("NickMele/armada/pull/1391")),
+        Some(StudioNodeKind::PullRequest)
+    );
+    assert_eq!(
+        kind(&at("NickMele/armada/milestone/17")),
+        Some(StudioNodeKind::Epic)
+    );
+    assert_eq!(
+        kind(&at("NickMele/armada/pulls/1391")),
+        Some(StudioNodeKind::PullRequest),
+        "two spellings of one pull request"
+    );
+    for stays_a_link in [
+        "https://example.invalid/a-board",
+        "https://react.dev/reference/react/useId",
+        "armada:session/b1c9d559",
+        "armada:thread",
+        &at("NickMele/armada/blob/main/README.md"),
+        &at("NickMele/armada/issues/not-a-number"),
+    ] {
+        assert_eq!(
+            kind(stays_a_link),
+            None,
+            "`{stays_a_link}` names nothing on the forge, so it stays a Link"
+        );
+    }
+
+    // The number comes off the address and nothing is fetched; the line a
+    // person typed beside it is carried over whatever the address turned out
+    // to be, because they typed it about this address.
+    let pasted = forge_node(
+        &at("NickMele/armada/issues/1394#issuecomment-4"),
+        Some(String::from("  where the kinds landed  ")),
+    )
+    .expect("an issue");
+    let StudioNodeContent::Issue {
+        number,
+        said,
+        title,
+        state,
+        ..
+    } = &pasted
+    else {
+        panic!("an Issue: {pasted:?}");
+    };
+    assert_eq!(number, "1394", "a comment anchor is still the issue");
+    assert_eq!(said.as_deref(), Some("where the kinds landed"), "trimmed");
+    assert_eq!((title, state), (&None, &None), "nothing was fetched");
+}
+
+/// **A read-in fills in what the forge already printed.** The `--jq` filters
+/// reduce an issue and a pull request to `#<number> <title> (<state>)` on the
+/// first line, so resolving a node's title and state costs no second call —
+/// `#1394`. A line this does not recognise leaves both absent.
+#[test]
+fn what_a_fetch_printed_says_a_nodes_title_and_where_it_stands() {
+    let read = forge_facts(
+        "#1394 An issue is a Link with rules bolted on (OPEN)
+
+body",
+    );
+    assert_eq!(
+        read.title.as_deref(),
+        Some("An issue is a Link with rules bolted on")
+    );
+    assert_eq!(read.state, Some(ForgeState::Open));
+    assert_eq!(read.read_in, None, "an Epic's count is a milestone's read");
+
+    // The *last* bracket, so a title carrying one of its own survives whole.
+    let bracketed = forge_facts("#1391 Dispatch (from a node) (MERGED)");
+    assert_eq!(bracketed.title.as_deref(), Some("Dispatch (from a node)"));
+    assert_eq!(bracketed.state, Some(ForgeState::Merged));
+
+    // A forge's case is the forge's and the word is ours.
+    assert_eq!(
+        forge_facts("#1 A title (closed)").state,
+        Some(ForgeState::Closed)
+    );
+    let unknown = forge_facts("#1 A title (draft)");
+    assert_eq!(unknown.title.as_deref(), Some("A title"));
+    assert_eq!(unknown.state, None, "a word this build has no name for");
+    assert_eq!(forge_facts("").title, None);
+}
 
 fn at(path: &str) -> String {
     format!("https://{FORGE_HOST}{path}")
@@ -115,14 +213,67 @@ fn a_milestone_is_two_calls_and_reads_back_bounded_with_its_total() {
 
     let mut printed = String::from("Studio\t137\n");
     for n in 0..MOST_ISSUES + 20 {
-        printed.push_str(&format!("https://x/issues/{n}\t#{n} Something — open\n"));
+        printed.push_str(&format!("https://x/issues/{n}\t{n}\tSomething\topen\n"));
     }
     let read = milestone_read(&printed, "17");
     assert_eq!(read.title, "Studio");
     assert_eq!(read.total, 137);
-    assert_eq!(read.issues.len(), MOST_ISSUES, "bounded");
+    assert_eq!(
+        read.issues.len(),
+        MOST_ISSUES + 20,
+        "every line the fetch printed: the bound lands on what the answer took"
+    );
     assert_eq!(read.issues[0].address, "https://x/issues/0");
-    assert_eq!(read.issues[0].named, "#0 Something — open");
+    assert_eq!(read.issues[0].number, "0");
+    assert_eq!(read.issues[0].title, "Something");
+    assert_eq!(read.issues[0].state, Some(core_model::ForgeState::Open));
+    assert_eq!(
+        read.taking(core_model::EpicTake::Everything).issues.len(),
+        MOST_ISSUES,
+        "bounded"
+    );
+}
+
+/// **The bound lands after the answer, never before it** — `#1405`. A milestone
+/// read front-first and then filtered would take fifty issues and show
+/// whichever of them happened to be open, so "only what is open" would be a
+/// bound on the wrong set.
+#[test]
+fn only_what_is_open_is_bounded_on_the_open_issues_and_says_what_it_left_out() {
+    let mut printed = String::from(
+        "Overview	200
+",
+    );
+    // Every closed issue first, which is the order that used to lose them all.
+    for n in 0..80 {
+        printed.push_str(&format!(
+            "https://x/issues/{n}	{n}	Shipped	closed
+"
+        ));
+    }
+    for n in 80..80 + MOST_ISSUES + 10 {
+        printed.push_str(&format!(
+            "https://x/issues/{n}	{n}	To do	open
+"
+        ));
+    }
+    let read = milestone_read(&printed, "17");
+    let taken = read.taking(core_model::EpicTake::Open);
+    assert_eq!(taken.issues.len(), MOST_ISSUES, "fifty open ones");
+    assert!(taken
+        .issues
+        .iter()
+        .all(|issue| issue.state == Some(core_model::ForgeState::Open)));
+    assert_eq!(taken.left_out, 80, "the closed ones, said and not silent");
+
+    let every = read.taking(core_model::EpicTake::Everything);
+    assert_eq!(every.issues.len(), MOST_ISSUES);
+    assert_eq!(every.left_out, 0);
+    assert_eq!(
+        every.issues[0].state,
+        Some(core_model::ForgeState::Closed),
+        "taking everything takes the forge's own order"
+    );
 }
 
 /// **Headings and text, and no markup.** A script's body is dropped whole

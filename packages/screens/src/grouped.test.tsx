@@ -25,7 +25,7 @@ function at(seconds: number): string {
   return new Date(Date.parse("2026-09-10T14:00:00Z") + seconds * 1000).toISOString();
 }
 
-function drawn(turns: Turn[], most?: number): string {
+function drawn(turns: Turn[]): string {
   const { rows } = hideUnread(entriesOf(turns, STEP));
   return renderToStaticMarkup(
     <WorkGrouped
@@ -35,9 +35,17 @@ function drawn(turns: Turn[], most?: number): string {
       emptyNote="Nothing yet"
       calls={CALLS}
       log={LOG}
-      {...(most === undefined ? {} : { most })}
     />,
   );
+}
+
+/**
+ * How many log rows a rendering drew. Every row's control names its own
+ * payload, so counting those counts the rows — and it counts them whether the
+ * fold above them is open or shut, which is the claim the bound makes.
+ */
+function rowsIn(markup: string): number {
+  return markup.split('aria-controls="log-payload-').length - 1;
 }
 
 /** Three reads in a row, all of them fine. */
@@ -83,19 +91,6 @@ describe("a failure is never folded", () => {
     // One run, four calls, one of them failed — so no heading is drawn for it.
     expect(markup).not.toContain("armada-work__head");
     expect(markup).toContain("The call failed");
-  });
-});
-
-describe("the preview is bounded in groups", () => {
-  it("keeps the last groups, not the last rows", () => {
-    const turns = [
-      ...threeReads(),
-      said(STEP, at(6), "First reply."),
-      said(STEP, at(7), "Second reply."),
-    ];
-    const markup = drawn(turns, 1);
-    expect(markup).toContain("Second reply.");
-    expect(markup).not.toContain("First reply.");
   });
 });
 
@@ -162,7 +157,7 @@ describe("what it does not draw", () => {
 });
 
 describe("the Working area reads as the Drone's sentences", () => {
-  function narrated(turns: Turn[], plan?: WorkPlan): string {
+  function narrated(turns: Turn[], plan?: WorkPlan, mostEntries?: number): string {
     const { rows } = hideUnread(entriesOf(turns, STEP));
     return renderToStaticMarkup(
       <WorkNarrated
@@ -174,6 +169,7 @@ describe("the Working area reads as the Drone's sentences", () => {
         emptyNote="Nothing yet"
         calls={CALLS}
         log={LOG}
+        {...(mostEntries === undefined ? {} : { mostEntries })}
       />,
     );
   }
@@ -228,6 +224,53 @@ describe("the Working area reads as the Drone's sentences", () => {
     expect(markup.slice(0, t1)).toContain('aria-expanded="false"');
     expect(markup.slice(t1, t2)).toContain('aria-expanded="true"');
     expect(markup).not.toContain(OUTSIDE_ANY_TASK);
+  });
+
+  // The owner's decision of 18 Sep 2026: the preview is the last ten entries,
+  // and *Open the log* is where everything is read. What the bound counts is
+  // the claim — eight groups, and eight sentences after them, each let one
+  // preview draw a hundred rows.
+  describe("the preview draws ten rows and never more", () => {
+    /** A sentence, then that many `Read` calls — one row each, the answer folded in. */
+    function reading(calls: number): Turn[] {
+      const turns = [said(STEP, at(0), "Reading the reducer to find the selector.")];
+      for (let one = 0; one < calls; one += 1) {
+        turns.push(called(STEP, at(one * 2 + 1), `p${one}`, "Read", `src/file${one}.ts`));
+        turns.push(answered(STEP, at(one * 2 + 2), `p${one}`));
+      }
+      return turns;
+    }
+
+    it("holds ten of a dozen consecutive calls of one tool", () => {
+      // The case group counting existed to avoid, taken on purpose.
+      const markup = narrated(reading(12), undefined, 10);
+      expect(rowsIn(markup)).toBe(10);
+      expect(markup).toContain("3 earlier, in the log");
+    });
+
+    it("says what is under a run the bound cut in half, not what the run held", () => {
+      const markup = narrated(reading(12), undefined, 10);
+      // The sentence went with the rows it lost, so the fold line is the
+      // heading — and it counts the calls in hand rather than all twelve.
+      expect(markup).not.toContain("Reading the reducer to find the selector.");
+      expect(markup).toContain("10 calls so far · Read");
+    });
+
+    it("counts a sentence as one of the ten, so sentences cannot fill it", () => {
+      const turns = Array.from({ length: 6 }, (_, one) => [
+        said(STEP, at(one * 3), `Sentence ${one}.`),
+        called(STEP, at(one * 3 + 1), `s${one}`, "Edit", "crates/fleet/src/evidence.rs"),
+        answered(STEP, at(one * 3 + 2), `s${one}`),
+      ]).flat();
+      const markup = narrated(turns, undefined, 10);
+      expect(rowsIn(markup)).toBe(5);
+      expect(markup).not.toContain("Sentence 0.");
+      expect(markup).toContain("Sentence 5.");
+    });
+
+    it("draws every row where nothing bounds it, which is how the log sheet reads", () => {
+      expect(rowsIn(narrated(reading(12)))).toBe(12);
+    });
   });
 });
 

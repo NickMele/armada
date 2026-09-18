@@ -22,6 +22,7 @@ import {
   StudioAddNode,
   StudioFrameSheet,
   StudioName,
+  StudioPicked,
   StudioWhiteboard,
   Table,
   TableBody,
@@ -31,7 +32,7 @@ import {
   TableRow,
   useStudioPlacement,
 } from "@armada/components";
-import type { StudioNodeByHand, StudioNodeByHandKind } from "@armada/components";
+import type { StudioNodeByHand, StudioNodeByHandKind, StudioPickedAct } from "@armada/components";
 import type {
   JobSummary,
   Outcome,
@@ -42,6 +43,7 @@ import type {
 } from "@armada/protocol";
 
 import { said } from "./copy";
+import { openStudioNode, type OpenStudioNode } from "./opening";
 import { absoluteOf } from "./duration";
 import {
   framesDrawn,
@@ -52,6 +54,7 @@ import {
   whiteboardNodes,
 } from "./studio";
 import { useStudioFrames, type ReadStudioFrame } from "./studio-frames";
+import { keepsAnAddress } from "./studio-promotion";
 import { useAddNodeKeys } from "./studio-keys";
 import type { StudioAnswer, StudioRead, StudiosRead } from "./studio-reads";
 import { useStudioPromotion } from "./StudioPromotion";
@@ -113,6 +116,12 @@ export type StudiosProps = {
    * Studio stays open underneath it, so closing the Job comes back here.
    */
   onOpenJob: (jobId: string) => void;
+  /**
+   * Hand one node's own address to the system browser — #1406. **A Studio and a
+   * node, never an address**: main reads it off the record it published, so no
+   * string composed here reaches the shell.
+   */
+  onOpenAddress: OpenStudioNode;
 };
 
 export function Studios(props: StudiosProps) {
@@ -337,6 +346,33 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
     });
   }
 
+  /**
+   * Bridge's own acts on what is picked — no rung, and nothing Fleet holds.
+   * **Acts on the node rather than presses on its card**: the board is a drag
+   * surface, and a control inside a node is a press fighting a drag. Opening an
+   * address, a picture or a Job is reading, so a read-only Studio offers all
+   * three.
+   */
+  const own: (StudioPickedAct & { press: () => void })[] = [
+    ...(selected !== undefined && keepsAnAddress(selected)
+      ? [{ id: "open", label: "Open", press: () => openAddress(selected.id) }]
+      : []),
+    ...(selected?.kind === "note" && selected.capture?.frame !== undefined
+      ? [{ id: "frame", label: "Open frame", press: () => setOpened(selected.id) }]
+      : []),
+    ...(openable === undefined
+      ? []
+      : [{ id: "job", label: "Open Job", press: () => props.onOpenJob(openable.id) }]),
+    ...(editable && selected !== undefined
+      ? [{ id: "remove", label: "Delete node", danger: true, press: () => setRemoving(selected.id) }]
+      : []),
+  ];
+
+  /** Hand the node's address to whatever browses the web here — #1406. */
+  function openAddress(nodeId: string): void {
+    void openStudioNode(props.onOpenAddress, studio.id, nodeId).then(setRefused);
+  }
+
   function decide(edgeId: string, accepted: boolean): void {
     setDeciding(edgeId);
     void props.onDecideEdge(edgeId, accepted).then((outcome) => {
@@ -412,38 +448,16 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
               <CardContent>Nothing on this Studio yet. Add a note, a link or a sketch to start it.</CardContent>
             </Card>
           ) : null}
-          {onBoard.length === 0 ? null : (
-            <Card aria-label="Selected node">
-              <CardContent className="armada-studio__aside">
-                <p>{onBoard.map((id) => nodeNamed(studio, id, jobs)).join("; ")}</p>
-                {editable ? promotion.acts : null}
-                {/* Opening the picture is reading, so it is offered read-only
-                    too — and it is an act on the node, where the acts on a node
-                    already are, rather than a press on a card the board drags. */}
-                {selected?.kind === "note" && selected.capture?.frame !== undefined ? (
-                  <Button size="sm" onClick={() => setOpened(selected.id)}>
-                    Open frame
-                  </Button>
-                ) : null}
-                {/* **An act on the node, not a press on the card** — the board
-                    is a drag surface, and a control inside a node is a press
-                    fighting a drag, which is why Open frame is here too.
-                    Reading a Job is reading, so it is offered read-only. */}
-                {openable === undefined ? null : (
-                  <Button size="sm" onClick={() => props.onOpenJob(openable.id)}>
-                    Open Job
-                  </Button>
-                )}
-                {editable && selected !== undefined ? (
-                  <Button variant="destructive" size="sm" onClick={() => setRemoving(selected.id)}>
-                    Delete node
-                  </Button>
-                ) : null}
-              </CardContent>
-            </Card>
-          )}
+          <StudioPicked
+            picked={onBoard.map((id) => nodeNamed(studio, id, jobs))}
+            acts={[...(editable ? promotion.acts : []), ...own]}
+            onAct={(id) => {
+              const mine = own.find((act) => act.id === id);
+              return mine === undefined ? promotion.onAct(id) : mine.press();
+            }}
+          />
           {proposed.length === 0 ? null : (
-            <Card aria-label="Proposed relations">
+            <Card className="armada-studio__proposals">
               <CardHeader>
                 <CardTitle>Proposed</CardTitle>
               </CardHeader>

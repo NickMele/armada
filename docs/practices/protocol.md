@@ -1222,6 +1222,67 @@ that route already had.
 **Additive on both counts.** An older Bridge reads a Link with no `forge` as the Link it always
 read, and an older Fleet is refused by the skew rule as it always was.
 
+**Superseded at 14.18**, which makes what an address names the node's own kind and drops this
+field.
+
+## Protocol 14.18: an Issue, a Pull request and an Epic are node kinds
+
+`StudioNodeContent` gains `issue`, `pull_request` and `epic`, and `Link` loses `forge`. `#1394`.
+
+Each of the three carries `address`, `number` and `said`, and a `title` absent until the node is
+read in. An Issue and a Pull request carry `state` — `open`, `closed` or `merged` — and an Epic
+carries `read_in`, `{ issues, total }`, how many of its issues are on the Studio of how many it
+holds. Every field but `address` and `number` is optional and left out rather than sent as null.
+
+**The kind is the concept and the adapter decides it.** `adapters::forge_node` reads an address
+once, when the node is made, and answers with the node's content. Nothing reads an address again:
+`Studio::of` no longer takes a classifier, and `dispatch_studio_draft` offers the three by kind.
+A Link is what no adapter recognised — a board, a page, a document, a session — and dispatches
+nothing.
+
+**`add_studio_node` still takes a Link, and Fleet writes what it is.** Bridge cannot read an
+address, so the seam carries the paste and not the kind; `StudioNodeByHand` is unchanged.
+
+**Additive by 14.7's reading, which added `finding` the same way.** `forge` goes with nothing that
+carries one: a Link whose address names something on the forge is converted on the boot that
+applies store V79, so no message an older Bridge parses stops parsing the same way. An older
+Bridge meeting one of the three leaves it off the whiteboard rather than failing, which is
+`whiteboardEdges`' rule for an unknown edge and is what `cardOf` gained here.
+
+## Protocol 14.19: a person answers a call Helm was refused
+
+`#1389`. Two new event kinds, three new routes and a DTO family, all additive. `helm.asking_to_run`
+carries `HelmAskingToRun { waiting: HelmCallInFlight }` when a Helm session reaches for something
+the person's own agent settings do not cover; `helm.call_answered` carries `HelmCallAnswered {
+call, manifest_id, tool, detail, rule, settled, at }` when the ask ends, whoever ended it. The
+routes are `POST /helm/permission` (the agent door's own permission tool, reached by the CLI and
+never by a model), `GET /helm/calls` and `POST /helm/calls/answer`.
+
+**The ask carries no `job_id`, and that is what makes it a new type rather than a
+`CommandInFlight`.** Every field of that one is about a Job — `step_id`, `allow_for_job`, a rule
+written into `armada.yml` on the Job's branch — and a Helm call has none: nothing is queued, no
+step is running, and what waits is one process inside one tool call. `HelmCallAnswer` is its own
+closed set for the same reason, and a surface matches on it to pick controls, so a fourth value in
+it is a major bump the way `WhenBlocked`'s third was.
+
+## Protocol 14.20: an Epic read-in asks which of its issues to take
+
+`#1405`. `ReadInLink` gains `take`, `everything` or `open`, and `EpicRead` gains `took`, `left_out`,
+`kept` and `laid_out_from`. All additive, and `take` is asked on an Epic alone: every other kind has
+one thing to read and nothing to ask about.
+
+**Reading an Epic in again with the other answer widens or narrows what is on the Studio.** Fleet
+makes the Issue nodes the answer wants and are not there, and takes back the ones it made that the
+answer no longer wants — except any a person has since worked on, which the Epic counts as `kept`.
+
+**An older peer is read as taking everything**, which is what reading one in used to do, so a Fleet
+ahead of Bridge sends `took` and a Bridge behind it ignores it. An Epic read in before this version
+carries no `took`, and is drawn saying nothing about an answer nobody gave it rather than claiming
+one — which is the same rule `title` and `state` already follow at 14.18.
+
+`laid_out_from` is Fleet's own bookkeeping on the wire: the corner of the block an Epic's issues sit
+in, so a widening fills that block's gaps and a node dragged out of it is readable as dragged.
+
 ## Open questions
 
 Naming these rather than deciding them, per this document's brief:

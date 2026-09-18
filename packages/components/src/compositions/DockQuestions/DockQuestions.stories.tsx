@@ -211,3 +211,37 @@ export const AnswersNotWiredYet: Story = {
     await expect(canvas.getByRole("note")).toHaveTextContent("Open job 12 to answer.");
   },
 };
+
+/**
+ * A call helm was held on, which has no job — so the card names its repository alone, says which
+ * rule would have to allow it, and offers three answers of its own. #1389.
+ */
+export const HelmNeedsPermission: Story = {
+  args: {
+    questions: [
+      {
+        id: "helm:helm-1",
+        repository: "armada",
+        label: "Helm needs your permission",
+        asked: <span className="mono">gh issue list --milestone Helm</span>,
+        detail: "Your settings would have to allow Bash(gh issue list:*).",
+        waiting: "18s",
+        answers: [
+          { id: "allow_once", label: "Allow once", consequence: "Helm runs it now. Nothing is written down." },
+          {
+            id: "allow_and_remember",
+            label: "Allow and remember",
+            consequence: "Helm runs it now, and the rule goes into this repository's own settings.",
+          },
+          { id: "refuse", label: "Refuse", consequence: "Helm is told no, and says what it could not do." },
+        ],
+        onAnswer: () => {},
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/armada · helm/)).toBeInTheDocument();
+    await expect(canvas.queryByText(/job /)).not.toBeInTheDocument();
+    await expect(canvas.getByRole("button", { name: "Allow and remember" })).toBeEnabled();
+  },
+};

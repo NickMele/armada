@@ -26,6 +26,7 @@ mod landing;
 mod mcp;
 mod reading_in;
 mod reclaim;
+mod remembering;
 pub mod repo;
 mod rerunning;
 mod scouting;

@@ -102,21 +102,45 @@
    run than Run time and past it, which the row's own drawn order already
    settles once for every view.
 
+   **Two bands, because the handle's own column moved the sum.** The floors as
+   drawn now need 1085px on a four-fact row — measured, at the frame, with the
+   handle's 132px and its gutter — so the first band starts where they stop
+   fitting rather than at the 900px the run used to clear. Run time and the
+   fourth fact give way there, which is the order the row already had; Progress
+   keeps its step name until the second band, and the handle keeps a column in
+   both. **The handle is not what gives way**: a row is quoted by it, and
+   shrinking every other track to nothing still leaves a four-fact row 71px too
+   wide at 954, so something has to go and it is not the identifier.
+
    armada-allow-off-contract: a container condition cannot read a custom property — measured, not assumed, same as @media
-   900px clears the row's own floor sum, shrunk, with room for Overview's own panel beside Helm's dock — docs/contracts/design-system.md */
-@container (max-width: 900px) {
+   1100px is where the drawn floors stop fitting, and the layout breakpoint besides — docs/contracts/design-system.md */
+@container (max-width: 1100px) {
   .armada-job-row-list:not([data-view="table"]) {
-    --armada-track-progress: var(--armada-track-bar);
     --armada-track-time: 0px;
     --armada-track-provenance: 0px;
   }
 
-  .armada-job-row-list:not([data-view="table"]) > .armada-job-row > .armada-job-row__body .armada-row-step {
-    display: none;
-  }
-
   .armada-job-row-list:not([data-view="table"]) > .armada-job-row
     .armada-job-row__field:nth-last-child(-n + 3):not(:nth-child(-n + 2)) {
+    display: none;
+  }
+}
+
+/* armada-allow-off-contract: a container condition cannot read a custom property — measured, not assumed, same as @media
+   900px clears the row's own floor sum, shrunk, with room for Overview's own panel beside Helm's dock — docs/contracts/design-system.md */
+@container (max-width: 900px) {
+  .armada-job-row-list:not([data-view="table"]) {
+    --armada-track-progress: var(--armada-track-bar);
+    /* The handle's column shrinks with the rest rather than giving way, and
+       Workflow gives up the width a branch name used to want: the three that
+       stay — handle, Workflow, Progress — are the drawing's own narrow row.
+       Measured on Overview's panels at the 768px window, where the floors as
+       drawn put the action back outside the frame, which is what #984 fixed. */
+    --armada-track-id: var(--armada-track-bar);
+    --armada-track-origin: calc(var(--space-12) + var(--space-8) + var(--space-1));
+  }
+
+  .armada-job-row-list:not([data-view="table"]) > .armada-job-row > .armada-job-row__body .armada-row-step {
     display: none;
   }
 }

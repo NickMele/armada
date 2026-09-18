@@ -46,6 +46,7 @@ import type {
 } from "@armada/screens/src/setup-reads";
 import type {
   CommandAnswer,
+  HelmCallAnswer,
   JudgeAnswer,
   SaveLimits,
   SavePreference,
@@ -169,6 +170,10 @@ const api: BridgeApi = {
     rule?: string,
   ): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.answerCommand, jobId, call, answer, note, rule),
+  // One held helm call. The note is a person's own words, read only on a
+  // refusal; `undefined` crosses as `undefined`.
+  answerHelmCall: (call: string, answer: HelmCallAnswer, note?: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.answerHelmCall, call, answer, note),
   // What that command does. A read, and the one capability here that answers a
   // question about a call rather than deciding it.
   explainCommand: (jobId: string, callId: string): Promise<CommandExplainedRead> =>
@@ -571,6 +576,11 @@ const api: BridgeApi = {
   // draws the address, and does not send it.
   openPullRequest: (jobId: string): Promise<Followed> =>
     ipcRenderer.invoke(CHANNELS.openPullRequest, jobId),
+
+  // What a Studio node points at — #1406. `openPullRequest`'s reason: a Studio
+  // id and a node id, never an address the renderer composed.
+  openStudioNode: (studioId: string, nodeId: string): Promise<Followed> =>
+    ipcRenderer.invoke(CHANNELS.openStudioNode, studioId, nodeId),
 
   // One comment's own link, `openPullRequest`'s reason exactly: a Job id and a
   // comment id, never an address the renderer composed.

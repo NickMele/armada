@@ -205,6 +205,46 @@ export const LinkWithNoLine: Story = {
   },
 };
 
+/**
+ * The three kinds a forge address makes — #1394. **A kind is a concept, never
+ * a vendor**: an Issue is an Issue whoever serves it, and which forge an
+ * address belongs to is an adapter's to know and never a card's.
+ *
+ * Each draws its address the way a Link does, and what it holds besides is a
+ * chip rather than a sentence: a number, where it stands, how much of an epic
+ * is on the board.
+ */
+export const OnAForge: Story = {
+  render: () => (
+    <Row>
+      <StudioNode
+        kind="issue"
+        address={SHORT_ADDRESS}
+        title="An issue, a pull request and an epic are Links with rules bolted on"
+        facts={["#1394", "Open"]}
+      />
+      <StudioNode
+        kind="pull_request"
+        address={SHORT_ADDRESS}
+        title="Dispatch an issue from its node"
+        facts={["#1391", "Merged"]}
+      />
+      <StudioNode kind="epic" address={SHORT_ADDRESS} title="Studio" facts={["#17", "12 of 30 issues"]} />
+    </Row>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Issue")).toBeVisible();
+    await expect(canvas.getByText("Pull request")).toBeVisible();
+    await expect(canvas.getByText("Epic")).toBeVisible();
+    await expect(canvas.getByText("#1394")).toBeVisible();
+    await expect(canvas.getByText("Merged")).toBeVisible();
+    await expect(canvas.getByText("12 of 30 issues")).toBeVisible();
+    // A card is a record of an address and never a place to go: nothing here
+    // navigates, as a Link does not.
+    await expect(canvas.queryByRole("link")).toBeNull();
+  },
+};
+
 export const Deferral: Story = {
   render: () => (
     <Row>

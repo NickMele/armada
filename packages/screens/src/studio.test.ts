@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import type { JobSummary, Studio, StudioRunKept, StudioSummary } from "@armada/protocol";
+import type { EpicRead, JobSummary, Studio, StudioNode, StudioRunKept, StudioSummary } from "@armada/protocol";
 
 import {
   framesDrawn,
@@ -274,5 +274,34 @@ test("a Finding says what it was handed beyond the checkout, and what was cut", 
   );
   expect(read[0]!.node).toMatchObject({
     facts: ["Read this repository's Helm thread", "Read a page, 12,400 characters cut"],
+  });
+});
+
+test("an Epic says which of its issues it took, how many that left out and how many it kept", () => {
+  const epics = (read: StudioNode[]) => whiteboardNodes({ ...STUDIO, nodes: read }, []);
+  const epic = (id: string, read_in: EpicRead): StudioNode => ({
+    id,
+    kind: "epic",
+    address: "https://x/milestone/17",
+    number: "17",
+    title: "Studio",
+    read_in,
+    position: { x: 0, y: 0 },
+    created_at: AT,
+  });
+
+  // A whole milestone says how many it holds, rather than the same number twice.
+  expect(epics([epic("a", { issues: 30, total: 30, took: "everything", left_out: 0, kept: 0 })])[0]!.node).toMatchObject({
+    facts: ["#17", "30 issues", "Every issue"],
+  });
+  // Narrowed: which state it took, what that left out, and what it kept
+  // because somebody had worked on it — #1405.
+  expect(epics([epic("b", { issues: 14, total: 30, took: "open", left_out: 16, kept: 2 })])[0]!.node).toMatchObject({
+    facts: ["#17", "14 of 30 issues", "Open issues only", "16 left out", "2 kept, worked on"],
+  });
+  // **An Epic read in before 14.20 says nothing about an answer nobody gave
+  // it**, and still says how much of it is here.
+  expect(epics([epic("c", { issues: 12, total: 30 })])[0]!.node).toMatchObject({
+    facts: ["#17", "12 of 30 issues"],
   });
 });

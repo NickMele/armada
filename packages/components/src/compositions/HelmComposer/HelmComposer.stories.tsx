@@ -3,12 +3,41 @@ import type { ReactElement, ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
+import { ShortcutRevealProvider } from "../../shortcut-reveal";
 import { HelmComposer, type HelmRepositoryOption } from "./HelmComposer";
 
 const repositories: HelmRepositoryOption[] = [
   { id: "01M2ARMADA", label: "armada" },
   { id: "01M2SHOP", label: "shop-01" },
 ];
+
+/** The switch's own entry while Helm is pointed at nothing — the word the repository asks elsewhere use. */
+const UNPOINTED = "Choose a repository";
+
+/** What the switch is called with Helm pointed at nothing: there is no *different* repository yet. */
+const POINT = "Point Helm at a repository";
+
+/** And once it is pointed at one. */
+const REPOINT = "Point Helm at a different repository";
+
+/**
+ * Picking an entry the way a person's mouse does, which is not what
+ * `selectOptions` does on its own: **a native `<select>` fires `change` only
+ * when the displayed value actually moves**, and `user-event` dispatches one
+ * regardless. That difference is this whole defect — the switch displayed
+ * *armada* while holding no value, so choosing *armada* changed nothing and
+ * Chromium stayed silent — and a play that let `user-event` fire anyway would
+ * report the handler called when the app's first repository could not be
+ * chosen at all.
+ */
+async function pick(
+  select: HTMLElement,
+  value: string,
+  events: { selectOptions: (target: HTMLElement, value: string) => Promise<void> },
+): Promise<void> {
+  if ((select as HTMLSelectElement).value === value) return;
+  await events.selectOptions(select, value);
+}
 
 /** The dock's own width and glass — every story draws inside it, so a story that
  *  types is measured at the width the composer really has. */
@@ -38,9 +67,46 @@ export default meta;
 
 type Story = StoryObj<typeof HelmComposer>;
 
-/** A single repository: no switch to draw, nothing to switch to. */
+/**
+ * A single repository, and Helm pointed at it: no switch to draw, nothing to
+ * switch to. **The switch offered here would be a switch to where Helm already
+ * is**, so the line names the repository instead and the handler goes unused.
+ */
 export const AtRest: Story = {
-  args: { current: repositories[0]!.id, repositories: [repositories[0]!], onStartFresh: fn() },
+  args: { current: repositories[0]!.id, repositories: [repositories[0]!], onSwitch: fn(), onStartFresh: fn() },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole("combobox")).not.toBeInTheDocument();
+    await expect(canvas.getByText(repositories[0]!.label)).toBeInTheDocument();
+  },
+};
+
+/**
+ * Pointed at nothing with exactly one repository set up — the moment the dock
+ * reads *Helm is not pointed at a repository. Pick armada to ask about it.*
+ * and, until now, gave nobody anything to pick with: the count that governs
+ * the control said one repository is nothing to switch between, which is true
+ * only while Helm is pointed at it.
+ *
+ * **The switch is the act that sentence names**, so it is drawn here, standing
+ * at its own entry with that one repository under it to choose.
+ */
+export const UnpointedWithOneRepository: Story = {
+  args: { repositories: [repositories[0]!], onSwitch: fn(), onStartFresh: fn(), disabled: true },
+  play: async ({ args, canvas, userEvent }) => {
+    const switcher = canvas.getByRole("combobox", { name: POINT });
+    // Its own entry, not the one repository: Helm is not pointed at that yet,
+    // and a switch displaying it would say it was.
+    await expect(switcher).toHaveDisplayValue(UNPOINTED);
+    await expect(switcher).not.toHaveDisplayValue(repositories[0]!.label);
+    // Said once, as with two or more: the entry says it and says what to do.
+    await expect(canvas.queryByText("No repository to ask yet")).not.toBeInTheDocument();
+
+    // And the one repository is pickable — which is the whole of why the
+    // control is drawn. `pick` because the browser fires no `change` for an
+    // entry already displayed, and `user-event` fires one regardless.
+    await pick(switcher, repositories[0]!.id, userEvent);
+    await expect(args.onSwitch).toHaveBeenCalledWith(repositories[0]!.id);
+  },
 };
 
 /** On All repositories, the dock's own switch — the rail's pick never moves for it. */
@@ -48,8 +114,40 @@ export const SwitchOnAll: Story = {
   args: { current: repositories[0]!.id, repositories, onSwitch: fn(), onStartFresh: fn() },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.selectOptions(canvas.getByRole("combobox"), repositories[1]!.id);
+    const switcher = canvas.getByRole("combobox", { name: REPOINT });
+    // Pointed at one, the switch stands on it and carries nothing else — the
+    // unpointed entry is not an option a pointed switch offers.
+    await expect(switcher).toHaveDisplayValue(repositories[0]!.label);
+    await expect(canvas.queryByRole("option", { name: UNPOINTED })).not.toBeInTheDocument();
+    await userEvent.selectOptions(switcher, repositories[1]!.id);
     await expect(args.onSwitch).toHaveBeenCalledWith(repositories[1]!.id);
+  },
+};
+
+/**
+ * Pointed at nothing, with repositories to point at: the switch stands at its
+ * own entry, not at whichever repository happens to be listed first.
+ *
+ * **Both halves of this are the defect.** A `<select>` whose `value` matches no
+ * `<option>` falls back to displaying the first one, so the switch read
+ * *armada* while the chip beside it read *No repository to ask yet* — and
+ * because *armada* was already the displayed value, picking it fired no
+ * `change` at all, which left the first repository in the list unchoosable. A
+ * play that only picks the second repository passes either way.
+ */
+export const UnpointedStandsAtItsOwnEntry: Story = {
+  args: { repositories, onSwitch: fn(), onStartFresh: fn(), disabled: true },
+  play: async ({ args, canvas, userEvent }) => {
+    const switcher = canvas.getByRole("combobox", { name: POINT });
+    await expect(switcher).toHaveDisplayValue(UNPOINTED);
+    await expect(switcher).not.toHaveDisplayValue(repositories[0]!.label);
+    // Said once: the entry says it and says what to do, so the line does not
+    // repeat it — at the dock's width the two cut each other down to "No repo…".
+    await expect(canvas.queryByText("No repository to ask yet")).not.toBeInTheDocument();
+
+    // The first repository in the list, which is the one that could not be chosen.
+    await pick(switcher, repositories[0]!.id, userEvent);
+    await expect(args.onSwitch).toHaveBeenCalledWith(repositories[0]!.id);
   },
 };
 
@@ -66,14 +164,26 @@ export const StartFreshRefusedWhileReplying: Story = {
   },
 };
 
-/** Nothing is servable yet — no repository has a Manifest for Helm to answer for. */
+/**
+ * Nothing is servable yet — no repository has a Manifest for Helm to answer
+ * for. **The handler is given and the switch is still not drawn**: pointing
+ * Helm at nothing is a reason to offer a repository, not to offer none.
+ */
 export const NothingToAskYet: Story = {
-  args: { disabled: true },
+  args: { repositories: [], onSwitch: fn(), disabled: true },
   play: async ({ args, canvas }) => {
+    // No switch is drawn with nothing to point at, so the line is the only
+    // place the state can be said, and it says it.
+    await expect(canvas.queryByRole("combobox")).not.toBeInTheDocument();
+    await expect(canvas.getByText("No repository to ask yet")).toBeInTheDocument();
     await expect(canvas.getByRole("textbox")).toBeDisabled();
     const send = canvas.getByRole("button", { name: "Send" });
     await expect(send).toBeDisabled();
     await userEvent.click(send, { pointerEventsCheck: 0 });
+    await expect(args.onSend).not.toHaveBeenCalled();
+    // A disabled field takes no focus, so the press lands on the document —
+    // and nothing else in the tree answers ⌘Enter.
+    await userEvent.keyboard("{Meta>}{Enter}{/Meta}");
     await expect(args.onSend).not.toHaveBeenCalled();
   },
 };
@@ -201,6 +311,53 @@ export const SendSitsInsideTheField: Story = {
   },
 };
 
+/**
+ * `⌘Enter` asks, and plain `Enter` writes a second line — the drone message
+ * box's contract, honoured here off the same registry row.
+ */
+export const CmdEnterSends: Story = {
+  render: (args) => <Typed onSend={args.onSend} />,
+  // The play's own `userEvent`, not the imported one: a hold that spans two
+  // calls needs the instance that remembers `⌘` is down between them.
+  play: async ({ args, canvas, userEvent }) => {
+    const field = canvas.getByRole("textbox");
+    await userEvent.type(field, "Why did job 12 stall?");
+
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onSend).not.toHaveBeenCalled();
+    await expect(field).toHaveValue("Why did job 12 stall?\n");
+
+    await userEvent.keyboard("{Meta>}{Enter}{/Meta}");
+    await expect(args.onSend).toHaveBeenCalledTimes(1);
+  },
+};
+
+/**
+ * Held `⌘` puts `⌘Enter` on Helm's own Send, and releasing takes it away. The
+ * tint and the wording are untouched, and the keycap is `aria-hidden`, so the
+ * button is still named `Send`.
+ */
+export const RevealedOnHold: Story = {
+  render: (args) => (
+    <ShortcutRevealProvider>
+      <Typed onSend={args.onSend} />
+    </ShortcutRevealProvider>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const badge = () =>
+      canvas.queryByText((_, el) => el?.tagName === "KBD" && el.textContent === "⌘Enter");
+    await userEvent.type(canvas.getByRole("textbox"), "Why did job 12 stall?");
+    await expect(badge()).not.toBeInTheDocument();
+
+    await userEvent.keyboard("{Meta>}");
+    await expect(badge()).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Send" })).toBeInTheDocument();
+
+    await userEvent.keyboard("{/Meta}");
+    await expect(badge()).not.toBeInTheDocument();
+  },
+};
+
 /** Blank never sends — the button stays off until there is something to say. */
 export const BlankDoesNotSend: Story = {
   render: (args) => <Typed onSend={args.onSend} />,
@@ -211,6 +368,8 @@ export const BlankDoesNotSend: Story = {
     await userEvent.type(canvas.getByRole("textbox"), "   ");
     await expect(send).toBeDisabled();
     await userEvent.click(send, { pointerEventsCheck: 0 });
+    await expect(args.onSend).not.toHaveBeenCalled();
+    await userEvent.keyboard("{Meta>}{Enter}{/Meta}");
     await expect(args.onSend).not.toHaveBeenCalled();
     await userEvent.type(canvas.getByRole("textbox"), "Why did job 12 stall?");
     await expect(canvas.getByRole("button", { name: "Send" })).toBeEnabled();

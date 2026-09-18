@@ -178,6 +178,10 @@ export * from "./actions";
 // beneath it reads `useShortcutReveal()` rather than taking a prop for it.
 export * from "./shortcut-reveal";
 
+// `⌘Enter` sends, in every box a message is typed into. The registry holds the
+// binding; this is the keystroke test and the badge the two composers share.
+export * from "./send-message";
+
 // The trackpad's answer to a press, a no-op until Bridge's renderer provides one.
 export * from "./haptics";
 
@@ -312,6 +316,7 @@ export * from "./compositions/WorkNarration/WorkNarration";
 export * from "./compositions/StudioCapture/StudioCapture";
 export * from "./compositions/StudioAddNode/StudioAddNode";
 export * from "./compositions/StudioName/StudioName";
+export * from "./compositions/StudioPicked/StudioPicked";
 export * from "./compositions/StudioNode/StudioNode";
 export * from "./compositions/StudioWhiteboard/StudioWhiteboard";
 // A label and its figure in one aligned column — Pulse and the Fleet panel.

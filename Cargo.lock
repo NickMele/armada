@@ -27,6 +27,7 @@ name = "adapters"
 version = "0.0.0"
 dependencies = [
  "adapter-traits",
+ "core-model",
  "git2",
  "ipc",
  "serde",

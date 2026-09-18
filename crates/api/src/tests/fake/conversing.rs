@@ -67,6 +67,37 @@ impl Conversations for FakeDaemon {
         })
     }
 
+    /// Answers `allow` at once. **The wait is Fleet's**, and a fake that held
+    /// the call would make every door case in this crate take five minutes.
+    async fn ask_the_person(
+        &self,
+        asking: ipc::AskingToRun,
+        _manifest_id: Option<ManifestId>,
+    ) -> Result<ipc::RunOrNot, Refusal> {
+        self.asked_to_run
+            .lock()
+            .expect("not poisoned")
+            .push(asking.clone());
+        Ok(ipc::RunOrNot::Allow {
+            updated_input: asking.input,
+        })
+    }
+
+    async fn list_helm_calls(&self) -> Result<ipc::HelmCallsWaiting, Refusal> {
+        Ok(ipc::HelmCallsWaiting {
+            waiting: Vec::new(),
+        })
+    }
+
+    async fn answer_helm_call(
+        &self,
+        _said: ipc::AnswerHelmCall,
+    ) -> Result<ipc::HelmCallsWaiting, Refusal> {
+        Ok(ipc::HelmCallsWaiting {
+            waiting: Vec::new(),
+        })
+    }
+
     async fn start_helm_fresh(
         &self,
         manifest_id: Option<ManifestId>,

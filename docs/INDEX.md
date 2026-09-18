@@ -177,6 +177,7 @@ approximations.
   — whether `--tools` and `--restricted` hold a read-only agent to one checkout,
   and what `SIGINT` and `SIGTERM` each leave of a run's cost.
 - [`spikes/018-what-can-a-helm-session-do-in-each-permission-mode.md`](spikes/018-what-can-a-helm-session-do-in-each-permission-mode.md)
+- [`spikes/019-is-auto-mode-reachable-for-a-helm-session.md`](spikes/019-is-auto-mode-reachable-for-a-helm-session.md)
   — what a session resolves once `--strict-mcp-config` comes off, what each
   permission mode lets it call, and what a refusal leaves in the stream.
 - [`spikes/019-what-raises-the-resize-loop-notice-on-a-studio.md`](spikes/019-what-raises-the-resize-loop-notice-on-a-studio.md)
@@ -228,7 +229,7 @@ can find them.
 | Closing a session — what the work just made untrue, and what to update | `reflect` |
 | Putting a decision to a person, and writing the options | `asking-a-person` |
 | Running a whole milestone from one approval, wave by wave | `epic-as-one-job` |
-| Moving the owner's Fleet onto a merged fix | `restart-fleet` |
+| Moving the owner's Fleet and Bridge onto a merged fix | `restart-app` |
 | Walking the owner through what this session left waiting on him, one question at a time | `review-open-items` |
 | Asking the code graph how something works | `gitnexus-exploring` |
 | Asking the code graph what a change breaks | `gitnexus-impact-analysis` |

@@ -33,6 +33,11 @@ const nodes: StudioWhiteboardNode[] = [
   { id: "sketch", position: { x: 680, y: 520 }, node: { kind: "sketch", state: "frozen", title: "The legend, redrawn", facts: ["diagram"] } },
   { id: "deferral", position: { x: 1020, y: -130 }, node: { kind: "deferral", state: "open", title: "Does the legend belong on the Board?", facts: ["blocks 1"] } },
   { id: "outline", position: { x: 1020, y: 260 }, node: { kind: "outline", state: "draft", title: "Legend, then width", facts: ["3 parts"] } },
+  // The three kinds a forge address makes — #1394. Each is a record of
+  // something already filed, drawn beside what a person worked out about it.
+  { id: "forge-issue", position: { x: 0, y: 520 }, node: { kind: "issue", title: "The Board's legend is illegible", address: "https://example.invalid/armada/issues/1394", facts: ["#1394", "Open"] } },
+  { id: "forge-pull", position: { x: 0, y: 780 }, node: { kind: "pull_request", title: "Dispatch an issue from its node", address: "https://example.invalid/armada/pull/1391", facts: ["#1391", "Merged"] } },
+  { id: "forge-epic", position: { x: 340, y: 780 }, node: { kind: "epic", title: "Studio", address: "https://example.invalid/armada/milestone/17", facts: ["#17", "12 of 30 issues"] } },
   { id: "issue", position: { x: 1360, y: 260 }, node: { kind: "issue_draft", state: "draft", title: "The Board's legend is illegible" } },
   { id: "job", position: { x: 1700, y: 260 }, node: { kind: "job", state: "running", title: "The Board's legend is illegible", facts: ["j-3f2a", "bug"] } },
 ];
@@ -41,6 +46,7 @@ const nodes: StudioWhiteboardNode[] = [
 const edges: StudioWhiteboardEdge[] = [
   { id: "e1", source: "link", target: "note-legend", kind: "produced" },
   { id: "e2", source: "link", target: "contradiction", kind: "produced" },
+  { id: "e-epic", source: "forge-epic", target: "forge-issue", kind: "produced" },
   { id: "e3", source: "run", target: "note-width", kind: "produced" },
   { id: "e4", source: "note-legend", target: "finding-file", kind: "produced" },
   { id: "e5", source: "note-legend", target: "cluster", kind: "produced" },
@@ -77,7 +83,7 @@ export const EveryKind: Story = {
         await expect(canvas.getAllByText(label)).toHaveLength(2);
       }
       await expect(canvas.getAllByRole("group", { name: /, proposed$/ })).toHaveLength(3);
-      await expect(canvas.getAllByRole("group", { name: / produced / })).toHaveLength(10);
+      await expect(canvas.getAllByRole("group", { name: / produced / })).toHaveLength(11);
     });
 
     const note = canvas.getByRole("group", { name: /^Note: The legend under the step bar/ });

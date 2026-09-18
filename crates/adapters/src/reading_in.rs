@@ -15,6 +15,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use adapter_traits::LookupCall;
+use core_model::{EpicRead, EpicTake, ForgeFacts, ForgeState, StudioNodeContent, StudioNodeKind};
 use serde::Deserialize;
 
 /// The forge this workspace already assumes, as its host appears in a link.
@@ -44,6 +45,11 @@ const MOST_BYTES: u64 = 4_000_000;
 ///
 /// **A bound, because a milestone is unbounded and a Studio is laid out by
 /// hand.** A hundred nodes landing at once is a board nobody can arrange.
+///
+/// **Applied after the answer, never before it** — `#1405`. A milestone read
+/// front-first and then filtered would take fifty issues and show whichever of
+/// them happened to be open, so "only what is open" would be a bound on the
+/// wrong set.
 pub const MOST_ISSUES: usize = 50;
 
 /// What a Link's address names, where it names something a scout may be handed
@@ -171,29 +177,70 @@ pub fn source_of(address: &str, root: &str, home: &str) -> Option<Source> {
     })
 }
 
-/// What a Link's address names on this repository's forge, where it names
-/// anything there, and `None` for every other address — `#1379`.
+/// The node a pasted address makes, where it names something on this
+/// repository's forge, and `None` for every other address — which is what
+/// leaves a board, a page or a session a Link. `#1394`.
 ///
-/// **What Bridge is told, so it never reads an address itself.** Which host is
-/// the forge is this crate's to know and the gate keeps the vendor's name
-/// inside it, so a rule about issue links written in TypeScript or in
-/// `crates/ipc` could not be written at all, let alone kept in step with
-/// [`source_of`]. Fleet answers this on every Studio it puts on the wire.
+/// **The adapter decides the kind, and the kind is the concept.** Which host
+/// is the forge and which of its paths is an issue are this crate's to know —
+/// the gate keeps the vendor's name inside it — so nothing in `crates/ipc`,
+/// `crates/store` or Bridge could write this rule at all. What comes back is
+/// the domain's own content, so the three names are spelled once.
 ///
-/// **Read off the address every time, never kept on the record.** An address
-/// is fixed the moment a Link is pasted, so a stored answer could only go
-/// stale against the rule above it.
-pub fn forge_named(address: &str) -> Option<ipc::StudioLinkForge> {
-    let (_, _, marker, _) = forge_link(address.trim())?;
-    Some(match marker {
-        "issues" => ipc::StudioLinkForge::Issue,
-        "pull" => ipc::StudioLinkForge::PullRequest,
-        _ => ipc::StudioLinkForge::Milestone,
-    })
+/// **Read once, when the node is made, and kept.** An address is fixed the
+/// moment it is pasted, so what it names cannot change under the record; a
+/// classifier read again on every send is what `#1394` replaced.
+pub fn forge_node(address: &str, said: Option<String>) -> Option<StudioNodeContent> {
+    let address = address.trim();
+    let (_, _, marker, number) = forge_link(address)?;
+    let kind = match marker {
+        "issues" => StudioNodeKind::Issue,
+        "pull" => StudioNodeKind::PullRequest,
+        _ => StudioNodeKind::Epic,
+    };
+    StudioNodeContent::on_the_forge(kind, String::from(address), number, said)
+}
+
+/// What the forge said about an issue or a pull request, off the first line of
+/// what [`fetching`] printed — `#1394`.
+///
+/// **The filters already print it**, as `#<number> <title> (<state>)`, so a
+/// read-in resolves a node's title and state with no second call. A line this
+/// does not recognise leaves both absent, which is the node as it was.
+pub fn forge_facts(printed: &str) -> ForgeFacts {
+    let line = printed.lines().next().unwrap_or_default().trim();
+    // The number is already on the node, read off its address; what is wanted
+    // here is what comes after it.
+    let rest = line.strip_prefix('#').unwrap_or(line);
+    let rest = rest.split_once(' ').map_or("", |(_, rest)| rest).trim();
+    // The *last* bracket, so a title carrying one of its own survives.
+    let (title, state) = match rest.rsplit_once('(') {
+        Some((title, state)) => (title, forge_state(state.trim_end_matches(')'))),
+        None => (rest, None),
+    };
+    ForgeFacts {
+        title: Some(title.trim().to_string()).filter(|title| !title.is_empty()),
+        state,
+        read_in: None,
+    }
+}
+
+/// A forge's word for where something stands, as the domain spells it.
+///
+/// **Case is the forge's and the word is ours.** One endpoint answers `OPEN`
+/// and another `open`, and a node that read them as two states would draw the
+/// same issue two ways.
+fn forge_state(word: &str) -> Option<ForgeState> {
+    match word.trim().to_ascii_lowercase().as_str() {
+        "open" => Some(ForgeState::Open),
+        "closed" => Some(ForgeState::Closed),
+        "merged" => Some(ForgeState::Merged),
+        _ => None,
+    }
 }
 
 /// [`forge_reference`] behind the scheme check, so one reading answers both
-/// [`source_of`] and [`forge_named`].
+/// [`source_of`] and [`forge_node`].
 fn forge_link(address: &str) -> Option<(String, String, &'static str, String)> {
     if !address.starts_with("http://") && !address.starts_with("https://") {
         return None;
@@ -348,8 +395,10 @@ const PR: &str = r##""#" + (.number|tostring) + " " + .title + " (" + .state + "
 /// The milestone's own line: its title and how many issues it holds in all.
 const MILESTONE: &str = r#".title + "\t" + ((.open_issues + .closed_issues)|tostring)"#;
 
-/// One line per issue: its address, a tab, then how it is named on a node.
-const ISSUE_LINE: &str = r##".[] | select(.pull_request == null) | .html_url + "\t#" + (.number|tostring) + " " + .title + " — " + .state"##;
+/// One line per issue, tab-separated: its address, its number, its title and
+/// where it stands. **Four fields rather than one sentence**, because each is
+/// a field on the Issue node the read-in makes — `#1394`.
+const ISSUE_LINE: &str = r##".[] | select(.pull_request == null) | .html_url + "\t" + (.number|tostring) + "\t" + .title + "\t" + .state"##;
 
 fn forge_view(
     what: &str,
@@ -414,34 +463,103 @@ fn milestone_issues(owner: &str, repo: &str, number: &str) -> LookupCall {
 }
 
 /// One issue on a milestone, as a Studio keeps it: the address a Job is
-/// dispatched from, and the line a person reads on its node.
+/// dispatched from, and the three fields its Issue node draws. `#1394`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnIssue {
     pub address: String,
-    pub named: String,
+    pub number: String,
+    pub title: String,
+    pub state: Option<ForgeState>,
 }
 
-/// A milestone as it was read: what it is called, every issue that fits, and
-/// how many it holds in all.
+impl AnIssue {
+    /// The Issue node this issue makes. **Every field filled**, because a
+    /// milestone's own read already answered all three.
+    pub fn node(&self) -> Option<StudioNodeContent> {
+        StudioNodeContent::on_the_forge(
+            StudioNodeKind::Issue,
+            self.address.clone(),
+            self.number.clone(),
+            None,
+        )?
+        .resolved(&ForgeFacts {
+            title: Some(self.title.clone()),
+            state: self.state,
+            read_in: None,
+        })
+    }
+}
+
+/// A milestone as it was read: what it is called, every issue the fetch
+/// printed, and how many it holds in all.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MilestoneRead {
     pub title: String,
+    /// Every issue the fetch printed, in the forge's own order and **not yet
+    /// bounded**: the answer about which to take is applied first, and
+    /// [`MilestoneRead::taking`] is where [`MOST_ISSUES`] lands. `#1405`.
     pub issues: Vec<AnIssue>,
-    /// Every issue on it, whether or not it fits in [`MilestoneRead::issues`].
+    /// Every issue on it, whether or not it is in [`MilestoneRead::issues`].
     pub total: u64,
 }
 
+/// Which of a milestone's issues one answer takes, and how many it did not.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Taken<'a> {
+    /// What to put on the Studio, bounded at [`MOST_ISSUES`].
+    pub issues: Vec<&'a AnIssue>,
+    /// How many the answer left out, before the bound. **Said on the Epic**,
+    /// so narrowing a milestone is never a silent loss. `#1405`.
+    pub left_out: u64,
+}
+
+impl MilestoneRead {
+    /// The issues `take` asks for, bounded, and how many it left out.
+    pub fn taking(&self, take: EpicTake) -> Taken<'_> {
+        let wanted: Vec<&AnIssue> = self
+            .issues
+            .iter()
+            .filter(|issue| take.admits(issue.state))
+            .collect();
+        let left_out = (self.issues.len() - wanted.len()) as u64;
+        Taken {
+            issues: wanted.into_iter().take(MOST_ISSUES).collect(),
+            left_out,
+        }
+    }
+
+    /// What the Epic node itself now says: its title, and how the read left it.
+    /// `#1394`, `#1405`.
+    pub fn facts(&self, read_in: EpicRead) -> ForgeFacts {
+        ForgeFacts {
+            title: Some(self.title.clone()),
+            state: None,
+            read_in: Some(read_in),
+        }
+    }
+}
+
 /// What [`fetching`] printed for a milestone: its own line, then an issue per
-/// line. **Bounded at [`MOST_ISSUES`]**, and `total` is what says so.
+/// line. **Every line, and `total` is how many the milestone holds** — what
+/// fits is [`MilestoneRead::taking`]'s answer, once the person's own is known.
 pub fn milestone_read(printed: &str, number: &str) -> MilestoneRead {
     let mut lines = printed.lines().filter(|line| !line.trim().is_empty());
     let head = lines.next().unwrap_or_default();
     let (title, counted) = head.split_once('\t').unwrap_or((head, ""));
     let issues: Vec<AnIssue> = lines
-        .filter_map(|line| line.split_once('\t'))
-        .map(|(address, named)| AnIssue {
-            address: address.trim().to_string(),
-            named: named.trim().to_string(),
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            let address = fields.next()?.trim();
+            let number = fields.next()?.trim();
+            let title = fields.next()?.trim();
+            // A line missing a field is a line this did not print. It is
+            // dropped rather than read as an issue with blanks in it.
+            (!address.is_empty() && !number.is_empty()).then(|| AnIssue {
+                address: address.to_string(),
+                number: number.to_string(),
+                title: title.to_string(),
+                state: fields.next().and_then(forge_state),
+            })
         })
         .collect();
     let total = counted.trim().parse().unwrap_or(issues.len() as u64);
@@ -450,7 +568,7 @@ pub fn milestone_read(printed: &str, number: &str) -> MilestoneRead {
             true => format!("Milestone {number}"),
             false => title.trim().to_string(),
         },
-        issues: issues.into_iter().take(MOST_ISSUES).collect(),
+        issues,
         total,
     }
 }

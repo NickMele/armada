@@ -3,6 +3,7 @@
 
 import type { StudioNodeFrame, StudioWhiteboardEdge, StudioWhiteboardNode } from "@armada/components";
 import type {
+  EpicRead,
   JobSummary,
   ScoutSource,
   Studio,
@@ -61,6 +62,52 @@ function firstLine(body: string): string {
 }
 
 /**
+ * Where something on a forge stands, in the words a card draws. #1394.
+ *
+ * **A word this build does not know is drawn as itself**, `StudioNode`'s rule
+ * for a state: a newer Fleet's word said plainly beats no word at all.
+ */
+function forgeState(state: string): string {
+  return { open: "Open", closed: "Closed", merged: "Merged" }[state] ?? state;
+}
+
+/**
+ * What an Epic says about itself, as the facts a card draws — #1394, #1405.
+ *
+ * **An Epic that fits says how many it holds**, rather than saying the same
+ * number twice: the two-number form is there to say a read did not take
+ * everything, and drawing it always would make a whole milestone read as a
+ * partial one.
+ *
+ * **Which issues it took is drawn beside the count, and only where it was
+ * recorded.** An Epic read in before 14.20 kept no answer, so it says nothing
+ * about one rather than claiming it took everything.
+ */
+function epicRead(read: EpicRead): string[] {
+  const count = read.issues === read.total ? `${read.total} issues` : `${read.issues} of ${read.total} issues`;
+  if (read.took === undefined) return [count];
+  // **One fact each, because a chip is one fact.** A card is 240 wide and a
+  // chip that does not fit is clipped, so a sentence written across three of
+  // them reads and a sentence written into one does not.
+  return [
+    count,
+    EPIC_TOOK[read.took] ?? read.took,
+    ...(read.left_out ? [`${read.left_out} left out`] : []),
+    ...(read.kept ? [`${read.kept} kept, worked on`] : []),
+  ];
+}
+
+/**
+ * What each answer is called where a card draws it. **A word this build does
+ * not know is drawn as itself**, `forgeState`'s rule: a newer Fleet's word said
+ * plainly beats no word at all.
+ */
+const EPIC_TOOK: Readonly<Record<string, string>> = {
+  everything: "Every issue",
+  open: "Open issues only",
+};
+
+/**
  * How many of a Studio's frames are drawn at once — #1352.
  *
  * **A bound, because a frame is a file and a Studio is kept until it is
@@ -89,8 +136,17 @@ export type FrameOf = (nodeId: string) => StudioNodeFrame;
 /** For a caller whose subject is not the pictures — every Note reads as one still being fetched. */
 export const NO_FRAME_HELD: FrameOf = () => ({});
 
-/** The node as a card: its kind, its state where it has one, a title, and facts. */
-function cardOf(node: StudioNode, jobs: readonly JobSummary[], frameOf: FrameOf): StudioWhiteboardNode["node"] {
+/**
+ * The node as a card: its kind, its state where it has one, a title, and facts.
+ * **`null` on a kind this build does not know** — `whiteboardEdges`' rule for an
+ * edge, one scope over: a node drawn as a kind it is not is a claim nobody made,
+ * and a newer Fleet may send one (#1394 added three).
+ */
+function cardOf(
+  node: StudioNode,
+  jobs: readonly JobSummary[],
+  frameOf: FrameOf,
+): StudioWhiteboardNode["node"] | null {
   switch (node.kind) {
     case "run":
       // What was run, the way the run sheet names it — the Check's name, its command and its
@@ -141,12 +197,32 @@ function cardOf(node: StudioNode, jobs: readonly JobSummary[], frameOf: FrameOf)
       // A person's line wins because it is theirs, and the address is drawn
       // under whichever it was, so nothing is said twice.
       return { kind: "link", address: node.address, title: node.said ?? node.named ?? node.address };
+    // The three kinds a forge address makes — #1394. The title follows a
+    // Link's rule, with what the forge calls it where a read-in learned one;
+    // everything else the kind holds is a fact rather than a sentence.
+    case "issue":
+    case "pull_request":
+      return {
+        kind: node.kind,
+        address: node.address,
+        title: node.said ?? node.title ?? node.address,
+        facts: [`#${node.number}`, ...(node.state === undefined ? [] : [forgeState(node.state)])],
+      };
+    case "epic":
+      return {
+        kind: "epic",
+        address: node.address,
+        title: node.said ?? node.title ?? node.address,
+        facts: [`#${node.number}`, ...(node.read_in === undefined ? [] : epicRead(node.read_in))],
+      };
     case "deferral":
       return { kind: "deferral", state: stateOf(node, "open"), title: node.what };
     case "outline":
       return { kind: "outline", state: stateOf(node, "draft"), title: firstLine(node.body) };
     case "issue_draft":
       return { kind: "issue_draft", state: "draft", title: node.title };
+    default:
+      return null;
   }
 }
 
@@ -165,11 +241,10 @@ export function whiteboardNodes(
   jobs: readonly JobSummary[],
   frameOf: FrameOf = NO_FRAME_HELD,
 ): StudioWhiteboardNode[] {
-  return studio.nodes.map((node) => ({
-    id: node.id,
-    position: node.position,
-    node: cardOf(node, jobs, frameOf),
-  }));
+  return studio.nodes.flatMap((node) => {
+    const card = cardOf(node, jobs, frameOf);
+    return card === null ? [] : [{ id: node.id, position: node.position, node: card }];
+  });
 }
 
 const RELATIONS = ["same_as", "blocks", "answers"] as const;
@@ -194,6 +269,7 @@ export function nodeNamed(studio: Studio, nodeId: string, jobs: readonly JobSumm
   const node = studio.nodes.find((one) => one.id === nodeId);
   if (node === undefined) return nodeId;
   const card = cardOf(node, jobs, NO_FRAME_HELD);
+  if (card === null) return nodeId;
   return `${STUDIO_NODE_KIND[card.kind]} ${card.title}`;
 }
 

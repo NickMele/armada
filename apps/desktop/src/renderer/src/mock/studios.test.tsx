@@ -37,8 +37,20 @@ function close(): void {
 afterEach(close);
 
 const node = (name: RegExp) => page.getByRole("group", { name });
-/** The acts on what is selected, and the dialog whichever one opened. */
-const acts = () => page.getByRole("group", { name: "Acts on what is selected" });
+/** The one control every act on what is picked lives behind — #1399. */
+const offers = () => page.getByRole("button", { name: "Acts", exact: true });
+/** Open it. The trigger toggles, so an open menu is left open. */
+async function openActs(): Promise<void> {
+  await expect.element(offers()).toBeVisible();
+  if (offers().element().getAttribute("aria-expanded") !== "true") await offers().click();
+}
+/** One act, as it is read in the menu. */
+const offered = (name: string) => page.getByRole("menuitem", { name, exact: true });
+/** Reach one act: open the control, then press what it offers. */
+async function act(name: string): Promise<void> {
+  await openActs();
+  await offered(name).click();
+}
 const asked = (name: string) => page.getByRole("dialog").getByRole("button", { name, exact: true });
 
 /**
@@ -173,7 +185,7 @@ test("Delete node confirms, with Cancel first, and takes the node's edges with i
 
   node(/^Finding: /).element().focus();
   await userEvent.keyboard("{Enter}");
-  await page.getByRole("button", { name: "Delete node" }).click();
+  await act("Delete node");
   // Scaling up, so the press inside it waits for it to land — #1323.
   const confirm = page.getByRole("dialog");
   await entered(confirm);
@@ -247,17 +259,21 @@ test("a Note draws the frame it kept, opens it full size, and a Note without one
   // Opened from the node's own acts, and read-only is no reason not to look.
   kept.element().focus();
   await userEvent.keyboard("{Enter}");
-  await page.getByRole("button", { name: "Open frame" }).click();
+  await act("Open frame");
   const sheet = page.getByRole("dialog", { name: "Note" });
   await expect.element(sheet).toBeVisible();
   await expect.element(sheet.getByText("The legend under the step bar is unreadable")).toBeVisible();
   await expect.element(sheet.getByRole("img", { name: /captured from/ })).toBeVisible();
 
-  // A Note that kept none is offered nothing to open.
+  // A Note that kept none is offered nothing to open. Continued first, so what
+  // the menu is missing is the frame rather than every act a read-only Studio
+  // withholds.
   await userEvent.keyboard("{Escape}");
-  node(/^Note: It wraps at 720 wide/).element().focus();
-  await userEvent.keyboard("{Enter}");
-  await expect.poll(() => page.getByRole("button", { name: "Open frame" }).query()).toBeNull();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await pick(/^Note: It wraps at 720 wide/);
+  await openActs();
+  await expect.element(offered("Write up")).toBeVisible();
+  expect(offered("Open frame").query()).toBeNull();
 });
 
 test("two Notes clustered, the Cluster written up, the draft edited and dispatched to a Job node", async () => {
@@ -274,9 +290,10 @@ test("two Notes clustered, the Cluster written up, the draft edited and dispatch
   await userEvent.keyboard("{Meta>}");
   await node(/^Note: Overview still says three/).click();
   await userEvent.keyboard("{/Meta}");
-  await expect.element(acts().getByRole("button", { name: "Cluster Notes" })).toBeVisible();
+  await openActs();
+  await expect.element(offered("Cluster Notes")).toBeVisible();
 
-  await acts().getByRole("button", { name: "Cluster Notes" }).click();
+  await act("Cluster Notes");
   await page.getByRole("textbox", { name: "Title" }).fill("Counts go stale");
   await asked("Cluster").click();
   await expect.element(node(/^Cluster: Counts go stale/)).toBeVisible();
@@ -284,7 +301,7 @@ test("two Notes clustered, the Cluster written up, the draft edited and dispatch
   await expect.poll(() => fleet.studios()[0]!.edges.filter((edge) => edge.kind === "produced").length).toBe(2);
 
   await pick(/^Cluster: Counts go stale/);
-  await acts().getByRole("button", { name: "Write up" }).click();
+  await act("Write up");
   // The write-up opens on the Notes' own words rather than on an empty field.
   await expect
     .poll(() => (page.getByRole("textbox", { name: "Body" }).element() as HTMLTextAreaElement).value)
@@ -295,7 +312,7 @@ test("two Notes clustered, the Cluster written up, the draft edited and dispatch
 
   // Edited before it is sent: what is dispatched is what the person left.
   await pick(/^Issue draft: Counts go stale after what they count changes/);
-  await acts().getByRole("button", { name: "Edit draft" }).click();
+  await act("Edit draft");
   await page.getByRole("textbox", { name: "Body" }).fill("Both counts are read off a row that is stale.");
   await asked("Save draft").click();
   await expect
@@ -303,7 +320,7 @@ test("two Notes clustered, the Cluster written up, the draft edited and dispatch
     .toMatchObject({ body: "Both counts are read off a row that is stale." });
 
   await pick(/^Issue draft: Counts go stale after what they count changes/);
-  await acts().getByRole("button", { name: "Dispatch" }).click();
+  await act("Dispatch");
   // What is sent is the draft's own text, title first, and a person reads it before pressing.
   await expect
     .poll(() => (page.getByRole("textbox", { name: "What is sent" }).element() as HTMLTextAreaElement).value)
@@ -331,10 +348,11 @@ test("a Contradiction is ended as Resolved here, with the answer kept on the nod
 
   await pick(/^Contradiction: The chip reads the Board/);
   // All four outcomes are offered on the node, and two of them are the rungs beside them.
-  for (const offered of ["Write up", "Defer", "Not a problem", "Resolved here"]) {
-    await expect.element(acts().getByRole("button", { name: offered, exact: true })).toBeVisible();
+  await openActs();
+  for (const one of ["Write up", "Defer", "Not a problem", "Resolved here"]) {
+    await expect.element(offered(one)).toBeVisible();
   }
-  await acts().getByRole("button", { name: "Resolved here", exact: true }).click();
+  await offered("Resolved here").click();
   await page.getByRole("textbox", { name: "Answer" }).fill("The Board wins; the row is stale");
   await asked("Resolve").click();
 
@@ -346,7 +364,8 @@ test("a Contradiction is ended as Resolved here, with the answer kept on the nod
     });
   // Ended once: nothing offers a second outcome on it.
   await pick(/^Contradiction: The chip reads the Board/);
-  expect(acts().getByRole("button", { name: "Not a problem", exact: true }).query()).toBeNull();
+  await openActs();
+  expect(offered("Not a problem").query()).toBeNull();
 });
 
 /** The address the owner pasted, long enough that a card cannot hold it whole. */
@@ -392,7 +411,7 @@ test("a pasted address is asked about, takes a line of its own, and keeps it acr
 
   await page.getByRole("button", { name: "Continue" }).click();
   await pick(/^Link: the owner's own report/);
-  await page.getByRole("button", { name: "Edit line" }).click();
+  await act("Edit line");
   await entered(page.getByRole("dialog"));
   await userEvent.fill(page.getByLabelText("Your line", { exact: true }), "why the card said nothing");
   await asked("Save line").click();
@@ -404,55 +423,108 @@ test("a pasted address is asked about, takes a line of its own, and keeps it acr
   });
 });
 
-test("an issue is read in and a milestone fills the board, with each Link left standing", async () => {
+test("an issue is read in and an epic fills the board, with each address node left standing", async () => {
   const fleet = studying();
   open(fleet.scenario);
   await page.getByRole("button", { name: "Studios", exact: true }).first().click();
   await page.getByRole("button", { name: "The Board's legend", exact: true }).click();
   // Reopened read-only, so nothing acts on it until a person continues it.
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect.element(node(/^Link: https:\/\/example\.invalid\/o\/r\/issues\/1293/)).toBeVisible();
+  await expect.element(node(/^Issue: Read a source a person already has/)).toBeVisible();
 
   // One issue: a Finding beside the Notes and the Contradiction its scout asked for.
-  await pick(/^Link: https:\/\/example\.invalid\/o\/r\/issues\/1293/);
-  await acts().getByRole("button", { name: "Read in" }).click();
+  await pick(/^Issue: Read a source a person already has/);
+  await act("Read in");
   await asked("Read in").click();
   await expect.element(node(/^Finding: Read in https:\/\/example\.invalid\/o\/r\/issues\/1293, frozen/)).toBeVisible();
   await expect.element(node(/^Note: The issue wants Links read in/)).toBeVisible();
   await expect.element(node(/^Contradiction: The issue says Connections have no home yet/)).toBeVisible();
 
   const studio = () => fleet.studios()[0]!;
-  // The Link keeps its address whatever came back, and everything hangs off it.
+  // The node keeps its address whatever came back, and everything hangs off it.
   expect(studio().nodes.find((one) => one.id === "legend-issue")).toMatchObject({
-    kind: "link",
+    kind: "issue",
     address: "https://example.invalid/o/r/issues/1293",
+    number: "1293",
   });
   expect(studio().edges.filter((edge) => edge.from === "legend-issue" && edge.kind === "produced")).toHaveLength(4);
   // A relation the scout asked for waits on a person.
   expect(studio().edges.filter((edge) => edge.standing === "proposed" && edge.kind === "blocks")).toHaveLength(1);
 
-  // A milestone: one Link per issue, each naming the filed issue's address, and
-  // the milestone's own Link saying how many of how many were read in.
-  await pick(/^Link: https:\/\/example\.invalid\/o\/r\/milestone\/17/);
-  await acts().getByRole("button", { name: "Read in" }).click();
+  // An Epic: one Issue per issue, each carrying the filed issue's address, and
+  // the Epic itself saying how many of how many were read in. **It asks what
+  // to take first** — #1405 — and taking every issue is what fills the board.
+  await pick(/^Epic: Studio/);
+  await act("Read in");
+  await userEvent.selectOptions(page.getByLabelText("Take", { exact: true }), "everything");
   await asked("Read in").click();
-  await expect.element(node(/^Link: Studio — 3 of 3 issues read in/)).toBeVisible();
-  await expect.element(node(/^Link: #1293 An issue cannot be read into a Studio — open/)).toBeVisible();
-  await expect.element(node(/^Link: #1275 Kit manages connections — open/)).toBeVisible();
+  await expect.element(node(/^Issue: An issue cannot be read into a Studio/)).toBeVisible();
+  await expect.element(node(/^Issue: Kit manages connections/)).toBeVisible();
 
   const issues = studio()
     .edges.filter((edge) => edge.from === "legend-milestone" && edge.kind === "produced")
     .map((edge) => studio().nodes.find((one) => one.id === edge.to));
-  expect(issues.map((one) => (one?.kind === "link" ? one.address : null))).toEqual([
+  expect(issues.map((one) => (one?.kind === "issue" ? one.address : null))).toEqual([
     "https://example.invalid/o/r/issues/1293",
     "https://example.invalid/o/r/issues/1291",
     "https://example.invalid/o/r/issues/1275",
   ]);
-  // Its own address survives being named.
+  // Its own address survives, and how much of it landed is two numbers.
   expect(studio().nodes.find((one) => one.id === "legend-milestone")).toMatchObject({
     address: "https://example.invalid/o/r/milestone/17",
-    named: "Studio — 3 of 3 issues read in",
+    read_in: { issues: 3, total: 3, took: "everything", left_out: 0, kept: 0 },
   });
+});
+
+/**
+ * `#1405`'s definition of done, on Bridge: **reading a milestone in asks
+ * whether to take every issue or only the open ones, pressing the Epic
+ * afterwards changes that answer, and a Note written against a closed issue
+ * survives narrowing.**
+ */
+test("reading an epic in asks what to take, and narrowing leaves what a person worked on", async () => {
+  const fleet = studying();
+  open(fleet.scenario);
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await page.getByRole("button", { name: "The Board's legend", exact: true }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  const studio = () => fleet.studios()[0]!;
+  const epic = () => studio().nodes.find((one) => one.id === "legend-milestone");
+
+  // The offer asks, and opens on the answer a person planning work wants.
+  await pick(/^Epic: Studio/);
+  await act("Read in");
+  await expect.element(page.getByRole("dialog", { name: "Read this epic in" })).toBeVisible();
+  await expect.element(page.getByLabelText("Take", { exact: true })).toHaveValue("open");
+  await asked("Read in").click();
+  await expect.element(node(/^Issue: An issue cannot be read into a Studio/)).toBeVisible();
+  await expect.poll(() => epic()).toMatchObject({ read_in: { issues: 2, total: 3, took: "open", left_out: 1 } });
+  // The Epic says which state it took and how many it left out.
+  await expect.element(node(/^Epic: Studio/)).toHaveTextContent("Open issues only");
+  await expect.element(node(/^Epic: Studio/)).toHaveTextContent("1 left out");
+  expect(studio().nodes.some((one) => one.kind === "issue" && one.number === "1291")).toBe(false);
+
+  // Widening takes the closed one too, and a Note is written against it.
+  await act("Read in");
+  await userEvent.selectOptions(page.getByLabelText("Take", { exact: true }), "everything");
+  await asked("Read in").click();
+  await expect.element(node(/^Issue: Promotion: cluster, defer, write up/)).toBeVisible();
+  await pick(/^Issue: Promotion: cluster, defer, write up/);
+  await act("Defer");
+  await userEvent.fill(page.getByLabelText("What is being put off", { exact: true }), "does this still hold?");
+  await asked("Defer").click();
+  await expect.element(node(/^Deferral: does this still hold\?/)).toBeVisible();
+
+  // Narrowing again leaves it standing, and the Epic says it kept one.
+  await pick(/^Epic: Studio/);
+  await act("Read in");
+  await expect.element(page.getByLabelText("Take", { exact: true })).toHaveValue("everything");
+  await userEvent.selectOptions(page.getByLabelText("Take", { exact: true }), "open");
+  await asked("Read in").click();
+  await expect.poll(() => epic()).toMatchObject({ read_in: { issues: 3, took: "open", left_out: 1, kept: 1 } });
+  await expect.element(node(/^Issue: Promotion: cluster, defer, write up/)).toBeVisible();
+  await expect.element(node(/^Deferral: does this still hold\?/)).toBeVisible();
+  await expect.element(node(/^Epic: Studio/)).toHaveTextContent("1 kept, worked on");
 });
 
 /**
@@ -473,52 +545,54 @@ test("an issue read in is dispatched, its Job opens from the node, and the node 
   await page.getByRole("button", { name: "The Board's legend", exact: true }).click();
   await page.getByRole("button", { name: "Continue" }).click();
 
-  // The milestone fills the board with a Link per issue — #1293.
-  await pick(/^Link: https:\/\/example\.invalid\/o\/r\/milestone\/17/);
-  await acts().getByRole("button", { name: "Read in" }).click();
+  // The Epic fills the board with an Issue per issue — #1293.
+  await pick(/^Epic: Studio/);
+  await act("Read in");
   await asked("Read in").click();
-  await expect.element(node(/^Link: #1293 An issue cannot be read into a Studio — open/)).toBeVisible();
+  await expect.element(node(/^Issue: An issue cannot be read into a Studio/)).toBeVisible();
 
   // All three forge kinds dispatch, and the dialog names which it is about:
-  // an issue, a pull request and a milestone are three different asks — #1379.
-  await pick(/^Link: the branch that needs reading/);
-  await acts().getByRole("button", { name: "Dispatch" }).click();
-  await expect.element(page.getByRole("dialog", { name: "Dispatch the pull request this Link names" })).toBeVisible();
+  // an issue, a pull request and an epic are three different asks — #1379,
+  // #1394. Reading an Epic in and dispatching it are not rivals either.
+  await pick(/^Pull request: where dispatch landed/);
+  await act("Dispatch");
+  await expect.element(page.getByRole("dialog", { name: "Dispatch this pull request" })).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
 
-  await pick(/^Link: Studio — 3 of 3 issues read in/);
-  await acts().getByRole("button", { name: "Dispatch" }).click();
-  await expect.element(page.getByRole("dialog", { name: "Dispatch the milestone this Link names" })).toBeVisible();
+  await pick(/^Epic: Studio/);
+  await act("Dispatch");
+  await expect.element(page.getByRole("dialog", { name: "Dispatch this epic" })).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
 
-  // A Link naming nothing on the forge has nothing filed to dispatch against.
-  await pick(/^Link: where the legend was drawn/);
-  await expect.poll(() => acts().getByRole("button", { name: "Dispatch" }).query()).toBeNull();
+  // A Link is an address no adapter recognised: nothing filed to dispatch.
+  await pick(/^Link: why the ids collide/);
+  await openActs();
+  await expect.poll(() => offered("Dispatch").query()).toBeNull();
 
-  await pick(/^Link: #1293 An issue cannot be read into a Studio — open/);
-  await acts().getByRole("button", { name: "Dispatch" }).click();
+  await pick(/^Issue: An issue cannot be read into a Studio/);
+  await act("Dispatch");
   // The address is the whole request. Nothing is filed — the issue already is.
   await expect
     .poll(() => (page.getByRole("textbox", { name: "What is sent" }).element() as HTMLTextAreaElement).value)
     .toBe("https://example.invalid/o/r/issues/1293");
   await asked("Dispatch").click();
 
-  // The Job node lands with a `Produced` edge from the Link it came from, and
+  // The Job node lands with a `Produced` edge from the node it came from, and
   // stands at the gate like every other Job.
-  const dispatched = /^Job: #1293 An issue cannot be read into a Studio — open/;
+  const dispatched = /^Job: An issue cannot be read into a Studio/;
   await expect.element(node(dispatched)).toBeVisible();
   const studio = () => fleet.studios()[0]!;
   const jobNode = () => studio().nodes.find((one) => one.kind === "job")!;
   const edge = studio().edges.find((one) => one.to === jobNode().id)!;
   expect(edge.kind).toBe("produced");
   expect(studio().nodes.find((one) => one.id === edge.from)).toMatchObject({
-    kind: "link",
+    kind: "issue",
     address: "https://example.invalid/o/r/issues/1293",
   });
 
   // The node opens the Job, the way a Board row does.
   await pick(dispatched);
-  await page.getByRole("button", { name: "Open Job" }).click();
+  await act("Open Job");
   // The gate is unchanged: a Job from a Studio stands at `awaiting_approval`
   // like any other, and this is where it is approved.
   await expect.element(page.getByRole("button", { name: "Approve dispatch" })).toBeVisible();
@@ -529,5 +603,49 @@ test("an issue read in is dispatched, its Job opens from the node, and the node 
 
   // Back on the Studio it was left on, and the node reads what the Job is
   // doing now rather than what it was doing when it was made.
-  await expect.element(node(/^Job: #1293 An issue cannot be read into a Studio — open, running/)).toBeVisible();
+  await expect.element(node(/^Job: An issue cannot be read into a Studio, running/)).toBeVisible();
+});
+
+/**
+ * #1406's own: a person picks a node holding an address, presses Open, and it
+ * opens in their browser with Bridge unchanged behind it.
+ *
+ * **What is proved is the address**, not the press: the renderer sends a Studio
+ * and a node, and what reaches the browser is what the record carries.
+ */
+test("a node holding an address opens in the browser, and a node without one offers no Open", async () => {
+  const fleet = studying();
+  open(fleet.scenario);
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await page.getByRole("button", { name: "The Board's legend", exact: true }).click();
+
+  // Read-only is no reason not to look at what a node points at.
+  await pick(/^Issue: Read a source a person already has/);
+  await act("Open");
+  await expect.poll(() => fleet.browsed()).toEqual(["https://example.invalid/o/r/issues/1293"]);
+
+  await pick(/^Link: why the ids collide/);
+  await act("Open");
+  await expect.poll(() => fleet.browsed()).toEqual([
+    "https://example.invalid/o/r/issues/1293",
+    "https://react.dev/reference/react/useId",
+  ]);
+
+  await pick(/^Pull request: where dispatch landed/);
+  await act("Open");
+  await expect.poll(() => fleet.browsed()).toHaveLength(3);
+  expect(fleet.browsed()[2]).toBe("https://example.invalid/o/r/pull/1391");
+
+  await pick(/^Epic: Studio/);
+  await act("Open");
+  await expect.poll(() => fleet.browsed()).toHaveLength(4);
+  expect(fleet.browsed()[3]).toBe("https://example.invalid/o/r/milestone/17");
+
+  // A Finding holds no address, so nothing offers to open one — and Bridge is
+  // still on the Studio, because no surface navigates.
+  await page.getByRole("button", { name: "Continue" }).click();
+  await pick(/^Finding: Where do the legend's colours come from/);
+  await openActs();
+  expect(offered("Open").query()).toBeNull();
+  await expect.element(page.getByRole("heading", { name: "The Board's legend" })).toBeVisible();
 });

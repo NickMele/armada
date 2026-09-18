@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Check, CircleDot, Clock, Cpu, Folder, GitBranch, OctagonAlert, Power, UserCheck, X } from "lucide-react";
-import { expect } from "storybook/test";
+import { Check, CircleDot, Clock, Cpu, Folder, GitBranch, Layers, OctagonAlert, Power, UserCheck, X } from "lucide-react";
+import { expect, fn, waitFor } from "storybook/test";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
+import { ActiveJobsList } from "../ActiveJobsList/ActiveJobsList";
 import { StepBar } from "../StepBar/StepBar";
 import { JobRowStacked } from "./JobRowStacked";
 
@@ -547,5 +548,103 @@ export const TheLongestVerbAtTheWidthFloor: StoryObj = {
     await expect(row.querySelector(".armada-job-row__action")!.getBoundingClientRect().right).toBeLessThanOrEqual(
       wrapper.right,
     );
+  },
+};
+
+/** Three titles of wildly different lengths, so nothing here lines up by accident. */
+const HANDLE_ROWS = [
+  { handle: "3-runningWaitingOnACommand", headline: "Reuse one HTTP client across every query" },
+  { handle: "14-cache-the-manifest-read", headline: "Cache the manifest read" },
+  {
+    handle: "1-board-s-clear-button-should-reclaim-worktr",
+    headline: "Refuse a merge press whose chosen comments were never posted",
+  },
+] as const;
+
+const handleCopied = fn();
+
+/**
+ * **The handle is a column, not the tail of the title.** It sat at the end of
+ * the headline, so it started wherever that row's title happened to end while
+ * the facts under it stood in columns — "none of the ids align nicely like the
+ * rest of the job row text". It leads the field run now, labelled the way
+ * Workflow and Progress are.
+ *
+ * `Job`, not `ID`: the handle is what a person calls a Job
+ * (`crates/core-model/src/job/handle.rs`), and the id is the ULID the row
+ * carries and never draws.
+ *
+ * The list is here because the tracks are: a row standing alone sizes its own
+ * handle column, and the frame is what spreads one column across every row.
+ */
+export const HandlesInTheirOwnColumn: StoryObj = {
+  render: () => (
+    <ActiveJobsList
+      heading="Active jobs"
+      summary="3 jobs."
+      selectable
+      label="Active jobs"
+      columns={["Workflow", "Progress", "Run time"]}
+    >
+      {HANDLE_ROWS.map((row) => (
+        <JobRowStacked
+          key={row.handle}
+          status="running"
+          statusIcon={CircleDot}
+          statusLabel="Running"
+          headline={row.headline}
+          jobId={row.handle}
+          handle={row.handle}
+          onOpen={() => {}}
+          onCopied={handleCopied}
+          fields={[
+            { label: "Workflow", icon: Layers, value: "Bug, 6 steps" },
+            {
+              label: "Progress",
+              value: (
+                <>
+                  <StepBar total={6} current={2} activity="running" label="Step 2 of 6" />
+                  <span className="armada-row-step">regression_verify</span>
+                </>
+              ),
+            },
+            { label: "Run time", value: "11m 03s", mono: true },
+          ]}
+          action={
+            <SplitButton ground="card" items={[{ label: "Kill", danger: true }]}>
+              Open
+            </SplitButton>
+          }
+        />
+      ))}
+    </ActiveJobsList>
+  ),
+  play: async ({ canvasElement, userEvent }) => {
+    const handles = [...canvasElement.querySelectorAll<HTMLElement>(".armada-job-row__id")];
+    const titles = [...canvasElement.querySelectorAll<HTMLElement>(".armada-job-row__title")];
+    await expect(handles).toHaveLength(HANDLE_ROWS.length);
+
+    // The claim a rendering cannot make: every handle starts on one x.
+    const starts = handles.map((handle) => handle.getBoundingClientRect().left);
+    for (const start of starts) await expect(start).toBeCloseTo(starts[0]!, 0);
+
+    // And the titles end nowhere near each other, which is what the handles
+    // used to follow. Without this, the assertion above would pass on three
+    // rows that happened to be the same width.
+    const ends = titles.map((title) => title.getBoundingClientRect().right);
+    await expect(Math.max(...ends) - Math.min(...ends)).toBeGreaterThan(24);
+
+    // Each handle is under its own title rather than beside it.
+    for (const [at, handle] of handles.entries()) {
+      await expect(handle.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+        titles[at]!.getBoundingClientRect().bottom,
+      );
+    }
+
+    // Still an identifier, so it still copies (docs/contracts/design-system.md).
+    handleCopied.mockClear();
+    await userEvent.click(handles[1]!);
+    // The clipboard write is a promise, and the surface is told either way it settles.
+    await waitFor(() => expect(handleCopied).toHaveBeenCalledWith(HANDLE_ROWS[1].handle));
   },
 };

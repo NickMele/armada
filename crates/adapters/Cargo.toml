@@ -10,6 +10,10 @@ workspace = true
 
 [dependencies]
 adapter-traits = { path = "../adapter-traits" }
+# The node an address makes. A forge's shapes are this crate's to know and the
+# kinds are the domain's, so what `forge_node` hands back is the domain's own
+# content rather than a second spelling of the same three names — `#1394`.
+core-model = { path = "../core-model" }
 git2 = { version = "0.19", default-features = false }
 # Not the wire, the codec. A Drone's stdout is a third place bytes enter the
 # process, and `ipc::decode`/`ipc::encode` is the one route that reads and

@@ -10,7 +10,9 @@
 use std::future::Future;
 use std::sync::Arc;
 
-use ipc::{AskHelm, HelmConversation, ManifestId};
+use ipc::{
+    AnswerHelmCall, AskHelm, AskingToRun, HelmCallsWaiting, HelmConversation, ManifestId, RunOrNot,
+};
 
 use crate::conversing::ObservedHelm;
 use crate::daemon::Refusal;
@@ -45,4 +47,29 @@ pub trait Conversations: Send + Sync + 'static {
         &self,
         manifest_id: Option<ManifestId>,
     ) -> impl Future<Output = Result<HelmConversation, Refusal>> + Send;
+
+    /// `ask_the_person` — put one call to the person and **do not return until
+    /// they have answered or the hold has run out**. `#1389`.
+    ///
+    /// The only method on this seam that waits on a person rather than on
+    /// Fleet: the session's own process is inside the tool call for as long as
+    /// this takes, which is what makes the answer land in the same turn.
+    /// Silence answers [`RunOrNot::Deny`], never an allow.
+    fn ask_the_person(
+        &self,
+        asking: AskingToRun,
+        manifest_id: Option<ManifestId>,
+    ) -> impl Future<Output = Result<RunOrNot, Refusal>> + Send;
+
+    /// `list_helm_calls` — every ask waiting on this person right now, across
+    /// every repository. Fleet-wide, because the dock is.
+    fn list_helm_calls(&self) -> impl Future<Output = Result<HelmCallsWaiting, Refusal>> + Send;
+
+    /// `answer_helm_call` — a person's answer, delivered inside the call that
+    /// is waiting on it. [`Refusal::IllegalMove`] where nothing is waiting
+    /// under that id, or where the answer is not one that call offered.
+    fn answer_helm_call(
+        &self,
+        said: AnswerHelmCall,
+    ) -> impl Future<Output = Result<HelmCallsWaiting, Refusal>> + Send;
 }

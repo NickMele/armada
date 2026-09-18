@@ -217,6 +217,13 @@ pub const RUN_LOG_RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 /// resolved once here like every other Machine setting — `#943`.
 pub const HELM_ACTION_AUTHORITY: fleet::helm::Authority = fleet::helm::Authority::Acting;
 
+/// `settings.helm-ask-hold`, at its own default: five minutes. How long one
+/// call a Helm session made is held open for a person to answer in the dock
+/// before Fleet answers `deny` for them — `#1389`, and
+/// `fleet::helm::SHIPPED_ASK_HOLD` says what the five is measured against.
+pub const HELM_ASK_HOLD: fleet::helm::HelmAskHold =
+    fleet::helm::HelmAskHold::of(fleet::helm::SHIPPED_ASK_HOLD);
+
 /// `settings.helm-session-retention-expiry`, at its own default: 30 days. How
 /// long a closed Helm session's stored session id is kept before the next
 /// reply's write sweeps it away. `#943`.
@@ -527,6 +534,14 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
             admitted => format!(", admitted {}", admitted.len()),
         }
     );
+    // Said only where it happened: every boot after the one that converted
+    // them prints nought, and a line saying so every time would be noise.
+    if reconciled.recognised > 0 {
+        println!(
+            "  {} Link on a Studio is now the Issue, Pull request or Epic its address names",
+            reconciled.recognised
+        );
+    }
     for job in &reconciled.adopted {
         // Named rather than counted, because an adopted Drone is a Job whose
         // record has a hole in it: what it did while Fleet was away is not in
@@ -750,6 +765,7 @@ fn assemble(
         run_log_retention: RUN_LOG_RETENTION,
         helm_authority: HELM_ACTION_AUTHORITY,
         helm_session_retention: HELM_SESSION_RETENTION,
+        helm_ask_hold: HELM_ASK_HOLD,
         // The kernel, because the question is which process holds a socket.
         // `fleet::peer` holds the measurement that chose it over `lsof`.
         peers: Arc::new(fleet::peer::Kernel),

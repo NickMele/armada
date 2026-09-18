@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
-import { expect } from "storybook/test";
+import { expect, within } from "storybook/test";
 
 import { Button } from "../../primitives/Button/Button";
 import { StepTimeline, StepTimelineSkeleton, type StepTimelineAttempt } from "./StepTimeline";
@@ -120,6 +120,102 @@ export const FoldedAtTheGate: Story = {
     await userEvent.click(working);
     await expect(working).toHaveAttribute("aria-expanded", "true");
     await expect(canvas.getByText("The activity log.")).toBeVisible();
+  },
+};
+
+/* --- The header holds its height ------------------------------------------ */
+
+/** The shortest summary the fixtures carry, and one the length of a sentence. */
+const A_WORD = "thinking";
+const A_SENTENCE =
+  "I'll wait for the survey agent to finish before declaring the plan done, since the " +
+  "reducer still imports the store and the test would go green for the wrong reason.";
+
+/** The two widths the panel is measured at, both named where a person reads them. */
+const NARROW = "The panel at its narrowest";
+const WIDE = "The panel with room to spare";
+
+/** The live step, with whatever the Drone last said under the phase's name. */
+function summarised(said: string): StepTimelineAttempt {
+  return {
+    id: "1",
+    name: "Attempt 1",
+    current: true,
+    rows: [
+      { id: "a", name: "Instructed", activity: "advanced", meta: "06:26:54", body: body("The brief.") },
+      {
+        id: "b",
+        name: "Working",
+        activity: "running",
+        live: true,
+        now: { detail: said },
+        meta: "351 calls · 43m 37s · 36 files",
+        body: body("The activity log."),
+        act: <Button variant="ghost" size="sm">Open the log</Button>,
+      },
+    ],
+  };
+}
+
+function HeaderHoldsItsHeightDrawn() {
+  const [said, setSaid] = useState(A_WORD);
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setSaid(said === A_WORD ? A_SENTENCE : A_WORD)}
+      >
+        {said === A_WORD ? "Say something longer" : "Say one word"}
+      </Button>
+      {/* `--w-work-min` is the floor the work area is held to beside the dock,
+          so it is the narrowest this header is drawn at; twice it stands for
+          the window the annotation was taken at, with the dock shut. */}
+      <section aria-label={NARROW} style={{ width: "var(--w-work-min)" }}>
+        <StepTimeline attempts={[summarised(said)]} />
+      </section>
+      <section aria-label={WIDE} style={{ width: "calc(var(--w-work-min) * 2)" }}>
+        <StepTimeline attempts={[summarised(said)]} />
+      </section>
+    </>
+  );
+}
+
+/**
+ * The header holds one height whatever the Drone last said.
+ *
+ * **The owner's annotation.** The summary is as long as the sentence, and the
+ * header read that length as a width too — which decided whether the act
+ * wrapped to a second row, so the panel header grew and everything under it
+ * moved every time the Drone said something new.
+ *
+ * **Measured, because a rendering cannot show it**: what a person sees is a
+ * jump between two drawings, each of which looks right alone. The figure is
+ * the top of the header to the first line of the body — the complaint in
+ * numbers. Checked against the change reverted: the wide panel read 57px on
+ * one word and 97px on the sentence, and the play failed on that 40px.
+ */
+export const HeaderHoldsItsHeight: Story = {
+  name: "The header holds its height",
+  args: { attempts: [summarised(A_WORD)] },
+  render: () => <HeaderHoldsItsHeightDrawn />,
+  play: async ({ canvas, userEvent }) => {
+    // Off roles and text: which element draws the header line is the markup's
+    // business, and what is on trial is where the body below it starts.
+    const held = (panel: string) => {
+      const region = within(canvas.getByRole("region", { name: panel }));
+      const head = region.getByRole("button", { name: /Working/ });
+      const first = region.getByText("The activity log.");
+      return Math.round(first.getBoundingClientRect().top - head.getBoundingClientRect().top);
+    };
+
+    await expect(canvas.getAllByText(A_WORD)).toHaveLength(2);
+    const onAWord = { narrow: held(NARROW), wide: held(WIDE) };
+
+    await userEvent.click(canvas.getByRole("button", { name: "Say something longer" }));
+    await expect(canvas.getAllByText(A_SENTENCE)).toHaveLength(2);
+
+    await expect({ narrow: held(NARROW), wide: held(WIDE) }).toEqual(onAWord);
   },
 };
 

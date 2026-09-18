@@ -1,0 +1,80 @@
+// What Helm's dock says while it is pointed at no repository, through `App`.
+//
+// `helm.state === "none"` is *Helm is pointed at nothing*, and `main/helm.ts`
+// publishes it for several reasons — a rail sitting on a repository that is
+// not set up is one, with others set up beside it. The dock drew one sentence
+// for all of them, "No repository has a Manifest yet for Helm to answer
+// about.", which on `every-state` told a person a false fact about their own
+// machine on the one surface whose job is answering about it.
+//
+// Every mock scenario publishes `helm: { state: "none" }` — no main is behind
+// this window to point it — so the dock's unpointed sentence is what these
+// moments draw without anything being pressed.
+
+import { expect, test } from "vitest";
+import { page } from "vitest/browser";
+
+import { mount, unmountAfterEach } from "./testing";
+
+unmountAfterEach();
+
+/** The sentence that stood for every unpointed state, and was true in one of them. */
+const ONCE_SAID = "No repository has a Manifest yet for Helm to answer about.";
+
+/** The dock beside the content — an `aside` of its own, labelled Helm. */
+const dock = () => page.getByRole("complementary", { name: "Helm" });
+
+test("repositories set up and Helm pointed at none: the dock counts them, and the switch that points it is there", async () => {
+  // Two of this scenario's repositories are set up, and nothing has pointed Helm at either.
+  mount("every-state");
+  await expect.element(dock()).toBeVisible();
+
+  await expect
+    .element(page.getByText("Helm is not pointed at a repository. 2 are set up, so pick one to ask about it."))
+    .toBeVisible();
+  expect(page.getByText(ONCE_SAID).query()).toBeNull();
+  // The act the sentence names is the dock's own switch, under the thread it is written in.
+  const switcher = page.getByRole("combobox", { name: "Point Helm at a repository" });
+  await expect.element(switcher).toBeVisible();
+  // And the switch agrees with the sentence: it stands at an entry of its own,
+  // not at whichever repository is listed first. It read *armada* here — a
+  // `<select>` whose value matches no option displays the first one — so the
+  // dock said Helm was pointed at nothing while the control said armada.
+  await expect.element(switcher).toHaveDisplayValue("Choose a repository");
+});
+
+test("one repository set up and Helm pointed at none: the dock names it, and there is a switch to pick it with", async () => {
+  // `empty-store` is one repository set up, no Job yet, and nothing pointing Helm at it —
+  // the moment the sentence named an act with no control under it, because the composer
+  // counted the repositories and one is nothing to switch between.
+  mount("empty-store");
+  await expect.element(dock()).toBeVisible();
+
+  await expect
+    .element(page.getByText("Helm is not pointed at a repository. Pick armada to ask about it."))
+    .toBeVisible();
+  const switcher = page.getByRole("combobox", { name: "Point Helm at a repository" });
+  await expect.element(switcher).toBeVisible();
+  // Standing at its own entry, with the repository the sentence names under it to pick.
+  await expect.element(switcher).toHaveDisplayValue("Choose a repository");
+  await expect.element(page.getByRole("option", { name: "armada" })).toBeInTheDocument();
+});
+
+test("nothing set up: the dock says so in the words the rail and Setup use, and names the way out", async () => {
+  // `nothing-set-up` is two repositories served and neither of them set up.
+  mount("nothing-set-up");
+  await expect.element(dock()).toBeVisible();
+
+  await expect
+    .element(
+      page.getByText("Nothing is set up yet for Helm to answer about. Set up a repository, and Helm answers for it."),
+    )
+    .toBeVisible();
+  // Neither the old sentence nor the pointed-at-none one, which would be false here.
+  expect(page.getByText(ONCE_SAID).query()).toBeNull();
+  expect(page.getByText(/Helm is not pointed at a repository/).query()).toBeNull();
+  // And no switch, though the dock hands the composer its handler in every state: pointing
+  // Helm at nothing is a reason to offer a repository, not a reason to offer none. The
+  // sentence above is the whole of what this moment has to say.
+  expect(page.getByRole("combobox", { name: /^Point Helm at a/ }).query()).toBeNull();
+});

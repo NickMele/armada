@@ -310,3 +310,60 @@ fn a_drop_closes_a_window_and_a_recording_forgets_them() {
     let again = WorkPlan::after(Some(&plan), &recorded(&["one again"])).expect("a recording");
     assert!(windows(&again, "T1").is_empty());
 }
+
+/// The rendering a later step's Drone and the planning step's own Judge are
+/// both handed. **The detail is the half that carries the paths**, so a
+/// rendering without it is a plan nobody downstream can act on.
+#[test]
+fn a_rendering_hangs_each_tasks_detail_under_its_title() {
+    let detailed = entry(
+        PlanChange::Recorded {
+            approach: Approach::new("Reword the stat").expect("an approach"),
+            tasks: vec![
+                NewTask::new(
+                    "Reword the Drones stat itself",
+                    "packages/screens/src/overview.ts",
+                )
+                .expect("a title"),
+                NewTask::new("Cover it", "").expect("a title"),
+            ],
+        },
+        by_step("plan"),
+    );
+    let plan = WorkPlan::fold(&[detailed])
+        .expect("a history that replays")
+        .expect("a plan");
+    assert_eq!(
+        plan.rendered(),
+        "Approach: Reword the stat\n\nTasks:\
+         \n  T1 [open] Reword the Drones stat itself\
+         \n      packages/screens/src/overview.ts\
+         \n  T2 [open] Cover it",
+        "a detail hangs under its title, and a task without one gets no line"
+    );
+}
+
+/// A dropped task keeps both: the reason stays on the title's line, where a
+/// reader looking for why scans, and the detail stays under it.
+#[test]
+fn a_dropped_task_renders_its_reason_and_its_detail() {
+    let reason = crate::DropReason::new("already done on main").expect("a reason");
+    let recorded = entry(
+        PlanChange::Recorded {
+            approach: Approach::new("Reword the stat").expect("an approach"),
+            tasks: vec![
+                NewTask::new("Clear the other spellings", "TheShell.stories.tsx").expect("a title"),
+            ],
+        },
+        by_step("plan"),
+    );
+    let plan = WorkPlan::fold(&[recorded, updated("T1", TaskUpdate::Dropped(reason))])
+        .expect("a history that replays")
+        .expect("a plan");
+    assert_eq!(
+        plan.rendered(),
+        "Approach: Reword the stat\n\nTasks:\
+         \n  T1 [dropped] Clear the other spellings — dropped: already done on main\
+         \n      TheShell.stories.tsx"
+    );
+}

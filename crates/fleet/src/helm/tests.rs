@@ -49,13 +49,14 @@ review and no undo on what you write there: the ask is the whole of the \
 permission, and a change nobody asked for is one nobody will go looking for. \
 Say in your answer which files you changed.
 
-WHEN A CALL IS REFUSED
+WHEN A CALL WAITS
 
-A command or a tool from another server may come back saying it requires \
-approval. Nobody can be asked about it here — a person at a terminal would be, \
-and this conversation has nowhere to put the question. Say what you were \
-refused and what you wanted it for, and stop. Do not look for another way to \
-do the same thing.
+A command, an edit or a tool from another server that this person's own \
+settings do not already allow is put to them, in Armada, and your call waits \
+inside itself until they answer. That wait is the system working. Do not retry \
+it, do not look for another way round it, and do not say it failed. Where they \
+refuse, or where nobody answers, you are told so in the tool's own result: say \
+what you could not do and carry on without it.
 
 EACH TURN
 
@@ -277,11 +278,28 @@ fn helm_only_is_an_acting_helms_and_only_its_reads_a_read_only_ones() {
         assert!(may(Authority::Acting, row), "`{}`", row.operation);
         assert_eq!(
             may(Authority::ReadOnly, row),
-            row.kind == "query",
+            row.kind == "query" || row.operation == ipc::door::ASKS_A_PERSON,
             "`{}`",
             row.operation
         );
     }
+}
+
+/// `#1389`: **the permission tool is not an act, so no authority decides it.**
+/// It is a `Helm only` command by shape — it is a POST — and a read-only Fleet
+/// that withheld it would leave every uncovered call refused with nobody asked,
+/// which is the state the issue exists to end. What comes back through it is a
+/// person's own answer, so it grants nothing this predicate could be guarding.
+#[test]
+fn the_permission_tool_is_offered_however_far_this_machine_lets_helm_act() {
+    let tool = HELM_ONLY
+        .iter()
+        .find(|row| row.operation == ipc::door::ASKS_A_PERSON)
+        .expect("the inventory offers the permission tool to a Helm session");
+
+    assert_eq!(tool.kind, "command");
+    assert!(may(Authority::Acting, tool));
+    assert!(may(Authority::ReadOnly, tool));
 }
 
 /// `#1041`. Helm's approval-card ask is one of its acts, and it moves nothing:

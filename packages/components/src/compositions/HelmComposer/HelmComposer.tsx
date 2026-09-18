@@ -1,11 +1,15 @@
-import type { FormEvent } from "react";
+import type { FormEvent, KeyboardEvent } from "react";
 import { AttachmentChip } from "../../primitives/AttachmentChip/AttachmentChip";
 import { Button } from "../../primitives/Button/Button";
 import { Select } from "../../primitives/Select/Select";
 import { Textarea } from "../../primitives/Textarea/Textarea";
+import { SendKbd, sendsOn } from "../../send-message";
 
 /** One repository the switch may point Helm at — id is the Manifest id. */
 export type HelmRepositoryOption = { id: string; label: string };
+
+/** No Manifest id is empty, so this value is never a repository. `AskRepository` reads the same way. */
+const UNPOINTED = "";
 
 /** The open Job chipped above the message box — `#1075`. */
 export type HelmComposerChip = { jobHandle: string; title: string };
@@ -18,7 +22,11 @@ export type HelmComposerChip = { jobHandle: string; title: string };
 export type HelmComposerProps = {
   /** The repository Helm answers for right now, by its Manifest id. Absent where nothing is servable yet. */
   current?: string;
-  /** Every repository the switch may choose. Fewer than two draws no control — there is nothing to switch to. */
+  /**
+   * Every repository the switch may choose. **Pointed at one of them, fewer
+   * than two draws no control** — there is nothing to switch to. Pointed at
+   * nothing, one is enough: it is somewhere to go. None is still nothing.
+   */
   repositories?: HelmRepositoryOption[];
   /** The dock's own switch, on All repositories. The rail's pick never moves for it. */
   onSwitch?: (manifestId: string) => void;
@@ -59,11 +67,39 @@ export function HelmComposer({
   disabled = false,
 }: HelmComposerProps) {
   const blank = value.trim() === "";
+  const available = !blank && !disabled;
   const label = repositories.find((one) => one.id === current)?.label;
+  /**
+   * Somewhere to point Helm that it is not pointed at already. **Pointed at a
+   * repository, one repository is nothing to switch between**, which is all
+   * this used to say. Pointed at nothing, that one repository is somewhere to
+   * go, and the dock says so in words — *Helm is not pointed at a repository.
+   * Pick armada to ask about it.* — so the control it names has to be here to
+   * pick with. With none set up there is still nothing to draw either way, and
+   * the dock's own sentence carries that moment on its own.
+   */
+  const somewhere = current === undefined ? repositories.length > 0 : repositories.length > 1;
+  const switching = onSwitch !== undefined && somewhere;
+  /**
+   * What Helm is pointed at, said once on this line. Pointed at nothing with
+   * the switch drawn, the switch's own entry is what says it — and says what to
+   * do about it — so this stays empty rather than repeating it: at the dock's
+   * width the two together cut each other down to "No repo…" and "Choose a
+   * rep…". With no switch to draw there is nowhere else for it to be said.
+   */
+  const naming = label ?? (switching ? undefined : "No repository to ask yet");
 
   function submit(event: FormEvent): void {
     event.preventDefault();
-    if (!blank && !disabled) onSend();
+    if (available) onSend();
+  }
+
+  // ⌘Enter asks exactly what Send asks — the drone message box's binding, one
+  // treatment. Plain Enter is still a new line: an ask is prose too.
+  function keyed(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (!sendsOn(event)) return;
+    event.preventDefault();
+    if (available) onSend();
   }
 
   return (
@@ -72,15 +108,35 @@ export function HelmComposer({
         <AttachmentChip filename={`Job ${chip.jobHandle} · ${chip.title}`} onRemove={onRemoveChip} />
       )}
       <div className="armada-helm-composer__head">
-        <span className="armada-helm-composer__repository">
-          {label ?? "No repository to ask yet"}
-        </span>
-        {onSwitch === undefined || repositories.length < 2 ? null : (
+        {naming === undefined ? null : (
+          <span className="armada-helm-composer__repository">{naming}</span>
+        )}
+        {onSwitch === undefined || !switching ? null : (
           <Select
-            aria-label="Point Helm at a different repository"
-            value={current ?? ""}
-            onChange={(event) => onSwitch(event.target.value)}
+            // Named for what it does from where Helm is standing. *A different
+            // repository* is a lie while it is pointed at none, and since this
+            // change that is the switch's commonest moment — every unpointed
+            // dock with anything set up draws it, one repository included.
+            aria-label={current === undefined ? "Point Helm at a repository" : "Point Helm at a different repository"}
+            value={current ?? UNPOINTED}
+            onChange={(event) => {
+              if (event.target.value !== UNPOINTED) onSwitch(event.target.value);
+            }}
           >
+            {/* Pointed at nothing, the switch needs an entry of its own to
+                stand at — the same disabled placeholder the repository asks
+                elsewhere draw (`AskRepository`), in the same words. Without
+                one, a `value` matching no `<option>` left Chromium displaying
+                the first repository: the switch disagreed with the chip beside
+                it, and that first repository could not be chosen at all,
+                because picking the entry already displayed fires no `change`.
+                Once Helm is pointed at one, there is nothing to stand in for
+                and the entry is gone. */}
+            {current === undefined ? (
+              <option value={UNPOINTED} disabled>
+                Choose a repository
+              </option>
+            ) : null}
             {repositories.map((one) => (
               <option key={one.id} value={one.id}>
                 {one.label}
@@ -107,6 +163,7 @@ export function HelmComposer({
           rows={3}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onKeyDown={keyed}
           disabled={disabled}
           placeholder="Ask Helm about this repository"
           // Reopening the dock remounts this field — #1094 — and that is the
@@ -118,6 +175,7 @@ export function HelmComposer({
             tint is HelmComposer.css's, over a secondary. */}
         <Button type="submit" variant="secondary" ground="card" size="sm" disabled={disabled || blank}>
           Send
+          <SendKbd available={available} />
         </Button>
       </div>
       {/* Where the person is stays under the field, not inside it: it is a

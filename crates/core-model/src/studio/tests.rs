@@ -5,9 +5,9 @@ use alloc::string::String;
 
 use crate::envelope::{Timestamp, Ulid};
 use crate::studio::{
-    EdgeRefused, StudioAuthor, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding,
-    StudioName, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeKind, StudioNodeState,
-    StudioPosition, StudioRelation, ToItself,
+    EdgeRefused, ForgeState, StudioAuthor, StudioEdge, StudioEdgeId, StudioEdgeKind,
+    StudioEdgeStanding, StudioName, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeKind,
+    StudioNodeState, StudioPosition, StudioRelation, ToItself,
 };
 use crate::studio::{
     NotScoutable, ScoutCheckout, ScoutEnded, ScoutLook, ScoutOutcome, StudioFinding,
@@ -23,7 +23,7 @@ fn at() -> Timestamp {
 
 #[test]
 fn every_set_reads_back_from_its_own_spelling() {
-    assert_eq!(StudioNodeKind::ALL.len(), 11, "studio.md's eleven kinds");
+    assert_eq!(StudioNodeKind::ALL.len(), 14, "studio.md's fourteen kinds");
     for kind in StudioNodeKind::ALL {
         assert_eq!(StudioNodeKind::from_wire(kind.as_wire()), Some(*kind));
     }
@@ -35,6 +35,14 @@ fn every_set_reads_back_from_its_own_spelling() {
         assert_eq!(StudioEdgeKind::from_wire(kind.as_wire()), Some(*kind));
     }
     assert_eq!(StudioNodeKind::IssueDraft.as_wire(), "issue_draft");
+    // **An Issue and an Issue draft are two kinds and two spellings**: one is
+    // an issue somebody already filed, the other Armada's own unfiled text.
+    assert_eq!(StudioNodeKind::Issue.as_wire(), "issue");
+    assert_eq!(StudioNodeKind::PullRequest.as_wire(), "pull_request");
+    assert_eq!(StudioNodeKind::Epic.as_wire(), "epic");
+    for state in ForgeState::ALL {
+        assert_eq!(ForgeState::from_wire(state.as_wire()), Some(*state));
+    }
 }
 
 /// A relation is spelled as the edge kind it becomes, and none becomes

@@ -44,6 +44,7 @@ import type {
 import type { PlanEditAnswer } from "@armada/screens/src/plan-edits";
 import type {
   CommandAnswer,
+  HelmCallAnswer,
   JudgeAnswer,
   SaveLimits,
   StartCheckoutRun,
@@ -93,6 +94,9 @@ export const readStudioFrame = (studioId: string, nodeId: string) =>
   window.armada.readStudioFrame(studioId, nodeId);
 export const promoteOnStudio = (studioId: string, promotion: StudioPromotion) =>
   window.armada.promoteOnStudio(studioId, promotion);
+/** Open what a Studio node points at. Main reads the address; the renderer sends none. #1406. */
+export const openStudioNode = (studioId: string, nodeId: string) =>
+  window.armada.openStudioNode(studioId, nodeId);
 export const reclaimOne = (jobId: string) => window.armada.reclaimWorktree(jobId);
 export const deleteBranchOne = (jobId: string, tip: string) => window.armada.deleteBranch(jobId, tip);
 export const forgetOne = (jobId: string) => window.armada.forgetJob(jobId);
@@ -226,6 +230,10 @@ export function useCommands(sending: Sending) {
   // Which Job an act is in flight on. **Nothing destructive happens on one
   // press** — the dialog that collects the confirmation is the render's.
   const [acting, setActing] = useState<string | null>(null);
+  // Which Helm call has an answer in flight, by the call id Fleet minted.
+  // **Beside `acting` and not inside it**: a Helm call is on no Job, so the
+  // one flag every Job act sets could not name it. #1389.
+  const [answeringHelm, setAnsweringHelm] = useState<string | null>(null);
   // Which act that is, so the control that sent it is the one that waits. #1117.
   const [actingAct, setActingAct] = useState<ActingAct | null>(null);
   // Which Job has a decision on its work in flight. Separate from `acting`,
@@ -476,6 +484,22 @@ export function useCommands(sending: Sending) {
       setOutcome(answered);
       return answered;
     });
+  }
+
+  /**
+   * Answer one held Helm call. **Not through `acted`**, which holds `acting` on
+   * a Job id — a Helm call has none. What draws the card's own controls off
+   * while this is out is the call id held here. #1389.
+   */
+  async function answerHelmCall(call: string, chose: HelmCallAnswer, note?: string): Promise<Outcome> {
+    setAnsweringHelm(call);
+    try {
+      const answered = await window.armada.answerHelmCall(call, chose, note);
+      setOutcome(answered);
+      return answered;
+    } finally {
+      setAnsweringHelm((held) => (held === call ? null : held));
+    }
   }
 
   /**
@@ -786,6 +810,8 @@ export function useCommands(sending: Sending) {
     redirect,
     answer,
     answerCommand,
+    answerHelmCall,
+    answeringHelm,
     answerJudge,
     setWhenRefused,
     setWhenBlocked,

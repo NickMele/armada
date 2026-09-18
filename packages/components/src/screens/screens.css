@@ -1264,6 +1264,18 @@
   gap: var(--space-3);
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
+  /* The aside is bounded so it cannot reach the zoom controls (#1399), so a
+     list longer than the room left is what scrolls. */
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Proposed relations are as many as Helm has proposed. The card gives room back
+   rather than pushing the acts above it off the board. */
+.armada-studio__proposals {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .armada-studio__aside p {
@@ -1277,7 +1289,12 @@
   gap: var(--space-2);
 }
 
+/* Accept and Reject on one proposed relation. **It wraps**, because the aside is
+   one node wide — 198px of content — and a row that does not wrap runs out of
+   the whiteboard and under Helm's dock. The acts on a picked node are no longer
+   a row at all: `StudioPicked` holds them in one control (#1399). */
 .armada-studio__acts {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }

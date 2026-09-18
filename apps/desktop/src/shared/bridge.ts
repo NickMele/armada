@@ -483,6 +483,9 @@ export const CHANNELS = {
   redirectDrone: "bridge:redirect-drone",
   answerQuestion: "bridge:answer-question",
   answerCommand: "bridge:answer-command",
+  // One call helm was held on, answered in the dock. No job id: it names the
+  // call fleet minted, and nothing on the board moves. #1389.
+  answerHelmCall: "bridge:answer-helm-call",
   // What a command does, read for the person deciding about it. A read: it
   // moves nothing, and the three answers are live while it is out.
   explainCommand: "bridge:explain-command",
@@ -613,6 +616,7 @@ export const CHANNELS = {
   // One rung of promotion — #1291. One channel across six operations: what a
   // person does on a Studio is one capability, and `act` picks the route.
   promoteOnStudio: "bridge:promote-on-studio",
+  openStudioNode: "bridge:open-studio-node",
   // A press Fleet answered, felt on the trackpad. Sent, never invoked: nothing waits on it.
   tap: "bridge:tap",
 } as const;
