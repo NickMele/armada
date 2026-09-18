@@ -1043,8 +1043,17 @@ is the back-fill by hand that this section existed to prevent.
 ⌥⌘C      capture a note onto the open Studio
 ⌘\       toggle sidebar
 ⌘[ ⌘]    back / forward
+⌘Enter   send the message in the field that has focus
 Esc      close an overlay, or return to the list from a detail route
 ```
+
+**`⌘Enter` is the one Global binding that needs a focused field**, and it is
+in this tier because it is modified rather than because it fires from
+nowhere. Plain `Enter` in a message box is a new line — a redirect to a drone
+and an ask to Helm are both prose — so the key that sends has to carry a
+modifier, and a single-key binding would be suppressed inside a field anyway
+by the rule below. It is drawn on the Send button only while `⌘` is held, per
+`kbd` below.
 
 **Contextual — single-key, on the focused row or the open job.** This is
 what makes triage fast: move down the queue and act without reaching for
@@ -1337,6 +1346,17 @@ makes the box read as a key rather than as a small chip.
   ambiguity the safety rule above was rewritten to remove.
 - **The 48px sidebar rail is more usable than it looks**, because the
   ⌘-digit bindings reach every surface without labels.
+- **A control may draw its own Global binding while `⌘` is held**, and
+  never at rest. The sidebar's rows, Helm's reopen button and the Send
+  button in a message box each do; the badge mounts on the hold and goes
+  on release. This is not the rule under the debug payload — that one
+  refuses a kbd standing permanently on a button, which is reference
+  material sitting on the thing it describes. A hold is asked for: a
+  person pressing `⌘` is looking for what it reaches, and a badge that is
+  gone a moment later cannot compete with the label. Every reveal reads
+  one listener through `ShortcutRevealProvider`, because a hold watched in
+  two places ends in two places. Contextual bindings are never revealed
+  this way — holding `⌘` fires none of them.
 
 ---
 
