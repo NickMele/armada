@@ -146,7 +146,7 @@ pub struct JobDetail {
     ///
     /// **Absent is not empty**, the same pair `write_targets` draws. Absent
     /// is a Job that has claimed nothing yet — every Job the proposer drafted,
-    /// until its first scope step declares — so there was no comparison to
+    /// until its first step declares — so there was no comparison to
     /// make. Present and empty is a comparison that ran and found nobody. A
     /// card that showed those two the same way would say "no overlap" about a
     /// Job nothing had looked at.

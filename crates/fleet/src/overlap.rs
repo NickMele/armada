@@ -35,7 +35,7 @@ where
     ///
     /// **`None` is "no comparison was made"**, and it is not the same answer as
     /// an empty list. `None` is this Job having claimed nothing yet, which is
-    /// every proposer-drafted Job until its first scope step declares; empty is
+    /// every proposer-drafted Job until its first step declares; empty is
     /// a comparison that ran and found nobody. A card that drew those the same
     /// way would tell a person there is no overlap when nothing had looked.
     ///
