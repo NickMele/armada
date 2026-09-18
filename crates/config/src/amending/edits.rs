@@ -13,7 +13,7 @@ use core_model::{AutoMerge, ReviewGate};
 use serde_yaml_ng::{Mapping, Number, Value};
 
 use super::drafts::{
-    links_node, NewCheck, NewCommand, NewEvidence, NewLink, NewNarrowing, NewPort,
+    links_node, NewCheck, NewCommand, NewEvidence, NewLink, NewNarrowing, NewPort, NewRunner,
 };
 use super::{NotAmended, Unplaceable};
 

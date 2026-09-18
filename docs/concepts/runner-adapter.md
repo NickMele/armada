@@ -106,13 +106,22 @@ the first.
 
 ## What is built
 
-`run_changed` only, from shipped descriptions only. A Check names its runner in
-`armada.yml`, Fleet reads `crates/config/runners/<name>.yml`, and a narrowed run uses
-that shape where the Check declares no `narrow` of its own.
+`run_changed`, from shipped descriptions, and enough detection for the Manifest
+proposer to name a runner on a repository nobody has configured.
 
-Nothing else on this page is code. There is no detection, no learning, no
-publishing, and the other five shapes have no caller — a description declaring
-one is not refused, it is simply never asked for.
+| Piece | State |
+|---|---|
+| A Check names its runner, and a narrowed run resolves `run_changed` from it | built |
+| `detect.command` — the program a workspace's own runnable names | built, and the only detection there is |
+| `detect.manifest`, `detect.dependency`, `detect.files` | read by nothing |
+| `one_test`, `run_group`, `run_pattern`, `run_failed` | no caller |
+| Learning, verification, publishing | not started |
+
+**Detection reads what a script runs, not what is installed.** A Scan records
+each runnable's command verbatim, so `"test": "vitest run"` gives the runner
+away — and a package holding vitest while its `test` script runs something else
+would make a dependency list say the opposite. That is also why the one signal
+built is the one Scan already carries; nothing reads a dependency list yet.
 
 **`output` is not read, and `--passWithNoTests=false` is why that is safe for
 now.** The third verification state below needs a runner's output parsed; vitest

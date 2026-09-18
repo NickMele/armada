@@ -27,6 +27,7 @@ use serde_yaml_ng::Value;
 pub struct RunnerDescription {
     name: String,
     run_changed: Option<String>,
+    command: Option<String>,
 }
 
 impl RunnerDescription {
@@ -41,6 +42,35 @@ impl RunnerDescription {
     pub fn name(&self) -> &str {
         &self.name
     }
+
+    /// The program a runnable's command names when this runner drives it.
+    /// **`None` where the description claims none**, and then nothing detects
+    /// it and a repository has to name it.
+    pub fn command(&self) -> Option<&str> {
+        self.command.as_deref()
+    }
+}
+
+/// The runner a runnable's own command names, where a shipped description
+/// claims that program.
+///
+/// **Every token, not the first.** A script reading `pnpm exec vitest run`
+/// names vitest as surely as one reading `vitest run`, and which of the two a
+/// repository writes is not something to be right about.
+pub fn detected(run: &str) -> Option<String> {
+    let named: Vec<&str> = run
+        .split_whitespace()
+        .filter(|token| !token.starts_with('-'))
+        .collect();
+    SHIPPED
+        .iter()
+        .filter_map(|text| read(text))
+        .find(|runner| {
+            runner
+                .command()
+                .is_some_and(|program| named.contains(&program))
+        })
+        .map(|runner| runner.name)
 }
 
 /// Every runner compiled in, in the order they are declared here.
@@ -73,7 +103,16 @@ fn read(text: &str) -> Option<RunnerDescription> {
         .and_then(|commands| commands.get("run_changed"))
         .and_then(Value::as_str)
         .map(str::to_string);
-    Some(RunnerDescription { name, run_changed })
+    let command = document
+        .get("detect")
+        .and_then(|detect| detect.get("command"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    Some(RunnerDescription {
+        name,
+        run_changed,
+        command,
+    })
 }
 
 #[cfg(test)]
@@ -107,6 +146,36 @@ mod tests {
             run_changed.contains("--passWithNoTests=false"),
             "without it a run matching nothing exits zero and reads as a pass: {run_changed}"
         );
+    }
+
+    /// **Every token, not the first.** Which of these two spellings a
+    /// repository writes is not something to be right about.
+    #[test]
+    fn a_script_naming_a_shipped_runner_is_detected_however_it_is_spelled() {
+        assert_eq!(detected("vitest run"), Some("vitest".to_string()));
+        assert_eq!(detected("pnpm exec vitest run"), Some("vitest".to_string()));
+        assert_eq!(
+            detected("vitest --coverage run"),
+            Some("vitest".to_string()),
+            "a flag between the program and the rest changes nothing"
+        );
+    }
+
+    #[test]
+    fn a_script_naming_nothing_shipped_is_detected_as_nothing() {
+        assert_eq!(detected("node --test"), None);
+        assert_eq!(
+            detected("jest --ci"),
+            None,
+            "not shipped yet, and not guessed at"
+        );
+        assert_eq!(detected(""), None);
+    }
+
+    /// A flag spelling a runner's name is a flag.
+    #[test]
+    fn a_flag_is_never_read_as_the_program() {
+        assert_eq!(detected("node --test --vitest"), None);
     }
 
     #[test]

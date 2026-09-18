@@ -106,10 +106,23 @@ impl Draft {
                 requires,
             } => {
                 let provenance = Provenance::AddedDuringSetup;
+                // **The edit form names no runner, so it decides nothing about
+                // one.** It carries the line's own forward exactly as
+                // `put_line` carries its provenance: a person retyping a `run`
+                // is not a person saying the runner was wrong, and a form that
+                // silently dropped it would make every edit to a detected
+                // Check a quiet un-detection. A line that is new to this draft
+                // has none to carry, which is a Check that runs whole.
+                let runner = self
+                    .checks
+                    .iter()
+                    .find(|one| one.name == name)
+                    .and_then(|one| one.runner.clone());
                 let put = ProposedCheck {
                     name,
                     run,
                     requires,
+                    runner,
                     provenance,
                 };
                 put_line(
@@ -225,6 +238,9 @@ impl Draft {
                 name: command.name,
                 run: command.run,
                 requires: Vec::new(),
+                // A Command moved to Checks was never detected as one, so
+                // nothing about a runner travels with it.
+                runner: None,
             });
             return Ok(());
         }
