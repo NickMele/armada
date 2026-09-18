@@ -1,6 +1,7 @@
 import { MessageSquare, Plus, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { ArmadaLockupHorizontal } from "@armada/brand";
+import { FLEET_DOT_TONE, type FleetState } from "../FleetPanel/FleetPanel";
 import { Button } from "../../primitives/Button/Button";
 import { KbdCmd } from "../../primitives/Kbd/Kbd";
 import { useShortcutReveal } from "../../shortcut-reveal";
@@ -44,6 +45,21 @@ export type TitleBarProps = {
     binding?: string;
     onOpen: () => void;
   };
+  /**
+   * Fleet's liveness, as one dot on the bar's trailing edge. **Present only
+   * while the left column is folded** — #1437. Everywhere else the Fleet panel
+   * carries the dot and the caller leaves this out, since two dots at one
+   * width is the duplication the owner rejected on 17 Sep 2026 alongside a
+   * mark that appears only when something is wrong.
+   *
+   * **Liveness and nothing else.** pid, port, protocol and uptime stay in the
+   * panel and come back with it; that is the cost the owner took for a dot.
+   */
+  fleet?: {
+    state: FleetState;
+    /** The panel's own word — "Running", "Not running". Read for the name and the tooltip. */
+    label: string;
+  };
 };
 
 export function TitleBar({
@@ -52,6 +68,7 @@ export function TitleBar({
   onDispatch,
   dispatchDisabled = false,
   helm,
+  fleet,
 }: TitleBarProps) {
   const revealing = useShortcutReveal();
   return (
@@ -109,7 +126,41 @@ export function TitleBar({
         )}
 
         <ArmadaLockupHorizontal height={20} title="Armada" />
+
+        {/* Last, on the bar's own trailing edge — where the owner put it on
+            17 Sep 2026. The dot is `--dot`, the same 6px the panel and the
+            48px rail draw, so the three readings of one fact are one size as
+            well as one colour. */}
+        {fleet === undefined ? null : (
+          <span
+            className="armada-title-bar__fleet"
+            // A graphic with a name, `StepBar`'s own pattern, rather than a
+            // live region: this mounts on a resize and would announce itself
+            // for a state nobody asked about. The hue is redundancy here, not
+            // the carrier — the name says it in words.
+            role="img"
+            aria-label={fleetSaid(fleet.label)}
+            // `title`, not the `Tooltip` primitive: it is what this row
+            // already gives its Helm button, and a tooltip's own surface at
+            // `--z-tooltip` has nothing to anchor to on a 6px dot in chrome
+            // that appears and disappears with the window.
+            title={fleetSaid(fleet.label)}
+          >
+            <span className="armada-title-bar__fleet-dot" data-tone={FLEET_DOT_TONE[fleet.state]} aria-hidden />
+          </span>
+        )}
       </div>
     </div>
   );
+}
+
+/**
+ * What the dot says, in words — one producer, so the tooltip a person hovers
+ * and the name a screen reader speaks cannot become two sentences. It names
+ * the subject the folded Fleet panel would have named, then the panel's own
+ * word for the state; the em dash is this row's own separator, from Helm's
+ * `Open Helm — ⌘J`.
+ */
+function fleetSaid(label: string): string {
+  return `Fleet — ${label}`;
 }
