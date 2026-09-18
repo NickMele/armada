@@ -175,7 +175,7 @@ Fleet on its own (`apps/desktop/src/main/socket.ts`). Reopening is a second,
 separate launchd job for the same reason Fleet's is one: the window has to
 outlive the session that asked for it.
 
-**Never on an allow list.** `.claude/skills/restart-fleet/SKILL.md` is when an
+**Never on an allow list.** `.claude/skills/restart-app/SKILL.md` is when an
 agent reaches for it and what to tell the owner first — the confirmation is
 Claude Code's own permission prompt, not a flag this script reads.
 
