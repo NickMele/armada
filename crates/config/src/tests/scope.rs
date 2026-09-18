@@ -121,7 +121,7 @@ fn a_step_can_name_the_earlier_evidence_its_work_is_measured_against() {
     evidence_scope:
       context_source: drone_declared
       reference_docs:
-        - scope.evidence
+        - plan.evidence
 ",
     )
     .expect("a step naming an earlier step's evidence loads");
@@ -130,7 +130,7 @@ fn a_step_can_name_the_earlier_evidence_its_work_is_measured_against() {
         .expect("the step declares one");
     assert_eq!(
         scope.reference_docs(),
-        &[EvidenceRef::parse("scope.evidence").expect("a reference")],
+        &[EvidenceRef::parse("plan.evidence").expect("a reference")],
         "what the step is measured against is carried, not dropped"
     );
 }

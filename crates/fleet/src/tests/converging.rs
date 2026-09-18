@@ -75,8 +75,8 @@ pub(super) fn one_step(scope: Option<Scoped<'static>>) -> ResolvedWorkflow {
 /// step in the shipped workflows has.
 fn a_written_step() -> ResolvedWorkflow {
     testkit::resolved(&[Sketch {
-        id: "scope",
-        label: "Scope the change",
+        id: "plan",
+        label: "Plan the change",
         evidence_type: Some("facts_note"),
         gates: &[Gate::ArtifactExists { target: ARTIFACT }],
         judged_on: &[],

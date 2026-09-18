@@ -277,7 +277,7 @@ async fn refusals_are_scoped_to_the_step_that_stopped() {
     const IMPL: &str = "01DRONEIMPLEMENTIMPLEMENT";
 
     let at = TempDir::new();
-    let scope = recording_on(&at, SCOPE, "scope");
+    let scope = recording_on(&at, SCOPE, "plan");
     scope.saw(&[
         called("toolu_scope", "git push --force"),
         refused("toolu_scope"),
@@ -303,7 +303,7 @@ async fn refusals_are_scoped_to_the_step_that_stopped() {
     let earlier = refusals(
         &at.path().to_string_lossy(),
         HANDLE,
-        Some(&StepId::new("scope")),
+        Some(&StepId::new("plan")),
     )
     .await;
     assert_eq!(
