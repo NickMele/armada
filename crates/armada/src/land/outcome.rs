@@ -52,6 +52,22 @@ impl OutcomeState {
             OutcomeState::Stopped => 7,
         }
     }
+
+    /// The lowercase word this state is spelled with on the wire — what
+    /// `--status` prints, matching `scripts/land`'s own Python-native
+    /// lowercase strings rather than this enum's `Debug` capitalisation.
+    pub fn word(self) -> &'static str {
+        match self {
+            OutcomeState::Waiting => "waiting",
+            OutcomeState::Gating => "gating",
+            OutcomeState::Merging => "merging",
+            OutcomeState::Landed => "landed",
+            OutcomeState::Red => "red",
+            OutcomeState::Conflict => "conflict",
+            OutcomeState::Ungated => "ungated",
+            OutcomeState::Stopped => "stopped",
+        }
+    }
 }
 
 /// What is known about one branch's most recent turn.

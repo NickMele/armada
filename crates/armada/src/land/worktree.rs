@@ -92,6 +92,25 @@ pub fn reused(
     commit: &str,
     logs: &Path,
 ) -> Result<PathBuf, ReuseError> {
+    reused_keeping(repo, which, commit, logs, KEEP)
+}
+
+/// The same, but with what survives `git clean -xdff` given explicitly
+/// rather than taken from [`KEEP`].
+///
+/// **The seam Stage 4 needs and Stage 3 did not.** `scripts/land`'s own
+/// `KEEP` reads `ARMADA_LAND_SEED`/`ARMADA_LAND_KEEP` at import time; this
+/// crate's `land::env::Env` reads them once at the verb's entry point and
+/// hands the list down here, rather than this module reading an environment
+/// variable itself — [`reused`] keeps [`KEEP`] as the fixed default every
+/// existing test above already relies on.
+pub fn reused_keeping(
+    repo: &Path,
+    which: LandWorktree,
+    commit: &str,
+    logs: &Path,
+    keep: &[&str],
+) -> Result<PathBuf, ReuseError> {
     let root = land_root(repo).map_err(ReuseError::LandRoot)?;
     let at = root.join(which.directory_name());
 
@@ -122,7 +141,7 @@ pub fn reused(
     checked(&at, &["reset", "--hard", "--quiet", commit]).map_err(ReuseError::Git)?;
 
     let mut clean_args: Vec<&str> = vec!["clean", "-xdff", "--quiet"];
-    for path in KEEP {
+    for path in keep {
         clean_args.push("-e");
         clean_args.push(path);
     }
