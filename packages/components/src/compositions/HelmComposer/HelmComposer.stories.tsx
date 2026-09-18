@@ -73,10 +73,29 @@ type Story = StoryObj<typeof HelmComposer>;
  * is**, so the line names the repository instead and the handler goes unused.
  */
 export const AtRest: Story = {
-  args: { current: repositories[0]!.id, repositories: [repositories[0]!], onSwitch: fn(), onStartFresh: fn() },
+  args: {
+    current: repositories[0]!.id,
+    repositories: [repositories[0]!],
+    onSwitch: fn(),
+    onStartFresh: fn(),
+    onOpenRecord: fn(),
+  },
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole("combobox")).not.toBeInTheDocument();
     await expect(canvas.getByText(repositories[0]!.label)).toBeInTheDocument();
+  },
+};
+
+/**
+ * The session record, which is how a bad answer is carried to somebody who
+ * could fix it — `#1367`. **A disclosure and not the copy itself**: the record
+ * is read before it leaves the machine, and the copy is inside the reading.
+ */
+export const RecordOpens: Story = {
+  args: { current: repositories[0]!.id, repositories: [repositories[0]!], onOpenRecord: fn() },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Session record" }));
+    await expect(args.onOpenRecord).toHaveBeenCalled();
   },
 };
 

@@ -31,6 +31,13 @@ export type HelmComposerProps = {
   /** The dock's own switch, on All repositories. The rail's pick never moves for it. */
   onSwitch?: (manifestId: string) => void;
   onStartFresh?: () => void;
+  /**
+   * Opens the session record — the brief, the roster, the authority and the
+   * turns, as one artifact a person can quote. `#1367`. **A disclosure and not
+   * the copy itself**: the record has to be read before it leaves the machine,
+   * and the dock has no width to read mono text in. Absent draws no control.
+   */
+  onOpenRecord?: () => void;
   /** Refused while a reply is being written — Fleet's own rule, not a guess drawn here. */
   startFreshDisabled?: boolean;
   /** The open Job, while its chip stands. Absent off a Job, or once its `×` has been pressed. */
@@ -57,6 +64,7 @@ export function HelmComposer({
   repositories = [],
   onSwitch,
   onStartFresh,
+  onOpenRecord,
   startFreshDisabled = false,
   chip,
   onRemoveChip,
@@ -143,6 +151,11 @@ export function HelmComposer({
               </option>
             ))}
           </Select>
+        )}
+        {onOpenRecord === undefined ? null : (
+          <Button variant="ghost" size="sm" onClick={onOpenRecord}>
+            Session record
+          </Button>
         )}
         {onStartFresh === undefined ? null : (
           <Button variant="ghost" size="sm" onClick={onStartFresh} disabled={startFreshDisabled}>

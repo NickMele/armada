@@ -3,7 +3,7 @@
 // made in `main/helm.ts`, and this draws whatever it publishes.
 
 import { useState } from "react";
-import { HelmComposer, HelmThread } from "@armada/components";
+import { HelmComposer, HelmRecord, HelmThread } from "@armada/components";
 import type {
   HelmApprovalCard,
   HelmApprovalCardState,
@@ -11,7 +11,14 @@ import type {
   HelmRepositoryOption,
   HelmThreadRow,
 } from "@armada/components";
-import type { HelmContext, JobSummary, RepositorySummary, WorkflowSummary } from "@armada/protocol";
+import type {
+  HelmContext,
+  HelmDebugInfo,
+  HelmDebugRead,
+  JobSummary,
+  RepositorySummary,
+  WorkflowSummary,
+} from "@armada/protocol";
 import { helmRowsOf, type HelmApprovalAsk, type HelmFoldedRow } from "@armada/screens/src/helm-thread";
 import type { BridgeState } from "../../shared/bridge";
 import { locationOf, type StudioNamed } from "./helm-context";
@@ -33,6 +40,10 @@ export type HelmDockProps = {
   studio?: StudioNamed;
   onStartFresh: () => void;
   onSwitch: (manifestId: string) => void;
+  /** The session as one record, read once when a person opens it — #1367. */
+  onReadRecord: () => Promise<HelmDebugRead>;
+  /** Told after the record's clipboard write, either way. */
+  onCopied: (what: string) => void;
   /** Approve, answered: the card waits on this, and a refusal puts it back to ready. #1117. */
   onApprove: (jobId: string) => Promise<{ ok: boolean }>;
 };
@@ -56,9 +67,12 @@ export function HelmDock({
   studio,
   onStartFresh,
   onSwitch,
+  onReadRecord,
+  onCopied,
   onApprove,
 }: HelmDockProps) {
   const [draft, setDraft] = useState("");
+  const [record, setRecord] = useState<Read>({ open: false });
   const [pressed, setPressed] = useState<Record<string, Pressed>>({});
   const current = helm.state === "none" ? undefined : helm.manifestId;
   const options = repositories
@@ -81,6 +95,18 @@ export function HelmDock({
       : current === undefined
         ? unpointedNote(options)
         : undefined;
+
+  /**
+   * Read the record, then draw it. **Asked each time it is opened**, never
+   * held: it is one artifact taken at a moment, and a stale one quoted into an
+   * issue is worse than none.
+   */
+  function openRecord(): void {
+    setRecord({ open: true });
+    void onReadRecord().then((read) =>
+      setRecord(read.ok ? { open: true, record: read.record } : { open: true, failed: whyRecord(read) }),
+    );
+  }
 
   function send(): void {
     const text = draft.trim();
@@ -105,6 +131,7 @@ export function HelmDock({
         // does not hide it either — Discuss, or the switch itself, points
         // Helm away from the picked repository without moving the rail.
         onSwitch={onSwitch}
+        onOpenRecord={current === undefined ? undefined : openRecord}
         onStartFresh={onStartFresh}
         startFreshDisabled={replying}
         value={draft}
@@ -112,8 +139,31 @@ export function HelmDock({
         onSend={send}
         disabled={!live || current === undefined}
       />
+      <HelmRecord
+        open={record.open}
+        record={record.record}
+        reading={record.record === undefined && record.failed === undefined}
+        failed={record.failed}
+        onCopied={onCopied}
+        onClose={() => setRecord({ open: false })}
+      />
     </div>
   );
+}
+
+/** The record sheet's own state, held for as long as it is open and no longer. */
+type Read = { open: boolean; record?: HelmDebugInfo; failed?: string };
+
+/**
+ * Why the record could not be read, in one sentence. **Fleet's own refusal
+ * where it gave one**, and the connection's where the request never left.
+ */
+function whyRecord(read: Extract<HelmDebugRead, { ok: false }>): string {
+  const outcome = read.outcome;
+  if (outcome.ok) return "The session could not be read.";
+  if (outcome.why === "not_connected") return "Fleet is not connected, so the session cannot be read.";
+  if (outcome.why === "refused") return outcome.error.message;
+  return "The session could not be read.";
 }
 
 /**
