@@ -139,7 +139,7 @@ async fn entry_zero_carries_the_reason_and_names_the_proposer() {
     assert!(
         zero.paths_added.is_empty(),
         "it adds no paths, because nothing has worked out what they are — the \
-         scope step's own revision is the entry that will"
+         declaring step's own revision is the entry that will"
     );
 }
 
