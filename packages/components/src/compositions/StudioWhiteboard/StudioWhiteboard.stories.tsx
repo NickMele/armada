@@ -159,3 +159,31 @@ export const ReadOnly: Story = {
     });
   },
 };
+
+/**
+ * Opened *at* a node rather than at nothing — a Job's detail reaching the
+ * Studio that dispatched it, #1362.
+ *
+ * **A `play`, because a still cannot tell the two apart.** What has to hold is
+ * that the board reports the selection it was given without anyone clicking,
+ * and that a person's own click then wins: a prop that re-asserted itself
+ * every render would take the board back off them.
+ */
+export const OpenedAtANode: Story = {
+  args: { nodes, edges, pick: "job", onNodeMoved: fn(), onSelectionChange: fn() },
+  play: async ({ canvas, args, userEvent, step }) => {
+    const job = canvas.getByRole("group", { name: /^Job: / });
+    await waitFor(() => expect(job).toBeVisible());
+
+    await step("the node it was opened at is selected, with nothing pressed", async () => {
+      await waitFor(() => expect(args.onSelectionChange).toHaveBeenLastCalledWith(["job"]));
+    });
+
+    await step("a person's own pick takes it from there", async () => {
+      const note = canvas.getByRole("group", { name: /^Note: The legend under the step bar/ });
+      note.focus();
+      await userEvent.keyboard("{Enter}");
+      await waitFor(() => expect(args.onSelectionChange).toHaveBeenLastCalledWith(["note-legend"]));
+    });
+  },
+};

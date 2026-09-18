@@ -184,7 +184,10 @@ export function job(status: string, over: Partial<JobSummary> = {}): JobSummary 
     status,
     workflow_id: WORKFLOW_ID,
     owner_manifest_id: MANIFEST_ID,
-    origin: "dispatched",
+    // **A registry value, since #1362 draws it.** `dispatched` was a word no
+    // `origin` row has, invisible while nothing rendered the field and a dash
+    // on every row the moment the board grew a Dispatched by column.
+    origin: "manual",
     urgency: "normal",
     atomic: false,
     model: "sonnet",

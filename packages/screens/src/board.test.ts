@@ -361,6 +361,21 @@ describe("the All tab's sections", () => {
   });
 });
 
+describe("the column that says where a job came from", () => {
+  // #1362. Fixed and not conditional: `origin` is `NOT NULL`, so there is no
+  // board where the track would be reserved for nothing.
+  it("is drawn on every board", () => {
+    expect(columnsFor([], null, false)).toContain("Dispatched by");
+    expect(BOARD_COLUMNS.at(-1)).toBe("Dispatched by");
+  });
+
+  it("comes after the three a person scans, and before Repository and Tasks", () => {
+    const columns = columnsFor([job({ tasks: { done: 1, working: 0, open: 1, dropped: 0 } })], null, false);
+    expect(columns.indexOf("Dispatched by")).toBeGreaterThan(columns.indexOf("Run time"));
+    expect(columns.indexOf("Dispatched by")).toBeLessThan(columns.indexOf(TASKS_COLUMN));
+  });
+});
+
 describe("a Board row's tasks", () => {
   it("names the Tasks column only where some row has a plan", () => {
     expect(columnsFor([job()], null, false)).toEqual(BOARD_COLUMNS);

@@ -209,17 +209,19 @@ export const BOARD_SORTS: readonly { id: BoardSort; label: string }[] = [
  * facts. The badge and the actions take no name: a status reads as one without
  * a header, and a column of buttons is not a fact about the Job.
  *
- * **Three, not four.** `Dispatched by` is the fourth fact the Board wants and
- * the one it cannot draw. The words exist: `enum-verbs.toml` carries every
- * `origin` row and `sub_dispatched` carries a form rather than a word, both
- * settled when #234 closed. Two things are still missing, and only the first is
- * a line: the generator's wanted list does not name `origin`, so no `ORIGIN`
- * map reaches Bridge; and `JobSummary` carries the full `Origin` without
- * `dispatched_by`, so on a sub-dispatched row the form has nothing to
- * fill its slot with. Naming a column before both are answered would reserve a
- * track for a value that never arrives, which reads as one that failed to load.
+ * **Four, since #1362.** `Dispatched by` is the fourth fact the Board wants,
+ * and both things that had stopped it are answered: #1115 put `origin` on the
+ * generator's wanted list, so the `ORIGIN` map reaches Bridge, and #1165 put
+ * `dispatched_by` on `JobSummary`, so a sub-dispatched row's form has its
+ * parent's id to fill the slot with. The comment that named those two gaps
+ * outlived them — the column is drawn now, and `originReading` is the one
+ * reading behind it and behind the header's own field.
+ *
+ * **Every row has one.** `origin` is `NOT NULL`, so this is a fixed column and
+ * not a conditional one like Repository and Tasks: there is no board where the
+ * track would be reserved for nothing.
  */
-export const BOARD_COLUMNS = ["Workflow", "Progress", "Run time"];
+export const BOARD_COLUMNS = ["Workflow", "Progress", "Run time", "Dispatched by"];
 
 /**
  * Drawn only on All repositories where Fleet serves more than one. **Before Tasks**: every row

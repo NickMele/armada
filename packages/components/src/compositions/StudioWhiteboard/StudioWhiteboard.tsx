@@ -62,6 +62,16 @@ export type StudioWhiteboardProps = {
   onNodeMoved?: (id: string, position: { x: number; y: number }) => void;
   onSelectionChange?: (ids: readonly string[]) => void;
   /**
+   * One node to arrive selected — the board opened *at* something rather than
+   * at nothing. `#1362`: a Job's detail opens the Studio that dispatched it,
+   * and the person lands on the part of the graph it came from.
+   *
+   * **Applied once, never held.** `onSelectionChange` stays the only report of
+   * what is selected; this is the other direction, and a prop that re-asserted
+   * itself would take the board back off the person clicking on it.
+   */
+  pick?: string | null;
+  /**
    * Nothing moves. A Studio reopens read-only (`docs/concepts/studio.md`), so
    * no node drags, by pointer or by arrow key, and `onNodeMoved` is never
    * called. Pan, zoom, fit and selection still work: reading is looking around.
@@ -247,12 +257,20 @@ function Board({
   edges: givenEdges,
   onNodeMoved,
   onSelectionChange,
+  pick = null,
   readOnly = false,
   children,
 }: StudioWhiteboardProps) {
   // Placement is the whiteboard's to hold between moves; the caller hears each
   // one through `onNodeMoved` and keeps it wherever positions are kept.
-  const [kept, setKept] = useState<BoardNode[]>(() => given.map(toBoardNode));
+  // **`pick` is read at mount and never again**, which is why it is folded into
+  // the initial state rather than applied by an effect: a later write here
+  // lands in the middle of React Flow's own change for a click, and the first
+  // node of a multiple pick came out as the whole of it. The board is keyed by
+  // its Studio, so opening another one is a fresh mount and a fresh pick.
+  const [kept, setKept] = useState<BoardNode[]>(() =>
+    given.map((entry) => ({ ...toBoardNode(entry), selected: pick !== null && entry.id === pick })),
+  );
   const nodes = useMemo(() => merged(given, kept), [given, kept]);
 
   const onNodesChange = useCallback(

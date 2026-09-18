@@ -508,6 +508,10 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
           key={studio.id}
           nodes={whiteboardNodes(studio, jobs, frameOf, board)}
           edges={whiteboardEdges(studio)}
+          // The node the surface was opened at, where it was opened at one —
+          // a Job's own node, reached from its detail (#1362). Applied once,
+          // so every pick after it is the person's.
+          pick={selectedNode}
           readOnly={!editable}
           onNodeMoved={(nodeId, position) => {
             // The whiteboard refuses a move while read-only already. This is the second lock.
