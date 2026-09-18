@@ -5,6 +5,12 @@
 //! Fleet only ever interpolates into a fixed template. That is what makes a
 //! learned one safe to keep and, later, to publish.
 //!
+//! **Beside , not under .** These are Armada's own
+//! source, and everything under  but the workflows is a record of one
+//! run on one machine and is ignored — a shipped description put there compiles
+//! in the tree that wrote it and in no fresh checkout. A repository's own
+//! description, when that is built, is what belongs under .
+//!
 //! **Shipped ones are compiled in, for the reason the workflow catalogue is.**
 //! A repository that has never been configured still meets a Fleet that knows
 //! `vitest`, and a description nobody can delete out from under a running Job
@@ -38,7 +44,7 @@ impl RunnerDescription {
 }
 
 /// Every runner compiled in, in the order they are declared here.
-const SHIPPED: &[&str] = &[include_str!("../../../.armada/runners/vitest.yml")];
+const SHIPPED: &[&str] = &[include_str!("../runners/vitest.yml")];
 
 /// The shipped description answering to `name`.
 ///

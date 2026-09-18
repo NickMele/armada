@@ -107,7 +107,7 @@ the first.
 ## What is built
 
 `run_changed` only, from shipped descriptions only. A Check names its runner in
-`armada.yml`, Fleet reads `.armada/runners/<name>.yml`, and a narrowed run uses
+`armada.yml`, Fleet reads `crates/config/runners/<name>.yml`, and a narrowed run uses
 that shape where the Check declares no `narrow` of its own.
 
 Nothing else on this page is code. There is no detection, no learning, no
