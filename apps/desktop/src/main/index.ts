@@ -917,9 +917,13 @@ void app.whenReady().then(() => {
     if (!text(studioId) || !text(nodeId) || at === null) return undefined;
     return (await connection?.studios.moveNode(studioId, nodeId, at)) ?? unsent;
   });
-  ipcMain.handle(CHANNELS.removeStudioNode, async (_event, studioId: unknown, nodeId: unknown) =>
-    text(studioId) && text(nodeId) ? ((await connection?.studios.removeNode(studioId, nodeId)) ?? unsent) : undefined,
-  );
+  // Everything picked, deleted as one write — #1411. **Every name is checked
+  // here before any of them crosses**, so a list carrying one thing that is not
+  // a node reaches no route at all rather than half a delete.
+  ipcMain.handle(CHANNELS.removeStudioNodes, async (_event, studioId: unknown, nodeIds: unknown) => {
+    if (!text(studioId) || !Array.isArray(nodeIds) || nodeIds.length === 0 || !nodeIds.every(text)) return undefined;
+    return (await connection?.studios.removeNodes(studioId, nodeIds)) ?? unsent;
+  });
   // Studio capture — #1290. **Main takes the frame, of the sender's own window
   // and no other**, so the one capability the preload gains is a Note on a
   // Studio rather than a screenshot the renderer could ask for and keep.

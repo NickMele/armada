@@ -508,8 +508,8 @@ const api: BridgeApi = {
   // drawn and nothing about the file's place on disk crosses with them.
   readStudioFrame: (studioId: string, nodeId: string): Promise<FrameRead> =>
     ipcRenderer.invoke(CHANNELS.readStudioFrame, studioId, nodeId),
-  removeStudioNode: (studioId: string, nodeId: string): Promise<Outcome> =>
-    ipcRenderer.invoke(CHANNELS.removeStudioNode, studioId, nodeId),
+  removeStudioNodes: (studioId: string, nodeIds: readonly string[]): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.removeStudioNodes, studioId, [...nodeIds]),
   decideStudioEdge: (studioId: string, edgeId: string, accepted: boolean): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.decideStudioEdge, studioId, edgeId, accepted),
   promoteOnStudio: (studioId: string, promotion: StudioPromotion): Promise<Outcome> =>

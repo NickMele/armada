@@ -83,7 +83,8 @@ export const addStudioNode = (studioId: string, node: StudioNodeByHand, position
   window.armada.addStudioNode(studioId, node, position);
 export const moveStudioNode = (studioId: string, nodeId: string, position: { x: number; y: number }) =>
   window.armada.moveStudioNode(studioId, nodeId, position);
-export const removeStudioNode = (studioId: string, nodeId: string) => window.armada.removeStudioNode(studioId, nodeId);
+export const removeStudioNodes = (studioId: string, nodeIds: readonly string[]) =>
+  window.armada.removeStudioNodes(studioId, nodeIds);
 export const decideStudioEdge = (studioId: string, edgeId: string, accepted: boolean) =>
   window.armada.decideStudioEdge(studioId, edgeId, accepted);
 // Studio capture — #1290. What a person pointed at; the frame is main's to take.
