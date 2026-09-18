@@ -403,7 +403,7 @@ fn proposal(
         origin: ipc::TopLevelOrigin::from(core_model::TopLevelOrigin::AutoDetected),
         urgency: ipc::Urgency::from(core_model::Urgency::Normal),
         // Undetermined, as it is for every other proposal: the child's own
-        // scope step settles what it writes, and a parent guessing paths for a
+        // declaring step settles what it writes, and a parent guessing paths for a
         // repository its child has not opened yet would be a second source for
         // an answer settled later with better information.
         atomic: false,

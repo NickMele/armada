@@ -425,6 +425,7 @@ fn lifted(name: String, declared: &Check, expect_exit_code: i64) -> ResolvedChec
         runs_at: declared.runs_at(),
         places: declared.places(),
         width: declared.width(),
+        runner: declared.runner().cloned(),
     }
 }
 

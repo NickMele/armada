@@ -44,7 +44,7 @@ Doing that by hand means knowing the workflow catalogue before you can ask for a
 | `title` | What the Job is called, written from the description or the prompt |
 | `workflow_id` | Which WorkflowDef the work should run under |
 | A graph, where the work is several Jobs | The order they must land in |
-| `scope`, where the work is several Jobs | What each one is for, and none of what the others are |
+| `facts`, where the work is several Jobs | What each one is for, and none of what the others are |
 
 **Naming the Job is part of the same reading**, so nobody types a title for work they have already described — the call has the description in front of it and a [Job](job.md) requires a name.
 
@@ -52,7 +52,9 @@ Doing that by hand means knowing the workflow catalogue before you can ask for a
 
 **One Job's `facts` is the request as the person wrote it.** Nothing was divided, so its part is all of it.
 
-**A member of a split gets its `scope` line and nothing else.** Not the rest of the request, and not the other Jobs' titles. What that line says is the whole of what its [Drone](drone.md) is told, which is why a plan of several whose member names no part is refused rather than handed the undivided request.
+**A member of a split gets its own `facts` and nothing else.** Not the rest of the request, and not the other Jobs' titles. What that line says is the whole of what its [Drone](drone.md) is told, which is why a plan of several whose member names no part is refused rather than handed the undivided request.
+
+**The word is `facts` and not `scope`, and that is the contract's ruling rather than a preference.** [Design system](../contracts/design-system.md)'s retired-names table says a page "saying it proposes scope is describing a different call from the one that exists" — the proposer stopped naming scope when scope became a step's declared paths, and this page went on calling a member's own `facts` by the old word. Nothing on the wire ever carried it: `crates/ipc/src/proposing.rs` has no such field.
 
 Why: a request naming a bug and an addition became two Jobs on 9 Sep 2026, and the first one did both. Every member carried the whole request, so the split lived in the two titles and nowhere a Drone reads — and the second Job was queued to redo work that had already landed.
 
@@ -68,7 +70,7 @@ What it costs is real and is the same cost in every direction: a Drone on a spli
 
 Why: naming paths credibly needs the repository, and a guess would be a second source for something a [Drone](drone.md) states later with better information.
 
-**The workflow's scope step does not fill them in either.** `declare_scope` sets that step's own `DeclaredPaths`, which is what the drift check reads; `write_targets` moves only on a scope revision, and `atomic` is frozen at dispatch. [Change a Job's scope](../journeys/change-a-jobs-scope.md) holds what each of the two lists is for.
+**The workflow's declaring step does not fill them in either.** `declare_scope` sets that step's own `DeclaredPaths`, which is what the drift check reads; `write_targets` moves only on a scope revision, and `atomic` is frozen at dispatch. [Change a Job's scope](../journeys/change-a-jobs-scope.md) holds what each of the two lists is for.
 
 **Shape is therefore not among them either.** A Job's shape follows from `write_targets` and `atomic`, and this call settles neither. [Convoy](convoy.md) — Three shapes, not two carries what the three are.
 
@@ -157,7 +159,7 @@ Why: every Job the request became already stands at `awaiting_approval`, so a pl
 
 **Its output is not stored as its own record.** `workflow_id`, `title` and the Job's own brief land on the [Job](job.md) — the last as `facts` — and no field says a proposal happened.
 
-**Its reasoning is.** Entry zero of a Job's `scope_revisions[]` carries a `rationale` — why that workflow. It names no paths, because none were proposed; the scope step's own declaration is the entry that names them. That rationale is the only durable trace the call ever ran.
+**Its reasoning is.** Entry zero of a Job's `scope_revisions[]` carries a `rationale` — why that workflow. It names no paths, because none were proposed; the step's own declaration is the entry that names them. That rationale is the only durable trace the call ever ran.
 
 | Depends on it | What it reads | Why |
 | --- | --- | --- |
@@ -175,7 +177,7 @@ A human override is evaluable against the decisions people actually made.
 
 **Proposing scope at dispatch is rejected.** A call that has not read the repository can only guess at paths, and one that has read it is a [Drone](drone.md) at many times the price.
 
-The scope step declares its paths through the scope tool, and the drift check compares that declaration against the real diff. A proposal made before anything was read is not something that check can weigh.
+A step declares its paths through the scope tool, and the drift check compares that declaration against the real diff. A proposal made before anything was read is not something that check can weigh.
 
 **Rescope-and-respawn stays the correction path** for a person changing a dispatched Job's scope, and that returns to this same gate. **A Drone asking for a path the Job does not name does not**: a [Judge](judge.md) answers whether it belongs to the step the Drone was given, and the Job never leaves `running`. See [Change a Job's scope](../journeys/change-a-jobs-scope.md).
 
@@ -195,4 +197,4 @@ It shares the `ModelClient` adapter with the [Judge](judge.md) — same client, 
 
 ## Open questions
 
-- **[revert-inherits-which-scope-revision]** Which of a Job's scope revisions a revert reads from the Job it undoes. What decides it: entry zero carries the proposer's rationale and no paths, so a revert reading entry zero inherits no scope at all. The two candidates are the scope step's own entry, which is the first that names paths, and the latest entry, which is what the Job actually ran under. They differ only on a Job that was rescoped mid-flight. The property this has to preserve is that a revert cannot arrive at a different shape from the Job it reverses, and that holds for either candidate as long as a revert reads rather than proposing afresh.
+- **[revert-inherits-which-scope-revision]** Which of a Job's scope revisions a revert reads from the Job it undoes. What decides it: entry zero carries the proposer's rationale and no paths, so a revert reading entry zero inherits no scope at all. The two candidates are the declaring step's own entry, which is the first that names paths, and the latest entry, which is what the Job actually ran under. They differ only on a Job that was rescoped mid-flight. The property this has to preserve is that a revert cannot arrive at a different shape from the Job it reverses, and that holds for either candidate as long as a revert reads rather than proposing afresh.

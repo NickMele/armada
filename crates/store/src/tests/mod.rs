@@ -170,6 +170,12 @@ pub fn workflow() -> FrozenWorkflow {
                         // the case every other fixture here already covers.
                         // #1444.
                         width: std::num::NonZeroU32::new(3),
+                        // Declared, so every round trip here walks a Check
+                        // that names its runner and the package it runs in.
+                        runner: Some(core_model::Runner::declared(
+                            "vitest".to_string(),
+                            Some("packages/screens".to_string()),
+                        )),
                     },
                     ResolvedCheck::DiffNonempty,
                     // Carried on the shared fixture for `when`'s reason: every

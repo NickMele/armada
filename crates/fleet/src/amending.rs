@@ -171,6 +171,11 @@ fn edit(wire: ManifestEdit) -> Result<Vec<Edit>, Unknown> {
                     requires: new.requires,
                     when: new.when,
                     narrow: new.narrow.map(narrowing),
+                    // **An edit a person made names no runner.** Detection
+                    // reads a scan's evidence and an edit form has none behind
+                    // it; a Check declared here runs whole until the file says
+                    // otherwise.
+                    runner: None,
                 }),
             );
             return Ok(match code {

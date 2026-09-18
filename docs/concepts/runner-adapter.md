@@ -104,6 +104,32 @@ later; an appended one can silently run the wrong thing while still looking
 right. Between "more to write" and "quietly wrong," this schema always takes
 the first.
 
+## What is built
+
+`run_changed`, from shipped descriptions, and enough detection for the Manifest
+proposer to name a runner on a repository nobody has configured.
+
+| Piece | State |
+|---|---|
+| A Check names its runner, and a narrowed run resolves `run_changed` from it | built |
+| `detect.command` — the program a workspace's own runnable names | built, and the only detection there is |
+| `detect.manifest`, `detect.dependency`, `detect.files` | read by nothing |
+| `one_test`, `run_group`, `run_pattern`, `run_failed` | no caller |
+| Learning, verification, publishing | not started |
+
+**Detection reads what a script runs, not what is installed.** A Scan records
+each runnable's command verbatim, so `"test": "vitest run"` gives the runner
+away — and a package holding vitest while its `test` script runs something else
+would make a dependency list say the opposite. That is also why the one signal
+built is the one Scan already carries; nothing reads a dependency list yet.
+
+**`output` is not read, and `--passWithNoTests=false` is why that is safe for
+now.** The third verification state below needs a runner's output parsed; vitest
+can be told to report it as an exit code instead, so the shipped description
+asks for that and the tri-state holds without a parser. A runner that cannot say
+it matched nothing by its exit code needs `output` read before it can be trusted
+to narrow.
+
 ## The six shapes are fixed
 
 Fleet's caller code knows how to invoke exactly these six. Where an adapter

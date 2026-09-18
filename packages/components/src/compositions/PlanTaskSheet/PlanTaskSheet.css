@@ -105,3 +105,26 @@
 .armada-task-sheet__absent {
   margin: 0;
 }
+
+/* A declared path the work never reached, and a path it reached that the plan
+   never named. **Neither is an error** — `crates/fleet/src/scope.rs` refuses to
+   fail a step for either, and a task has less standing than a step. So both
+   read as a quiet note on the row rather than a warning on it. */
+.armada-task-sheet__files li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.armada-task-sheet__unreached {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-task-sheet__unplanned {
+  color: var(--fg-subtle);
+}

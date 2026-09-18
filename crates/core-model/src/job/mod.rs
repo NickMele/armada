@@ -47,6 +47,7 @@ mod policy;
 mod prerequisite;
 mod record;
 mod review;
+mod runner;
 mod runs_at;
 mod scope;
 mod source;
@@ -99,6 +100,7 @@ pub use review::{
     Area, Became, Bucket, ChangedTest, Confidence, Dismissal, Finding, FollowUp, Proves,
     ReviewRecord, TestChange, TestsInChange, Untested, ViewStep,
 };
+pub use runner::Runner;
 pub use runs_at::RunsAt;
 pub use scope::{under, ContextSource, DeclarePlanAt, DeclaredPaths, EvidenceScope};
 pub use source::WorkflowSource;

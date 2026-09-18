@@ -150,7 +150,7 @@ fn not_covered(check: &ResolvedCheck, touched: &[String]) -> Option<Observed> {
 /// change touched feeds it. The third is a skip and not a pass — a Drone told
 /// `test` passed on a change that touched no crate would have been told
 /// something false about its own work.
-fn narrowed(
+pub(crate) fn narrowed(
     check: &ResolvedCheck,
     name: &str,
     run: &str,
@@ -166,7 +166,20 @@ fn narrowed(
         return whole;
     }
     match checks_runner::narrowed(check.narrowing(), touched) {
-        Narrowed::Whole => whole,
+        // **The Check's own declaration is answered first, and the runner's
+        // only where it said nothing.** A repository that wrote a `narrow` for
+        // this Check has said how it wants it narrowed; a shipped description
+        // of the runner is what answers where it has not. The same precedence
+        // `docs/concepts/runner-adapter.md` states for a repository's own
+        // description against a shipped one, one tier down.
+        Narrowed::Whole => match by_its_runner(check, touched) {
+            Some(command) => Planned::Command {
+                name: name.to_string(),
+                run: run.to_string(),
+                narrowed_to: Some(command),
+            },
+            None => whole,
+        },
         Narrowed::To(command) => Planned::Command {
             name: name.to_string(),
             run: run.to_string(),
@@ -185,6 +198,23 @@ fn narrowed(
                 .to_string(),
         }),
     }
+}
+
+/// The command this Check's runner narrows it to for these paths, where it has
+/// one.
+///
+/// **`None` is every reason a runner cannot answer**, and they are all the same
+/// answer to the caller: the Check runs whole. It names no runner; no shipped
+/// description answers to that name; the description declares no `run_changed`;
+/// or the paths cannot be spelled as arguments.
+///
+/// A learned or repository-local description is not read here yet — `shipped`
+/// is the only source, and the rest of the lifecycle in
+/// `docs/concepts/runner-adapter.md` is unbuilt.
+pub(crate) fn by_its_runner(check: &ResolvedCheck, touched: &[String]) -> Option<String> {
+    let runner = check.runner()?;
+    let described = config::shipped(runner.name())?;
+    checks_runner::run_changed(described.run_changed()?, runner.pkg(), touched)
 }
 
 /// What was observed of one declared Check, and what it printed.
@@ -209,7 +239,7 @@ pub(crate) struct Completed {
 /// The two variants are the whole reason the skip decision is pure: everything
 /// that does not need a process is settled while the list is being built, and
 /// the futures are made only for what is left.
-enum Planned {
+pub(crate) enum Planned {
     /// Already answered — a Check the step's changes do not cover, or the diff
     /// reading the caller took before this was called.
     Already(Observed),

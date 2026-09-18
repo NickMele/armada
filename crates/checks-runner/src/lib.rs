@@ -49,7 +49,7 @@ mod tests;
 
 pub use failing::{failing_tests, failing_tests_in};
 pub use matched::{one_test_ran, OneTestRan};
-pub use narrow::{narrowed, one_test, Narrowed};
+pub use narrow::{narrowed, one_test, run_changed, Narrowed};
 pub use run::{run, run_until, run_writing, run_writing_with_env, split, Attempt, Output, Writing};
 pub use serving::Served;
 pub use width::{resolve_width, CheckWidth, WIDTH_ENV};
