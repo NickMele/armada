@@ -3,7 +3,7 @@
 # Move the running Fleet — and Bridge, once it needs to — onto whatever is in
 # this working tree. Two callers: an agent, through Bash, after a merge that
 # touches Fleet or Bridge; and Bridge itself, from its own "restart on latest
-# build" act. Never on an allow list — `.claude/skills/restart-fleet/SKILL.md`
+# build" act. Never on an allow list — `.claude/skills/restart-app/SKILL.md`
 # says why, and says what to tell the owner before running this.
 #
 # **launchd is the parent, and that is the whole design.** `scripts/dev` starts

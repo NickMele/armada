@@ -1,9 +1,9 @@
 ---
-name: restart-fleet
+name: restart-app
 description: Move the owner's Fleet — and Bridge, once it needs to — onto the working tree's build, so a merged fix runs without him leaving Bridge for a terminal. Load after merging a change to Fleet or Bridge, before running `scripts/restart`.
 ---
 
-# Moving the owner's Fleet onto a merged fix
+# Moving the owner's Fleet and Bridge onto a merged fix
 
 **Run `scripts/restart` after a merge that touches Fleet or Bridge, when the
 owner is going to look at the result.** A Job was left undelivered on 12 Sep
@@ -22,6 +22,12 @@ needs it, reopens the window in front of him — the same reason
 `.claude/skills/armada-local/SKILL.md` says an agent does not run
 `scripts/dev`. Leaving it off every allow list is what turns "an agent ran
 this" into a prompt he sees before it happens.
+
+**Fast-forward the checkout first.** It builds what is in the working tree, not
+what is on `origin/main`. On 17 Sep 2026 the checkout was four merges behind, so
+the restart faithfully rebuilt the old code and Fleet came back on the protocol
+version it started on — the one thing the restart was run to change. `git pull
+--ff-only` before it, and read the version it prints at the end.
 
 **Say what it will do before you call it.** Not "restarting Fleet" — whether
 a Drone is working right now (it refuses if one is, naming the Job), and
