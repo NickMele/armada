@@ -26,7 +26,9 @@ afterEach(async () => {
 });
 
 /** The floors, as `spacing.css` declares them. Read, never retyped. */
-function floor(token: "--w-run-column-min" | "--w-step-panel-min" | "--window-fold-left"): number {
+function floor(
+  token: "--w-run-column-min" | "--w-step-panel-min" | "--window-fold-left" | "--sidebar-rail",
+): number {
   const value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(token));
   if (!Number.isFinite(value)) throw new Error(`${token} is not declared`);
   return value;
@@ -184,7 +186,6 @@ test("while folded, Navigation, Stats and Fleet are absent rather than hidden", 
 // move. One pixel narrower is the first fold. Two tests and not one, because
 // `mount` puts a second App in the document rather than replacing the first.
 test("at --window-fold-left the column still stands, on the floors exactly", async () => {
-  expect(floor("--window-fold-left")).toBe(1280);
   await atWidth(floor("--window-fold-left"));
   await expect.poll(leftColumn).not.toBe(null);
   bothFloorsHold();
@@ -207,7 +208,7 @@ test("at 1150 with Helm's dock closed the left column is drawn", async () => {
   // from outside it.
   await userEvent.keyboard("{Meta>}j{/Meta}");
   await expect.poll(leftColumn).not.toBe(null);
-  expect(leftColumnWidth()).toBeGreaterThan(48);
+  expect(leftColumnWidth()).toBeGreaterThan(floor("--sidebar-rail"));
 });
 
 // Above the band nothing moved, and below it nothing moved: the column is
@@ -215,11 +216,11 @@ test("at 1150 with Helm's dock closed the left column is drawn", async () => {
 test.each([1512, 1440])("at %i the left column is still expanded", async (width) => {
   await atWidth(width);
   await expect.poll(leftColumn).not.toBe(null);
-  expect(leftColumnWidth()).toBeGreaterThan(48);
+  expect(leftColumnWidth()).toBeGreaterThan(floor("--sidebar-rail"));
 });
 
-test.each([1100, 900, 768])("at %i the left column is still the 48px rail", async (width) => {
+test.each([1100, 900, 768])("at %i the left column is still the rail", async (width) => {
   await atWidth(width);
   await expect.poll(leftColumn).not.toBe(null);
-  expect(leftColumnWidth()).toBe(48);
+  expect(leftColumnWidth()).toBe(floor("--sidebar-rail"));
 });
