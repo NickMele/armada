@@ -54,6 +54,8 @@ export class StudioReads {
   private listing: string | null = null;
   /** The Studio held open, or `null`. */
   private opened: string | null = null;
+  /** The open Studio as Fleet last wrote it, kept so a Run node can be looked up by its server. */
+  private graph: Studio | null = null;
   private list: StudiosRead = { state: "none" };
 
   constructor(publish: Publish, port: () => number | null) {
@@ -71,6 +73,7 @@ export class StudioReads {
   /** Hold one Studio, or `null` to drop it. */
   async watchStudio(studioId: string | null): Promise<void> {
     this.opened = studioId;
+    this.graph = null;
     if (studioId === null) return this.publish({ studio: { state: "none" } });
     await this.readStudio();
   }
@@ -80,9 +83,31 @@ export class StudioReads {
     await Promise.all([this.readList(), this.readStudio()]);
   }
 
+  /**
+   * The Studio a capture window opened on one server Run lands its Notes on —
+   * #1294. `null` where no open Studio holds a Run node for that server.
+   *
+   * **Read off the Studio main is holding, never named by a renderer.** The
+   * review's rule is that the Studio is the Run's own, decided when the window
+   * opens; a click handler naming one would be a second answer to that.
+   */
+  servedBy(serverId: string): { id: string; name: string | null } | null {
+    const studio = this.graph;
+    if (studio === null) return null;
+    const held = studio.nodes.some(
+      (node) => node.kind === "run" && node.held === "server" && node.run_id === serverId,
+    );
+    // **The name as Fleet wrote it, `null` on an untitled Studio.** What an
+    // untitled one is called is copy, and copy is the renderer's.
+    return held ? { id: studio.id, name: studio.name ?? null } : null;
+  }
+
   /** `studio.changed`, or an act's own answer: the Studio whole, as Fleet wrote it. */
   changed(studio: Studio): void {
-    if (this.opened === studio.id) this.publish({ studio: { state: "read", studio } });
+    if (this.opened === studio.id) {
+      this.graph = studio;
+      this.publish({ studio: { state: "read", studio } });
+    }
     if (this.list.state === "read" && this.list.manifestId === studio.manifest_id) {
       this.showList({ ...this.list, list: { studios: foldStudio(this.list.list.studios, studio) } });
     }
@@ -90,7 +115,10 @@ export class StudioReads {
 
   /** `studio.deleted`: gone from the list, and the open Studio says so rather than failing. */
   deleted(gone: StudioDeleted): void {
-    if (this.opened === gone.id) this.publish({ studio: { state: "gone", studioId: gone.id } });
+    if (this.opened === gone.id) {
+      this.graph = null;
+      this.publish({ studio: { state: "gone", studioId: gone.id } });
+    }
     if (this.list.state === "read" && this.list.manifestId === gone.manifest_id) {
       const studios = this.list.list.studios.filter((one) => one.id !== gone.id);
       this.showList({ ...this.list, list: { studios } });
@@ -230,6 +258,7 @@ export class StudioReads {
   close(): void {
     this.listing = null;
     this.opened = null;
+    this.graph = null;
     this.list = { state: "none" };
   }
 
@@ -271,6 +300,7 @@ export class StudioReads {
     if (port === null) return this.publish({ studio: { state: "failed", studioId, outcome: NOT_CONNECTED } });
     const answer = await ask(port, "GET", member(studioId));
     if (this.opened !== studioId) return;
+    this.graph = answer.ok ? (answer.body as Studio) : null;
     this.publish({
       studio: answer.ok
         ? { state: "read", studio: answer.body as Studio }

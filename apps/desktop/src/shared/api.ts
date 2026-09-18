@@ -9,6 +9,7 @@
 import type {
   AddTask,
   Artifact,
+  CaptureOpened,
   CallRead,
   CheckOutputRead,
   ClearOutcome,
@@ -38,6 +39,7 @@ import type {
   WhenRefused,
 } from "@armada/protocol";
 import type { BridgeState, Summons } from "./bridge";
+import type { CaptureAimed, CaptureHeld, CaptureWheel, CaptureWindowState } from "./capture-window";
 import type { Pattern } from "./haptics";
 import type { PlanEditAnswer } from "@armada/screens/src/plan-edits";
 import type { EditManifest, SaveManifestFile } from "@armada/protocol";
@@ -841,6 +843,46 @@ export type BridgeApi = {
    * published and refuses anything that is not `https:`.
    */
   openStudioNode: (studioId: string, nodeId: string) => Promise<Followed>;
+  /**
+   * Open the capture window on a server Run, pinned to that Run's own loopback
+   * origin — #1294, `docs/practices/capture-window.md`.
+   *
+   * **A server id and one of its links, never a composed address.** Main
+   * resolves it off the live holder Fleet published, exactly as `openServerLink`
+   * does, and loading a page in a window is strictly more than handing it to
+   * the OS.
+   *
+   * **The one entry any Bridge surface has.** Everything the window then does
+   * is `captureWindow` below, which only that window's own bar can reach.
+   */
+  openCaptureWindow: (serverId: string, url: string) => Promise<CaptureOpened>;
+  /**
+   * What the capture window's own bar may ask of the window it belongs to.
+   *
+   * **Every entry is answered for the calling bar and no other window.** Main
+   * finds the window by the sender's own `webContents`, so a bar cannot name
+   * one, and the page below it holds no preload and reaches none of this.
+   */
+  captureWindow: {
+    /** Install the listener that draws the bar, and take its first state. */
+    read: (onChanged: (state: CaptureWindowState) => void) => () => void;
+    /** Turn capture on or off: the bar covers the page and a press points. */
+    arm: (on: boolean) => Promise<CaptureWindowState | null>;
+    /** What is under the pointer, in the page's own viewport coordinates. */
+    aim: (x: number, y: number) => Promise<CaptureAimed | null>;
+    /** Take the capture under the pointer. **The capture stays in main**; this is what to draw. */
+    hold: (x: number, y: number) => Promise<CaptureHeld | null>;
+    /** Drop what is held without capturing it. */
+    release: () => Promise<void>;
+    /** Put the held Note on the Studio this window opened on. Main takes the frame. */
+    save: (said: string) => Promise<Outcome>;
+    /** Reload the pinned origin. There is no address field and no history. */
+    reload: () => Promise<void>;
+    /** Hand the last refused address to the system browser, on a person's press. */
+    followRefused: () => Promise<void>;
+    /** A wheel taken while armed, so the page still scrolls under the outline. */
+    scroll: (wheel: CaptureWheel) => void;
+  };
   /**
    * Take the work. **The counterpart to `approveDispatch`, at the other end of
    * the Job.** On the workflow's last step Fleet commits and delivers before

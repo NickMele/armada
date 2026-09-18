@@ -1,0 +1,84 @@
+/* The capture window's bar, `#1294`. Bridge's chrome above a page Bridge did
+ * not author — `docs/practices/capture-window.md`, *What a person sees*.
+ *
+ * NO TOKEN FOR THE ROW HEIGHT, so it is composed from the spacing scale the
+ * same way `TitleBar.css` composes its own. Both are the same height on
+ * purpose, and main reads the same three tokens to size the view.
+ *
+ * The document is transparent below this bar so the page shows through the
+ * view: while capture is armed the bar's view covers the whole window, and
+ * only this strip and the capture layer paint. */
+.armada-capture-bar {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-sunken);
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+}
+
+.armada-capture-bar__row,
+.armada-capture-bar__said {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: calc(var(--space-8) + var(--space-2) + var(--space-1));
+  padding-inline: var(--space-3);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+/* The Run's own name, marked so the eye lands on it first: what is below this
+   bar is that server and not Armada. */
+.armada-capture-bar__run {
+  flex: none;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-xs);
+}
+
+/* In full and never abbreviated: the whole point of the bar is that a person
+   can read where they are without an address field to type into. */
+.armada-capture-bar__address {
+  flex: none;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+/* The one track that gives: the Studio's name is what shortens on a narrow
+   window, because the address and the acts are not the parts to lose. */
+.armada-capture-bar__aim {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-subtle);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-capture-bar__said {
+  background: var(--bg-overlay);
+}
+
+.armada-capture-bar__ended {
+  color: var(--degraded);
+}
+
+.armada-capture-bar__refused {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--error);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-capture-bar__frames {
+  flex: none;
+  color: var(--fg-subtle);
+}
