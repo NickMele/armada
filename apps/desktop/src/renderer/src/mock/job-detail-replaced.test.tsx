@@ -10,6 +10,7 @@ import { page } from "vitest/browser";
 import { killed, running } from "@armada/screens/src/fixtures/build/index";
 import { watchedRead } from "@armada/screens/src/fixtures/build/base";
 import type { JobFixture } from "@armada/screens/src/fixtures/fixture";
+import type { Watched } from "@armada/protocol";
 
 import { onJob } from "./scenario";
 import type { Scenario } from "./scenario";
@@ -33,28 +34,41 @@ function theJobThatTookOver(): JobFixture {
   const fixture = running();
   const job = { ...fixture.job, ...REPLACEMENT, redispatched_from: killed().job.id };
   if (fixture.watched.state !== "read") return { ...fixture, job };
-  return { ...fixture, job, watched: watchedRead({ ...fixture.watched.detail, job }) };
+  // The backward read Fleet fills on open: the predecessor's handle, not the
+  // ULID on the column. #1474. The read moves onto the new id with the job —
+  // `asRow`'s rule — or the detail reads as some other job's.
+  const replaces = { job_id: killed().job.id, handle: killed().job.handle };
+  const detail = { ...fixture.watched.detail, job, replaces };
+  const watched: Watched = { state: "read", jobId: job.id, detail };
+  return { ...fixture, job, watched };
+}
+
+/** `killed`, naming the job that took the work on. */
+function theJobThatWasReplaced(): JobFixture {
+  const from = killed();
+  if (from.watched.state !== "read") return from;
+  const replaced_by = { job_id: REPLACEMENT.id, handle: REPLACEMENT.handle };
+  return { ...from, watched: watchedRead({ ...from.watched.detail, replaced_by }) };
 }
 
 /** The killed job, its replacement, and the one link between them. */
 function aRedispatch(): Scenario {
+  return bothJobs(onJob(theJobThatWasReplaced()));
+}
+
+/** The same redispatch, landed on from the other end. */
+function landedOnTheReplacement(): Scenario {
+  return bothJobs(onJob(theJobThatTookOver()));
+}
+
+/** Both ends served, whichever of the two the scenario opens on. */
+function bothJobs(base: Scenario): Scenario {
+  const dead = theJobThatWasReplaced();
   const replacement = theJobThatTookOver();
-  const from = killed();
-  const dead: JobFixture =
-    from.watched.state !== "read"
-      ? from
-      : {
-          ...from,
-          watched: watchedRead({
-            ...from.watched.detail,
-            replaced_by: { job_id: replacement.job.id, handle: replacement.job.handle },
-          }),
-        };
-  const base = onJob(dead);
   return {
     ...base,
     state: { ...base.state, jobs: [dead.job, replacement.job] },
-    reads: { ...base.reads, [replacement.job.id]: replacement },
+    reads: { ...base.reads, [dead.job.id]: dead, [replacement.job.id]: replacement },
   };
 }
 
@@ -77,6 +91,21 @@ test("one press opens the job that replaced it", async () => {
   mount(aRedispatch());
   await page.getByRole("button", { name: `Open ${REPLACEMENT.handle}` }).click();
   await expect.element(page.getByText(REPLACEMENT.handle, { exact: true }).first()).toBeVisible();
+});
+
+// The defect the owner hit: the header said `Redispatched from` and then a
+// ULID. #1474.
+test("the header names the job this one replaced by its handle, never its id", async () => {
+  mount(landedOnTheReplacement());
+  const said = page.getByRole("button", { name: killed().job.handle });
+  await expect.element(said).toBeVisible();
+  expect(page.getByText(killed().job.id, { exact: true }).query()).toBeNull();
+});
+
+test("one press on that fact opens the job it replaced", async () => {
+  mount(landedOnTheReplacement());
+  await page.getByRole("button", { name: killed().job.handle }).click();
+  await expect.element(page.getByText("This job was redispatched")).toBeVisible();
 });
 
 test("a job killed and left alone says nothing extra", async () => {

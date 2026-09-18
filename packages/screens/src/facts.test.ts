@@ -269,23 +269,53 @@ describe("a Studio that has been deleted", () => {
   });
 });
 
-// The quieter half of #1439: the job that took the work on says where it came
-// from, in the slot a sub-dispatched job names its parent in.
+// The quieter half of #1439, made readable by #1474: the job that took the
+// work on names the one it replaced, by its handle and pressable.
 describe("which job it replaced", () => {
   const now = Date.now();
+  const FROM = { job_id: "01FAILED000000000000000000", handle: "41-parse-the-manifest" };
+
+  /** A detail carrying whatever the lineage read came back with. */
+  function replacing(replaces: JobDetail["replaces"]): JobDetail {
+    return { ...detail(undefined), ...(replaces === undefined ? {} : { replaces }) };
+  }
 
   it("draws nothing on a job that replaced nothing", () => {
-    expect(factsOf(job(), null, now).some((fact) => fact.label === "Redispatched from")).toBe(
-      false,
-    );
+    expect(
+      factsOf(job(), replacing(undefined), now).some(
+        (fact) => fact.label === "Redispatched from",
+      ),
+    ).toBe(false);
   });
 
-  it("closes the run with the job it replaced", () => {
-    const drawn = factsOf(job({ redispatched_from: "01FAILED000000000000000000" }), null, now);
+  it("closes the run with the handle of the job it replaced, pressable", () => {
+    const drawn = factsOf(job({ redispatched_from: FROM.job_id }), replacing(FROM), now);
     expect(drawn.at(-1)).toEqual({
       label: "Redispatched from",
-      value: "01FAILED000000000000000000",
+      value: FROM.handle,
       mono: true,
+      opensJob: FROM.job_id,
     });
+  });
+
+  // The defect: a ULID nobody can read or press. Nothing falls back to it.
+  it("never draws the raw id, before the read lands or after it comes back empty", () => {
+    const carrying = job({ redispatched_from: FROM.job_id });
+    for (const whole of [null, replacing(undefined)]) {
+      expect(factsOf(carrying, whole, now).some((fact) => fact.value === FROM.job_id)).toBe(false);
+    }
+  });
+
+  // A dead end named rather than left silent — `studioGoneFact`'s rule. The
+  // id points at a job nothing holds, and saying nothing would read as a job
+  // nobody redispatched.
+  it("says the job it replaced is forgotten, where the read comes back empty", () => {
+    const drawn = factsOf(job({ redispatched_from: FROM.job_id }), replacing(undefined), now);
+    expect(drawn.at(-1)).toEqual({ label: "The job it replaced has been forgotten" });
+  });
+
+  it("claims neither way before the read lands", () => {
+    const drawn = factsOf(job({ redispatched_from: FROM.job_id }), null, now);
+    expect(drawn.some((fact) => String(fact.label).includes("forgotten"))).toBe(false);
   });
 });

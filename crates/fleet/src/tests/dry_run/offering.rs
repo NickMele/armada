@@ -76,7 +76,7 @@ async fn the_tool_points_at_the_block_that_names_the_checks() {
         .find(|step| step.id() == &StepId::new("implement"))
         .expect("the step")
         .clone();
-    let offer = Checking::at(workflow.frozen(), &step).expect("an offer");
+    let offer = Checking::at(workflow.frozen(), &step, None).expect("an offer");
     let heading = offer
         .text()
         .lines()
@@ -123,5 +123,69 @@ fn a_step_with_no_checks_is_not_offered_the_dry_run() {
         .find(|step| step.id() == &StepId::new("implement"))
         .expect("the step")
         .clone();
-    assert!(Checking::at(unchecked.frozen(), &step).is_none());
+    assert!(Checking::at(unchecked.frozen(), &step, None).is_none());
+}
+
+/// The `implement` step of the one-step fixture, which declares a Check.
+fn a_step_with_checks() -> (config::ResolvedWorkflow, core_model::ResolvedStep) {
+    let workflow = one_step("/usr/bin/true");
+    let step = workflow
+        .frozen()
+        .steps()
+        .iter()
+        .find(|step| step.id() == &StepId::new("implement"))
+        .expect("the step")
+        .clone();
+    (workflow, step)
+}
+
+/// **The number, not the word "limit".** A part told only that one exists
+/// cannot tell whether spending one early risks running out at the second task
+/// of seven, so it spends none — which is what happened on 17 Sep. #1456.
+#[test]
+fn the_offer_says_how_many_whole_runs_are_left() {
+    use crate::briefing::Allowance;
+
+    let said = |allowance| {
+        let (workflow, step) = a_step_with_checks();
+        Checking::at(workflow.frozen(), &step, Some(allowance))
+            .expect("an offer")
+            .text()
+            .to_string()
+    };
+
+    let fresh = said(Allowance::of(3, 0));
+    assert!(
+        fresh.contains("ask for every check 3 times"),
+        "a part that has spent none is told what it gets: {fresh}"
+    );
+    assert!(
+        !fresh.contains("are left"),
+        "and not told a remainder equal to the whole, which reads as a warning: {fresh}"
+    );
+
+    let partly = said(Allowance::of(3, 2));
+    assert!(
+        partly.contains("3 times") && partly.contains("1 of those are left"),
+        "a part that has spent two is told both: {partly}"
+    );
+
+    let spent = said(Allowance::of(3, 3));
+    assert!(
+        spent.contains("used all of them") && spent.contains("Naming one check is still free"),
+        "a part with none left is told the free one remains: {spent}"
+    );
+}
+
+/// A brief assembled outside a spawn has no allowance to state, and says a
+/// limit exists rather than inventing a number.
+#[test]
+fn an_offer_with_no_allowance_says_a_limit_exists_and_no_number() {
+    let (workflow, step) = a_step_with_checks();
+    let said = Checking::at(workflow.frozen(), &step, None)
+        .expect("an offer")
+        .text()
+        .to_string();
+    assert!(said.contains("There is a limit"), "{said}");
+    assert!(!said.contains("3 times"), "it invents no number: {said}");
 }

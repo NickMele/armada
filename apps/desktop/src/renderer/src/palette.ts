@@ -121,10 +121,12 @@ export function dormantIn(where: {
     // focus, and opening the palette took that focus away. The row is drawn so
     // the binding is discovered, and it says what it needs.
     send_message: "type in a message box first",
-    // It said "the rail does not hide yet" until the column learned to fold
-    // itself under `--window-fold-left`. It does hide now — just never because
-    // somebody asked it to, which is the half of this act that is still unbuilt.
-    toggle_sidebar: "the column folds itself when space is short; nothing toggles it by hand",
+    // #1435 briefly made this read "the column folds itself … it does hide
+    // now". It does not: under `--window-fold-left` the column collapses to
+    // its 48px rail, which is what the owner asked for and what #1435 got
+    // wrong. So nothing hides the column at any width, by hand or otherwise,
+    // and this act is unbuilt in full rather than in half.
+    toggle_sidebar: "the column collapses itself when space is short; nothing hides it by hand",
     history: "no back and forward yet",
   };
 }

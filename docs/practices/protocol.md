@@ -1462,7 +1462,53 @@ absent on a Job whose Studio was deleted — the nodes cascade with it — and
 *that Studio is no longer there*, with no control, which is `job-board.md`'s *A
 Board outlives its Workspace* one scope smaller.
 
-## Protocol 16.6: a Note says which server it was captured on
+## Protocol 16.5: a proposed Check names the runner that drives it
+
+`#1456`. `ProposedCheck.runner`, additive and optional — `{ name, pkg? }`,
+carried by the new `ProposedRunner` — naming the runner setup detected from what
+a workspace's own script runs. Absent is every Check nothing detected one for,
+which is every Check before this and every Check in a repository whose scripts
+name no runner Armada ships a description of.
+
+**Minor, and the one direction that matters is Fleet to Bridge.** Bridge reads a
+proposal to draw it and to let a person edit lines by name; it does not compose
+a `ProposedCheck`, so the strict direction is never exercised. An older Bridge
+meeting the field ignores it and draws what it always drew — and what a person
+approves is the proposal's own `text`, the edits applied through `config`'s one
+writer, so the `runner:` block reaches them in the file whether or not the
+surface knows the field exists.
+
+**What travels is a name and a package, never a command.** Every way of running
+less than a whole Check is written once in that runner's own description rather
+than per Check — `docs/concepts/runner-adapter.md`. So this field does not grow
+when a shape is added to that schema, and a Bridge rendering it needs to know
+nothing about what any runner can do.
+
+## Protocol 16.6: a redispatched Job names the one it replaced, readably
+
+`#1474`. `JobDetail.replaces`, additive — `{ job_id, handle }`, the Job this one
+replaced, beside `replaced_by` and shaped the same.
+
+**The same column, followed the other way.** 16.2 read `redispatched_from` as a
+predicate to answer *which Job replaced this one*; this follows it as a column
+to answer *which Job this one replaced*. Still no second record, still nothing
+written, and V82's index is the other direction's — this join is `job_id` at
+both ends. `store::lineage` holds both reads, and Fleet composes both handles
+with `core_model::handle_of` at the seam.
+
+**A DTO of its own rather than `ReplacedBy` reused**, though the two fields
+match today. They answer opposite questions of one record, and the direction is
+the whole content of the answer.
+
+**Why anything crossed at all.** The id already crossed as
+`JobSummary.redispatched_from`, and the header drew it: a bare ULID, which is
+the one fact on the screen about where the Job came from and the one fact a
+person can neither read nor press. What was missing is the predecessor's number
+and title, which live on a row Bridge does not hold.
+
+**Additive, so a Fleet ahead of a Bridge sends a field it ignores** and the
+header draws the ULID it already drew.
+## Protocol 16.7: a Note says which server it was captured on
 
 `#1294`. `StudioCapture.served`, optional — `{ run, name, address }`: the instance Fleet held, what
 the Manifest calls it, and the origin the capture window was pinned to. Additive: one new optional
@@ -1478,10 +1524,23 @@ together are the page. The address is not an identity and the field does not cla
 whatever bound that loopback port owns the origin, which is why capture ends with the Run —
 `docs/practices/capture-window.md`, *What this does not claim*.
 
-**This was written as 16.5 and is 16.6**, because `#1456` took 16.5 underneath it while the branch
-was open — the fourth time this file records that collision. **It was not caught by a conflict**:
-both branches wrote `minor = 5`, so the merge was clean and the two sides agreed on a number that
-meant two different things. The merge is where to re-read this file, not the diff.
+**This was written as 16.5, then 16.6, and is 16.7.** `#1456` took 16.5 underneath it and `#1477`
+took 16.6, both while this branch was open — the fourth and fifth times this file records the
+collision, and both on one day.
+
+**Re-reading the file is not the check.** The 16.5 collision produced no conflict at all: both
+branches wrote `minor = 5`, so git had nothing to disagree about and two additive changes agreed on
+a number meaning two different things. A branch that reads 16.7 and a `main` that reads 16.7 look
+identical and are not. The check is whether the bump is still the branch's own:
+
+```
+git log origin/main..HEAD -- protocol-version.toml
+```
+
+**Nothing printed, on a branch whose commits touched that file, means the bump was absorbed by a
+merge and the number now belongs to somebody else.** Run it after bringing `main` in, before the
+Checks — not once at the start, because `main` moves under an open branch and did three times under
+this one.
 
 ## Open questions
 

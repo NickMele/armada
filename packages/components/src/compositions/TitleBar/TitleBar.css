@@ -38,7 +38,8 @@
 .armada-title-bar__dispatch,
 /* Not interactive, but it opts out for the same reason the rest do: a drag
    region swallows the pointer, and a `title` tooltip inside one never opens.
-   The dot's whole job while the column is folded is to be hovered. */
+   The dot carries pid, port and protocol nowhere, so being hovered for its
+   `title` is its whole second job. */
 .armada-title-bar__fleet {
   -webkit-app-region: no-drag;
 }
@@ -180,11 +181,11 @@
   flex: none;
 }
 
-/* Fleet's liveness while the left column is folded — #1437. Drawn nowhere
-   else, so this rule is only ever live in the one band between
-   `--layout-breakpoint` and `--window-fold-left` with Helm's dock beside the
-   content; at every other width the Fleet panel's own dot is the reading and
-   this element is not in the tree.
+/* Fleet's liveness, at every width — #1438, corrected 18 Sep 2026. It was
+   drawn only while the left column was absent; the column is never absent now,
+   and the owner kept the dot rather than letting it go with the band it was
+   built for. So the Fleet panel's own dot and this one are both on screen at
+   every width, which he was shown and chose.
 
    The wrapper exists for the hover target, not the drawing: `--dot` is 6px and
    a 6px `title` target is one a person misses, so `--space-1` around it gives
