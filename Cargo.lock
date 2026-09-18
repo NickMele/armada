@@ -75,6 +75,7 @@ dependencies = [
  "fleet",
  "ipc",
  "notify",
+ "serde",
  "store",
  "testkit",
  "tokio",
