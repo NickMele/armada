@@ -7,6 +7,7 @@
 // is a union on it. Its state, an edge's kind and its standing stay `string`.
 
 import type { CheckoutRunUnderway } from "./rehearsal";
+import type { ServerState } from "./servers";
 
 /** Every Studio one repository keeps, the last touched first — `GET /studios`. */
 export type StudioList = {
@@ -40,11 +41,13 @@ export type Studio = StudioSummary & {
 /** What a node holds, tagged by its kind. `docs/concepts/studio.md`, Nodes. */
 export type StudioNodeContent =
   /**
-   * A reference to the run, never its status. `kept` is absent while the run
-   * is still there to read; present is partial — the run has been swept and
-   * this is all there is. Since 14.10, #1289.
+   * A reference to a run, never its status. `held` says which of Fleet's two
+   * readers answers for `run_id` — **absent is a run in the checkout**, which
+   * is every node written before 16.2. `kept` is absent while it is still
+   * there to read; present is partial — the record is gone and this is all
+   * there is. Since 14.10, #1289; `held` since 16.2, #1345.
    */
-  | { kind: "run"; run_id: string; kept?: StudioRunKept }
+  | { kind: "run"; run_id: string; held?: StudioRunHeld; kept?: StudioRunKept }
   /** What a person pointed at and said, fixed at capture. `capture` since 14.11, #1290. */
   | { kind: "note"; said: string; capture?: StudioCapture }
   | { kind: "cluster"; title: string }
@@ -405,6 +408,37 @@ export type StudioRunStarted = {
   studio: Studio;
   node_id: string;
   run: CheckoutRunUnderway;
+};
+
+/**
+ * Who holds what a Run node's `run_id` names. A checkout run is read back by
+ * `observe_checkout_run`; a server by `list_servers`, `observe_server` and
+ * `stop_server`. Since 16.2, #1345.
+ */
+export type StudioRunHeld = "checkout" | "server";
+
+/**
+ * `POST /studios/:studio_id/start_server`. Starts a Command with `serve` in
+ * the checkout of the repository this Studio belongs to — so it names no
+ * repository and no workspace, as `start_server` does not. Since 16.2, #1345.
+ */
+export type StartStudioServer = {
+  name: string;
+  position: StudioPosition;
+  produced_by?: string;
+};
+
+/**
+ * `start_studio_server`'s answer, 202: the Studio whole, the node it made, and
+ * the instance. **One instance per checkout** — a name already serving is
+ * answered with the one that is up and `already_up` true, and the node is
+ * still made. Since 16.2, #1345.
+ */
+export type StudioServerStarted = {
+  studio: Studio;
+  node_id: string;
+  server: ServerState;
+  already_up: boolean;
 };
 
 // Promotion — `docs/concepts/studio.md`, Promotion. Since 14.11, #1291.

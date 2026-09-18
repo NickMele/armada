@@ -19,6 +19,7 @@ import {
   CardHeader,
   CardTitle,
   Dialog,
+  DropdownMenu,
   StudioAddNode,
   StudioFrameSheet,
   StudioName,
@@ -34,8 +35,10 @@ import {
 } from "@armada/components";
 import type { StudioNodeByHand, StudioNodeByHandKind, StudioPickedAct } from "@armada/components";
 import type {
+  CheckoutRunSheetRead,
   JobSummary,
   Outcome,
+  ServerState,
   Studio,
   StudioPosition,
   StudioPromotion,
@@ -43,7 +46,7 @@ import type {
 } from "@armada/protocol";
 
 import { said } from "./copy";
-import { openStudioNode, type OpenStudioNode } from "./opening";
+import { openServerLink, openStudioNode, type OpenServerLink, type OpenStudioNode } from "./opening";
 import { absoluteOf } from "./duration";
 import {
   framesDrawn,
@@ -57,6 +60,7 @@ import { useStudioFrames, type ReadStudioFrame } from "./studio-frames";
 import { clearingLabel, clearingOf, clearingSaid } from "./studio-clearing";
 import { keepsAnAddress } from "./studio-promotion";
 import { useAddNodeKeys } from "./studio-keys";
+import { studioStartEntries, studioStarts, type StudioStart } from "./studio-starting";
 import type { StudioAnswer, StudioRead, StudiosRead } from "./studio-reads";
 import { useStudioPromotion } from "./StudioPromotion";
 
@@ -129,6 +133,31 @@ export type StudiosProps = {
    * string composed here reaches the shell.
    */
   onOpenAddress: OpenStudioNode;
+  /**
+   * What this repository's checkout declares, as the Manifest surface reads it
+   * — the Checks, the Commands and the servers a Studio can start (#1345).
+   */
+  runSheet: CheckoutRunSheetRead;
+  /**
+   * Every server Fleet holds. **A Run node holding one reads this rather than a
+   * copy**, so a Studio left open says what the server is doing now.
+   */
+  servers: readonly ServerState[];
+  /** The clock the window ticks on, for how long a server has been up. */
+  now: number;
+  /** Run one Check or Command in the checkout, as a Run node on this Studio. */
+  onStartRun: (name: string, position: StudioPosition) => Promise<Outcome>;
+  /** Start one server in the checkout, as a Run node holding the instance. */
+  onStartServer: (name: string, position: StudioPosition) => Promise<Outcome>;
+  /** End the instance a picked Run node holds. */
+  onStopServer: (serverId: string) => Promise<Outcome>;
+  /**
+   * Hand one of a server's links to the system browser — main checks it against
+   * the links it is already holding for that server, so no string composed here
+   * reaches the shell. `Followed` rather than `Outcome`: opening an address has
+   * its own reasons for failing, and they are the same ones a forge link's are.
+   */
+  onOpenServerLink: OpenServerLink;
 };
 
 export function Studios(props: StudiosProps) {
@@ -308,6 +337,8 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
   // here rather than in the control, because `N`, `V` and `S` open it too.
   const [adding, setAdding] = useState<StudioNodeByHandKind | null>(null);
   const [addingOut, setAddingOut] = useState(false);
+  /** A start is out to Fleet: the menu does not send a second — #1345. */
+  const [starting, setStarting] = useState(false);
   useAddNodeKeys(open.editable && live, setAdding);
   // The pictures the Notes kept, and the `blob:` each one becomes — #1352.
   const frames = useStudioFrames(props.onReadFrame, open.id);
@@ -321,6 +352,15 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
   const proposed = proposedRelations(studio, jobs);
   const onBoard = picked.filter((id) => studio.nodes.some((node) => node.id === id));
   const selected = onBoard.length === 1 ? studio.nodes.find((node) => node.id === onBoard[0]) : undefined;
+  const board = { servers: props.servers, now: props.now };
+  // The instance a picked Run node holds, while Fleet still holds it — #1345.
+  // **The live holder, never the node**: what a server is doing is Fleet's, and
+  // a node that kept a result is one whose server is already gone.
+  const serving =
+    selected?.kind === "run" && selected.held === "server"
+      ? props.servers.find((one) => one.id === selected.run_id && one.phase !== "exited")
+      : undefined;
+  const starts = studioStarts(props.runSheet);
   // **The row, not the node, is what opens.** A Job node holds a reference and
   // no status, so a Job the Board no longer carries is one there is nothing to
   // read — and the node draws its id, which is what says so.
@@ -355,6 +395,22 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
   }
 
   /**
+   * Start one entry, and let the node it makes land where the person is
+   * looking. **A server goes to its own operation** — it is held rather than
+   * run, and `start_studio_run` refuses a name carrying `serve` — #1345.
+   */
+  function start(started: StudioStart, position: StudioPosition): void {
+    setStarting(true);
+    const out = started.server
+      ? props.onStartServer(started.name, position)
+      : props.onStartRun(started.name, position);
+    void out.then((outcome) => {
+      setStarting(false);
+      answered(outcome);
+    });
+  }
+
+  /**
    * Bridge's own acts on what is picked — no rung, and nothing Fleet holds.
    * **Acts on the node rather than presses on its card**: the board is a drag
    * surface, and a control inside a node is a press fighting a drag. Opening an
@@ -371,6 +427,25 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
     ...(openable === undefined
       ? []
       : [{ id: "job", label: "Open Job", press: () => props.onOpenJob(openable.id) }]),
+    // **A server's links and its Stop are acts on the node**, for the reason
+    // every act here is: the board is a drag surface, and a button inside a card
+    // is a press fighting a drag — #1345, and `StudioNode`'s own rule.
+    ...(serving === undefined
+      ? []
+      : serving.links.map((link, at) => ({
+          id: `link-${at}`,
+          label: `Open ${link.name ?? link.url}`,
+          press: () => void openServerLink(props.onOpenServerLink, serving.id, link.url).then(setRefused),
+        }))),
+    ...(serving === undefined
+      ? []
+      : [
+          {
+            id: "stop-server",
+            label: "Stop the server",
+            press: () => void props.onStopServer(serving.id).then(answered),
+          },
+        ]),
     // **One delete, counted rather than named** — #1411. Eighteen titles is the
     // panel that overflowed the window, and a second act for the one-node case
     // is a second path to keep in step with this one: they had already drifted
@@ -431,7 +506,7 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
       <div className="armada-studio__board">
         <StudioWhiteboard
           key={studio.id}
-          nodes={whiteboardNodes(studio, jobs, frameOf)}
+          nodes={whiteboardNodes(studio, jobs, frameOf, board)}
           edges={whiteboardEdges(studio)}
           readOnly={!editable}
           onNodeMoved={(nodeId, position) => {
@@ -462,13 +537,20 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
               </CardContent>
             </Card>
           ) : null}
+          {editable && starts.length > 0 ? (
+            <Card aria-label="Run">
+              <CardContent>
+                <StartRun starts={starts} saving={starting} onStart={start} />
+              </CardContent>
+            </Card>
+          ) : null}
           {studio.nodes.length === 0 ? (
             <Card>
               <CardContent>Nothing on this Studio yet. Add a note, a link or a sketch to start it.</CardContent>
             </Card>
           ) : null}
           <StudioPicked
-            picked={onBoard.map((id) => nodeNamed(studio, id, jobs))}
+            picked={onBoard.map((id) => nodeNamed(studio, id, jobs, board))}
             acts={[...(editable ? promotion.acts : []), ...own]}
             onAct={(id) => {
               const mine = own.find((act) => act.id === id);
@@ -558,6 +640,35 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
  * board is inside that provider. What it buys is the rule: a node lands where
  * the person is looking rather than at the origin.
  */
+/**
+ * The `Run` control, on the board's own aside — #1345.
+ *
+ * **`AddNode`'s shape for `AddNode`'s reason**: `useStudioPlacement` reads the
+ * viewport React Flow holds, and only a component drawn inside the board is
+ * inside that provider. What it buys is the same rule — the Run node lands
+ * where the person is looking rather than at the origin.
+ */
+function StartRun(props: {
+  starts: readonly StudioStart[];
+  saving: boolean;
+  onStart: (start: StudioStart, position: StudioPosition) => void;
+}) {
+  const place = useStudioPlacement();
+  const entries = studioStartEntries(props.starts);
+  if (entries === undefined) return null;
+  return (
+    <DropdownMenu
+      triggerLabel="Run"
+      disabled={props.saving}
+      entries={entries}
+      onSelect={(id) => {
+        const started = props.starts.find((one) => one.id === id);
+        if (started !== undefined) props.onStart(started, place());
+      }}
+    />
+  );
+}
+
 function AddNode(props: {
   adding: StudioNodeByHandKind | null;
   onAdding: (kind: StudioNodeByHandKind | null) => void;

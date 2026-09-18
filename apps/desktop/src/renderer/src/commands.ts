@@ -26,7 +26,7 @@
 // swapped the surface for a transcript; the turns are the open step's activity
 // log now, so it tracks which Job is open and nothing presses it.
 
-import type { EditManifestProposal, StudioPromotion, WriteManifestProposal } from "@armada/protocol";
+import type { EditManifestProposal, StudioPosition, StudioPromotion, WriteManifestProposal } from "@armada/protocol";
 import { useEffect, useState } from "react";
 
 import type { BridgeState } from "../../shared/bridge";
@@ -96,6 +96,10 @@ export const readStudioFrame = (studioId: string, nodeId: string) =>
   window.armada.readStudioFrame(studioId, nodeId);
 export const promoteOnStudio = (studioId: string, promotion: StudioPromotion) =>
   window.armada.promoteOnStudio(studioId, promotion);
+export const startStudioRun = (studioId: string, name: string, position: StudioPosition) =>
+  window.armada.startStudioRun(studioId, name, position);
+export const startStudioServer = (studioId: string, name: string, position: StudioPosition) =>
+  window.armada.startStudioServer(studioId, name, position);
 /** Open what a Studio node points at. Main reads the address; the renderer sends none. #1406. */
 export const openStudioNode = (studioId: string, nodeId: string) =>
   window.armada.openStudioNode(studioId, nodeId);

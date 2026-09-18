@@ -527,6 +527,27 @@ The run starts first and the node is written after it: every refusal `start_chec
 **A Run node reads its state off the run and copies no status.** Once `settings.ad-hoc-run-log-retention` sweeps the run, the node keeps what it said — command, exit code, duration and the log's last lines — and that is what `get_studio` answers as `kept`. A Run on a Studio writes no Evidence, as every run outside a Job does not.
 """
 
+[operations.start_studio_server]
+kind = "command"
+transport = "HTTP"
+agent_access = "Helm only"
+description = "Start a Manifest Command with `serve` in the checkout from a Studio, and answer with the Studio, the Run node it made and the instance"
+notes = """
+**The title of `#1345` was the defect**: a Studio could run a Check or a Command and not start the web app, which is the first thing a feedback session does. `start_studio_run` refuses a name carrying `serve` and names this one.
+
+**Beside `start_studio_run` rather than inside it**, as `start_server` is beside `start_run` everywhere else. A server is held rather than run: it has no exit until something stops it, it is read back by `list_servers` and `observe_server` rather than by the run reader, and it is ended with `stop_server`. One call that could answer with either would hand a caller an id and leave it to work out which reader to ask.
+
+**A Run node holds it**, and not a fifteenth kind: `docs/concepts/studio.md` says a Run node holds a Manifest command started from the Studio, and Run is one of only two kinds that may take status colour — which *starting* and *serving* need. The node's `held` says which of the two ids it carries; absent is a run in the checkout, which is every node written before 16.2.
+
+**One instance per checkout.** A name already serving is answered with the instance that is up and `already_up` true, and the node is still made — it records that this Studio asked for it, and it reads the live holder from then on. Ports come from the main checkout's own span, never from the Studio, and no workspace is named: a server is declared in the Manifest Fleet holds for the repository, which is `start_server`'s reason too.
+
+**The server starts first and the node is written after it.** Every refusal `start_server` makes is made here — a name nothing declares, a Check, a Command that declares no `serve` — and a refused start leaves no node behind. `produced_by` names the node it was started from, and the Studio draws the `produced` edge.
+
+**What the node keeps is written the instant the server ends**, not when its directory is swept: a server's result is Fleet's memory and a restart takes it, so that is the last moment there is anything to keep. What is kept is the Run node's own shape — name, the `serve` line as it ran, exit code, how long it was up and the log's last lines — and a server that exits on its own reads as a failure whatever its code. **A server started from a Studio writes no Evidence**, as every run outside a Job does not.
+
+`agent_access` is `Helm only` for `start_studio_run`'s reason, and it is deliberately not one of `fleet::helm::reach::UNASKED`.
+"""
+
 [operations.get_call]
 kind = "query"
 transport = "HTTP"
@@ -1862,6 +1883,10 @@ agent_access = "Helm only"
 description = "Fresh Drone with corrective context"
 notes = """
 Intervention Ladder rung 2.
+
+**The link it writes is read from both ends.** The replacement carries `redispatched_from`, and `get_job` on the Job that was replaced answers `replaced_by` — the same column read as a predicate, never a second one written here. #1439, and `docs/concepts/job.md`, *A redispatch is read from both ends*.
+
+**Two Jobs may name one predecessor and nothing refuses it.** A redispatch leaves an escalated Job `killed`, and `killed` is redispatchable, so pressing this twice on one Job mints two replacements. The reverse read answers with the newer. Whether the second press should be refused is not decided.
 """
 
 [operations.reject_job]

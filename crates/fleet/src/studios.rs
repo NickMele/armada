@@ -22,8 +22,9 @@ use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, DeferOnStudio,
     DispatchStudioDraft, EditStudioDraft, EditStudioLink, GroupStudioNodes, HelmStudioAct,
     ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNodes, RenameStudio,
-    SettleContradiction, StartScout, StartStudioRun, StopScout, StudioDeleted, StudioHelmActed,
-    StudioList, StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
+    SettleContradiction, StartScout, StartStudioRun, StartStudioServer, StopScout, StudioDeleted,
+    StudioHelmActed, StudioList, StudioRunStarted, StudioServerStarted, StudioSummary, WireError,
+    WriteUpStudioNode,
 };
 use store::{LoadJobError, Store, StudioError};
 
@@ -736,6 +737,16 @@ where
         within: Option<ManifestId>,
     ) -> Result<StudioRunStarted, Refusal> {
         Fleet::started_studio_run(self, studio_id, run, by, within).await
+    }
+
+    async fn start_studio_server(
+        self: std::sync::Arc<Self>,
+        studio_id: ipc::StudioId,
+        server: StartStudioServer,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> Result<StudioServerStarted, Refusal> {
+        Fleet::started_studio_server(self, studio_id, server, by, within).await
     }
 
     // Promotion — `crate::promoting`, `#1291`.

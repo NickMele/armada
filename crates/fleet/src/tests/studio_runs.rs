@@ -138,9 +138,10 @@ async fn a_run_a_studio_holds_keeps_its_tail_and_result_when_retention_sweeps_it
         run_node(&started.studio, &started.node_id),
         &StudioNodeContent::Run {
             run_id: started.run.id.clone(),
+            held: None,
             kept: None,
         },
-        "a reference, and no status copied off the run"
+        "a reference to a run in the checkout, and no status copied off it"
     );
     finished(&fleet, &started.run.id).await;
 
@@ -150,7 +151,8 @@ async fn a_run_a_studio_holds_keeps_its_tail_and_result_when_retention_sweeps_it
         .await
         .expect("underway");
 
-    let StudioNodeContent::Run { run_id, kept } = run_node(&second.studio, &started.node_id) else {
+    let StudioNodeContent::Run { run_id, kept, .. } = run_node(&second.studio, &started.node_id)
+    else {
         panic!("still a Run node");
     };
     assert_eq!(run_id, &started.run.id, "it still says which run it was");
@@ -201,6 +203,7 @@ async fn a_run_node_cannot_be_added_by_hand() {
             ipc::AddStudioNode {
                 content: StudioNodeContent::Run {
                     run_id: String::from("01NEVERRAN"),
+                    held: None,
                     kept: None,
                 },
                 position: StudioPosition { x: 0, y: 0 },

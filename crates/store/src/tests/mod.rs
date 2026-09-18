@@ -27,6 +27,7 @@ mod helm_sessions;
 mod iteration;
 mod kit;
 mod limits;
+mod lineage;
 mod manifest_allowed;
 mod manifest_snapshot;
 mod migrate;

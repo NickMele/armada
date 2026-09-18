@@ -16,8 +16,9 @@ use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, DeferOnStudio,
     DispatchStudioDraft, EditStudioDraft, EditStudioLink, GroupStudioNodes, ManifestId,
     MoveStudioNode, ProposeStudioEdge, ReadInLink, RemoveStudioNodes, RenameStudio,
-    SettleContradiction, StartScout, StartStudioRun, StopScout, Studio, StudioDeleted, StudioId,
-    StudioList, StudioNodeId, StudioRunStarted, WriteUpStudioNode,
+    SettleContradiction, StartScout, StartStudioRun, StartStudioServer, StopScout, Studio,
+    StudioDeleted, StudioId, StudioList, StudioNodeId, StudioRunStarted, StudioServerStarted,
+    WriteUpStudioNode,
 };
 
 use crate::daemon::{Redirector, Refusal};
@@ -200,6 +201,25 @@ pub trait Studios: Send + Sync + 'static {
         by: Redirector,
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<StudioRunStarted, Refusal>> + Send;
+
+    /// `start_studio_server` — start a Command with `serve` in the checkout of
+    /// the repository this Studio belongs to, and put a Run node on it that
+    /// holds the instance. `#1345`.
+    ///
+    /// **Its own operation beside `start_studio_run`**, as `start_server` is
+    /// its own beside `start_run`: a server is held rather than run, the two
+    /// answers are read back by different readers, and one call that could
+    /// return either would make the caller work out which it got.
+    ///
+    /// **One instance per checkout.** A name already serving is answered with
+    /// the instance that is up, `already_up` true, and the node still made.
+    fn start_studio_server(
+        self: std::sync::Arc<Self>,
+        studio_id: StudioId,
+        server: StartStudioServer,
+        by: Redirector,
+        within: Option<ManifestId>,
+    ) -> impl Future<Output = Result<StudioServerStarted, Refusal>> + Send;
     /// `group_studio_nodes` — several nodes accepted as one Cluster or read in
     /// order as one Outline, with a `produced` edge from each. `#1291`.
     fn group_studio_nodes(

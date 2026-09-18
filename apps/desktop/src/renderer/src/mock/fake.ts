@@ -189,6 +189,10 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
     startServer: async () => OK,
     stopServer: async () => OK,
     openServerLink: async () => ({ ok: false, why: "no_address" }),
+    // A Studio starting one entry — #1289, #1345. The mock Fleet answers, so
+    // what these do here is what every other unstubbed act does: nothing.
+    startStudioRun: async () => ({ ok: true }) as Outcome,
+    startStudioServer: async () => ({ ok: true }) as Outcome,
     examineJob: async (jobId) => publish({ examination: failed(jobId, "/examine") }),
     readEvidence: async (jobId) =>
       publish({

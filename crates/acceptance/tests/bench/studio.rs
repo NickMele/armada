@@ -449,7 +449,7 @@ pub fn a_studio_with_a_run_started_from_a_note(
     let run = StudioNode::added(
         StudioNodeId::carried(Ulid::carried("01RUNNODE")),
         StudioNodeContent::Run {
-            run_id: THE_RUN.to_string(),
+            run: core_model::StudioRun::Checkout(THE_RUN.to_string()),
             kept,
         },
         StudioPosition { x: 240, y: 0 },
@@ -480,6 +480,65 @@ pub fn a_studio_with_a_run_started_from_a_note(
 
 /// The run's own record, as the checkout wrote it: it failed, and nobody
 /// stopped it.
+/// The server instance a Studio started, and the id its Run node holds.
+pub const THE_SERVER: &str = "01STUDIOSERVER0000000000";
+
+/// The `serve` line as it ran, `${port.NAME}` already resolved.
+pub const THE_SERVE: &str =
+    "pnpm -C packages/components exec storybook dev -p 41207 --no-open --ci";
+
+/// A Studio holding one Note and the server a person started from it.
+///
+/// `kept` is what the node holds once the server has ended — `None` while
+/// Fleet is still the one to read it from.
+pub fn a_studio_with_a_server_started_from_a_note(
+    kept: Option<core_model::StudioRunKept>,
+) -> StudioGraph {
+    let mut graph = a_studio_with_a_run_started_from_a_note(None);
+    let server = StudioNode::added(
+        StudioNodeId::carried(Ulid::carried("01SERVERNODE")),
+        StudioNodeContent::Run {
+            run: core_model::StudioRun::Server(THE_SERVER.to_string()),
+            kept,
+        },
+        StudioPosition { x: 480, y: 0 },
+        at(3),
+        StudioAuthor::Person,
+    );
+    graph.nodes = vec![server];
+    graph.edges = Vec::new();
+    graph
+}
+
+/// The server as it ended: it exited on its own, with a code, having been up
+/// for four minutes and having printed more than a node would carry.
+pub fn a_server_that_fell_over() -> ipc::ServerState {
+    ipc::ServerState {
+        id: THE_SERVER.to_string(),
+        name: String::from("storybook_dev"),
+        job_id: None,
+        manifest_id: None,
+        phase: ipc::ServerPhase::Exited,
+        serve: THE_SERVE.to_string(),
+        ports: vec![ipc::ServerPort {
+            name: String::from("storybook"),
+            port: 41_207,
+        }],
+        links: vec![ipc::ServerLink {
+            url: String::from("http://localhost:41207"),
+            name: Some(String::from("Storybook")),
+        }],
+        started_by: ipc::StartedBy::Person,
+        started_at: ipc::Instant::carried("2026-09-17T09:01:00.000Z"),
+        serving_since: Some(ipc::Instant::carried("2026-09-17T09:01:12.000Z")),
+        ended_at: Some(ipc::Instant::carried("2026-09-17T09:05:00.000Z")),
+        exit_code: Some(0),
+        ended: Some(String::from("exited 0")),
+        stopped: false,
+        log: format!(".armada/servers/main/{THE_SERVER}/output.log"),
+    }
+}
+
 pub fn a_failed_run() -> ipc::CheckoutRunRecord {
     ipc::CheckoutRunRecord {
         id: THE_RUN.to_string(),

@@ -21,11 +21,16 @@ import {
   createStudio,
   decideStudioEdge,
   moveStudioNode,
+  openServerLink,
   openStudioNode,
   promoteOnStudio,
   readStudioFrame,
   removeStudioNodes,
   renameStudio,
+  startStudioRun,
+  startStudioServer,
+  stopServer,
+  watchCheckoutRunSheet,
   watchStudio,
   watchStudios,
 } from "./commands";
@@ -51,6 +56,8 @@ export type StudiosSurfaceProps = {
   onSelectNode: (nodeId: string | null) => void;
   /** Open one Job whole — the Board's own press, reached from a Job node (#1379). */
   onOpenJob: (jobId: string) => void;
+  /** The clock the window ticks on, for how long a server node has been up — #1345. */
+  now: number;
   onCopied: (value: string) => void;
 };
 
@@ -66,6 +73,14 @@ export function StudiosSurface(props: StudiosSurfaceProps) {
   useEffect(() => {
     watchStudio(openId);
     return () => watchStudio(null);
+  }, [openId]);
+
+  // What this repository's checkout declares, so a Studio can start one of it —
+  // #1345. **The Manifest surface's own read**, held open only while a Studio
+  // is open: one surface is mounted at a time, so the two never want it at once.
+  useEffect(() => {
+    watchCheckoutRunSheet(openId !== null);
+    return () => watchCheckoutRunSheet(false);
   }, [openId]);
 
   if (all) {
@@ -143,6 +158,18 @@ export function StudiosSurface(props: StudiosSurfaceProps) {
         // The Studio stays standing under the Job, so closing it comes back to
         // the whiteboard with the node reading whatever the Job is doing now.
         onOpenJob={props.onOpenJob}
+        // What the checkout declares, what Fleet is holding, and the clock.
+        // **The live holder, never a copy**: a Run node holding a server reads
+        // its state off this list, so a Studio left open stays right — #1345.
+        runSheet={state.checkoutRunSheet}
+        servers={state.servers.servers}
+        now={props.now}
+        onStartRun={(name, position) => startStudioRun(openId ?? "", name, position)}
+        onStartServer={(name, position) => startStudioServer(openId ?? "", name, position)}
+        onStopServer={stopServer}
+        // The address is main's to find, off the server it published — the same
+        // rule a node's own address is opened under.
+        onOpenServerLink={openServerLink}
       />
     </Boundary>
   );

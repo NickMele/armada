@@ -27,6 +27,7 @@ files, a rule can — and the rule is the point.
 | `workflows.toml` | The workflows Armada runs, and the ones it has decided not to design yet |
 | `workflow-samples/*.json` | The WorkflowDefs themselves, verbatim. One per workflow whose row says it has one |
 | `actions.toml` | The verb, the glyph and the binding every act in Bridge carries |
+| `studio-kinds.toml` | What a [Studio](../../../docs/concepts/studio.md)'s graph is made of: its node kinds and their states, its edge kinds, the forge states a node carries and the rungs of promotion between them |
 
 **`actions.toml` is the one file here that is not a domain enum**, and it lives
 here for the reason `enum-verbs.toml` does: it is a set code reads, and a set
@@ -36,6 +37,12 @@ in `enum-verbs.toml`, `kill` is an action. Its glyphs are keys in
 `packages/icons/icons.toml` rather than a second roster, and its bindings are
 the two blocks under "Keyboard and command palette" in
 `docs/contracts/design-system.md`, which the gate reads and compares.
+
+**`studio-kinds.toml` is held to three readers rather than one enum**, because
+a Studio's sets are spelled in `core-model`, in the store's `CHECK` constraints
+and in the TypeScript mirror, and nothing compared them. Its promotions are not
+an enum at all: they are `from`/`to` pairs over the node kinds, the shape
+`job-transitions.toml` has and for the same reason.
 
 ## What a rule can check, and why the layout is shaped for it
 

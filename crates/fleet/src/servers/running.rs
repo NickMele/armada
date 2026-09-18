@@ -86,6 +86,12 @@ where
         held.ended(state.clone());
         self.noted_server(&state);
         self.publish(Event::ServerExited(state.clone()));
+        // **Before the final state is sent**, so a Studio holding this server
+        // has kept what it said by the time anything waiting on `Exited`
+        // returns — Fleet stopping every server is one such waiter, and a
+        // write started after it would race the process going. `#1345`.
+        self.kept_what_studios_hold_of_server(&state, &plan.dir)
+            .await;
         plan.now.send_replace(state);
     }
 

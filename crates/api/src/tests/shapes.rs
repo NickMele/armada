@@ -350,6 +350,10 @@ pub fn detail(job: JobSummary) -> JobDetail {
         review: None,
         work_plan: None,
         confidence: None,
+        // Filled by the caller, which is the only thing holding the other
+        // Jobs: a replacement is found by reading every Job's own
+        // `redispatched_from`, never written twice.
+        replaced_by: None,
     }
 }
 

@@ -203,8 +203,8 @@ pub use detail::{
 };
 pub use detail::{
     Criterion, Currency, Dependency, JobDelivery, JobDetail, JobReview, JobSpend, JudgeInFlight,
-    PullRequestChecks, PullRequestDetail, Refusal, ReviewedBy, Settled, StepDetail, StepFacts,
-    StepPass, Stuck, Verdict,
+    PullRequestChecks, PullRequestDetail, Refusal, ReplacedBy, ReviewedBy, Settled, StepDetail,
+    StepFacts, StepPass, Stuck, Verdict,
 };
 pub use drift::{Declaration, Drift, ManifestDrift, PackageScripts, Unfollowed};
 pub use drones::{DroneDetail, DroneList, DroneSummary};
@@ -312,9 +312,10 @@ pub use studio::{
     AddStudioNode, ContradictionSettled, CreateStudio, DecideStudioEdge, DeferOnStudio,
     DispatchStudioDraft, EditStudioDraft, EditStudioLink, EpicRead, EpicTake, ForgeState,
     GroupStudioNodes, HelmStudioAct, MoveStudioNode, ProposeStudioEdge, RemoveStudioNodes,
-    RenameStudio, SettleContradiction, StartStudioRun, Studio, StudioDeleted, StudioEdge,
-    StudioHelmActed, StudioList, StudioNode, StudioNodeContent, StudioPosition, StudioRunKept,
-    StudioRunStarted, StudioSummary, WriteUpStudioNode,
+    RenameStudio, SettleContradiction, StartStudioRun, StartStudioServer, Studio, StudioDeleted,
+    StudioEdge, StudioHelmActed, StudioList, StudioNode, StudioNodeContent, StudioPosition,
+    StudioRunHeld, StudioRunKept, StudioRunStarted, StudioServerStarted, StudioSummary,
+    WriteUpStudioNode,
 };
 pub use turn::{
     BlockKind, CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage,

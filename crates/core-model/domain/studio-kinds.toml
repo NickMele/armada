@@ -1,0 +1,372 @@
+# What a Studio's graph is made of: its node kinds, the states each holds, its
+# edge kinds, and the rungs of promotion between them.
+#
+# Authored here, and this file is the authority on every set in it.
+# `docs/concepts/studio.md` states the rules these sets serve and points here
+# for the sets themselves; a page that spells one out again is a copy, and a
+# copy can only go stale.
+#
+# The sets were spelled in three places nothing compared — the enums in
+# `crates/core-model/src/studio.rs`, the `CHECK` constraints in
+# `crates/store/src/studio.rs`, and the mirror in
+# `packages/protocol/src/studio.ts`. Adding a kind to one and not the others
+# merged green and failed the first time a person met that kind. `#1313`.
+#
+# **The table key is the wire value**, so the comparison is a set lookup with
+# no mapping in between, for the reason `README.md` gives. `name` is the word a
+# person reads and is checked against the lexicon; it is never sent anywhere.
+#
+# **The store's `CHECK` sets are a migration.** Widening one is a new migration
+# in `crates/store/src/studio.rs`, never an edit to a version that has run —
+# `V79` rebuilt both tables to add the three forge kinds, because SQLite cannot
+# widen a `CHECK`. The gate reads the last `CREATE TABLE` for each table, so a
+# set added here needs its migration in the same change.
+#
+# Held to the three by `cargo xtask verify-foundations`, rule "a Studio's kinds
+# are one set across the registry, the enums, the store and the wire" —
+# `xtask/src/rules_studio.rs`, which says what it refuses and why.
+
+# ---------------------------------------------------------------- node kinds
+#
+# Fields:
+#   name          - the word a person reads. Checked against the lexicon's
+#                   *Never* lists in `docs/contracts/design-system.md`
+#   holds         - what a node of this kind carries
+#   states        - the states it may hold, the first being where it starts.
+#                   Empty for a kind with none, and for the two whose state is
+#                   read off the run or the Job. Each is a key under `[states]`
+#   status_colour - whether it draws in Job colours. Run and Job alone
+#   added_by_hand - whether a person may put one on a Studio directly. Every
+#                   other kind is made by the act that earns it
+#   dispatches    - whether it offers Dispatch. Derived nowhere: the `dispatch`
+#                   rung's `from` says the same thing and the gate holds the two
+#                   equal, the way a status row's `transitions_out` is held to
+#                   the transition table
+#   not_called    - words this kind avoids because Armada already uses them
+#   notes         - the reasoning the kind carries, where it carries any
+
+[nodes.run]
+name = "Run"
+holds = "A Manifest command started from the Studio — a Check, a Command or a server — and its log until retention takes it"
+states = []
+status_colour = true
+added_by_hand = false
+dispatches = false
+not_called = []
+notes = "Its state is the run's own, so it declares none here. **A server is this kind and not a fifteenth**: a Command with `serve` is a Manifest command started from the Studio, and Run is one of only two kinds that may take status colour — which *starting* and *serving* both need. `#1345`. `run` is on the lexicon's *Never* list under Job — which bans calling a *Job* a run, and this node is a run. The gate sanctions the one word and refuses every other collision."
+
+[nodes.note]
+name = "Note"
+holds = "What a person pointed at and said, fixed at capture"
+states = []
+status_colour = false
+added_by_hand = true
+dispatches = false
+not_called = ["Observation"]
+notes = "Observation is the one flagged inference Helm may add to an answer."
+
+[nodes.cluster]
+name = "Cluster"
+holds = "Notes a person accepted as one thing"
+states = []
+status_colour = false
+added_by_hand = false
+dispatches = false
+not_called = []
+
+[nodes.finding]
+name = "Finding"
+holds = "What a scout learned, and everything it read"
+states = ["proposed", "gathering", "frozen"]
+status_colour = false
+added_by_hand = false
+dispatches = false
+not_called = []
+notes = "The one kind that starts `proposed`, which is what Helm may add unasked."
+
+[nodes.contradiction]
+name = "Contradiction"
+holds = "Two sources that disagree, and its outcome"
+states = ["reported", "issue_draft", "deferral", "not_a_problem", "resolved_here"]
+status_colour = false
+added_by_hand = false
+dispatches = false
+not_called = []
+notes = "Its four outcomes are its states after `reported`, so ending one is a state and never a second field. Two of them are the rungs that make a node and two are their own act."
+
+[nodes.sketch]
+name = "Sketch"
+holds = "A diagram or mockup, as structured content"
+states = ["frozen"]
+status_colour = false
+added_by_hand = true
+dispatches = false
+not_called = []
+notes = "Structured content and never pixels: an agent can read a record and cannot read a drawing."
+
+[nodes.link]
+name = "Link"
+holds = "An address no adapter recognised, kept with a line of the person's own, and what the source calls itself where a read-in learned one"
+states = []
+status_colour = false
+added_by_hand = true
+dispatches = false
+not_called = ["Source"]
+notes = "Source is a verification source, in the Design System's hedging rule. A Link dispatches nothing: there is no filed thing to dispatch against."
+
+[nodes.issue]
+name = "Issue"
+holds = "An issue on a forge: its address, its number, a line of the person's own, and its title and state where it has been read in"
+states = []
+status_colour = false
+added_by_hand = false
+dispatches = true
+not_called = []
+notes = "A kind is a concept and never a vendor: an Issue is an Issue whoever serves it, and a second forge is a second adapter rather than a fourth kind. Not added by hand — a person pastes an address and the adapter decides what it names."
+
+[nodes.pull_request]
+name = "Pull request"
+holds = "A pull request on a forge, with an Issue's fields. Its state also holds `merged`"
+states = []
+status_colour = false
+added_by_hand = false
+dispatches = true
+not_called = []
+
+[nodes.epic]
+name = "Epic"
+holds = "What a forge calls a set of issues under one address, with its title, how many of its issues are on this Studio, which of them the read took and what that left out"
+states = []
+status_colour = false
+added_by_hand = false
+dispatches = true
+not_called = ["Milestone"]
+notes = "Milestone is a forge's own word for one of several shapes, and a vendor's where the node is a concept. No state and a count instead: what matters is how much of it is on the Studio."
+
+[nodes.deferral]
+name = "Deferral"
+holds = "Something a person put off, against what it blocks"
+states = ["open", "answered"]
+status_colour = false
+added_by_hand = false
+dispatches = false
+not_called = ["Question"]
+notes = "Question is a Drone's question on the dock, and an open question in `docs/`."
+
+[nodes.outline]
+name = "Outline"
+holds = "An ordered reading of the nodes feeding it"
+states = ["draft", "frozen"]
+status_colour = false
+added_by_hand = false
+dispatches = false
+not_called = ["Plan"]
+notes = "Plan is a Job's own Plan. The order of an Outline is the order of its `produced` edges."
+
+[nodes.issue_draft]
+name = "Issue draft"
+holds = "An issue's title and body, never filed by Armada"
+states = ["draft"]
+status_colour = false
+added_by_hand = false
+dispatches = true
+not_called = ["Ticket"]
+notes = "Ticket is banned by the lexicon as a word for a Job. Filing the draft on a forge is optional and a person's own act."
+
+[nodes.job]
+name = "Job"
+holds = "A dispatched Job, as a reference to it"
+states = []
+status_colour = true
+added_by_hand = false
+dispatches = false
+not_called = []
+notes = "Holds a reference and no copy of its status, which it reads off the same rows the Job Board reads. A status written onto a node would be right once."
+
+# -------------------------------------------------------------- node states
+#
+# Every state any node kind holds, and what it says. Which kinds hold which is
+# `states` on the node row above; this is the whole set, and it is the set the
+# `state` column's `CHECK` carries.
+#
+# Fields:
+#   means - what the state asserts about the node
+
+[states.proposed]
+means = "Suggested and not started. Carries its cost where it can be run"
+
+[states.gathering]
+means = "Working, and spending"
+
+[states.frozen]
+means = "Done changing. Still promotable"
+
+[states.reported]
+means = "Two sources that disagree, recorded and not yet ended"
+
+[states.issue_draft]
+means = "Ended by writing it up, because one side was stale and a file needed fixing"
+
+[states.deferral]
+means = "Ended by deferring on it, because it was a real decision"
+
+[states.not_a_problem]
+means = "Ended because both statements hold, in different contexts"
+
+[states.resolved_here]
+means = "Ended by the person settling it, and the node records the answer"
+
+[states.open]
+means = "Put off, and nothing has answered it"
+
+[states.answered]
+means = "A Finding settled it"
+
+[states.draft]
+means = "Armada's own unfiled text, a person's to edit and nobody else's"
+
+# ---------------------------------------------------------------- edge kinds
+#
+# Fields:
+#   means    - what the edge says about the two nodes
+#   drawn_by - who draws it. `the Studio` or `a person accepts`, and no third
+#              answer: an agent reorganising a person's work is what separates
+#              a drawing surface from a record of decisions. Helm and a scout
+#              may propose one, drawn dashed until accepted
+#   notes    - the reasoning the kind carries, where it carries any
+
+[edges.produced]
+means = "The first node made the second"
+drawn_by = "the Studio"
+notes = "Always the Studio's own, so it is the one kind no call may propose — and the store refuses a `produced` edge that is not already accepted."
+
+[edges.same_as]
+means = "Two nodes say one thing"
+drawn_by = "a person accepts"
+
+[edges.blocks]
+means = "One has to land before the other"
+drawn_by = "a person accepts"
+
+[edges.answers]
+means = "A Finding settles a Deferral"
+drawn_by = "a person accepts"
+
+# -------------------------------------------------------------- forge states
+#
+# Where something on a forge stands, as an Issue or a Pull request carries it.
+# **Not a state of Armada's**: these three are the forge's answer, kept as a
+# field, and nothing here moves a node through them.
+#
+# Fields:
+#   means - what the forge is saying
+#   on    - the node kinds that may carry it
+
+[forge_states.open]
+means = "The forge says it is open"
+on = ["issue", "pull_request"]
+
+[forge_states.closed]
+means = "The forge says it is closed"
+on = ["issue", "pull_request"]
+
+[forge_states.merged]
+means = "A pull request's own end. An issue never holds it"
+on = ["pull_request"]
+
+# ------------------------------------------------------------- an Epic's take
+#
+# Which of an Epic's issues a read-in takes. Asked, never assumed: a person
+# reading a milestone to plan work wants the open ones and a person reading one
+# to see what shipped wants all of them.
+#
+# Fields:
+#   means - which issues the answer takes
+
+[epic_take.everything]
+means = "Every issue the Epic holds, whatever state it is in"
+
+[epic_take.open]
+means = "Only what the forge says is open"
+
+# --------------------------------------------------------------- promotions
+#
+# The rungs a node climbs, and who acts on each. An array of tables rather than
+# one table per rung, for the reason `job-transitions.toml` is one: `from` and
+# `to` are the identity and neither end has a name a Rust identifier carries.
+#
+# **Every `to` is a node kind this file declares**, which is the rule *nothing
+# reaches outside Armada on a Studio's behalf*, written as something a set
+# lookup can check. A `from` may be `outside`, because capture and reading in
+# both start somewhere Armada does not own; nothing may end there.
+#
+# Fields:
+#   rung - what the act is called
+#   from - what it starts from. Node kinds, `any`, or `outside`
+#   to   - what it makes. Node kinds, always
+#   who  - who acts, from the closed set `person`, `helm_on_ask`,
+#          `scout_on_ask`, `fleet`, `dispatch_gate`
+#   acts - the same in a person's words, where the set alone would mislead
+
+[[promotions]]
+rung = "Run"
+from = ["any"]
+to = ["run"]
+who = ["person", "helm_on_ask"]
+acts = "A person, or Helm on their ask. Started from a node or from nothing, and by no other act — what a node says about a run is read off the run"
+
+[[promotions]]
+rung = "Read in"
+from = ["link", "issue", "pull_request", "epic"]
+to = ["note", "cluster", "contradiction", "issue"]
+who = ["scout_on_ask", "fleet"]
+acts = "A scout, on a person's ask. An Epic is Fleet's own read with no scout: a list echoed back by a model is cost spent on a transcription. An Epic reads in as one Issue per issue and makes no Issue draft"
+
+[[promotions]]
+rung = "Capture"
+from = ["outside"]
+to = ["note"]
+who = ["person"]
+acts = "The person, using an app. Pointing at something wrong needs a pointer, so no agent takes this rung"
+
+[[promotions]]
+rung = "Ask"
+from = ["any"]
+to = ["finding"]
+who = ["scout_on_ask"]
+acts = "A scout, on a person's ask"
+
+[[promotions]]
+rung = "Cluster"
+from = ["note"]
+to = ["cluster"]
+who = ["person"]
+acts = "A person accepts"
+
+[[promotions]]
+rung = "Outline"
+from = ["any"]
+to = ["outline"]
+who = ["person"]
+acts = "A person orders the nodes feeding it, and that order is kept as the order of its `produced` edges"
+
+[[promotions]]
+rung = "Defer"
+from = ["any"]
+to = ["deferral"]
+who = ["person"]
+acts = "A person, only, whatever Helm's authority setting says"
+
+[[promotions]]
+rung = "Write up"
+from = ["note", "cluster", "contradiction", "outline"]
+to = ["issue_draft"]
+who = ["person", "helm_on_ask"]
+acts = "A person, or Helm on their ask. One ask may cover writing up and dispatching when it names both; \"write it up\" alone never dispatches"
+
+[[promotions]]
+rung = "Dispatch"
+from = ["issue_draft", "issue", "pull_request", "epic"]
+to = ["job"]
+who = ["dispatch_gate"]
+acts = "The dispatch gate. An Issue draft dispatches its text and the three forge kinds dispatch their address; nothing is filed, because what the address names already exists"
