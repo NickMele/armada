@@ -34,6 +34,17 @@ use tokio::sync::oneshot;
 /// harness waits, so the answer the Drone gets is Fleet's and says why.
 pub const HOLD: Duration = Duration::from_secs(PERMISSION_WAIT.as_secs() - 60);
 
+/// How long a refused check runner's own Check is run for before the Drone is
+/// told no instead.
+///
+/// **Under `crate::silence`'s poke rather than under the permission wait.** A
+/// Drone waiting here is not marked as checking, so its silence clock runs; the
+/// poke is two minutes and costs one injected turn, and this leaves room under
+/// it. A narrowed run of one Check is seconds — 245ms for a vitest suite
+/// narrowed to one file — so the bound is for the run that is not narrow
+/// rather than for the ordinary case. #1174.
+pub const RATHER_THAN_REFUSE: Duration = Duration::from_secs(90);
+
 /// How long [`Fleet::permission`](crate::Fleet::permission) holds a question
 /// inside the Drone's call before telling it to wait for a turn. The shipped
 /// value is [`HOLD`], which the composition root writes out.

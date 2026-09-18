@@ -129,12 +129,17 @@ async fn heard_over(
 /// then one message per start and one per finish — never more running than
 /// the gate has slots, the fifth waiting until one frees — and a last message
 /// with nothing in it once the writer is dropped.
-/// **Skipped while the machine is loaded, `#1467`.** It passes alone and
-/// fails only when the whole suite runs on a saturated machine, which is
-/// what the merge line does — so it refused every branch on the night it
-/// was switched off. `#1467` carries the causes already found and what is
-/// left to read; switching it back on is that issue's, not this file's.
-#[ignore = "flaky under load, #1467"]
+///
+/// **Back on with the place a Check holds, `#1467`.** The place came back
+/// inside the Check's own spawned task, where the command exits, while
+/// `finished` is published where the task is joined — so between the two the
+/// room had a free place and the stream still showed the Check that held it
+/// running, and the next Check could be said to start before the one it
+/// replaced was said to end. Load widened that window; it was not made by it.
+/// The place comes out of the task with the answer now and is dropped after
+/// the announcement, which is what puts `freed` before `starts[AT_ONCE]` for
+/// good. [`more_checks_running_than_the_bound_allows_is_read_as_a_breach`]
+/// holds the bound's reading to a breach it should still catch.
 #[tokio::test]
 async fn each_check_is_said_to_start_and_to_finish_in_order_under_the_slot_bound() {
     let repo = TempDir::new();
