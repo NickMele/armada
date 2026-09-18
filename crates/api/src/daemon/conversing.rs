@@ -11,7 +11,8 @@ use std::future::Future;
 use std::sync::Arc;
 
 use ipc::{
-    AnswerHelmCall, AskHelm, AskingToRun, HelmCallsWaiting, HelmConversation, ManifestId, RunOrNot,
+    AnswerHelmCall, AskHelm, AskingToRun, EventsSince, HelmCallsWaiting, HelmConversation,
+    HelmDebugInfo, ManifestId, RunOrNot,
 };
 
 use crate::conversing::ObservedHelm;
@@ -38,6 +39,26 @@ pub trait Conversations: Send + Sync + 'static {
         asked: AskHelm,
         manifest_id: Option<ManifestId>,
     ) -> impl Future<Output = Result<HelmConversation, Refusal>> + Send;
+
+    /// `get_helm_debug_info` — the session as one quotable record, taken at
+    /// this moment. `#1367`. [`Refusal::Unacceptable`] where Fleet serves no
+    /// such Manifest, the same as `observe_helm`.
+    fn get_helm_debug_info(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> impl Future<Output = Result<HelmDebugInfo, Refusal>> + Send;
+
+    /// What a Helm session's `get_events_since` was answered, kept so the
+    /// record can report it. **Not an operation**, [`Queries::owned_jobs`](crate::daemon::Queries::owned_jobs)'s
+    /// shape: the door has already answered the call by the time this is told.
+    ///
+    /// Told by the transport rather than read by the daemon, for
+    /// `get_events_since`'s own reason — the positions are the broadcaster's.
+    fn helm_polled(
+        &self,
+        manifest_id: ManifestId,
+        counted: EventsSince,
+    ) -> impl Future<Output = ()> + Send;
 
     /// `start_helm_fresh` — forget the stored session and the thread, so the
     /// next message starts over. [`Refusal::IllegalMove`] while a reply is being

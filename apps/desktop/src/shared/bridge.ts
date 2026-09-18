@@ -596,6 +596,8 @@ export const CHANNELS = {
   // Helm's conversation: say something, forget it, and point it at a
   // repository without moving the rail's own pick. #944.
   askHelm: "bridge:ask-helm",
+  // The session as one record, read once when a person opens it — #1367.
+  helmDebugInfo: "bridge:helm-debug-info",
   startHelmFresh: "bridge:start-helm-fresh",
   pointHelm: "bridge:point-helm",
   // A repository's Studios — #1287. Two reads a surface holds open, and one act per operation:

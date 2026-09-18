@@ -20,19 +20,31 @@ one.
 **One Plan per Job, not per step.** [Job](job.md) owns it the way it owns
 `facts[]` and `escalations[]` — a record the Job carries, not an actor.
 
-A Plan holds an `approach` — a paragraph — and an ordered list of Tasks. A
-Task carries a stable id (`T1`, `T2`, …), a one-line `title`, an optional
-`detail`, and a state: `open`, `working`, `done` or `dropped`. `dropped`
-requires a `reason`.
+A Plan holds an `approach` — a paragraph — and an ordered list of Tasks.
 
 | Field | On | Meaning |
 | --- | --- | --- |
 | `approach` | Plan | The step's own account of how it means to do the work |
 | `id` | Task | Stable, assigned once, never reused |
 | `title` | Task | One line |
-| `detail` | Task | Optional, longer |
+| `note` | Task | One line for what the other fields cannot hold. Optional |
+| `scope` | Task | The repository-relative paths this task touches |
+| `expects` | Task | What should prove it, written by the step that plans |
+| `shown` | Task | What did prove it, written by the step that does the work |
 | `state` | Task | `open`, `working`, `done`, `dropped` |
 | `reason` | Task | Required when `state` is `dropped` |
+
+**`scope` is a list because the step after the planning one reads it.** It
+was prose inside `note` until `#1421`, and a step handed prose went looking
+for the same files again — the Job the owner killed on 17 Sep had recorded
+`packages/screens/src/overview.ts` against the task that changes it, an hour
+before its next Drone grepped for the same file.
+
+**`expects` and `shown` are two fields and are never reconciled into one.**
+The planner names an artifact before the work starts; whoever does the work
+finds out what actually proved it. The pair disagreeing is the fact worth
+reading, so nothing collapses them — the same shape declared `scope` has
+against the files a task actually touched.
 
 **Every change records who made it** — a step, or a person — and **every
 change is an appended row**. The current list is derived; history is never

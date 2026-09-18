@@ -15,7 +15,7 @@ fn recorded(titles: &[&str]) -> PlanChange {
         approach: Approach::new("Bound the reader, then cover it").expect("an approach"),
         tasks: titles
             .iter()
-            .map(|title| NewTask::new(title, "a detail").expect("a title"))
+            .map(|title| NewTask::new(title, "a detail", &[], "").expect("a title"))
             .collect(),
     }
 }
@@ -24,6 +24,7 @@ fn updated(id: &str, to: TaskUpdate) -> PlanChange {
     PlanChange::Updated {
         task: TaskId::read(id).expect("a task id"),
         to,
+        shown: None,
     }
 }
 
@@ -76,7 +77,7 @@ fn a_plan_and_every_change_to_it_survive_the_process_that_kept_them() {
         plan.tasks()[2].reason(),
         Some("the writer never had the bug")
     );
-    assert_eq!(plan.tasks()[0].detail(), "a detail");
+    assert_eq!(plan.tasks()[0].note(), "a detail");
     assert!(matches!(
         plan.recorded_by(),
         PlanAuthor::Step { step_id, attempt } if step_id.as_str() == "fix" && attempt.number() == 1
