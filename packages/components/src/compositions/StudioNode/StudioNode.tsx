@@ -23,8 +23,12 @@ import { FactChip } from "../FactChip/FactChip";
  * How a run started from the Studio stands. Each takes its hue from
  * `--run-{state}` in `tokens/status.css`, which aliases the Job status it reads
  * as (#1277).
+ *
+ * **`starting` and `serving` are a server's** — a Command with `serve`, which
+ * is a Run node like any other (#1345). A server never reads `passed`: staying
+ * up is the whole of what it is for, so it ends `failed` or `stopped`.
  */
-export type StudioRunState = "running" | "passed" | "failed" | "stopped";
+export type StudioRunState = "running" | "starting" | "serving" | "passed" | "failed" | "stopped";
 
 export type StudioFindingState = "proposed" | "gathering" | "frozen";
 export type StudioContradictionState =
@@ -133,6 +137,8 @@ const NEUTRAL_STATE: Readonly<Record<string, string>> = {
   answered: "answered",
   draft: "draft",
   running: "running",
+  starting: "starting",
+  serving: "serving",
   passed: "passed",
   failed: "failed",
   stopped: "stopped",
@@ -172,7 +178,10 @@ export function studioNodeReading(node: StudioNodeOf): StudioNodeReading {
   }
   if (node.kind === "run") {
     if (node.state === undefined) return UNREAD;
-    return { words: node.state, status: null, run: node.state, missing: null, working: node.state === "running" };
+    // **A server pulses the whole time it is up**, not only while it comes up:
+    // it is a process Armada is holding, which is what the pulse says.
+    const working = node.state === "running" || node.state === "starting" || node.state === "serving";
+    return { words: node.state, status: null, run: node.state, missing: null, working };
   }
   if (!("state" in node)) return { words: null, status: null, run: null, missing: null, working: false };
   return {

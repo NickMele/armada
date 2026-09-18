@@ -1,5 +1,13 @@
 import { expect, test } from "vitest";
-import type { EpicRead, JobSummary, Studio, StudioNode, StudioRunKept, StudioSummary } from "@armada/protocol";
+import type {
+  EpicRead,
+  JobSummary,
+  ServerState,
+  Studio,
+  StudioNode,
+  StudioRunKept,
+  StudioSummary,
+} from "@armada/protocol";
 
 import {
   framesDrawn,
@@ -119,6 +127,80 @@ test("a kept Run reads as the run sheet reads it: the name, the command, the exi
     title: "typecheck",
     facts: ["pnpm typecheck", "8.4s"],
   });
+});
+
+/** A Studio holding one Run node that holds a server — #1345. */
+const holding = (over: Partial<Extract<StudioNode, { kind: "run" }>> = {}): Studio => ({
+  ...STUDIO,
+  nodes: [
+    { id: "n4", kind: "run", run_id: "sv1", held: "server", position: { x: 0, y: 0 }, created_at: AT, ...over },
+  ],
+  edges: [],
+});
+
+/** The instance Fleet holds, as `list_servers` answers it. */
+const SERVING: ServerState = {
+  id: "sv1",
+  name: "storybook_dev",
+  phase: "serving",
+  serve: "pnpm storybook dev -p 41207",
+  ports: [{ name: "storybook", port: 41207 }],
+  links: [{ url: "http://localhost:41207", name: "Storybook" }],
+  started_by: "person",
+  started_at: "2026-09-17T09:59:00Z",
+  serving_since: "2026-09-17T09:59:12Z",
+  stopped: false,
+  log: ".armada/servers/main/sv1/output.log",
+};
+
+const NOW = Date.parse("2026-09-17T10:04:12Z");
+
+test("a server node reads off the live holder: starting, then serving with how long it has been up", () => {
+  const starting = { ...SERVING, phase: "starting", serving_since: undefined };
+  expect(whiteboardNodes(holding(), [], undefined, { servers: [starting], now: NOW })[0]!.node).toEqual({
+    kind: "run",
+    state: "starting",
+    title: "storybook_dev",
+    facts: ["pnpm storybook dev -p 41207"],
+  });
+  expect(whiteboardNodes(holding(), [], undefined, { servers: [SERVING], now: NOW })[0]!.node).toEqual({
+    kind: "run",
+    state: "serving",
+    title: "storybook_dev",
+    facts: ["up 5m 00s", "localhost:41207"],
+  });
+});
+
+test("a server nobody is holding and that kept nothing says so rather than drawing its id", () => {
+  expect(whiteboardNodes(holding(), [], undefined, { servers: [], now: NOW })[0]!.node).toEqual({
+    kind: "run",
+    title: "Not read yet",
+    facts: ["sv1"],
+  });
+});
+
+test("a server that exited reads off what its node kept, as a failure with its code and never passed", () => {
+  const kept = { ...KEPT, name: "storybook_dev", command: SERVING.serve, exit_code: 0, duration_ms: 252000 };
+  const node = holding({ kept });
+  // **Exit zero and still failed.** Staying up is the whole of what a server is
+  // for, so `expect_exit_code` decides nothing here — `stopped` does.
+  expect(whiteboardNodes(node, [], undefined, { servers: [], now: NOW })[0]!.node).toEqual({
+    kind: "run",
+    state: "failed",
+    title: "storybook_dev",
+    facts: [SERVING.serve, "exit 0", "up 252.0s"],
+  });
+  expect(
+    whiteboardNodes(holding({ kept: { ...kept, stopped: true } }), [], undefined, { servers: [], now: NOW })[0]!.node,
+  ).toMatchObject({ state: "stopped" });
+});
+
+test("what a node kept wins over an instance that has exited, so a restart does not change what it says", () => {
+  const kept = { ...KEPT, name: "storybook_dev", command: SERVING.serve, exit_code: 7, duration_ms: 1000 };
+  const exited = { ...SERVING, phase: "exited", exit_code: 7, stopped: false };
+  expect(
+    whiteboardNodes(holding({ kept }), [], undefined, { servers: [exited], now: NOW })[0]!.node,
+  ).toMatchObject({ state: "failed", facts: [SERVING.serve, "exit 7", "up 1.0s"] });
 });
 
 test("edges keep their standing, and a kind this build does not know is left off", () => {

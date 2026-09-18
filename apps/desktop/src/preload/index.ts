@@ -526,6 +526,10 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.decideStudioEdge, studioId, edgeId, accepted),
   promoteOnStudio: (studioId: string, promotion: StudioPromotion): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.promoteOnStudio, studioId, promotion),
+  startStudioRun: (studioId: string, name: string, position: StudioPosition): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.startStudioRun, studioId, name, position),
+  startStudioServer: (studioId: string, name: string, position: StudioPosition): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.startStudioServer, studioId, name, position),
 
   // The three decisions on the work, and they are three entries for the reason
   // the two kills are two: one capability taking "which decision" as an

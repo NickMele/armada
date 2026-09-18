@@ -12,6 +12,7 @@
 //! | That a proposer reading the draft chooses well | Choosing is a model's, and this file calls none. The answer below is written by the test |
 //! | That the proposed Job is created at `awaiting_approval` | `fleet::drafting`'s conversion from a proposal to a Job is `pub(crate)`, so building one here would assert what the test built. `fleet`'s own tests create one |
 //! | That a Studio survives a restart on disk | It touches a file. `store` and `fleet` reopen one in their own tests; what is asserted here is the record reading back through the wire |
+//! | That a server is really held, started once and stopped from its node | It is a process on a port. `fleet`'s `studio_servers` starts a real one from a real Studio, asks twice and gets the one instance, and drives one that falls over; what is asserted here is the node that holds it and what it keeps, on the wire |
 //! | That a sweep past retention is what fills a Run node in | It deletes a directory. `fleet`'s `studio_runs` drives a real run past a real sweep; what is asserted here is the tail that sweep takes and the node carrying it over the wire |
 //! | That a reopened Studio is read-only until Continue | A Bridge state; #1287's mock browser test proves it |
 //! | That an Issue, a Pull request and an Epic dispatch their address, and that a Link does not | The route is `fleet`'s `promoting`, which drives a real dispatch to a Job at the gate; what Bridge offers off the kind is #1379's and #1394's mock browser tests. What is asserted here is the node each address makes, and the fields it carries on the wire |
@@ -30,14 +31,15 @@ use ipc::door::{DRAFTING, HELM_ONLY, REACHABLE};
 use ipc::{HelmStudioAct, StudioNodeContent};
 
 use bench::studio::{
-    a_capture_sent, a_failed_run, a_long_log, a_studio_promoted_to_a_job,
+    a_capture_sent, a_failed_run, a_long_log, a_server_that_fell_over, a_studio_promoted_to_a_job,
     a_studio_with_a_captured_note, a_studio_with_a_frozen_finding,
     a_studio_with_a_node_of_each_forge_kind, a_studio_with_a_run_started_from_a_note,
-    a_studio_with_sources_read_in, a_studio_with_two_notes, an_issue_draft, held, helms_manifest,
-    one_job_under, received_event, received_request, received_studio, ASKED, A_PAGE, COMMIT,
-    COMPONENT, COST, CUT, DRAFT_TITLE, FIRST_NOTE, FRAME_BYTES, FRAME_FILE, LEFT_AT, MARKUP,
-    OWNERS, READ, READ_IN_NOTE, REPOSITORY, SCREEN, SECOND_NOTE, SELECTOR, SIDES, SOURCES, STYLES,
-    THE_COMMAND, THE_FAILURE, THE_RUN,
+    a_studio_with_a_server_started_from_a_note, a_studio_with_sources_read_in,
+    a_studio_with_two_notes, an_issue_draft, held, helms_manifest, one_job_under, received_event,
+    received_request, received_studio, ASKED, A_PAGE, COMMIT, COMPONENT, COST, CUT, DRAFT_TITLE,
+    FIRST_NOTE, FRAME_BYTES, FRAME_FILE, LEFT_AT, MARKUP, OWNERS, READ, READ_IN_NOTE, REPOSITORY,
+    SCREEN, SECOND_NOTE, SELECTOR, SIDES, SOURCES, STYLES, THE_COMMAND, THE_FAILURE, THE_RUN,
+    THE_SERVE, THE_SERVER,
 };
 
 /// Step 5 of the claim, `#1394`: **a pasted address is the thing it names.**
@@ -699,6 +701,73 @@ fn a_run_node_reads_its_state_off_the_run_and_keeps_its_tail_and_result_once_it_
     assert!(
         swept.nodes[1].state.is_none(),
         "a swept run is still read off what the node kept, never off a status"
+    );
+}
+
+/// Step 2, the other half: **the web app is one of the things a Studio starts,
+/// and it is a Run node like any other.** `#1345`,
+/// `docs/concepts/studio.md`, *Nodes*.
+///
+/// **The failure this is against is a Studio that cannot run what it is about.**
+/// Starting the app is the first thing a feedback session does, and a Studio
+/// that could run a Check and not a server would send a person to a terminal
+/// for the one thing every note is written against.
+///
+/// **What crosses the wire is which reader answers for the id.** A server's id
+/// names an instance Fleet holds in memory and a run's names a directory; a
+/// node that said only *run* would have the two answered by the wrong reader.
+/// And what it keeps once the server is gone reads as a failure on an exit code
+/// of zero, because staying up is the whole of what a server is for.
+#[test]
+fn a_server_started_from_a_studio_is_a_run_node_that_says_whose_id_it_holds() {
+    let up = received_studio(&a_studio_with_a_server_started_from_a_note(None));
+    assert_eq!(
+        up.nodes[0].content,
+        StudioNodeContent::Run {
+            run_id: THE_SERVER.to_string(),
+            held: Some(ipc::StudioRunHeld::Server),
+            kept: None,
+        },
+        "a reference to the instance Fleet holds, and no copy of what it is doing"
+    );
+    assert!(
+        up.nodes[0].state.is_none(),
+        "a server copies no status either: what it is doing is read off the holder"
+    );
+
+    // It exits on its own, and the node keeps what it said the instant it does.
+    let ended = a_server_that_fell_over();
+    let log = a_long_log();
+    let kept = fleet::studio_servers::server_kept(&ended, Some(&log));
+    assert_eq!(kept.name, "storybook_dev");
+    assert_eq!(kept.command, THE_SERVE, "the serve line as it ran");
+    assert_eq!(kept.exit_code, Some(0));
+    assert!(
+        !kept.stopped,
+        "nobody stopped it, which is the whole of what makes it a failure"
+    );
+    assert_eq!(kept.duration_ms, 240_000, "how long it was up");
+    assert_eq!(
+        kept.lines.last().map(String::as_str),
+        Some(THE_FAILURE),
+        "the tail, where a server prints what took it down"
+    );
+    assert!(
+        !kept.whole,
+        "and a Studio does not quietly hold a whole log"
+    );
+
+    let gone = received_studio(&a_studio_with_a_server_started_from_a_note(Some(
+        kept.clone(),
+    )));
+    assert_eq!(
+        gone.nodes[0].content,
+        StudioNodeContent::Run {
+            run_id: THE_SERVER.to_string(),
+            held: Some(ipc::StudioRunHeld::Server),
+            kept: Some(ipc::StudioRunKept::of(&kept)),
+        },
+        "the node still says whose id it holds, and carries what is left of it"
     );
 }
 
