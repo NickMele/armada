@@ -9,6 +9,7 @@ import type {
   CheckoutRunDiff,
   CheckoutRunFollowed,
   CheckoutRunList,
+  CheckoutRunRecord,
   CheckoutRunSheet,
   CheckoutRunSheetRead,
   CheckoutRunUnderway,
@@ -169,6 +170,46 @@ export const VERIFY_ENDED: CheckoutVerify = {
   ],
 };
 
+/** One finished run in this checkout, as `list_checkout_runs` rows it. */
+function record(
+  name: string,
+  command: string,
+  at: string,
+  exit: number,
+  ms: number,
+): CheckoutRunRecord {
+  return {
+    id: `crun_${name}_${at.slice(11, 16).replace(":", "")}`,
+    name,
+    command,
+    required: [],
+    started_at: at,
+    ended_at: at,
+    duration_ms: ms,
+    exit_code: exit,
+    expect_exit_code: 0,
+    ended: `exited ${exit}`,
+    stopped: false,
+    changed: [],
+    undoable: false,
+    log: `runs/crun_${name}/output.log`,
+  };
+}
+
+/**
+ * What has run in this checkout, newest first — so the list on the left says
+ * what each entry last came to, which is what #1383 asked it to carry.
+ * `typecheck` is the one that came back with a code it did not expect.
+ */
+export const RUNS: CheckoutRunList = {
+  runs: [
+    record("typecheck", "pnpm typecheck", "2026-09-12T14:11:30Z", 2, 9420),
+    record("build", "cargo build --workspace --locked", "2026-09-12T14:09:02Z", 0, 41_300),
+    record("bootstrap", "pnpm install --frozen-lockfile", "2026-09-12T13:58:11Z", 0, 8200),
+  ],
+  unreadable: [],
+};
+
 /** What a pull brought in while the edit was open. */
 export const PULLED_TEXT = MANIFEST_TEXT.replace("base: main", "base: main\n\nauto_merge: never");
 
@@ -304,6 +345,8 @@ export type Manifesting = {
   setUp?: boolean;
   onEdits?: (body: EditManifest) => void;
   onStartRun?: (body: StartCheckoutRun) => void;
+  /** Pressed Verify. Opening its reading must not reach this — #1383. */
+  onStartVerify?: () => void;
   /** `false` leaves the rail on All repositories, which every per-repository surface has a state for. */
   picked?: boolean;
 };
@@ -430,6 +473,10 @@ function behaviour(fleet: FleetHandle, options: Manifesting): Partial<BridgeApi>
       options.diff === undefined ? { ok: false, outcome: { ok: false, why: "not_connected" } } : { ok: true, diff: options.diff },
     startCheckoutRun: async (body): Promise<Outcome> => {
       options.onStartRun?.(body);
+      return { ok: true };
+    },
+    startCheckoutVerify: async (): Promise<Outcome> => {
+      options.onStartVerify?.();
       return { ok: true };
     },
   };

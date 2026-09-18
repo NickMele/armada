@@ -1370,3 +1370,60 @@
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+/* ---- the Manifest surface's tab row ------------------------------------- */
+
+/* The tab strip with the surface's own readings at its trailing edge — Drift
+   and Verify, which were resident panels under this row until #1383 and took
+   45% of the window's height between them.
+
+   One row, so the two acts cost the Checks below no height at all. They are
+   ghosts, which is what the contract gives a toolbar, and the accent on this
+   surface stays spent on Run. */
+.armada-screen__tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: none;
+  min-width: 0;
+}
+
+.armada-screen__tabs-acts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-inline-start: auto;
+  flex: none;
+}
+
+/* How many lines went, inside the Drift act. Plain sans in --notice-caution,
+   which is what the contract gives a drift state: a drifted file is behind
+   rather than broken, and a bordered pill would be a Job state. */
+.armada-screen__drifted {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-body);
+  color: var(--notice-caution);
+}
+
+/* What the last Verify came to, inside its act. Unhued, because nothing about a
+   rehearsal is a verdict — the panel it opens holds the same rule. */
+.armada-screen__act-said {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-body);
+  color: var(--fg-subtle);
+}
+
+/* A stack that is also the containing block for its own layers —
+   `.armada-screen__detail`'s reason: the layer belongs to the screen it was
+   opened from, so the tabs and the list behind it stay on screen and under it
+   rather than the shell's rail going under it too.
+
+   No `overflow: hidden` with it, unlike the detail's: this stack has no radius
+   for a layer to round into, and the Edit and file views scroll through it. */
+.armada-screen__layered {
+  position: relative;
+}

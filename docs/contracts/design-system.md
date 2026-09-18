@@ -1515,6 +1515,53 @@ pressed is the one control in its group that is not greyed out. It stays
 focusable and refuses a second press. Disabling alone was the treatment
 before, and it drew the pressed control exactly like its siblings.
 
+### Tabs
+
+Sections of one object, drawn as a segmented control: one track, and the
+chosen tab filled inside it.
+
+```
+track      --bg-sunken · --border-default · --radius-md · 2px inner padding
+tab        32px · 12px horizontal padding · --text-sm · --fg-muted
+chosen     --accent-muted fill · --fg-default · weight 500 · --radius-sm
+hover      --fg-default
+count      trailing mono --text-2xs in --fg-subtle, never a filled pill
+```
+
+**The chosen tab is filled, not underlined.** The rail's own selected row is
+`--accent-muted` filled, and a panel's tabs sit in the same eyeline as it — an
+underline made one selection read as a different idea from the other, which is
+what the owner saw on Manifest on 17 Sep 2026. The fill is the contract's own
+for a selected row, with `--fg-default` on it because `--accent` measures
+4.06:1 there and would not clear as body text.
+
+**Still the `tabs` primitive.** A segmented control is how the strip is
+painted, not a new base component — hard rule 2 stands.
+
+**The run sheet's scope control is segmented too, and deliberately different.**
+*Changed / All* is a choice made before pressing Run, so it is built from
+`radio` and fills the chosen segment solid `--accent` with `--fg-inverse`, the
+way a pressed control reads; hairlines divide its segments because nothing
+travels across them. A tab is a view already open, which is the rail's own
+`--accent-muted`, and the fill travels, so it carries no dividers to slide
+over. **Two renderings of one shape, told apart by whether the press has
+happened yet** — and said here so the next strip does not pick one at random.
+
+**One fill that travels**, at `--duration-base`: the eye follows the selection
+from the tab it left, where an edge per tab can only swap. It travels by
+transform and width so nothing reflows, does not travel on first placement,
+and under reduced motion it simply lands.
+
+**A counted strip is the same control.** A count and the key that selects a
+tab sit either side of the label, inside the segment; a tab carrying both is
+the widest thing the strip holds, and the Job Board is where that is measured.
+
+**Suspended steps the whole strip back** — every tab to `--fg-subtle`, and the
+chosen one gives up its fill rather than its selection. A fill reads as *this
+is what you are looking at*, and while something else on the surface is
+narrowing the list that is not true. Nothing is disabled: pressing a tab is
+the way out of the state, so the way out has to work.
+
 ### Input
 
 ```

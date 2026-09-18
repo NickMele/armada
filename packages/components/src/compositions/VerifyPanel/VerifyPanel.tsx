@@ -48,6 +48,11 @@ export type VerifyPanelProps = {
   onStop?: () => void;
   /** Put an ended Verify away. Its steps stay under Earlier runs. */
   onDismiss?: () => void;
+  /**
+   * Whether the head says `Verify`. **`false` inside `VerifySheet`**, whose own
+   * title says it. The sentence and the buttons beside it stay either way.
+   */
+  titled?: boolean;
 };
 
 export function VerifyPanel({
@@ -58,6 +63,7 @@ export function VerifyPanel({
   refused,
   onStop,
   onDismiss,
+  titled = true,
 }: VerifyPanelProps) {
   const groups = [...new Set(steps.map((step) => step.group))].map(
     (group) => [group, steps.filter((step) => step.group === group)] as const,
@@ -66,7 +72,7 @@ export function VerifyPanel({
   return (
     <section className="armada-verify-panel" aria-label="Verify">
       <div className="armada-verify-panel__head">
-        <span className="armada-verify-panel__title">Verify</span>
+        {titled ? <span className="armada-verify-panel__title">Verify</span> : null}
         <p className="armada-verify-panel__says">
           Runs setup and every Check once, one after another, in this checkout as it is on disk.
         </p>

@@ -330,3 +330,7 @@ export * from "./compositions/ProducedPanel/ProducedPanel";
 export * from "./compositions/ToolName/ToolName";
 // A Note's frame, opened over the Studios surface. #1352.
 export * from "./compositions/StudioFrameSheet/StudioFrameSheet";
+// Drift's reading and Verify's run, each on its own layer instead of resident
+// above the runner. #1383.
+export * from "./compositions/DriftSheet/DriftSheet";
+export * from "./compositions/VerifySheet/VerifySheet";
