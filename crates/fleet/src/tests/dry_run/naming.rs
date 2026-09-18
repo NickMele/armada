@@ -122,10 +122,11 @@ async fn naming_a_check_never_spends_the_allowance() {
     );
 }
 
-/// **The answer comes back in the call that asked**, which is the whole of
-/// why `ran_inline` is not `run_checks` with a flag. #1174.
+/// **What is handed to the harness is the Check's own command**, narrowed to
+/// what the Drone changed — never the command it typed, and never something
+/// Fleet composed for it. #1174.
 #[tokio::test]
-async fn a_named_check_answers_inside_the_call_that_asked() {
+async fn the_command_handed_over_is_the_checks_own() {
     let home = TempDir::new();
     let fleet = Arc::new(a_fleet_checking(
         &home,
@@ -136,26 +137,17 @@ async fn a_named_check_answers_inside_the_call_that_asked() {
     started(&fleet, &home).await;
     let job = fleet.working_on().await.first().cloned().expect("a Job");
 
-    let said = fleet
-        .ran_inline(&job, ChecksAsk::just("fast"))
+    let command = fleet
+        .the_check_command(&job, ChecksAsk::just("fast"))
         .await
-        .expect("a report");
-    assert!(
-        said.contains("fast"),
-        "the report names the check that ran: {said}"
-    );
-    assert!(
-        !said.contains("slow"),
-        "and nothing it did not name: {said}"
-    );
+        .expect("a command to hand over");
+    assert_eq!(command, "/usr/bin/true");
 }
 
-/// **It leaves no mark behind.** `run_checks` puts the slot in checking and a
-/// spawned task takes it off; this sets none, so a caller that gives up cannot
-/// strand the slot with `is_checking` true and refuse every later ask with
-/// `AlreadyRunning`. That hazard is why this does not reuse that path.
+/// A name the part does not gate on hands nothing over, and the caller refuses
+/// as it did before rather than inventing a command.
 #[tokio::test]
-async fn it_leaves_the_slot_free_to_be_asked_again() {
+async fn a_check_this_part_does_not_gate_on_hands_nothing_over() {
     let home = TempDir::new();
     let fleet = Arc::new(a_fleet_checking(
         &home,
@@ -166,18 +158,10 @@ async fn it_leaves_the_slot_free_to_be_asked_again() {
     started(&fleet, &home).await;
     let job = fleet.working_on().await.first().cloned().expect("a Job");
 
-    fleet
-        .ran_inline(&job, ChecksAsk::just("fast"))
-        .await
-        .expect("the first");
-    fleet
-        .ran_inline(&job, ChecksAsk::just("fast"))
-        .await
-        .expect("a second, against a slot the first did not leave marked");
-
-    // And the ordinary path is still open afterwards, which it would not be
-    // if a mark had been left on.
-    asked_by_the_one(&fleet, ChecksAsk::just("fast"))
-        .await
-        .expect("the tool still answers");
+    assert_eq!(
+        fleet
+            .the_check_command(&job, ChecksAsk::just("typecheck"))
+            .await,
+        None
+    );
 }
