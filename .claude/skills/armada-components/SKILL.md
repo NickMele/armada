@@ -174,6 +174,14 @@ From `packages/components`:
 - `pnpm build-storybook` must succeed, once, before the PR.
 - `pnpm exec storybook dev -p 6006 --no-open --ci` to look at it. **Pass `--ci`**
   — without it a port conflict opens an interactive prompt and the command hangs.
+- **A primitive whose painting changed is looked at on every ground it is drawn
+  on.** Confirmed 18 Sep 2026: #1383 made the tab strip a segmented control on
+  a `--bg-sunken` track and ran the stories of all six consumers, which passed
+  — a `play` reads roles and text, and no test in this repository can see a
+  colour. On a Sheet's overlay that track sat 18 values below its ground and
+  read as a hole cut in the header. #1452 fixed it in a second pull request, by
+  looking. The grounds are the canvas, a card, a sheet's overlay and a dialog;
+  a component that fills itself from a surface token meets more than one.
 
 From the repository root:
 

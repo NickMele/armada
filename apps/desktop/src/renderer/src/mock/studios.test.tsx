@@ -603,7 +603,11 @@ test("an issue read in is dispatched, its Job opens from the node, and the node 
   // The gate is unchanged: a Job from a Studio stands at `awaiting_approval`
   // like any other, and this is where it is approved.
   await expect.element(page.getByRole("button", { name: "Approve dispatch" })).toBeVisible();
-  await expect.element(page.getByText("Dispatched by you")).toBeVisible();
+  // The origin, in the registry's own words. Spelled whole rather than as the
+  // trailing clause: `getByText` matches a substring without case, so the
+  // shorter `Dispatched by you` passed against `From a Studio, dispatched by
+  // you` and would pass against a row that had lost the Studio entirely.
+  await expect.element(page.getByText("From a Studio, by you")).toBeVisible();
 
   await page.getByRole("button", { name: "Approve dispatch" }).click();
   await userEvent.keyboard("{Escape}");

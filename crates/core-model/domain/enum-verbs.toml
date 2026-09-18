@@ -1105,3 +1105,19 @@ status_token = ""
 vocabulary = "Origin"
 in_code = ""
 notes = "A working Drone reported a test broken on main, Fleet ran that test against main and it failed, and the Drone drafted the fix. Drafted rather than dispatched, for `helm_drafted`'s reason: it still takes your approval. No slot for which Job reported it — `dispatched_by` would mark the fix as already approved and `subject` is neither sequencing nor provenance — so the breakage the fix claims says that on Job detail. #999. Neither glyph nor token, for `auto_detected`'s reason."
+
+[verbs.origin.studio_dispatched]
+verb = "From a Studio, by you"
+icon = ""
+status_token = ""
+vocabulary = "Origin"
+in_code = ""
+notes = "**Two clauses, because one column answers two questions.** Where the Job came from is the reading a person is after, so it leads; who pressed is the reading `manual` carried and it cannot be dropped, so it continues the same sentence rather than taking a second field nothing else on the row has. A Studio takes two values and not one for that reason — the alternative was a variant meaning *a Studio* and a second place saying *you*, which is a composition in Bridge the registry exists to prevent, exactly as `sub_dispatched`'s notes argue. **Both clauses are short because the column is fixed.** The first spelling was `From a Studio, dispatched by you`, and at 2000px with the Helm dock open it ellipsised away the second clause — which is the only thing separating this row from `studio_helm_drafted`'s, so the two origins read alike exactly where they differ. 21 characters against the 28 `sub_dispatched` already carries. **No slot**: which Studio is not on the Job, and the `produced` edge that names it is read on Job detail, where a control can reach it. Neither glyph nor token, for `auto_detected`'s reason. #1362."
+
+[verbs.origin.studio_helm_drafted]
+verb = "From a Studio, via Helm"
+icon = ""
+status_token = ""
+vocabulary = "Origin"
+in_code = ""
+notes = "`studio_dispatched`'s sibling, and the pair is read side by side on one board — so it is spelled to the same length for the same reason, and the two differ only in their second clause. **It says `via Helm` and not `drafted in Helm`**, which drops `helm_drafted`'s own word for what is still owed: a Job Helm wrote up and dispatched on your ask takes your approval, and this verb no longer says so. That reading is on Job detail and in the Job's own state, which is where a person acts on it; the row says who sent it, not what it is waiting for. Neither glyph nor token, for `auto_detected`'s reason. #1362."

@@ -280,6 +280,33 @@ export type JobDetail = {
    * Absent is nearly every job, one killed and left alone included.
    */
   replaced_by?: ReplacedBy;
+  /**
+   * The Studio this job was dispatched from, and the node to land on. Since 16.4.
+   *
+   * **Derived from the `produced` edge into the job's node**, never a column on
+   * the job: a forward pointer would be a second write that can disagree with
+   * the edge and outlive what it points at.
+   *
+   * **Absent is two facts, and `origin` tells them apart.** A job nobody
+   * dispatched from a Studio carries neither; a job whose origin says it came
+   * off one carries none here because the Studio has been deleted, and the
+   * screen says so rather than drawing a control that opens nothing.
+   */
+  from_studio?: FromStudio;
+};
+
+/**
+ * The Studio a job came off: what to call it, and where on it to land.
+ * `crates/ipc/src/detail.rs`.
+ *
+ * **The node is not optional.** Going back means landing on the part of the
+ * graph the job came from, so opening and selecting are one act.
+ */
+export type FromStudio = {
+  studio_id: string;
+  /** Absent on a Studio nobody has named. `UNTITLED_STUDIO` is the one word for that. */
+  name?: string;
+  node_id: string;
 };
 
 /**

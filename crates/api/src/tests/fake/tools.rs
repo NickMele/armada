@@ -133,7 +133,7 @@ impl Tools for FakeDaemon {
     async fn run_checks(
         self: std::sync::Arc<Self>,
         _caller: crate::Caller,
-        _only_what_changed: bool,
+        _ask: ipc::mcp::ChecksAsk,
     ) -> Result<ChecksStarted, NotRecorded> {
         self.while_working("checks to run")?;
         self.checked.fetch_add(1, Ordering::SeqCst);

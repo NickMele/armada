@@ -64,7 +64,9 @@ use crate::terms::{Capturing, Checking, Declaring, Delivering, RecordingThePlan,
 /// too, and sends nothing.
 pub const BASELINE: &str = "\
 You are working in a git worktree on a branch of your own. You cannot push, \
-open a pull request, or run commands this repository has not declared.
+open a pull request, or run commands this repository has not declared. You \
+cannot run its checks yourself either — those it does declare, and Fleet runs \
+them for you.
 
 When you have finished the work described below, you must report it using the \
 evidence submission tool you have been given. It is the only way to report. \

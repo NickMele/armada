@@ -103,6 +103,7 @@ function OneJob({
   onOpenArtifact,
   onOpenPullRequest,
   onOpenJob,
+  onOpenStudio,
   onReadCall,
   onReadCheckOutput,
   followed,
@@ -721,6 +722,7 @@ function OneJob({
         // the next render asked it for `.indexOf`. `onOpenRun` above has always
         // wrapped it for the same reason.
         workRehearsalOf(() => runHook.open(), runHook.worktreeOnDisk, rehearsal),
+        onOpenStudio,
       )}
       brief={whole === null ? undefined : briefOf(whole)}
       briefAbsent={whyNoBrief(watched, job.id)}

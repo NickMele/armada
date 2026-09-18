@@ -203,3 +203,37 @@ describe("whether this job's own read has answered yet", () => {
     expect(stillReading(read, JOB_ID)).toBe(true);
   });
 });
+
+describe("the way back to the Studio a job came off", () => {
+  const FROM = { studio_id: "01STUDIO0000000000000000000", name: "Stale counts", node_id: "01JOBNODE" };
+  const studioRow = (whole: JobDetail | null, onOpenStudio?: (studioId: string, nodeId: string) => void) =>
+    workOf(noOpen, job(), whole, manifest(), workflow(), noRehearsal, onOpenStudio).find(
+      (row) => row.iconLabel === "Studio",
+    );
+
+  it("names the Studio where a value you go and find lives", () => {
+    expect(studioRow(detail({ from_studio: FROM }), () => {})?.value).toBe("Stale counts");
+  });
+
+  it("calls a Studio nobody named what every other surface calls one", () => {
+    const unnamed = { ...FROM, name: undefined };
+    expect(studioRow(detail({ from_studio: unnamed }), () => {})?.value).toBe("Untitled Studio");
+  });
+
+  it("draws nothing for a job nothing dispatched from a Studio", () => {
+    expect(studioRow(detail())).toBeUndefined();
+  });
+
+  it("draws nothing before the read lands, rather than a row that appears twice", () => {
+    expect(studioRow(null)).toBeUndefined();
+  });
+
+  it("offers no control where the surface has nowhere to navigate", () => {
+    expect(studioRow(detail({ from_studio: FROM }))?.actions).toBeUndefined();
+  });
+
+  it("is one row and never a list — a job reaches the board from one Issue draft", () => {
+    const rows = workOf(noOpen, job(), detail({ from_studio: FROM }), manifest(), workflow(), noRehearsal, () => {});
+    expect(rows.filter((row) => row.iconLabel === "Studio")).toHaveLength(1);
+  });
+});

@@ -297,9 +297,10 @@ table = "jobs"
 storage = "Column"
 nullable = "No"
 frozen_at = "Creation"
-purpose = "auto_detected / manual / helm_drafted / sub_dispatched / workflow_triggered / drone_drafted."
+purpose = "auto_detected / manual / helm_drafted / sub_dispatched / workflow_triggered / drone_drafted / studio_dispatched / studio_helm_drafted."
 in_code = "Not yet"
-notes = "A denormalized label, not an independent fact: written from `dispatched_by` at creation, and where they disagree, `dispatched_by` wins. Walking the `dispatched_by` chain recovers root provenance. `workflow_triggered` is the one value not written from `dispatched_by` — the Job that named it is over; it links back through `subject` and does not consume the fan-out cap."
+notes = "A denormalized label, not an independent fact: written from `dispatched_by` at creation, and where they disagree, `dispatched_by` wins. Walking the `dispatched_by` chain recovers root provenance. `workflow_triggered` is the one value not written from `dispatched_by` — the Job that named it is over; it links back through `subject` and does not consume the fan-out cap. The two `studio_` values are the others: what they denormalize is not on the Job either, but the `produced` edge into the Job node on the Studio that dispatched it. They carry who pressed as well as where from, so nothing `manual` and `helm_drafted` said is lost — `enum-verbs.toml` carries both clauses."
+why = "**Which Studio is derived and that it was a Studio is stored, and the split is not arbitrary.** The edge is the only record of the Studio and it is deleted with the Studio, so a Job whose Studio is gone would read as a Job nobody dispatched from one — and a column naming the Studio would be a second write outliving what it points at, which is the argument `redispatched_from` is read as a predicate for (`#1439`). Stored says it came from a Studio and survives; derived says which, and offers a control only while there is something to open."
 
 [fields.owner_manifest_id]
 type = "id"

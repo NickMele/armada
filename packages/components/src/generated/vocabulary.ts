@@ -219,6 +219,8 @@ export const ORIGIN: Readonly<Record<string, Rendering | undefined>> = {
   "workflow_triggered": { verb: "Workflow-triggered", icon: null, badgeStatus: null, statusToken: null, hint: null },
   "sub_dispatched": { verb: "Sub-dispatched by {dispatched_by.job_id}", icon: null, badgeStatus: null, statusToken: null, hint: null },
   "drone_drafted": { verb: "Drafted by a Drone", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "studio_dispatched": { verb: "From a Studio, by you", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "studio_helm_drafted": { verb: "From a Studio, via Helm", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
 /**
@@ -380,4 +382,6 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "origin", variant: "workflow_triggered", missing: ["icon", "token"] },
   { vocabulary: "origin", variant: "sub_dispatched", missing: ["icon", "token"] },
   { vocabulary: "origin", variant: "drone_drafted", missing: ["icon", "token"] },
+  { vocabulary: "origin", variant: "studio_dispatched", missing: ["icon", "token"] },
+  { vocabulary: "origin", variant: "studio_helm_drafted", missing: ["icon", "token"] },
 ];

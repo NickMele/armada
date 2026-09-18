@@ -143,10 +143,7 @@ async fn called<D: Tools>(
         // **Answered once the run has started, and the report is not here.** A
         // build is minutes and a client gives up on a call sooner, which used to
         // take the run with it (#1020). By `Arc`, because the run outlives this.
-        Incoming::RunChecks {
-            id,
-            only_what_changed,
-        } => match served.shared().run_checks(caller, only_what_changed).await {
+        Incoming::RunChecks { id, ask } => match served.shared().run_checks(caller, ask).await {
             Ok(started) => Answered::Checking { id, started },
             Err(why) => Answered::Refused { id, why },
         },

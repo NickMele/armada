@@ -391,6 +391,20 @@ commands:
   fmt:
     run: cargo fmt --all
 
+  # **A Drone regenerating the wire's TypeScript after a protocol bump.** Not a
+  # Check — it writes, and what it writes lands in the diff — but a Drone that
+  # changes `crates/ipc` and `protocol-version.toml` cannot make `typecheck`
+  # pass without it, so it has to be reachable.
+  #
+  # **Declared because #1174 withholds the program.** Every Bash call naming a
+  # program one of the Checks runs is now refused whatever `when_blocked` says,
+  # and `pnpm` is one. That is right for `pnpm -C packages/screens test`, which
+  # `run_checks` does better, and wrong for this, which nothing else does at
+  # all — so it stops being an ungranted command and becomes a named one. A
+  # Drone runs it as `armada run codegen`.
+  codegen:
+    run: pnpm -C apps/desktop codegen
+
   gate:
     # Exits non-zero on purpose, which is why it is not a Check.
     run: cargo xtask verify-foundations

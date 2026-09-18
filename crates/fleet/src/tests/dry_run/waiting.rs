@@ -58,7 +58,10 @@ async fn a_drone_at_rest_on_its_own_checks_is_kept_and_told_the_report() {
     started(&fleet, &home).await;
     let (job, drone) = the_one_drone(&fleet).await.expect("a Drone at work");
 
-    let underway = fleet.run_checks(&job, false).await.expect("the run starts");
+    let underway = fleet
+        .run_checks(&job, ipc::mcp::ChecksAsk::everything(false))
+        .await
+        .expect("the run starts");
     std::fs::write(&go, "").expect("the Drone is told to end its run");
     let mut resting = false;
     for _ in 0..600 {

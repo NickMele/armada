@@ -57,16 +57,16 @@
 // wire, not in the store, not computed — and a labelled gap on every row reads
 // as a value that failed to load rather than one nothing serves.
 //
-// **Origin stays out too, and no longer for want of the word.**
-// `enum-verbs.toml` carries every `origin` row — `auto_detected` reads
-// `Found by Fleet`. What is missing is the carriage: the generator's wanted
-// list does not name `origin`, so no `ORIGIN` map reaches Bridge. #234 closed
-// once the verbs landed, and `sub_dispatched` carries the form
-// `Sub-dispatched by {dispatched_by.job_id}` rather than a word — settled
-// there, not still open. **Adding `origin` to the wanted list is not enough**:
-// `JobSummary` carries the full `Origin` and does not carry `dispatched_by`, so
-// the form has nothing to fill its slot with. The screen stories draw origins
-// as literals, so the track is drawn there and empty here. Unfiled.
+// **Origin is here since #1362, and the two gaps this comment used to name are
+// both closed.** #1115 put `origin` on the generator's wanted list, so the
+// `ORIGIN` map reaches Bridge; #1165 put `dispatched_by` on `JobSummary`, so
+// `sub_dispatched`'s form — `Sub-dispatched by {dispatched_by.job_id}` — has
+// the parent's id to fill its slot with. What made it worth drawing was a
+// value a person acts on: a Job off a Studio reads `From a Studio, by you`,
+// and the way back to that Studio is on the detail.
+//
+// **One reading, in `origin.ts`.** The header's own field draws the same
+// sentence, and two spellings of it is the drift that file prevents.
 //
 // **The step reads its name**, since `StepDetail` carries a label Fleet fills
 // from the frozen workflow. A list row holds `JobSummary` and not the steps, so
@@ -86,6 +86,7 @@ import { absoluteOf, elapsedSince, lasting } from "./duration";
 import { activityFor } from "./frozen";
 import { rowFreezeOf } from "./freeze";
 import { ROW_VERBS, verbOf } from "./keys";
+import { originReading } from "./origin";
 import { leading, readingOf } from "./reading";
 import type { Recent } from "./recent";
 
@@ -276,6 +277,14 @@ export function Row({
       value: elapsedNow ?? (isTerminal(job) ? endedAt : undefined) ?? "—",
       mono: true,
       quiet: elapsedNow === undefined,
+    },
+    {
+      label: "Dispatched by",
+      // **Plain sans in the muted colour, never a chip** — a chip is a status,
+      // and where a Job came from is not one. An origin the vocabulary does
+      // not hold draws nothing rather than its wire spelling.
+      value: originReading(job) ?? "—",
+      quiet: originReading(job) === undefined,
     },
     // After the three, so the handle, the status and the facts a person scans keep their places, and
     // before Tasks: every row names its repository where the column is drawn, and a row without a

@@ -243,6 +243,8 @@ Every Job shows a visible tag for where it came from.
 | Workflow-triggered | Created by a finished Job's `on_complete` |
 | Sub-dispatched | Spawned by a step of another Job, carrying `dispatched_by` |
 | Drafted by a Drone | A working Drone reported a test broken on main, Fleet ran that test against main and it failed, and the Drone drafted the fix |
+| From a Studio, by you | Dispatched off a [Studio](studio.md), by you |
+| From a Studio, via Helm | Dispatched off a Studio, by Helm on your ask |
 
 A Job drafted in Helm still requires your explicit approval, like any other Job dispatch — see [Helm](helm.md).
 
@@ -289,14 +291,38 @@ origin field of its own. The label above is what a row renders.
 | `helm_drafted` | Drafted in Helm |
 | `workflow_triggered` | Workflow-triggered |
 | `sub_dispatched` | Sub-dispatched by `<parent job id>` |
+| `studio_dispatched` | From a Studio, by you |
+| `studio_helm_drafted` | From a Studio, via Helm |
 
-**Three of the five read as sentences rather than labels**, settled on the
+**Three of the first five read as sentences rather than labels**, settled on the
 drawing and amended 2026-08-21 — see [Monitor active
 work](../journeys/monitor-active-work.md). *Auto-detected*, *Manual* and
 *Helm-drafted* were settings vocabulary naming modes the lexicon does not have;
 *Found by Fleet*, *Dispatched by you* and *Drafted in Helm* say who acted. The
 other two already named an act and are unchanged. Origin renders as plain sans
 in `--fg-muted` and never as a chip, because a chip is a status.
+
+### A Studio origin says where from and who pressed, in one reading
+
+**Two values and not one**, settled with `#1362`. Where the Job came from is
+the reading a person is after, so it leads; who pressed is what `manual` and
+`helm_drafted` carried and it cannot be dropped, so it continues the same
+sentence. A single value meaning *a Studio* would have put *dispatched by you*
+in a second place nothing checks, which is what the registry holding
+`sub_dispatched`'s whole form exists to prevent.
+
+**Which Studio is not on the row, and not on the Job.** The record is the
+`produced` edge from the Issue draft to the Job node, which lives on the
+Studio; reading it backwards is what Job detail does to offer the way back —
+see [Studio](studio.md), *The way back from a Job*. A row names no Studio for
+the reason a sub-dispatched row names its parent and nothing else: the row is
+where a person finds the Job, and the detail is where they reach what it came
+from.
+
+**A Job whose Studio was deleted still says it came off one.** The origin is
+stored and the edge is not, so the label stands and the way back goes quiet —
+the detail says the Studio is no longer there rather than offering a control
+that opens nothing. *A Board outlives its Workspace*, one scope smaller.
 
 ### A Convoy's row names its first write target
 

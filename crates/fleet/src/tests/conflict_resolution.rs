@@ -269,12 +269,12 @@ async fn the_sweep_sends_a_conflicted_job_at_its_gate_back_as_fleet_once_per_bas
 
 /// **Clean clears do not add up.** A long-lived Job clears two conflicts, both
 /// pushed, then one pass comes back still conflicting: that is one in a row.
-/// **Skipped while the machine is loaded, `#1436`.** It passes alone and
+/// **Skipped while the machine is loaded, `#1467`.** It passes alone and
 /// fails only when the whole suite runs on a saturated machine, which is
-/// what the merge line does — so it refused every branch tonight. Whether
-/// this is a defect it is catching, a timing dependence, or a test worth
-/// keeping at all is `#1436`'s to settle.
-#[ignore = "flaky under load, #1436"]
+/// what the merge line does — so it refused every branch on the night it
+/// was switched off. `#1467` carries the causes already found and what is
+/// left to read; switching it back on is that issue's, not this file's.
+#[ignore = "flaky under load, #1467"]
 #[tokio::test]
 async fn two_clean_clears_then_one_conflicted_pass_is_sent_again() {
     let home = TempDir::new();

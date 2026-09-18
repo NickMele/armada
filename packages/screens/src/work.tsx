@@ -45,6 +45,7 @@ import { openArtifact, type OpenArtifact } from "./opening";
 import type { JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import type { RunSheetSlice } from "./rehearsal";
+import { UNTITLED_STUDIO } from "./studio";
 
 /**
  * What the worktree row's **Run…** and a *Serving* row need — Journey 9, on
@@ -139,6 +140,7 @@ export function workOf(
   manifest: ManifestSummary | undefined,
   workflow: WorkflowSummary | undefined,
   rehearsal: WorkRehearsal,
+  onOpenStudio?: OpenStudioFrom,
 ): JobLogReferenceRow[] {
   const repo = repoOf(manifest);
   // Only `worktree` is drawn on this screen, which never reads `records` —
@@ -204,9 +206,57 @@ export function workOf(
     });
   }
 
+  rows.push(...studioRows(whole, onOpenStudio));
+
   if (whole !== null) rows.push(...overlapRows(whole), ...breakageRows(whole, job.id));
   rows.push(...servingRows(job.id, rehearsal));
   return rows;
+}
+
+/** Open the Studio a job came off, landing on the job's own node. */
+export type OpenStudioFrom = (studioId: string, nodeId: string) => void;
+
+/**
+ * The Studio this job was dispatched from, where the record is still there.
+ *
+ * **In this region and not in the header's field run**, which is the whole
+ * distinction the region is drawn on: the Studio is a value you go and find,
+ * and the notes and the draft that made the job worth doing are on it.
+ *
+ * **One row, never a list.** A job reaches the board from one Issue draft.
+ *
+ * **Absent draws nothing here**, and a job whose origin says it came off a
+ * Studio says so on the header's line instead — `facts.ts`, `studioGoneFact`.
+ * A deleted Studio takes the edge that named it, so there is nothing to open
+ * and no control is offered. `#1362`.
+ */
+function studioRows(whole: JobWhole | null, onOpenStudio?: OpenStudioFrom): JobLogReferenceRow[] {
+  const from = whole?.from_studio;
+  if (from === undefined) return [];
+  const name = from.name ?? UNTITLED_STUDIO;
+  return [
+    {
+      iconLabel: "Studio",
+      value: name,
+      actions:
+        onOpenStudio === undefined ? undefined : (
+          <Button
+            variant="secondary"
+            size="sm"
+            // **Short on screen, named for a reader.** The column is 380px
+            // wide and the Studio's name is in it; a control repeating the
+            // word took enough of that to clip the name to two words. The
+            // accessible name carries the whole of what the press opens, and
+            // opens with the visible word so voice control still reaches it —
+            // `replaced.tsx`'s `Open <handle>`.
+            aria-label={`Open ${name}`}
+            onClick={() => onOpenStudio(from.studio_id, from.node_id)}
+          >
+            Open
+          </Button>
+        ),
+    },
+  ];
 }
 
 /**

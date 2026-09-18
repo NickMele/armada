@@ -354,6 +354,8 @@ pub fn detail(job: JobSummary) -> JobDetail {
         // Jobs: a replacement is found by reading every Job's own
         // `redispatched_from`, never written twice.
         replaced_by: None,
+        // The fake keeps no Studio, so no Job it serves came off one.
+        from_studio: None,
     }
 }
 

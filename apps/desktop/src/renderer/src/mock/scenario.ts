@@ -48,7 +48,7 @@ import { connected } from "./moment";
 import type { Scenario } from "./moment";
 import { DRIFT_GONE, GH_ISSUE_VIEW, KIT_SERVERS, RUNS, manifesting } from "./manifest-fleet";
 import { SCRATCH, SHEET_READ, settingUp } from "./setup-fleet";
-import { everyKind, studying, untitled } from "./studio-fleet";
+import { EVERY_KIND_NAME, EVERY_KIND_STUDIO, everyKind, studying, untitled } from "./studio-fleet";
 
 export { connected, onBoard, unanswered } from "./moment";
 export type { FleetHandle, Scenario } from "./moment";
@@ -246,7 +246,30 @@ const RECORDED: [string, JobFixture][] = RECORDED_SLUGS.map((slug) => [slug, rec
 /** Every builder as an `every-state` row, each on its own id and title. Held, so a Studio can name one. */
 const EVERY_STATE_ROWS: JobFixture[] = BUILT.map(([name, fixture], at) =>
   asRow(fixture, at + 1, name, EVERY_STATE_TITLES[name]),
-);
+).map((fixture, at) => (at === 0 ? offAStudio(fixture) : fixture));
+
+/**
+ * The first row, dispatched off `everyKind()`'s Issue draft — #1362. **The row
+ * the Studio already names**, so the two halves agree: the Board says *From a
+ * Studio, dispatched by you*, and the detail's Studio row opens that Studio on
+ * the node the Job arrived as.
+ */
+function offAStudio(fixture: JobFixture): JobFixture {
+  const job = { ...fixture.job, origin: "studio_dispatched" };
+  if (fixture.watched.state !== "read") return { ...fixture, job };
+  return {
+    ...fixture,
+    job,
+    watched: {
+      ...fixture.watched,
+      detail: {
+        ...fixture.watched.detail,
+        job,
+        from_studio: { studio_id: EVERY_KIND_STUDIO, name: EVERY_KIND_NAME, node_id: "every-job" },
+      },
+    },
+  };
+}
 
 /**
  * A second folder added by path and never set up, so that `NOTHING_SET_UP`
