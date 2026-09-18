@@ -181,7 +181,7 @@ status_colour = true
 added_by_hand = false
 dispatches = false
 not_called = []
-notes = "Holds a reference and no copy of its status, which it reads off the same rows the Job Board reads. A status written onto a node would be right once."
+notes = "Holds a reference and no copy of its status, which it reads off the same rows the Job Board reads. A status written onto a node would be right once. Made by the `Dispatch` rung, and by one act off the Studio: a redispatch draws the replacement beside the Job it replaced under a `produced` edge, which is a Job node produced by a Job node and no rung of its own — nothing on a Studio was pressed. `#1440`."
 
 # -------------------------------------------------------------- node states
 #

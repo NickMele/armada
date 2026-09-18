@@ -99,6 +99,21 @@ test("a Job node takes its state off the Board, and says none where the Board ha
   expect(whiteboardNodes(STUDIO, [])[2]!.node).toEqual({ kind: "job", title: "j1" });
 });
 
+test("a Job that replaced another says which, and says nothing where this window has no such Job", () => {
+  const replaced = { ...JOB, id: "j0", handle: "11-fix-the-legend" } as JobSummary;
+  const replacement = { ...JOB, redispatched_from: "j0" } as JobSummary;
+  const studio: Studio = { ...STUDIO, nodes: [STUDIO.nodes[2]!], edges: [] };
+  expect(whiteboardNodes(studio, [replaced, replacement])[0]!.node).toEqual({
+    kind: "job",
+    state: "running",
+    title: "Fix the legend",
+    facts: ["12-fix-the-legend", "carried on from 11-fix-the-legend"],
+  });
+  // An id drawn as a handle says less than silence, so a predecessor this
+  // window does not hold is not named at all — #1440.
+  expect(whiteboardNodes(studio, [replacement])[0]!.node).toMatchObject({ facts: ["12-fix-the-legend"] });
+});
+
 test("a Run the Studio has not kept says so, and keeps its id as a fact rather than a title", () => {
   expect(whiteboardNodes(STUDIO, [])[3]!.node).toEqual({ kind: "run", title: "Not read yet", facts: ["r1"] });
 });

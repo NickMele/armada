@@ -92,6 +92,11 @@ where
         } else {
             Fleet::kill_job(self, job_id).await?
         };
+        // Last, and after the kill: a Studio holding the Job reads its node's
+        // status live, so drawing the replacement before the original stopped
+        // would put two nodes on the board both reading as the live one.
+        self.carried_on_studios(replaced.id(), dispatched.id(), &self.now())
+            .await;
         Ok(Replacement {
             replaced,
             dispatched,

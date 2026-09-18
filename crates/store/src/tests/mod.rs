@@ -16,6 +16,7 @@
 mod allowing;
 pub(crate) mod attempt;
 mod breakages;
+mod carrying_on;
 mod corrupt;
 mod cursor;
 mod delivery;
