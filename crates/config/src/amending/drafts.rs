@@ -18,7 +18,7 @@ pub struct NewCheck {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewRunner {
     pub name: String,
-    pub pkg: Option<String>,
+    pub dir: Option<String>,
 }
 
 /// `checks.<name>.narrow`, whole.
@@ -122,7 +122,7 @@ impl NewRunner {
     pub(super) fn node(&self) -> Node {
         Entries::new()
             .with("name", Some(text(&self.name)))
-            .with("pkg", self.pkg.as_deref().map(text))
+            .with("dir", self.dir.as_deref().map(text))
             .done()
     }
 }
