@@ -301,6 +301,55 @@ where
         self.dry_run_begins(caller, plan, read, spends(&ask)).await
     }
 
+    /// Run one named Check for the Drone and answer with what it said, inside
+    /// the call that asked.
+    ///
+    /// **No mark, no spawn and no later turn**, which is the whole of why this
+    /// is not [`run_checks`](Fleet::run_checks) with a flag. That one detaches
+    /// the run so a build can outlast what a client waits on one call (`#1020`)
+    /// and hands the report to the Drone as a turn — so the report has exactly
+    /// one deliverer, inside a task nobody awaits. A caller that wanted it
+    /// inline would have to race that task for the right to deliver it.
+    ///
+    /// Here the caller is already holding a tool call open and the report is
+    /// its answer, so the run is awaited and nothing else can deliver it. The
+    /// `Going` is held by this future rather than by the slot, so a caller that
+    /// gives up stops the batch instead of leaving a mark nothing takes off.
+    ///
+    /// **What it gives up is nothing this run could have used.** A narrowed run
+    /// is dropped by `reuse::KeptDryRun::of` whatever records it, the clocks it
+    /// would suspend are suspended for less than a poke, and the allowance is
+    /// not consulted because a named ask never spends it.
+    pub(crate) async fn ran_inline(
+        &self,
+        caller: &JobId,
+        ask: ipc::mcp::ChecksAsk,
+    ) -> Result<String, NotRun> {
+        let plan = self.dry_run_looks(caller, &ask).await?;
+        let read = self.dry_run_reads(&plan, &ask).await?;
+        let run = RUNS.fetch_add(1, Ordering::Relaxed);
+        // Held here, so giving up on this future stops what it started.
+        let (_going, stop) = Stop::when_dropped_or_one_fails();
+        let (heard, hearing) = tokio::sync::mpsc::unbounded_channel();
+        let showing =
+            self.announcing_dry_run(&plan.record, &plan.step, read.attempt, heard, !read.narrow);
+        let ran = self
+            .dry_run(caller, run, &plan, &read, &stop, &showing, hearing)
+            .await;
+        self.kept_timings(&plan.record, showing.timings()).await;
+        match ran {
+            Ok((report, _kept)) => {
+                // **The fix pointing is kept and the rest is not.** A test
+                // already broken on main is worth saying whatever route the
+                // run came by; everything else `dry_run_ends` does is about a
+                // run the slot is waiting on, and nothing is waiting on this.
+                self.pointed_at_fixes_in(plan.record.id(), &report).await;
+                Ok(ChecksReported::of(&Ok(report)).text().to_string())
+            }
+            Err(cause) => Err(NotRun::CouldNotRead { cause }),
+        }
+    }
+
     /// The slot's refusals, asked when the call arrives and again at the mark.
     ///
     /// **`spends` is what decides whether the allowance is consulted at all.**

@@ -22,7 +22,9 @@ use tokio::sync::oneshot;
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::permitting::{always_allow_rules, first, Answered, First, Permitted, Refusing, Waiting};
+use crate::permitting::{
+    always_allow_rules, first, Answered, First, Permitted, Refusing, Waiting, Withheld,
+};
 use crate::resume::Steer;
 use crate::session::{LiveSession, Occasion};
 
@@ -233,6 +235,18 @@ where
         let (job, step, _) = at_work.standing();
         let refusing = match self.first_answer(&job, asked).await {
             First::Allowed => return PermissionAnswer::Allow,
+            // **The command is not run, and the question it asked is answered
+            // anyway.** A Drone typing `cargo nextest run -p ipc` wants to know
+            // whether its work holds up; refusing and naming a tool leaves it
+            // to go and call that tool, and across six Drones on this machine
+            // none ever did — 32 commands by hand against one call. This is the
+            // same answer through the door it already reaches for. #1174.
+            First::Withheld(Withheld::RunsACheck { check, program }) => {
+                drop(working);
+                return self
+                    .answered_by_running(job_id, &what, &check, &program, asked)
+                    .await;
+            }
             First::Withheld(withheld) => Refusing::Withheld(withheld),
             First::NotGranted => Refusing::NotGranted,
             First::Ask => {
@@ -371,6 +385,62 @@ where
                     .then(|| (name.clone(), command.run().to_string()))
             })
             .collect()
+    }
+
+    /// Run the Check a refused command names, and answer with what it found.
+    ///
+    /// **A denial carrying a result, which is the shape the harness gives.** A
+    /// permission answer is allow or deny with a sentence, and the sentence is
+    /// what reaches the Drone — so the report travels as the reason the command
+    /// did not run. The text says so in its first line rather than leaving a
+    /// reader of the transcript to work out why a denial is full of test names.
+    ///
+    /// **Bounded under the silence poke**, `crate::silence`: a Drone waiting
+    /// here is not marked as checking, so the clocks keep running, and a run
+    /// that outlasts the bound is stopped and answered with the plain refusal.
+    /// A narrowed run is seconds; this is for the one that is not.
+    async fn answered_by_running(
+        &self,
+        job_id: &JobId,
+        what: &str,
+        check: &str,
+        program: &str,
+        asked: &PermissionAsked,
+    ) -> PermissionAnswer {
+        let plain = || {
+            Refusing::Withheld(Withheld::RunsACheck {
+                check: check.to_string(),
+                program: program.to_string(),
+            })
+            .to_the_drone(what)
+        };
+        let ask = ipc::mcp::ChecksAsk {
+            only_what_changed: true,
+            check: Some(check.to_string()),
+            files: Vec::new(),
+        };
+        let ran = tokio::time::timeout(
+            crate::permitting::RATHER_THAN_REFUSE,
+            self.ran_inline(job_id, ask),
+        )
+        .await;
+        let words = match ran {
+            Ok(Ok(report)) => format!(
+                "`{what}` was not run. It runs what the `{check}` check runs, so Fleet ran \
+                 `{check}` against what you have changed instead, and this is what it \
+                 found. Asking for it yourself with `run_checks` costs you nothing and \
+                 lets you name the files.\n\n{report}"
+            ),
+            _ => plain(),
+        };
+        let Some(slot) = self.slot_of(job_id).await else {
+            return PermissionAnswer::Deny(words);
+        };
+        let mut working = slot.lock().await;
+        if let Some(at_work) = working.as_mut().filter(|at_work| at_work.is(job_id)) {
+            at_work.refused_by_fleet(&asked.tool, &asked.call, &words);
+        }
+        PermissionAnswer::Deny(words)
     }
 
     /// Every Check the Manifest declares, as `(check name, program)`.
