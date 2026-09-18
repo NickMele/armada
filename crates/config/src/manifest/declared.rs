@@ -13,7 +13,7 @@
 
 use std::num::NonZeroU32;
 
-use core_model::{Covers, Narrowing, Prerequisite, RunsAt};
+use core_model::{Covers, Narrowing, Prerequisite, Runner, RunsAt};
 
 /// A command a change must pass to land or to advance a step.
 ///
@@ -32,6 +32,7 @@ pub struct Check {
     pub(super) runs_at: RunsAt,
     pub(super) places: NonZeroU32,
     pub(super) width: Option<NonZeroU32>,
+    pub(super) runner: Option<Runner>,
 }
 
 impl Check {
@@ -127,6 +128,13 @@ impl Check {
     /// spells the flag its runner reads. #1444.
     pub fn width(&self) -> Option<NonZeroU32> {
         self.width
+    }
+
+    /// Which runner drives this Check, and the package it runs in. **`None`
+    /// where the file names none**, and then nothing resolves out of a
+    /// runner's description for it.
+    pub fn runner(&self) -> Option<&Runner> {
+        self.runner.as_ref()
     }
 }
 

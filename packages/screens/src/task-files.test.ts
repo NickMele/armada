@@ -5,7 +5,14 @@ import type { ChangedFile } from "@armada/components";
 import type { PlanTask } from "@armada/protocol";
 
 import { answered, called } from "./fixtures/build/base";
-import { editsIn, filesByTask, repoPathOf, unownedOf } from "./task-files";
+import type { TaskFile } from "./task-files";
+import {
+  declaredAgainstTouched,
+  editsIn,
+  filesByTask,
+  repoPathOf,
+  unownedOf,
+} from "./task-files";
 
 const STEP = "implement";
 const TREE = "~/Development/armada/.armada/worktrees/01K5/";
@@ -85,5 +92,47 @@ describe("the files no task's edits account for", () => {
       { id: "3", path: `${TREE}crates/store/src/lib.rs`, added: 2 },
     ];
     expect(unownedOf(edits, DIFF).map((file) => file.path)).toEqual(["crates/store/src/lib.rs"]);
+  });
+});
+
+// `#1432`. A task says which files it will touch and Bridge already works out
+// which it did; this is the two put together.
+describe("declaredAgainstTouched", () => {
+  const file = (path: string): TaskFile => ({ path, inDiff: true });
+
+  it("marks a declared path the work reached, and one it did not", () => {
+    const read = declaredAgainstTouched(
+      ["packages/screens/src/overview.ts", "packages/screens/src/left-column.test.ts"],
+      [file("packages/screens/src/overview.ts")],
+    );
+    expect(read.declared).toEqual([
+      { path: "packages/screens/src/overview.ts", touched: true },
+      { path: "packages/screens/src/left-column.test.ts", touched: false },
+    ]);
+    expect(read.unplanned).toEqual([]);
+  });
+
+  it("names a file the work touched and the plan did not", () => {
+    const read = declaredAgainstTouched(
+      ["packages/screens/src/overview.ts"],
+      [file("packages/screens/src/overview.ts"), file("packages/screens/src/TheShell.stories.tsx")],
+    );
+    expect(read.unplanned).toEqual(["packages/screens/src/TheShell.stories.tsx"]);
+  });
+
+  // `declare_scope` takes a directory, and one real Job declared `crates/ipc`
+  // then edited `crates/ipc/operations.toml`. A prefix match that tested
+  // `startsWith` alone would also count `crates/ipc-extra/x.rs`.
+  it("counts a file under a declared directory, and not one that merely shares its spelling", () => {
+    const read = declaredAgainstTouched(
+      ["crates/ipc"],
+      [file("crates/ipc/operations.toml"), file("crates/ipc-extra/x.rs")],
+    );
+    expect(read.declared).toEqual([{ path: "crates/ipc", touched: true }]);
+    expect(read.unplanned).toEqual(["crates/ipc-extra/x.rs"]);
+  });
+
+  it("says nothing either way for a task that declared nothing and touched nothing", () => {
+    expect(declaredAgainstTouched([], [])).toEqual({ declared: [], unplanned: [] });
   });
 });

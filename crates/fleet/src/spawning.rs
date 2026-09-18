@@ -166,7 +166,16 @@ where
             .told_of_peers(peers)
             .sent_back_by(sent_back)
             .carrying_the_plan(the_plan)
-            .ruling_out(self.dismissed_for(job, step).await?);
+            .ruling_out(self.dismissed_for(job, step).await?)
+            // **Folded in here rather than asked of every caller**, for
+            // `also_carrying`'s reason: what a part may still ask for is a
+            // fact about the part at the moment a Drone starts, and a caller
+            // that had to remember it is a caller that could forget. Every
+            // spawn comes through this function. #1456.
+            .allowing(crate::briefing::Allowance::of(
+                self.dry_runs().allowed(),
+                working.as_ref().map_or(0, Working::dry_runs),
+            ));
         let brief = match opening.turn(job, job.workflow(), step, moved.as_ref()) {
             Ok(brief) => brief,
             Err(cause) => {

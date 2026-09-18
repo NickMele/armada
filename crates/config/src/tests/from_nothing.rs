@@ -31,6 +31,7 @@ fn whole() -> Vec<Edit> {
                 requires: vec!["migrate".to_string()],
                 when: Vec::new(),
                 narrow: None,
+                runner: None,
             }),
         },
         Edit::Command {

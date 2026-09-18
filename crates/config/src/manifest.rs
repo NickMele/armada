@@ -28,6 +28,7 @@
 mod declared;
 mod harness;
 mod referring;
+mod runner;
 mod seed;
 mod serving;
 
@@ -43,7 +44,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use core_model::{
-    Covers, ManifestId, Narrowing, PathPattern, RepoPath, ResolvedCheck, RunsAt, Ulid,
+    Covers, ManifestId, Narrowing, PathPattern, RepoPath, ResolvedCheck, Runner, RunsAt, Ulid,
 };
 use serde_yaml_ng::Value;
 
@@ -87,6 +88,7 @@ const CHECK_KEYS: &[&str] = &[
     "runs_at",
     "places",
     "width",
+    "runner",
 ];
 /// The values `checks.<name>.runs_at` takes, spelled as `core_model::RunsAt`
 /// spells them. #849.
@@ -633,6 +635,7 @@ pub(super) struct DraftCheck {
     runs_at: RunsAt,
     places: std::num::NonZeroU32,
     width: Option<std::num::NonZeroU32>,
+    runner: Option<Runner>,
 }
 
 /// `checks.<name>.narrow`, the second question a Check answers about paths.
@@ -775,6 +778,9 @@ fn check_entry(
     // survive as `None` rather than collapse to a default here, where nothing
     // knows the machine. Zero, negative and non-integer are refused by
     // `yaml::positive`, the same reader `places` uses. #1444.
+    let runner = table
+        .optional("runner")
+        .and_then(|value| runner::runner(&table.at("runner"), value, out));
     let width_key = table.at("width");
     let width = match table.optional("width") {
         None => Ok(None),
@@ -798,6 +804,7 @@ fn check_entry(
         runs_at: runs_at?,
         places: places?,
         width: width.ok()?,
+        runner,
     })
 }
 

@@ -105,6 +105,10 @@ asked about it again.";
 pub struct Opening {
     attempted: Attempted,
     crossed: Crossed,
+    /// What this part may still ask for. **`None` says nothing about it**,
+    /// which is every brief assembled outside a spawn — an acceptance bench
+    /// rendering one, and the two entry points a test calls directly.
+    allowance: Option<Allowance>,
 }
 
 /// Whether the step being opened has been worked before.
@@ -117,12 +121,63 @@ enum Attempted {
     Before(Stopped),
 }
 
+/// How many whole runs of a part's checks it may still ask for.
+///
+/// **A number a Drone can act on, rather than the word "limit".** A part that
+/// is told only that there is one, and not what it is, spends none of them: it
+/// cannot tell whether running out at the second task of seven is a risk it is
+/// taking. On 17 Sep one read that sentence and ran eighteen build commands by
+/// hand instead. #1456.
+///
+/// Naming one check is free and counts against nothing, so this is only ever
+/// about the whole-gate rehearsal.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Allowance {
+    allowed: u32,
+    left: u32,
+}
+
+impl Allowance {
+    /// What a part gets and what it has left, from what it has already spent.
+    /// **Saturating**, because a bound lowered while a part was running is a
+    /// part that has spent more than it now gets, and "minus one left" is not
+    /// a sentence.
+    pub fn of(allowed: u32, spent: u32) -> Allowance {
+        Allowance {
+            allowed,
+            left: allowed.saturating_sub(spent),
+        }
+    }
+
+    /// What the brief says. **`None` where a part gets none at all**, which is
+    /// a sentence about asking that would only confuse a part that cannot.
+    pub(crate) fn said(&self) -> Option<String> {
+        (self.allowed > 0).then(|| match self.left {
+            0 => format!(
+                "You may ask for every check {} times in this part, and you have used all \
+                 of them. Naming one check is still free.",
+                self.allowed
+            ),
+            left if left == self.allowed => format!(
+                "You may ask for every check {} times in this part.",
+                self.allowed
+            ),
+            left => format!(
+                "You may ask for every check {} times in this part, and {left} of those are \
+                 left.",
+                self.allowed
+            ),
+        })
+    }
+}
+
 impl Opening {
     /// A step no Drone has attempted yet, carrying nothing.
     pub fn fresh() -> Opening {
         Opening {
             attempted: Attempted::No,
             crossed: Crossed::nothing(),
+            allowance: None,
         }
     }
 
@@ -131,6 +186,19 @@ impl Opening {
         Opening {
             attempted: Attempted::Before(stopped),
             crossed: Crossed::nothing(),
+            allowance: None,
+        }
+    }
+
+    /// The same opening, saying what this part may still ask for.
+    ///
+    /// **Separate from the constructors for `carrying`'s reason**, and absent
+    /// is a brief that says a limit exists without saying what it is — which
+    /// is what every brief said before, and what this exists to stop.
+    pub fn allowing(self, allowance: Allowance) -> Opening {
+        Opening {
+            allowance: Some(allowance),
+            ..self
         }
     }
 
@@ -229,9 +297,9 @@ impl Opening {
         moved: Option<&TheBaseMoved>,
     ) -> Result<Brief, SpawnConfigRefused> {
         let mut blocks = match &self.attempted {
-            Attempted::No => assemble(job, workflow, at, &self.crossed),
+            Attempted::No => assemble(job, workflow, at, &self.crossed, self.allowance),
             Attempted::Before(stopped) => {
-                let mut blocks = assemble(job, workflow, at, &self.crossed);
+                let mut blocks = assemble(job, workflow, at, &self.crossed, self.allowance);
                 blocks.headed(&stopped.block(), ipc::BlockKind::AboutThisJob);
                 blocks
             }
@@ -369,7 +437,7 @@ pub fn first_turn(
     at: &StepId,
     crossed: &Crossed,
 ) -> Result<Brief, SpawnConfigRefused> {
-    assemble(job, workflow, at, crossed).brief()
+    assemble(job, workflow, at, crossed, None).brief()
 }
 
 /// Assemble the first turn for a Drone taking over a step that stopped.
@@ -388,7 +456,7 @@ pub fn resuming_turn(
     stopped: &Stopped,
     crossed: &Crossed,
 ) -> Result<Brief, SpawnConfigRefused> {
-    let mut blocks = assemble(job, workflow, at, crossed);
+    let mut blocks = assemble(job, workflow, at, crossed, None);
     blocks.headed(&stopped.block(), ipc::BlockKind::AboutThisJob);
     blocks.brief()
 }
@@ -606,7 +674,13 @@ impl Stopped {
     }
 }
 
-fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed) -> Blocks {
+fn assemble(
+    job: &Job,
+    workflow: &FrozenWorkflow,
+    at: &StepId,
+    crossed: &Crossed,
+    allowance: Option<Allowance>,
+) -> Blocks {
     // The baseline is the one block with no heading of its own.
     let mut blocks = Blocks::opening(BASELINE);
     blocks.headed(&notekeeping(job.id()), ipc::BlockKind::Standing);
@@ -690,7 +764,7 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
         if let Some(asked) = Declaring::at(step) {
             blocks.headed(asked.text(), ipc::BlockKind::Standing);
         }
-        if let Some(offered) = Checking::at(workflow, step) {
+        if let Some(offered) = Checking::at(workflow, step, allowance) {
             blocks.headed(offered.text(), ipc::BlockKind::Checks);
         }
     }

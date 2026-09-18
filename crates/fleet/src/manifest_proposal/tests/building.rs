@@ -184,3 +184,51 @@ fn two_workspaces_sharing_a_name_are_told_apart_by_path() {
         ]
     );
 }
+
+/// **Detected from what the script runs, not from what is installed.** A
+/// `package.json` naming `vitest` in its `test` script gives the runner away,
+/// and that is the one signal a Scan already carries — it records no
+/// dependency list, and a package holding vitest while running something else
+/// would make one say the opposite. #1456.
+#[test]
+fn a_test_script_naming_a_known_runner_proposes_it() {
+    let dir = checkout(&[
+        (
+            "package.json",
+            "{\"name\":\"screens\",\"scripts\":{\"test\":\"vitest run\"}}",
+        ),
+        ("pnpm-lock.yaml", "lockfileVersion: '9.0'\n"),
+    ]);
+    let root = answered(&dir, ".");
+    let test = root
+        .checks
+        .iter()
+        .find(|check| check.name == "test")
+        .expect("the test script is a check");
+    let runner = test.runner.as_ref().expect("vitest is detected");
+    assert_eq!(runner.name, "vitest");
+    assert_eq!(
+        runner.pkg, None,
+        "the root workspace is the repository, and there is no package below it to name"
+    );
+}
+
+/// A script naming nothing Armada ships a description of proposes no runner,
+/// and the Check runs whole — which is what every Check did before any of this.
+#[test]
+fn a_test_script_naming_no_known_runner_proposes_none() {
+    let dir = checkout(&[
+        (
+            "package.json",
+            "{\"name\":\"thing\",\"scripts\":{\"test\":\"node --test\"}}",
+        ),
+        ("pnpm-lock.yaml", "lockfileVersion: '9.0'\n"),
+    ]);
+    let root = answered(&dir, ".");
+    let test = root
+        .checks
+        .iter()
+        .find(|check| check.name == "test")
+        .expect("the test script is a check");
+    assert_eq!(test.runner, None);
+}
