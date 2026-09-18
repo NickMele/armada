@@ -297,12 +297,13 @@ async fn the_sweep_sends_a_conflicted_job_at_its_gate_back_as_fleet_once_per_bas
 
 /// **Clean clears do not add up.** A long-lived Job clears two conflicts, both
 /// pushed, then one pass comes back still conflicting: that is one in a row.
-/// **Skipped while the machine is loaded, `#1467`.** It passes alone and
-/// fails only when the whole suite runs on a saturated machine, which is
-/// what the merge line does — so it refused every branch on the night it
-/// was switched off. `#1467` carries the causes already found and what is
-/// left to read; switching it back on is that issue's, not this file's.
-#[ignore = "flaky under load, #1467"]
+///
+/// **Back on with [`until_a_drone_is_on`]'s wait, `#1467`.** The helper turned
+/// the Fleet to pass the time, so how many turns it took was a reading of the
+/// machine — and the fixture's Drone speaks once and exits, so the first turn
+/// taken after it has gone ends its step as `RunEnded` and escalates the Job.
+/// It waits in sleeps now and turns only to make a move. Reproduced with the
+/// check made to miss its first forty passes.
 #[tokio::test]
 async fn two_clean_clears_then_one_conflicted_pass_is_sent_again() {
     let home = TempDir::new();
