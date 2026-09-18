@@ -92,6 +92,14 @@ These four are load-bearing together. Loosening any one of them to make a
 feature easier is a security review, not a local decision — say so explicitly
 in review rather than quietly relaxing a flag to unblock yourself.
 
+**One window is not this window, and its posture is written down separately.**
+Studio capture on another repository's web app loads a page Bridge did not
+author, so it carries no Armada document and no `default-src 'self'` of its own;
+the other three flags are unchanged and it holds no preload at all. That review
+is `capture-window.md`, and it binds what gets built. Nothing in this section
+moves: Bridge's window still loads one file, refuses every navigation, and its
+CSP still refuses `127.0.0.1`.
+
 **A file on disk is drawn by handing its bytes over, never by widening
 `img-src`.** A step's frame and a Note's are both read by main, cross the
 preload as an array, and become a `blob:` the window makes itself — which
