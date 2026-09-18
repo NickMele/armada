@@ -77,24 +77,29 @@ describe("what a selection offers", () => {
     });
   });
 
-  test("a Link naming an issue dispatches; one naming anything else does not", () => {
-    // `forge` is Fleet's reading of the address and nothing here reads one:
-    // which host is the forge is `crates/adapters`' to know — #1379.
-    const link = (id: string, forge?: "issue" | "pull_request" | "milestone"): StudioNode => ({
-      id,
-      kind: "link",
-      address: `https://example.invalid/o/r/${id}`,
-      ...(forge === undefined ? {} : { forge }),
+  test("the three forge kinds dispatch, and a Link does not", () => {
+    // The kind is Fleet's reading of the address and nothing here reads one:
+    // which host is the forge is `crates/adapters`' to know — #1379, #1394.
+    const onTheForge = (kind: "issue" | "pull_request" | "epic"): StudioNode => ({
+      id: kind,
+      kind,
+      address: `https://example.invalid/o/r/${kind}/7`,
+      number: "7",
       position: { x: 0, y: 0 },
       created_at: at,
     });
-    const links = studio([link("issue", "issue"), link("milestone", "milestone"), link("pull", "pull_request"), link("board")]);
-    expect(actsOn(links, ["issue"])).toMatchObject({ dispatch: true, editLink: true, readIn: true });
-    // A milestone is read in, and what it holds is what is dispatched.
-    expect(actsOn(links, ["milestone"])).toMatchObject({ dispatch: false, readIn: true });
-    // Open with the owner, so the narrower answer stands: no Dispatch on one.
-    expect(actsOn(links, ["pull"])).toMatchObject({ dispatch: false });
-    expect(actsOn(links, ["board"])).toMatchObject({ dispatch: false });
+    const nodes = studio([
+      onTheForge("issue"),
+      onTheForge("pull_request"),
+      onTheForge("epic"),
+      { id: "board", kind: "link", address: "miro://board/uXjVK", position: { x: 0, y: 0 }, created_at: at },
+    ]);
+    for (const kind of ["issue", "pull_request", "epic"]) {
+      expect(actsOn(nodes, [kind])).toMatchObject({ dispatch: true, editLink: true, readIn: true });
+    }
+    // A Link is an address no adapter recognised, so there is nothing filed to
+    // dispatch against — and it is still read in and still takes a line.
+    expect(actsOn(nodes, ["board"])).toMatchObject({ dispatch: false, editLink: true, readIn: true });
   });
 
   test("an Issue draft is the only kind edited or dispatched", () => {
@@ -200,29 +205,53 @@ describe("the words a rung opens with", () => {
     };
     expect(dispatchedAs(draft)).toBe("A title\n\nA body");
     expect(dispatchedAs(note("a", "said"))).toBeNull();
-    // A Link sends its address alone: the issue it names is already filed.
+    // An Issue sends its address alone: the issue it names is already filed.
     const issue: StudioNode = {
       id: "l",
-      kind: "link",
+      kind: "issue",
       address: "https://example.invalid/o/r/issues/1379",
-      forge: "issue",
-      named: "#1379 An issue on a Studio cannot be dispatched — open",
+      number: "1379",
+      title: "An issue on a Studio cannot be dispatched",
+      state: "open",
       position: { x: 0, y: 0 },
       created_at: at,
     };
     expect(dispatchedAs(issue)).toBe("https://example.invalid/o/r/issues/1379");
-    expect(dispatchedAs({ ...issue, forge: "milestone" })).toBeNull();
+    // A pull request and an epic go the same way — #1394 — and a Link, which
+    // is an address no adapter recognised, dispatches nothing.
+    expect(dispatchedAs({ ...issue, kind: "pull_request" })).toBe(issue.address);
+    expect(dispatchedAs({ ...issue, kind: "epic" })).toBe(issue.address);
+    expect(
+      dispatchedAs({
+        id: "b",
+        kind: "link",
+        address: "miro://board/uXjVK",
+        position: { x: 0, y: 0 },
+        created_at: at,
+      }),
+    ).toBeNull();
   });
 });
 
-test("a Link offers Read in, and no other kind does", () => {
+test("every kind that keeps an address offers Read in, and no other kind does", () => {
   const board = studio([
     { id: "link", kind: "link", address: "miro://board/uXjVK", position: { x: 0, y: 0 }, created_at: at },
+    {
+      id: "epic",
+      kind: "epic",
+      address: "https://example.invalid/o/r/milestone/17",
+      number: "17",
+      position: { x: 0, y: 400 },
+      created_at: at,
+    },
     { id: "note", kind: "note", said: "the rail is unreadable", position: { x: 0, y: 200 }, created_at: at },
   ]);
-  // **Offered on every Link, whatever its address.** Which addresses are
-  // sources is Fleet's, and a rule copied here would drift from it.
+  // **Offered on every node with an address, whatever it is.** Which addresses
+  // are sources is Fleet's, and a rule copied here would drift from it — and
+  // the Link somebody pasted and the Epic it turned out to be are one node.
   expect(actsOn(board, ["link"]).readIn).toBe(true);
+  expect(actsOn(board, ["epic"]).readIn).toBe(true);
+  expect(actsOn(board, ["epic"]).editLink).toBe(true);
   expect(actsOn(board, ["note"]).readIn).toBe(false);
   expect(actsOn(board, ["link", "note"]).readIn).toBe(false);
 });

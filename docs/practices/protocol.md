@@ -1246,8 +1246,8 @@ address, so the seam carries the paste and not the kind; `StudioNodeByHand` is u
 **Additive by 14.7's reading, which added `finding` the same way.** `forge` goes with nothing that
 carries one: a Link whose address names something on the forge is converted on the boot that
 applies store V79, so no message an older Bridge parses stops parsing the same way. An older
-Bridge meeting one of the three draws it as an unknown kind rather than failing, which is the
-default `packages/screens`' `cardOf` gained here.
+Bridge meeting one of the three leaves it off the whiteboard rather than failing, which is
+`whiteboardEdges`' rule for an unknown edge and is what `cardOf` gained here.
 
 ## Open questions
 

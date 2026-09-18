@@ -124,13 +124,14 @@ function legend(): Studio {
       { id: "legend-width", kind: "note", said: "It wraps at 720 wide", position: { x: 0, y: 300 }, created_at: at },
       { id: "legend-finding", kind: "finding", asked: "Where do the legend's colours come from?", state: "frozen", position: { x: 340, y: 0 }, created_at: at },
       { id: "legend-draft", kind: "issue_draft", title: "The Board's legend is illegible", body: "…", state: "draft", position: { x: 680, y: 110 }, created_at: at },
-      // Two Links to read in — #1293. One issue, and one milestone, which fills
+      // Two addresses to read in — #1293. An Issue, and an Epic, which fills
       // the board with a node per issue and runs no scout.
-      // `forge` is what Fleet read each address as — #1379. A mock has no
-      // forge, so it says what a real one would have said: which host is the
-      // forge is `crates/adapters`' to know and nothing here may spell one.
-      { id: "legend-issue", kind: "link", address: "https://example.invalid/o/r/issues/1293", forge: "issue", position: { x: 0, y: 600 }, created_at: at },
-      { id: "legend-milestone", kind: "link", address: "https://example.invalid/o/r/milestone/17", forge: "milestone", position: { x: 0, y: 1400 }, created_at: at },
+      // The kind is what Fleet wrote when the address was pasted — #1394. A
+      // mock has no forge, so it says what a real one would have said: which
+      // host is the forge is `crates/adapters`' to know and nothing here may
+      // spell one.
+      { id: "legend-issue", kind: "issue", address: "https://example.invalid/o/r/issues/1293", number: "1293", title: "Read in: GitHub, web pages, sessions, Helm threads", state: "open", position: { x: 0, y: 600 }, created_at: at },
+      { id: "legend-milestone", kind: "epic", address: "https://example.invalid/o/r/milestone/17", number: "17", title: "Studio", position: { x: 0, y: 1400 }, created_at: at },
     ],
     edges: [
       { id: "legend-e1", from: "legend-note", to: "legend-finding", kind: "produced", standing: "accepted", created_at: at },
@@ -323,9 +324,9 @@ export function keeping(seeded: readonly Studio[] = []): StudioKeeping {
  * dispatch gate is unchanged, and a Job from a Studio stands where every other
  * one does (#1379).
  *
- * Its title is whatever it was dispatched from: a draft's own title, or the
- * line a read-in wrote on the Link, which is what the proposer would have read
- * the issue as.
+ * Its title is whatever it was dispatched from: a draft's own title, or what
+ * the forge calls what an address names, which is what the proposer would have
+ * read it as. An address nothing has read in is titled by its address.
  */
 function atTheGate(handle: FleetHandle, studio: Studio): void {
   const nodes = studio.nodes.filter((node) => node.kind === "job");
@@ -334,7 +335,13 @@ function atTheGate(handle: FleetHandle, studio: Studio): void {
   const edge = studio.edges.find((one) => one.to === node.id && one.kind === "produced");
   const from = studio.nodes.find((one) => one.id === edge?.from);
   const title =
-    from?.kind === "issue_draft" ? from.title : from?.kind === "link" ? (from.named ?? from.address) : "Dispatched from a Studio";
+    from === undefined
+      ? "Dispatched from a Studio"
+      : from.kind === "issue_draft"
+        ? from.title
+        : "address" in from
+          ? ((("title" in from ? from.title : undefined) ?? ("named" in from ? from.named : undefined)) ?? from.address)
+          : "Dispatched from a Studio";
   const row = job("awaiting_approval", {
     id: node.job_id,
     handle: mint("dispatched-from-a-studio-"),
@@ -395,8 +402,13 @@ const TOUCHED = "2026-09-17T08:40:00Z";
  */
 export function everyKind(jobId: string): Studio {
   const nodes: StudioNode[] = [
-    { id: "every-link", kind: "link", address: LONG_ADDRESS, forge: "issue", said: "where the legend was drawn", position: place(0, 0), created_at: MADE },
-    { id: "every-link-bare", kind: "link", address: LONG_ADDRESS, forge: "issue", position: place(-1, 0), created_at: MADE },
+    // A Link is an address no adapter recognised — #1394 — so what stands here
+    // is a documentation page, and the three forge kinds are their own rows.
+    { id: "every-link", kind: "link", address: LONG_ADDRESS, said: "where the legend was drawn", position: place(0, 0), created_at: MADE },
+    { id: "every-link-bare", kind: "link", address: LONG_ADDRESS, position: place(-1, 0), created_at: MADE },
+    { id: "every-issue", kind: "issue", address: "https://example.invalid/armada/issues/1394", number: "1394", title: "An issue, a pull request and an epic are Links with rules bolted on", state: "open", position: place(-1, 1), created_at: MADE },
+    { id: "every-pull-request", kind: "pull_request", address: "https://example.invalid/armada/pull/1391", number: "1391", title: "Dispatch an issue from its node, and open the Job it made", state: "merged", said: "where dispatch landed", position: place(-1, 2), created_at: MADE },
+    { id: "every-epic", kind: "epic", address: "https://example.invalid/armada/milestone/17", number: "17", title: "Studio", read_in: { issues: 12, total: 30 }, position: place(-1, 3), created_at: MADE },
     // The one Note here that kept a picture — #1352. The rest draw no plate.
     { id: "every-note", kind: "note", said: "The legend under the step bar is unreadable", capture: pointedAt("every-note"), position: place(1, 0), created_at: MADE },
     { id: "every-note-wide", kind: "note", said: "It wraps at 720 wide", position: place(0, 1), created_at: MADE },
@@ -555,26 +567,28 @@ function promoted(studio: Studio, promotion: StudioPromotion): Studio {
 }
 
 /**
- * A Link read in — #1293. **What Fleet fetched is decided here by the address**,
- * since a mock has no network: a milestone fills in as one Link per issue with
- * no scout, and every other source leaves a frozen Finding beside the Notes and
- * the Contradiction its scout asked for.
+ * An address read in — #1293, #1394. **What Fleet fetched is decided here by
+ * the address**, since a mock has no network: an Epic fills in as one Issue per
+ * issue with no scout, and every other source leaves a frozen Finding beside
+ * the Notes and the Contradiction its scout asked for.
  */
 function readIn(studio: Studio, nodeId: string, position: { x: number; y: number }): Studio {
   const link = studio.nodes.find((node) => node.id === nodeId);
-  if (link === undefined || link.kind !== "link") return studio;
+  if (link === undefined || !("address" in link)) return studio;
   const down = (n: number) => ({ x: position.x, y: position.y + n * 180 });
-  if (link.address.includes("/milestone/")) {
-    const issues = [
-      { address: "https://example.invalid/o/r/issues/1293", forge: "issue" as const, named: "#1293 An issue cannot be read into a Studio — open" },
-      { address: "https://example.invalid/o/r/issues/1291", forge: "issue" as const, named: "#1291 Promotion: cluster, defer, write up — closed" },
-      { address: "https://example.invalid/o/r/issues/1275", forge: "issue" as const, named: "#1275 Kit manages connections — open" },
+  if (link.kind === "epic") {
+    // Each issue's number, title and state are fields: the read already
+    // answered all three, so nothing is left for a later fetch — #1394.
+    const issues: StudioNodeContent[] = [
+      { kind: "issue", address: "https://example.invalid/o/r/issues/1293", number: "1293", title: "An issue cannot be read into a Studio", state: "open" },
+      { kind: "issue", address: "https://example.invalid/o/r/issues/1291", number: "1291", title: "Promotion: cluster, defer, write up", state: "closed" },
+      { kind: "issue", address: "https://example.invalid/o/r/issues/1275", number: "1275", title: "Kit manages connections", state: "open" },
     ];
-    const filled = issues.reduce((so_far, issue) => made(so_far, { kind: "link", ...issue }, [nodeId], down(issues.indexOf(issue))), studio);
+    const filled = issues.reduce((so_far, issue) => made(so_far, issue, [nodeId], down(issues.indexOf(issue))), studio);
     return {
       ...filled,
       nodes: filled.nodes.map((node) =>
-        node.id === nodeId && node.kind === "link" ? { ...node, named: "Studio — 3 of 3 issues read in" } : node,
+        node.id === nodeId && node.kind === "epic" ? { ...node, read_in: { issues: 3, total: 3 } } : node,
       ),
     };
   }
