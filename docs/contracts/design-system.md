@@ -780,10 +780,37 @@ one handle per panel, and never three panels each resolving their own width.
 nothing else — Helm left it for the dock (#948), so there is no second tier
 beneath it any more.
 
-**The column never disappears.** 48px is cheap and losing Navigation, Stats
-and Fleet entirely is worse than losing 48px, at any width — Stats and Fleet
-keep their one status dot each at that width, so a glance still says whether
-anything needs attention.
+**The column disappears in one band and nowhere else.** It used to disappear
+nowhere: 48px was cheap, and losing Navigation, Stats and Fleet entirely was
+worse than losing 48px at any width. That held until #1428 gave job detail's
+two columns their floors and left a band the window cannot pay for — between
+`--layout-breakpoint` and `--window-fold-left`, with Helm's dock beside the
+content, the rail, both floors and the dock want more pixels than there are,
+and the step panel sat at 202px on a laptop. The owner ruled on 17 Sep 2026
+that **the left column folds before Helm's dock does**, automatically, and
+comes back when the window grows.
+
+> **Rule.** The left column folds away entirely below `--window-fold-left`,
+> while Helm's dock is beside the content, and at no other width.
+> Why: the fold is arithmetic, not a preference — `--window-fold-left` is the
+> sum of the column, the dock at rest and job detail's two floors, and
+> `spacing.css` carries the addition. With the dock closed or folded to its
+> sheet the window has the room, so the column stays.
+
+**Everywhere else the column still never disappears**, and at 48px Stats and
+Fleet keep their one status dot each, so a glance still says whether anything
+needs attention.
+
+**The cost, taken knowingly.** A surface that moves on its own is
+disorienting the first time, and while the column is folded Stats and Fleet
+are not on screen at all — Navigation is still reached by `⌘1`–`⌘8` and from
+the palette, and neither of the other two has a binding, so Fleet's liveness
+is unread in that band. The two alternatives were rejected on 17 Sep 2026:
+correcting `--w-work-min` would cut the dock's drag ceiling on a 1512px
+screen from 868px to about 580 against #1176, and folding the dock to its
+sheet earlier puts Helm behind a scrim at a width that has room for it.
+`⌘\` (`toggle_sidebar`) is registered and stays unbuilt; nothing hides the
+column by hand.
 
 **Nav items do not carry escalation or approval counts.** Stats already
 carries both, as its own rows. Duplicating them in Navigation creates two
@@ -858,13 +885,19 @@ floors at 390px, which leaves 358px between its gutters.
 > `packages/shell/src/floor.ts` answers whether the window is at it, and a
 > touch client has no window to bound.
 
-**One breakpoint at ~1100px, and one client boundary at the desktop floor:**
+**One breakpoint at ~1100px, one fold at ~1280px, and one client boundary at
+the desktop floor:**
 
-| | ≥ 1100px | < 1100px | Touch client |
-| --- | --- | --- | --- |
-| Left column | Expanded, user-resizable — Navigation, Stats and Fleet together | Auto-collapses to the 48px rail; Stats and Fleet each keep one status dot | A bottom tab bar |
-| Job row | One shape at every width — a stacked row carrying the badge, the headline sentence and the labelled field run beneath | The same row. Nothing reshapes | The same row, field run wrapped |
-| Helm's dock | Beside the content when open; closed draws nothing, and the title row's Helm button reopens it | An edge strip; open draws it as a sheet over the content instead | Not built |
+| | ≥ 1280px | 1100–1280px, dock open | < 1100px | Touch client |
+| --- | --- | --- | --- | --- |
+| Left column | Expanded, user-resizable — Navigation, Stats and Fleet together | **Folds away entirely**, and its 216px go to the content | Auto-collapses to the 48px rail; Stats and Fleet each keep one status dot | A bottom tab bar |
+| Job row | One shape at every width — a stacked row carrying the badge, the headline sentence and the labelled field run beneath | The same row | The same row. Nothing reshapes | The same row, field run wrapped |
+| Helm's dock | Beside the content when open; closed draws nothing, and the title row's Helm button reopens it | Beside the content, unmoved — it is what the middle column is paying for | An edge strip; open draws it as a sheet over the content instead | Not built |
+
+The middle column is the only one where the column is narrower than the one
+to its right, and that is not a mistake: below 1100 the dock takes itself off
+screen and hands back more than the column costs, so the rail can come back.
+With the dock closed the middle column reads as the first.
 
 The third column is a client and not a window width. Nothing between 390px and
 768px is drawn, because the desktop window cannot get there and the touch

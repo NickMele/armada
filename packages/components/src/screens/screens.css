@@ -137,6 +137,19 @@
   width: var(--sidebar-rail);
 }
 
+/* The column folded away under --window-fold-left: the work takes the whole
+   window and has to supply the leading inset the column's own padding used to.
+   Without it the Board's rows and a Job's run tree start at the window's edge
+   while the dock still holds --space-4 off the other one, which reads as the
+   layout having come apart rather than as room having been made.
+
+   Keyed on the column's absence rather than on a modifier class, the same way
+   the handle's own `:has()` rules above and below this one are — `TheShell`
+   simply does not render it, and nothing has to be told twice. */
+.armada-shell__body:not(:has(.armada-shell__left)) .armada-shell__work {
+  margin-left: var(--space-4);
+}
+
 .armada-shell__panel {
   flex: 1;
   display: flex;

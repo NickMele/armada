@@ -32,6 +32,14 @@
 // Overview's own tiles do. Not built here: `@armada/screens` already depends
 // on this package for `statementOf`, and the reverse import would be a cycle.
 //
+// **And under `--window-fold-left` with Helm's dock beside the content, all
+// three are off screen** — `useTight` below. Navigation is still reached by
+// ⌘1–⌘8 and from the palette; Stats and Fleet are not reachable at all in that
+// band, so Fleet's liveness is unread until the window grows, the dock is
+// closed, or the window narrows past `--layout-breakpoint` and the rail's own
+// dot comes back. That is the cost the owner took on 17 Sep 2026 rather than
+// cut the dock's drag ceiling or fold the dock to its sheet earlier.
+//
 // # The picker and Dispatch live in the title row, not here
 //
 // #1087 moved the repository picker out of the rail and put a second
@@ -131,6 +139,11 @@ export function Shell({
 }: ShellProps) {
   const collapsed = useNarrow();
   const dock = useDock(collapsed);
+  // The column folds only while the dock is actually taking the room: closed,
+  // or folded to its sheet under the breakpoint, the window has the pixels and
+  // there is nothing to pay for. `useDock` decides `open` without reading this,
+  // so the two do not chase each other.
+  const leftFolded = useTight() && dock.open && !collapsed;
   const [dockWidth, resizeDock] = useDockWidth();
   const [leftWidth, resizeLeft] = useLeftWidth();
   const live = connection.state === "connected";
@@ -171,6 +184,7 @@ export function Shell({
       activeId={showing}
       onSelect={onSurface}
       collapsed={collapsed}
+      leftFolded={leftFolded}
       leftWidth={leftWidth}
       onResizeLeft={resizeLeft}
       repositoryPicker={
@@ -282,6 +296,34 @@ function useNarrow(): boolean {
   }, []);
 
   return narrow;
+}
+
+/**
+ * Whether the window is under `--window-fold-left`, the width at which the left
+ * column, Helm's dock at rest and job detail's two columns at their floors stop
+ * adding up. **The bound is read from the token**, the same way `useNarrow`
+ * reads `--layout-breakpoint` — the sum behind the number is in `spacing.css`
+ * and is not repeated here.
+ *
+ * `width <` rather than `max-width:`, because the token names the narrowest
+ * window that still fits rather than the widest that does not: at exactly 1280
+ * both floors are met with the column drawn, and `max-width` would fold it one
+ * pixel early and move a measurement that already landed.
+ */
+function useTight(): boolean {
+  const [tight, setTight] = useState(false);
+
+  useEffect(() => {
+    const bound = getComputedStyle(document.documentElement).getPropertyValue("--window-fold-left").trim();
+    if (bound === "") return undefined;
+    const query = window.matchMedia(`(width < ${bound})`);
+    const read = (): void => setTight(query.matches);
+    read();
+    query.addEventListener("change", read);
+    return () => query.removeEventListener("change", read);
+  }, []);
+
+  return tight;
 }
 
 /** Helm's binding, read from the registry rather than retyped. */
