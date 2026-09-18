@@ -1,6 +1,6 @@
 // The run time both the Board row and job detail's head draw — measured from
 // `started_at`, never `created_at`, so a Job waiting for approval or a slot
-// shows no run time. `#1008`, and #1481 for where it stops.
+// shows no run time. `#1008`, and #1484 for where it stops.
 
 import { describe, expect, it } from "vitest";
 
@@ -46,7 +46,7 @@ describe("elapsedOf", () => {
     expect(elapsedOf(job({ status: "queued", started_at: "2026-09-13T09:00:00Z" }), NOW)).toBe("5m 00s");
   });
 
-  // #1481. It read the clock rather than the Job, so a Job killed in the
+  // #1484. It read the clock rather than the Job, so a Job killed in the
   // morning was still counting in the evening and read as one still working.
   it("stops at the instant the Job stopped, rather than climbing after it", () => {
     expect(

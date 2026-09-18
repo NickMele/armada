@@ -102,7 +102,7 @@ describe("the pull request it opened", () => {
     expect(fact?.label).toBeUndefined();
   });
 
-  it("draws no branch beside it — Where things are has that, since #1481", () => {
+  it("draws no branch beside it — Where things are has that, since #1484", () => {
     const fields = run(detail({ pull_request: "https://forge.invalid/pull/4711" }));
     expect(fields.some((field) => field.value === job().branch)).toBe(false);
   });
@@ -198,7 +198,7 @@ describe("Run time", () => {
 });
 
 describe("what the run no longer carries", () => {
-  // #1481. Each of these is drawn a second time somewhere a person goes to
+  // #1484. Each of these is drawn a second time somewhere a person goes to
   // fetch it, and the header is what they read on the way past.
   const drawn = run(detail(undefined));
 

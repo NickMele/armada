@@ -169,7 +169,7 @@ describe("what the summary says", () => {
     expect(summarised(held({ held: "none" }), null)?.nothingRunningIsWrong).toBe(false);
   });
 
-  // #1481. The row said `on disk` over a `Size on disk` row, and `on disk` was
+  // #1484. The row said `on disk` over a `Size on disk` row, and `on disk` was
   // a constant: nothing looks at a worktree unless a person presses `Look now`,
   // so it was the same word on every Job anyone ever opened. The size is the
   // row now, and it is also the evidence the checkout is there.

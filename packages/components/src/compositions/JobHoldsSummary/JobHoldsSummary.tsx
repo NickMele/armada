@@ -27,7 +27,7 @@ import { FigureList, type Figure } from "../FigureList/FigureList";
  * the second is a reading, with `None` against the processes and the worktree
  * saying what became of it.
  *
- * **The worktree is one row and not two, since #1481.** It drew `on disk` over
+ * **The worktree is one row and not two, since #1484.** It drew `on disk` over
  * `Size on disk 1.2 GiB` — and `on disk` was a constant, because nothing looks
  * at a worktree unless somebody presses `Look now` in the sheet. The size is
  * the row now, and what a look finds wrong replaces it.
@@ -36,7 +36,7 @@ import { FigureList, type Figure } from "../FigureList/FigureList";
  * reading, and the reading is in the sheet. The control that opens it sits on
  * the region's title line, where the run keeps its elapsed figure.
  *
- * **What the Job is spending reads here too, since #1481.** Spend and Turns
+ * **What the Job is spending reads here too, since #1484.** Spend and Turns
  * were the second line of the job header, above everything a person opened the
  * Job for; this is the region that already answers what the Job is taking, so
  * they read beside the processes and the worktree. They come from the Job

@@ -131,7 +131,7 @@ export function nothingToAsk(resources: Holds): NothingToAsk | undefined {
  * **`null` is not a Job holding nothing**, and the summary's `note` is what
  * says which — the same split the full reading keeps.
  *
- * **One worktree row, not two, since #1481.** It drew `Worktree on disk` over
+ * **One worktree row, not two, since #1484.** It drew `Worktree on disk` over
  * `Size on disk 1.2 GiB`, and the first of those was a constant: nothing in
  * Armada looks at a worktree unless a person presses `Look now` in the sheet,
  * so every Job anyone opened said `on disk` and said it forever. Two rows, one
@@ -153,7 +153,7 @@ export function summarised(
 
 // # What the Job is spending, which used to be read above the run
 //
-// Spend and Turns were two of the header's facts until #1481. They are worth
+// Spend and Turns were two of the header's facts until #1484. They are worth
 // knowing and they are not what a person opens a Job to read, and Pulse is
 // already the region that answers *is this working and what is it taking* —
 // so they sit with the processes and the worktree rather than above them.

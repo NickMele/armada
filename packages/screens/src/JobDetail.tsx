@@ -685,7 +685,7 @@ function OneJob({
       // but the run is what they opened the Job to read, so the reading is on
       // the sheet and what stays here is what changes the answer.
       //
-      // **What it is spending reads here too, since #1481.** Spend and Turns
+      // **What it is spending reads here too, since #1484.** Spend and Turns
       // were the header's second line, above everything a person opened the
       // Job for; the question they answer is this region's, so they are drawn
       // in it. They come off `whole` rather than off a look, so they are there

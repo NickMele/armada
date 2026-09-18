@@ -73,7 +73,7 @@ async function everyRowSharesItsEdges(canvasElement: HTMLElement, line: HoldsLin
  * lines instead of a card.
  *
  * **The worktree row is the size.** It said `on disk` over a `Size on disk`
- * row until #1481, and `on disk` was the same word on every Job ever opened:
+ * row until #1484, and `on disk` was the same word on every Job ever opened:
  * nothing looks at a worktree unless somebody presses `Look now`.
  */
 export const HoldingALiveWorktree: Story = {
