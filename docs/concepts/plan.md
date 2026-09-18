@@ -46,6 +46,15 @@ finds out what actually proved it. The pair disagreeing is the fact worth
 reading, so nothing collapses them — the same shape declared `scope` has
 against the files a task actually touched.
 
+**A Judge reads the pair, and refuses silence rather than difference.**
+Feature, Bug and Refactor ask `the_evidence_accounts_for_itself` on the step
+that follows the plan: for each task set `done`, does its `shown` demonstrate
+its `expects`, or say why the work proved it another way? A task that proved
+its work differently and says so passes — that is how work finds the real
+seam. What is refused is a `shown` that neither matches nor accounts for
+itself. Epic plans too and asks nothing, because its steps that follow the
+plan are handed no `reference_docs` and a task there is a dispatched Job.
+
 **Every change records who made it** — a step, or a person — and **every
 change is an appended row**. The current list is derived; history is never
 overwritten.
@@ -69,11 +78,13 @@ Why: task state is self-report, and `docs/scope.md` treats self-report as a
 signal, not a source of truth.
 
 A step declaring `follows_plan: true` may still be judged against the plan's
-task states — whether the diff does what a task set `done` claims, and
-whether a `dropped` task's reason holds. That is a Judge criterion asked of
-the diff, never a mechanical gate on the plan itself. `plan_recorded` is the
-one mechanical check touching a Plan, and it asks only that one exists with
-at least `min_tasks` tasks — see [Workflow](workflow.md).
+task states — whether the diff does what a task set `done` claims, whether a
+`dropped` task's reason holds, and whether a done task's `shown` accounts for
+itself against its `expects`. Those are Judge criteria, asked of the diff and
+of the Drone's own account of its evidence, never a mechanical gate on the
+plan itself. `plan_recorded` is the one mechanical check touching a Plan, and
+it asks only that one exists with at least `min_tasks` tasks — see
+[Workflow](workflow.md).
 
 ## How a workflow declares it
 
