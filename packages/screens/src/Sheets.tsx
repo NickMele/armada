@@ -22,6 +22,7 @@ import {
   JobDiffSheet,
   JobHoldsSheet,
   PlanTaskSheet,
+  type PlanTaskSheetProps,
   RunSheet,
   railOfPatch,
   type ActivityFilter,
@@ -169,6 +170,15 @@ export type DetailSheetProps = {
   taskId?: string;
   /** Every task of the plan, for the sheet to find `taskId` among. */
   planTasks?: readonly PlanTaskRow[];
+  /**
+   * What the open task declared against what it touched, already read.
+   *
+   * **Built by the caller**, like `holds` and `run`: the inputs are the Job's
+   * own turns and its diff, which `JobDetail` holds and this layer does not.
+   * **Absent draws no comparison at all** rather than one saying every
+   * declared file went untouched. `#1432`.
+   */
+  taskTouched?: PlanTaskSheetProps["touched"];
   /** What the Job settings panel reads and sends, beyond the Job it already has. */
   settings: Omit<SettingsSheetProps, "job" | "whole" | "floor" | "onClose">;
   /**
@@ -199,6 +209,7 @@ export function DetailSheet({
   checkId,
   taskId,
   planTasks = [],
+  taskTouched,
   outputs,
   following,
   onHold,
@@ -296,6 +307,7 @@ export function DetailSheet({
         reason={task.reason}
         note={task.note}
         scope={task.scope}
+        {...(taskTouched === undefined ? {} : { touched: taskTouched })}
         expects={task.expects}
         shown={task.shown}
         floor={floor}
