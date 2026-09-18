@@ -172,6 +172,12 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
     listRepositoryAllowedCommands: async () => refused("/manifest/allowed-commands"),
     removeRepositoryAllowedCommand: async () => refused("/manifest/allowed-commands"),
 
+    listKitServers: async () => refused("/kit/servers"),
+    addKitServer: async () => refused("/kit/servers"),
+    forgetKitServer: async () => refused("/kit/servers"),
+    setKitServerReach: async () => refused("/kit/servers"),
+    setManifestServerReach: async () => refused("/kit/servers"),
+
     // The rail's pick is this window's own, so it moves here as it does in main.
     pickRepository: async (root) => publish({ repository: root }),
 

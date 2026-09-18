@@ -6,7 +6,7 @@
 // disagrees with itself is worse than one that is missing.
 //
 // **The digit is computed from the rail order, never typed.** The contract
-// binds `⌘1–⌘8` to Bridge surfaces *in rail order*, so a digit is a place in
+// binds `⌘1–⌘9` to Bridge surfaces *in rail order*, so a digit is a place in
 // the rail and nothing else. A surface added at the end takes the next digit
 // by arithmetic — Overview is the one exception, joining first instead (#921).
 //
@@ -17,38 +17,46 @@
 // `docs/concepts/bridge.md`, and every digit falls out of it.
 
 import { useEffect, useRef } from "react";
-import { ClipboardList, FileCog, HardDrive, LayoutDashboard, Presentation, Settings as SettingsIcon } from "lucide-react";
+import {
+  Briefcase,
+  ClipboardList,
+  FileCog,
+  HardDrive,
+  LayoutDashboard,
+  Presentation,
+  Settings as SettingsIcon,
+} from "lucide-react";
 
 import type { PaletteSurface } from "./Palette";
 
 /**
  * Bridge's surfaces in rail order. A surface's place in here is its digit.
  *
- * **Overview goes first, not last.** Every other surface here joined at the
- * end of the rail and took the next digit; Overview is where Bridge opens
- * (#921), so it took `⌘1` and every other digit moved down one instead —
- * the one deliberate exception to "a surface joins at the end", decided with
- * the owner on 13 Sep.
+ * **A surface joins at the end, and three have not.** Overview joined first
+ * (#921), Studios third (#1287), and Kit before Settings rather than after it
+ * (#1275) — each the owner's decision, each moving digits other than its own.
+ * Kit is what he brings and Settings is what this machine is, so the machine
+ * reads last.
  *
  * Two of the rest draw no row yet and they keep their place anyway. A rail
  * that renumbered as surfaces were built would move a learned key every time
  * — which is the thing moving Helm to `⌘6`, and then off the rail entirely
- * for `⌘J`, was allowed to do, with the reason recorded in `actions.toml`
- * beside the binding.
+ * for `⌘J`, was allowed to do.
  *
- * **Settings joined last, 14 Sep 2026 (#1089).** The status bar's Fleet
- * settings sheet had no rail row to lose when #1088 removed it, so this is
- * the first digit the surface has ever taken — the next one, by the same
- * arithmetic as every arrival before Overview's own exception.
- *
- * **Studios is the second exception, 17 Sep 2026 (#1287).** It joined third,
- * straight after the Job Board, on the owner's decision, so Alerts, Doctor,
- * Manifest, Cleanup and Settings each moved down a digit — Settings from `⌘7`
- * to `⌘8`. Where a Studio is read is beside the work it becomes, not after the
- * settings; the rule is still rail order, and only the arrival was the
- * exception, as Overview's was.
+ * The whole digit history is `actions.toml`'s `bridge_surfaces` row and
+ * `docs/contracts/design-system.md`, Two tiers. It is not repeated here.
  */
-const RAIL = ["overview", "board", "studios", "alerts", "doctor", "manifest", "worktrees", "settings"] as const;
+const RAIL = [
+  "overview",
+  "board",
+  "studios",
+  "alerts",
+  "doctor",
+  "manifest",
+  "worktrees",
+  "kit",
+  "settings",
+] as const;
 
 type SurfaceId = (typeof RAIL)[number];
 
@@ -58,6 +66,7 @@ export const SURFACE = {
   board: "board",
   manifest: "manifest",
   worktrees: "worktrees",
+  kit: "kit",
   settings: "settings",
   studios: "studios",
 } as const satisfies Record<string, SurfaceId>;
@@ -116,6 +125,16 @@ export const SURFACES: readonly PaletteSurface[] = [
     shortcut: digitOf(SURFACE.worktrees),
     aliases: ["held worktrees", "disk", "held disk"],
     icon: HardDrive,
+  },
+  {
+    id: SURFACE.kit,
+    label: "Kit",
+    shortcut: digitOf(SURFACE.kit),
+    // "MCP" and "servers" are what a person looking for this will type: Kit
+    // is Armada's word for the set, and the thing they came to connect has
+    // its own name in every other tool they use.
+    aliases: ["mcp", "servers", "mcp servers"],
+    icon: Briefcase,
   },
   {
     id: SURFACE.settings,

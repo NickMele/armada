@@ -50,6 +50,8 @@ import type {
 } from "@armada/screens/src/editing";
 import type { CheckoutRunDiffRead } from "@armada/protocol";
 import type { RepositoryAllowedCommandsRead } from "@armada/screens/src/manifest-allows";
+import type { KitServersRead } from "@armada/screens/src/manifest-kit";
+import type { AddKitServer, ManifestReach, ReachesDrones } from "@armada/protocol";
 import type { LocateAnswer } from "@armada/screens/src/locate-reads";
 import type { ComposingRead } from "@armada/screens/src/composing-reads";
 import type { StudioAnswer } from "@armada/screens/src/studio-reads";
@@ -608,6 +610,21 @@ export type BridgeApi = {
   removeRepositoryAllowedCommand: (run: string) => Promise<RepositoryAllowedCommandsRead>;
 
   /**
+   * Every MCP server in Kit, Kit's own default for each, this repository's
+   * Manifest word over it, and whether a Drone dispatched here resolves it —
+   * #1275. Every act below answers with the same whole list.
+   */
+  listKitServers: () => Promise<KitServersRead>;
+  /** Put one in Kit. **It reaches no Drone** until one of the two reaches below says so. */
+  addKitServer: (adding: AddKitServer) => Promise<KitServersRead>;
+  /** Take one out, and every Manifest's word about it with it. */
+  forgetKitServer: (name: string) => Promise<KitServersRead>;
+  /** Kit's own tier, for every Manifest that has not said otherwise. */
+  setKitServerReach: (name: string, drones: ReachesDrones) => Promise<KitServersRead>;
+  /** This Manifest's own word, or `null` to take it back and follow Kit again. */
+  setManifestServerReach: (name: string, reach: ManifestReach | null) => Promise<KitServersRead>;
+
+  /**
    * Pick the repository every per-repository read and act names, by a root `holds.repositories`
    * lists, or `null` for All repositories, which names none. What changed arrives as state:
    * `repository`, and the reads held open, taken again.
@@ -772,8 +789,15 @@ export type BridgeApi = {
   ) => Promise<Outcome>;
   /** Save where a person put a node down. Position only: nothing else about a node is written. */
   moveStudioNode: (studioId: string, nodeId: string, position: StudioPosition) => Promise<Outcome>;
-  /** Delete a node and every edge on it. A person's act, and only from the Studios surface. */
-  removeStudioNode: (studioId: string, nodeId: string) => Promise<Outcome>;
+  /**
+   * Delete everything picked, and every edge on it, as one write — #1411. A
+   * person's act, and only from the Studios surface.
+   *
+   * **The only delete, one node or eighteen.** **All of them or none**: Fleet
+   * takes the whole selection in one transaction, so nothing here has to say
+   * which half of a loop landed.
+   */
+  removeStudioNodes: (studioId: string, nodeIds: readonly string[]) => Promise<Outcome>;
   /** Accept a proposed relation, or reject it, which removes it. A person's act, as above. */
   decideStudioEdge: (studioId: string, edgeId: string, accepted: boolean) => Promise<Outcome>;
   /**

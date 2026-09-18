@@ -166,9 +166,9 @@ pub const SERVED: &[Route] = &[
         path: "/studios/:studio_id/move_node",
     },
     Route {
-        operation: "remove_studio_node",
+        operation: "remove_studio_nodes",
         method: "POST",
-        path: "/studios/:studio_id/remove_node",
+        path: "/studios/:studio_id/remove_nodes",
     },
     Route {
         operation: "propose_studio_edge",
@@ -348,6 +348,34 @@ pub const SERVED: &[Route] = &[
         operation: "remove_repository_allowed_command",
         method: "POST",
         path: "/manifest/allowed_commands/remove",
+    },
+    // Kit's servers, machine-wide, with the Manifest scoping the second tier
+    // rather than naming a resource — `#1275`. Each act spells itself in its
+    // last segment, as the remove above does.
+    Route {
+        operation: "get_kit_servers",
+        method: "GET",
+        path: "/kit/servers",
+    },
+    Route {
+        operation: "add_kit_server",
+        method: "POST",
+        path: "/kit/servers/add",
+    },
+    Route {
+        operation: "forget_kit_server",
+        method: "POST",
+        path: "/kit/servers/forget",
+    },
+    Route {
+        operation: "set_kit_server_reach",
+        method: "POST",
+        path: "/kit/servers/reach",
+    },
+    Route {
+        operation: "set_manifest_server_reach",
+        method: "POST",
+        path: "/kit/servers/manifest_reach",
     },
     // The path taken, under the Job that took it. `get_job_events` drops
     // `get_` and `job_` for the reason `redispatch` drops `_job`: the segment

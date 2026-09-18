@@ -270,11 +270,13 @@ export * from "./compositions/JobHoldsSummary/JobHoldsSummary";
 // That reading, on a trailing sheet. `JobResources` unchanged inside it — a
 // new home rather than an edit.
 export * from "./compositions/JobHoldsSheet/JobHoldsSheet";
+export * from "./compositions/PlanTaskSheet/PlanTaskSheet";
 
 // Every setting a person can change on a running Job, on the same layer, and
 // the header's way into it.
 export * from "./compositions/JobSettings/JobSettings";
 export * from "./compositions/FleetSettings/FleetSettings";
+export * from "./compositions/KitServers/KitServers";
 export * from "./compositions/MachineSettings/MachineSettings";
 
 // Asking a Job to show its work again, and every set a press kept beside the
@@ -328,3 +330,7 @@ export * from "./compositions/ProducedPanel/ProducedPanel";
 export * from "./compositions/ToolName/ToolName";
 // A Note's frame, opened over the Studios surface. #1352.
 export * from "./compositions/StudioFrameSheet/StudioFrameSheet";
+// Drift's reading and Verify's run, each on its own layer instead of resident
+// above the runner. #1383.
+export * from "./compositions/DriftSheet/DriftSheet";
+export * from "./compositions/VerifySheet/VerifySheet";

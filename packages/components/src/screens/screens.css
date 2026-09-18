@@ -917,60 +917,43 @@
   text-wrap: pretty;
 }
 
-/* What a task says beyond its title: its note, its files, and the evidence
-   expected of it beside the evidence the work showed. `#1421`.
-
-   **One stack, indented under the title rather than beside it.** A task
-   carrying three of these and one carrying none have to read as two rows of
-   the same list, which a second column cannot do — the rows without facts
-   would leave a ragged empty gutter down the whole plan. */
-.armada-inside__plan-task-facts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin-top: var(--space-1);
-}
-
-.armada-inside__plan-task-note {
+/* How many files a task names, and the mark that says it opens. `#1421` drew
+   the note, the paths and the evidence here; the rail is 380px and one real
+   plan put 5,196 characters of them under 364 characters of title. The count
+   is the half of it a person scans for — which task is the big one. */
+.armada-inside__plan-task-files {
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
-  text-wrap: pretty;
+  font-variant-numeric: tabular-nums;
 }
 
-/* The paths wrap as a row of their own so a task touching six files does not
-   push its evidence lines off the bottom of the well. */
-.armada-inside__plan-task-scope {
+/* The title is the control and the row is not: a pressable row would nest the
+   drop button inside it. Reset to a text run, so the only thing that says it
+   presses is the mark after it and the hover. */
+.armada-inside__plan-task-open {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-
-.armada-inside__plan-task-path {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
-  color: var(--fg-subtle);
-  background: var(--bg-hover);
-  border-radius: var(--radius-sm);
-  padding: 0 var(--space-1);
-}
-
-/* **Expected and shown carry the same weight**, because which one a reader
-   needs depends on whether the work agreed with the plan, and the drawing
-   cannot know that. */
-.armada-inside__plan-task-evidence {
-  display: flex;
+  align-items: baseline;
   gap: var(--space-2);
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
-  color: var(--fg-subtle);
-  text-wrap: pretty;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.armada-inside__plan-task-evidence-label {
-  color: var(--fg-muted);
+.armada-inside__plan-task-open > svg {
   flex: none;
+  color: var(--fg-subtle);
+  align-self: center;
+  margin-left: auto;
+}
+
+.armada-inside__plan-task-open:hover > svg {
+  color: var(--fg-muted);
 }
 
 /* `Drop…`, at the row's trailing edge. Quiet at rest, `.armada-wrow__mark`'s
@@ -1399,4 +1382,61 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/* ---- the Manifest surface's tab row ------------------------------------- */
+
+/* The tab strip with the surface's own readings at its trailing edge — Drift
+   and Verify, which were resident panels under this row until #1383 and took
+   45% of the window's height between them.
+
+   One row, so the two acts cost the Checks below no height at all. They are
+   ghosts, which is what the contract gives a toolbar, and the accent on this
+   surface stays spent on Run. */
+.armada-screen__tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: none;
+  min-width: 0;
+}
+
+.armada-screen__tabs-acts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-inline-start: auto;
+  flex: none;
+}
+
+/* How many lines went, inside the Drift act. Plain sans in --notice-caution,
+   which is what the contract gives a drift state: a drifted file is behind
+   rather than broken, and a bordered pill would be a Job state. */
+.armada-screen__drifted {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-body);
+  color: var(--notice-caution);
+}
+
+/* What the last Verify came to, inside its act. Unhued, because nothing about a
+   rehearsal is a verdict — the panel it opens holds the same rule. */
+.armada-screen__act-said {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-body);
+  color: var(--fg-subtle);
+}
+
+/* A stack that is also the containing block for its own layers —
+   `.armada-screen__detail`'s reason: the layer belongs to the screen it was
+   opened from, so the tabs and the list behind it stay on screen and under it
+   rather than the shell's rail going under it too.
+
+   No `overflow: hidden` with it, unlike the detail's: this stack has no radius
+   for a layer to round into, and the Edit and file views scroll through it. */
+.armada-screen__layered {
+  position: relative;
 }

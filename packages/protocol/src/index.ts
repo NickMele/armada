@@ -38,6 +38,7 @@ export * from "./history";
 export * from "./holding";
 export * from "./journal";
 export * from "./judged";
+export * from "./kit";
 export * from "./limits";
 export * from "./manifest-proposal";
 export * from "./preferences";

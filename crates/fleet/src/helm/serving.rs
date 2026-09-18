@@ -370,6 +370,8 @@ fn screen_phrase(screen: HelmScreen) -> &'static str {
         HelmScreen::Manifest => "the Manifest",
         HelmScreen::Cleanup => "Cleanup",
         HelmScreen::Studio => "Studios",
+        HelmScreen::Kit => "Kit",
+        HelmScreen::Settings => "Settings",
         HelmScreen::JobDetail => "a Job's detail",
     }
 }

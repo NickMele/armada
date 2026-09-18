@@ -24,7 +24,7 @@ import {
   openStudioNode,
   promoteOnStudio,
   readStudioFrame,
-  removeStudioNode,
+  removeStudioNodes,
   renameStudio,
   watchStudio,
   watchStudios,
@@ -133,7 +133,7 @@ export function StudiosSurface(props: StudiosSurfaceProps) {
         onRename={(studioId, name) => renameStudio(studioId, name)}
         onAddNode={(node, position) => addStudioNode(openId ?? "", node, position)}
         onMoveNode={(nodeId, position) => moveStudioNode(openId ?? "", nodeId, position)}
-        onRemoveNode={(nodeId) => removeStudioNode(openId ?? "", nodeId)}
+        onRemoveNodes={(nodeIds) => removeStudioNodes(openId ?? "", nodeIds)}
         onDecideEdge={(edgeId, accepted) => decideStudioEdge(openId ?? "", edgeId, accepted)}
         onReadFrame={readStudioFrame}
         onPromote={(promotion) => promoteOnStudio(openId ?? "", promotion)}

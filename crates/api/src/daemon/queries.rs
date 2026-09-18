@@ -252,6 +252,18 @@ pub trait Queries: Send + Sync + 'static {
         manifest_id: Option<ManifestId>,
     ) -> impl Future<Output = Result<ipc::RepositoryAllowedCommands, Refusal>> + Send;
 
+    /// `get_kit_servers` — every MCP server in Kit, Kit's own default for
+    /// each, this Manifest's word over it, and whether a Drone dispatched here
+    /// resolves it. `#1275`.
+    ///
+    /// **`resolves` is the resolution, not a hint.** The same call decides the
+    /// document a Drone is spawned against, so a surface drawing this row and
+    /// the file a Drone reads cannot disagree. The only `Refusal` is a fault.
+    fn get_kit_servers(
+        &self,
+        manifest_id: Option<ManifestId>,
+    ) -> impl Future<Output = Result<ipc::KitServers, Refusal>> + Send;
+
     /// `get_manifest_reading` — what Fleet's last re-read of `armada.yml` came
     /// to, and whether it took.
     ///
