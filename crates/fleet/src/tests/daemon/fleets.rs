@@ -122,6 +122,10 @@ pub fn fitted_over<V>(
         // The production default, `run_log_retention`'s reason: no fixture
         // here asserts on the sweep window.
         helm_session_retention: Duration::from_secs(30 * 24 * 60 * 60),
+        // Two seconds, not the shipped five minutes: a case about nobody
+        // answering has to outlive the hold, and `HelmAskHold` is a fitting
+        // for exactly that.
+        helm_ask_hold: crate::helm::HelmAskHold::of(Duration::from_secs(2)),
         // Nothing to place. A fake harness opens no sockets, so a fixture that
         // answered otherwise would be asserting against the machine rather than
         // against Fleet. `crate::tests::peer` plants one where the subject is

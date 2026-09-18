@@ -65,10 +65,13 @@
   overflow: hidden;
 }
 
-/* A Link draws its address under the line a person wrote, so its box holds
-   that row too — and holds it whether the line is there or not, so a Link
-   named by a read-in (#1293) does not grow as the name lands. */
-.armada-studio-node[data-kind="link"] .armada-studio-node__said {
+/* Every kind that keeps an address draws it under the line a person wrote, so
+   its box holds that row too — and holds it whether the line is there or not,
+   so one named by a read-in (#1293, #1394) does not grow as the name lands. */
+.armada-studio-node[data-kind="link"] .armada-studio-node__said,
+.armada-studio-node[data-kind="issue"] .armada-studio-node__said,
+.armada-studio-node[data-kind="pull_request"] .armada-studio-node__said,
+.armada-studio-node[data-kind="epic"] .armada-studio-node__said {
   height: calc(var(--leading-sm) * 3 + var(--leading-2xs) + var(--space-2));
 }
 
@@ -85,7 +88,7 @@
   overflow: hidden;
 }
 
-/* A Link's address, under the line a person wrote beside it — #1378. Mono and
+/* An address, under the line a person wrote beside it — #1378. Mono and
    neutral, because it is a value and not prose, and clipped to one line with
    the whole of it in the title: FactChip's rule, without the chip's surface,
    since this is the card's own second line rather than one value among a row

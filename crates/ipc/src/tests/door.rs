@@ -342,3 +342,73 @@ fn id() -> crate::mcp::CallId {
     };
     id
 }
+
+/// `#1389`: the permission tool is the one tool here whose arguments are the
+/// harness's rather than this inventory's. The CLI sends `tool_name`, `input`
+/// and `tool_use_id` at the top level and knows nothing of this door's `body`
+/// convention, so **the arguments are the body**.
+#[test]
+fn the_permission_tools_own_arguments_are_its_whole_body() {
+    let shapes = vec![Shape {
+        operation: crate::door::ASKS_A_PERSON,
+        method: "POST",
+        path: "/helm/permission",
+        query: &[],
+    }];
+    let asked = read(
+        &call(
+            crate::door::ASKS_A_PERSON,
+            json!({
+                "tool_name": "Bash",
+                "input": { "command": "gh issue list" },
+                "tool_use_id": "toolu_01",
+            }),
+        ),
+        &shapes,
+    );
+
+    let Asked::Call { call, .. } = asked else {
+        panic!("expected a call, got {asked:?}");
+    };
+    assert_eq!(call.path, "/helm/permission");
+    let body: Value = serde_json::from_str(&call.body.expect("a body")).expect("the body is JSON");
+    assert_eq!(body["tool_name"], "Bash");
+    assert_eq!(body["input"]["command"], "gh issue list");
+    assert_eq!(body["tool_use_id"], "toolu_01");
+}
+
+/// The schema a client reads before it calls. **A `body` property here would
+/// be the CLI told to send a shape it never sends**, and the call would arrive
+/// with nothing in it.
+#[test]
+fn the_permission_tool_publishes_the_harnesss_schema_and_not_a_body() {
+    let shapes = vec![Shape {
+        operation: crate::door::ASKS_A_PERSON,
+        method: "POST",
+        path: "/helm/permission",
+        query: &[],
+    }];
+    let listed: Value = serde_json::from_str(
+        &answer(Answered::Tools {
+            id: crate::mcp::CallId::of(json!(1)),
+            shapes,
+        })
+        .expect("an answer"),
+    )
+    .expect("the answer is JSON");
+
+    let schema = &listed["result"]["tools"][0]["inputSchema"]["properties"];
+    assert!(schema.get("tool_name").is_some(), "{schema}");
+    assert!(schema.get("input").is_some(), "{schema}");
+    assert!(schema.get("tool_use_id").is_some(), "{schema}");
+    assert!(schema.get("body").is_none(), "{schema}");
+}
+
+/// The name the CLI is handed on `--permission-prompt-tool` is assembled in
+/// `adapters` out of this constant and the server's, and the tool's own
+/// operation row is keyed on the same one. **Two spellings that could drift.**
+#[test]
+fn the_permission_tools_name_is_the_one_both_ends_spell() {
+    assert_eq!(crate::door::ASKS_A_PERSON, "ask_the_person");
+    assert_eq!(crate::door::SERVER, "armada-fleet");
+}

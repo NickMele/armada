@@ -374,6 +374,18 @@ export function applyArrival(host: ArrivalHost, text: string, fleet: BridgeState
     host.questions.forgotten(event.job_id);
     return;
   }
+  // **Above the tail, because a helm call names no job.** It waits inside one
+  // tool call for the length of one reply, so the card goes up on the ask and
+  // comes down on the answer, whoever answered — a person, or fleet's bound
+  // running out. #1389.
+  if (event.kind === "helm.asking_to_run") {
+    host.questions.helmAsking(event.waiting);
+    return;
+  }
+  if (event.kind === "helm.call_answered") {
+    host.questions.helmAnswered(event.call);
+    return;
+  }
   if (event.kind === "manifest.reread") {
     // **Above the tail below, because there is no Job to find.** The tail
     // reads `event.job_id` and treats a Job it does not hold as a missed

@@ -1,0 +1,4 @@
+{"t": 1789685110.293, "event": "start", "wait": 120.0, "answer": "allow"}
+{"t": 1789685110.326, "event": "notification", "method": "notifications/initialized"}
+{"t": 1789685112.33, "event": "asked", "tool_name": "Bash", "input": {"command": "gh issue list --repo NickMele/armada --limit 1", "description": "List the most recent issue in NickMele/armada repo"}}
+{"t": 1789685232.336, "event": "answered", "after": 120.0, "body": {"behavior": "allow", "updatedInput": {"command": "gh issue list --repo NickMele/armada --limit 1", "description": "List the most recent issue in NickMele/armada repo"}}}

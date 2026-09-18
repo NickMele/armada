@@ -19,6 +19,7 @@ use crate::commanding::CommandInFlight;
 use crate::detail::{JudgeInFlight, Settled};
 use crate::enums::{Actor, EvidenceType, JobStatus, StepState};
 use crate::helm::HelmChangedCheckout;
+use crate::helm_call::{HelmAskingToRun, HelmCallAnswered};
 use crate::ids::ProposalId;
 use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
 use crate::job::{JobForgotten, JobList, JobSummary};
@@ -165,6 +166,13 @@ pub enum Event {
     // person's ask and in no worktree. `#1373`.
     #[serde(rename = "helm.changed_checkout")]
     HelmChangedCheckout(HelmChangedCheckout),
+    // A Helm session reached for something the person's own settings do not
+    // cover, and is held inside the call until they answer. `#1389`.
+    #[serde(rename = "helm.asking_to_run")]
+    HelmAskingToRun(HelmAskingToRun),
+    // What became of one such ask, whoever ended it.
+    #[serde(rename = "helm.call_answered")]
+    HelmCallAnswered(HelmCallAnswered),
 }
 
 impl Event {

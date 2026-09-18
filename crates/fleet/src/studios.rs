@@ -76,6 +76,24 @@ pub(crate) fn author(by: Redirector) -> StudioAuthor {
     }
 }
 
+/// What a pasted address turned out to name — an Issue, a Pull request or an
+/// Epic — and the content untouched where nothing recognised it. `#1394`.
+///
+/// **A person pastes a Link and Fleet writes what it is.** Bridge sends a Link
+/// because Bridge cannot read an address: which host is the forge is
+/// `crates/adapters`' to know and the gate refuses its name in TypeScript. So
+/// the one act stays *paste an address*, and the seam carries no kind an
+/// address did not earn.
+///
+/// **The line a person typed is carried over**, because they typed it about
+/// this address whatever it turned out to be.
+pub(crate) fn recognised(content: StudioNodeContent) -> StudioNodeContent {
+    let StudioNodeContent::Link { address, said, .. } = &content else {
+        return content;
+    };
+    adapters::forge_node(address, said.clone()).unwrap_or(content)
+}
+
 /// A stored Studio row that does not read back. A 500.
 const STUDIO_UNREADABLE: &str = "fleet.studio_unreadable";
 
@@ -152,7 +170,7 @@ where
             self.studio_held(&store, &id, within.as_ref())?;
             write(&mut store, &id).map_err(|why| self.studio_refusal(why))?;
             let graph = store.studio(&id).map_err(|why| self.studio_refusal(why))?;
-            ipc::Studio::of(&graph, &adapters::forge_named)
+            ipc::Studio::of(&graph)
         };
         self.events()
             .publish(ipc::Event::StudioChanged(studio.clone()));
@@ -259,7 +277,7 @@ where
     ) -> Result<ipc::Studio, Refusal> {
         let store = self.store().lock().await;
         self.studio_held(&store, &studio_id.to_domain(), within.as_ref())
-            .map(|graph| ipc::Studio::of(&graph, &adapters::forge_named))
+            .map(|graph| ipc::Studio::of(&graph))
     }
 
     /// **The record is the allowlist**, which is what makes a caller-supplied
@@ -350,7 +368,7 @@ where
             let graph = store
                 .studio(&studio.id)
                 .map_err(|why| self.studio_refusal(why))?;
-            ipc::Studio::of(&graph, &adapters::forge_named)
+            ipc::Studio::of(&graph)
         };
         self.events()
             .publish(ipc::Event::StudioChanged(created.clone()));
@@ -476,7 +494,7 @@ where
         let at = self.now();
         let node = StudioNode::added(
             StudioNodeId::carried(self.mint().ulid()),
-            content,
+            recognised(content),
             add.position.to_domain(),
             at.clone(),
             author(by),

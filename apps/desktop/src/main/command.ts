@@ -29,7 +29,9 @@ import type {
 import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, RestartRequested, TurnRaise } from "@armada/protocol";
 import type {
   AnswerCommand,
+  AnswerHelmCall,
   CommandAnswer,
+  HelmCallAnswer,
   CommandExplained,
   JudgeAnswer,
   JudgeAnswered,
@@ -578,6 +580,25 @@ export class JobCommands {
     return this.act(jobId, this.answering, "already_answering", (port) =>
       ask(port, "POST", route(jobId, "answer_command"), body),
     );
+  }
+
+  /**
+   * Answer one held Helm call. #1389.
+   *
+   * **Outside `act` and outside every in-flight set here**, because a Helm call
+   * has no Job: nothing on the board moves, nothing is re-read, and the answer
+   * lands inside a session's own tool call rather than on a row. Fleet answers
+   * with the calls still waiting, which the dock does not need — the event says
+   * the same thing — so only the outcome comes back.
+   */
+  async answerHelmCall(call: string, answer: HelmCallAnswer, note?: string): Promise<Outcome> {
+    const port = this.board.port();
+    if (port === null) return { ok: false, why: "not_connected" };
+    // Nothing rather than an empty string, `answerCommand`'s rule.
+    const said = note?.trim() ?? "";
+    const body: AnswerHelmCall = { call, answer, ...(said === "" ? {} : { note: said }) };
+    const answered = await ask(port, "POST", "/helm/calls/answer", body);
+    return answered.ok === true ? { ok: true } : answered.outcome;
   }
 
   /**

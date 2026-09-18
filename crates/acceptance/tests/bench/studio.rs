@@ -137,10 +137,67 @@ pub fn a_studio_with_two_notes() -> StudioGraph {
     }
 }
 
+/// A page nobody's adapter recognises, which is what keeps a Link a Link.
+pub const A_PAGE: &str = "https://react.dev/reference/react/useId";
+
+/// One node of each kind a forge address makes, and a Link beside them.
+///
+/// **Every node here is built by `adapters::forge_node`**, off an address, so
+/// nothing in this bench decides a kind: the fixture is what the adapter
+/// answered, which is the claim. The page is there because it is what the
+/// adapter answered nothing about.
+pub fn a_studio_with_a_node_of_each_forge_kind() -> StudioGraph {
+    let addresses = [
+        format!(
+            "https://{}NickMele/armada/issues/1394",
+            adapters::FORGE_HOST
+        ),
+        format!("https://{}NickMele/armada/pull/1391", adapters::FORGE_HOST),
+        format!(
+            "https://{}NickMele/armada/milestone/17",
+            adapters::FORGE_HOST
+        ),
+    ];
+    let mut nodes: Vec<StudioNode> = Vec::new();
+    for (n, address) in addresses.iter().enumerate() {
+        let content = adapters::forge_node(address, None)
+            .unwrap_or_else(|| panic!("`{address}` names something on the forge"));
+        nodes.push(StudioNode::added(
+            StudioNodeId::carried(Ulid::carried(format!("01FORGE{n}"))),
+            content,
+            StudioPosition {
+                x: (n as i64) * 340,
+                y: 0,
+            },
+            at(1),
+            StudioAuthor::Person,
+        ));
+    }
+    nodes.push(StudioNode::added(
+        StudioNodeId::carried(Ulid::carried("01PAGE")),
+        adapters::forge_node(A_PAGE, None)
+            .unwrap_or_else(|| StudioNodeContent::link(A_PAGE.to_string(), None)),
+        StudioPosition { x: 1020, y: 0 },
+        at(1),
+        StudioAuthor::Person,
+    ));
+    StudioGraph {
+        studio: Studio {
+            id: StudioId::carried(Ulid::carried("01STUDIO")),
+            manifest_id: ManifestId::carried(Ulid::carried(REPOSITORY)),
+            name: StudioName::named(DRAFT_TITLE),
+            named_by: Some(StudioAuthor::Person),
+            created_at: at(0),
+            touched_at: at(2),
+        },
+        nodes,
+        edges: Vec::new(),
+    }
+}
+
 /// The Studio as a client reads it: served, encoded, sent, and read back.
 pub fn received_studio(graph: &StudioGraph) -> ipc::Studio {
-    let body = ipc::encode(&ipc::Studio::of(graph, &adapters::forge_named))
-        .expect("a Studio that serialises");
+    let body = ipc::encode(&ipc::Studio::of(graph)).expect("a Studio that serialises");
     ipc::decode("a Studio", body.as_bytes()).expect("a Studio that reads back")
 }
 

@@ -70,6 +70,17 @@ export type StudioNodeOf =
    * they typed none the title *is* the address, and it is not said twice.
    */
   | { kind: "link"; address: string }
+  /**
+   * The three kinds a forge address makes — `#1394`. Each draws its address
+   * the way a Link does; what it holds besides is a fact, not a sentence.
+   *
+   * **No `state` on any of them.** Where something stands *on a forge* is one
+   * of their facts, drawn as a chip, and not a state of Armada's that this
+   * card would colour or pulse.
+   */
+  | { kind: "issue"; address: string }
+  | { kind: "pull_request"; address: string }
+  | { kind: "epic"; address: string }
   | { kind: "deferral"; state: StudioDeferralState }
   | { kind: "outline"; state: StudioOutlineState }
   | { kind: "issue_draft"; state: "draft" }
@@ -99,6 +110,9 @@ export const STUDIO_NODE_KIND: Readonly<Record<StudioNodeKind, string>> = {
   contradiction: "Contradiction",
   sketch: "Sketch",
   link: "Link",
+  issue: "Issue",
+  pull_request: "Pull request",
+  epic: "Epic",
   deferral: "Deferral",
   outline: "Outline",
   issue_draft: "Issue draft",
@@ -216,7 +230,7 @@ export function StudioNode(props: StudioNodeProps) {
   // **Clipped to the card, with the whole of it in the title** — `FactChip`'s
   // rule for a value longer than its column, and the defect `#1378` was raised
   // on: an address wrapped over three lines is what the node was before.
-  const address = props.kind === "link" ? props.address : null;
+  const address = "address" in props ? props.address : null;
   const untitled = address !== null && address === title;
   return (
     <Card

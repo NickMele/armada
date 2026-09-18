@@ -328,20 +328,20 @@ async fn a_job_dispatched_from_a_draft_stands_at_the_gate_with_the_drafts_own_wo
     );
 }
 
-/// `#1379`: **anything already on the forge is dispatched from its Link, and
-/// the address is the whole request.** Nothing is filed and nothing is
-/// summarised on the way — it exists, and the Job proposer has taken a ticket
-/// link as a request since it shipped.
+/// `#1379`, `#1394`: **an issue already on the forge is dispatched from its
+/// Issue node, and the address is the whole request.** Nothing is filed and
+/// nothing is fetched on the way — the issue exists, and the Job proposer has
+/// taken a ticket link as a request since it shipped.
 ///
-/// **Which workflow each runs under is not here and must not be.** An issue,
-/// a pull request and a milestone are three asks, and
-/// `docs/concepts/job-proposer.md` makes choosing between them the proposer's
-/// own decision off the request and each definition's `for_requests` line —
-/// which `crates/config/tests/shipped.rs` holds and
-/// `tests::proposing` measures. What this asserts is that all three cross
-/// whole and unchanged.
+/// **The node was pasted as a Link.** Bridge cannot read an address, so what
+/// arrives on the seam is a Link and Fleet writes what it is.
+///
+/// **Which workflow each of the three runs under is not here and must not
+/// be.** `docs/concepts/job-proposer.md` makes choosing the proposer's own
+/// decision off the request and each definition's `for_requests` line, which
+/// `crates/config/tests/shipped.rs` holds and `tests::proposing` measures.
 #[tokio::test]
-async fn a_link_naming_an_issue_dispatches_its_address_and_the_job_node_hangs_off_it() {
+async fn a_pasted_issue_dispatches_its_address_and_the_job_node_hangs_off_it() {
     let home = TempDir::new();
     let fleet = std::sync::Arc::new(a_fleet_that_proposes(&home));
     let studio = a_studio(&fleet).await;
@@ -352,8 +352,7 @@ async fn a_link_naming_an_issue_dispatches_its_address_and_the_job_node_hangs_of
         StudioNodeContent::Link {
             address: address.clone(),
             said: None,
-            named: Some("#1379 An issue on a Studio cannot be dispatched — open".to_string()),
-            forge: None,
+            named: None,
         },
     )
     .await;
@@ -379,22 +378,32 @@ async fn a_link_naming_an_issue_dispatches_its_address_and_the_job_node_hangs_of
         [&link],
         "the Job points back at the Link it was dispatched from"
     );
-    let [kept] = of_kind(&dispatched, StudioNodeKind::Link)[..] else {
-        panic!("the Link is still there");
+    assert!(
+        of_kind(&dispatched, StudioNodeKind::Link).is_empty(),
+        "what was pasted as a Link is an Issue: the adapter recognised the address"
+    );
+    let [kept] = of_kind(&dispatched, StudioNodeKind::Issue)[..] else {
+        panic!("the Issue is still there");
     };
-    let StudioNodeContent::Link {
+    let StudioNodeContent::Issue {
         address: still,
-        forge,
+        number,
+        title,
+        state,
         ..
     } = &kept.content
     else {
-        panic!("a Link");
+        panic!("an Issue");
     };
-    assert_eq!(still, &address, "a Link never stops being its address");
     assert_eq!(
-        *forge,
-        Some(ipc::StudioLinkForge::Issue),
-        "and the wire says what it names, so Bridge never reads the address"
+        still, &address,
+        "an address node never stops being its address"
+    );
+    assert_eq!(number, "1379", "read off the address, with no fetch");
+    assert_eq!(
+        (title, state),
+        (&None, &None),
+        "what the forge calls it waits on a read-in"
     );
 
     let listed = api::Queries::list_jobs(fleet.as_ref(), None)
@@ -418,14 +427,15 @@ async fn a_link_naming_an_issue_dispatches_its_address_and_the_job_node_hangs_of
     );
 }
 
-/// **A pull request and a milestone dispatch the same way an issue does**, and
-/// a Link naming nothing on the forge still dispatches nothing — `#1379`.
+/// **A Pull request and an Epic dispatch the same way an Issue does**, and a
+/// Link — an address no adapter recognised — still dispatches nothing.
+/// `#1379`, `#1394`.
 ///
 /// One test over both, because what is being held is one rule: the request is
 /// the address, whichever of the three it is, and nothing here names a
 /// workflow.
 #[tokio::test]
-async fn a_pull_request_and_a_milestone_each_dispatch_their_own_address() {
+async fn a_pull_request_and_an_epic_each_dispatch_their_own_address() {
     let home = TempDir::new();
     let fleet = std::sync::Arc::new(a_fleet_that_proposes(&home));
     let studio = a_studio(&fleet).await;
@@ -445,7 +455,6 @@ async fn a_pull_request_and_a_milestone_each_dispatch_their_own_address() {
                 address: address.clone(),
                 said: None,
                 named: None,
-                forge: None,
             },
         )
         .await;
@@ -469,7 +478,7 @@ async fn a_pull_request_and_a_milestone_each_dispatch_their_own_address() {
         assert_eq!(
             made_by(&dispatched, &job),
             [&link],
-            "the Job points back at the Link it was dispatched from"
+            "the Job points back at the node it was dispatched from"
         );
     }
 
@@ -498,7 +507,7 @@ async fn a_pull_request_and_a_milestone_each_dispatch_their_own_address() {
         "each Job's brief is its own address, whole and on its own"
     );
 
-    // A Link naming nothing on the forge still has nothing to dispatch against.
+    // A Link is an address no adapter recognised, so there is nothing filed.
     let board = added(
         &fleet,
         &studio,
@@ -506,7 +515,6 @@ async fn a_pull_request_and_a_milestone_each_dispatch_their_own_address() {
             address: "https://example.invalid/a-board".to_string(),
             said: None,
             named: None,
-            forge: None,
         },
     )
     .await;
@@ -761,7 +769,6 @@ async fn each_rung_refuses_the_kinds_it_is_not_for() {
             address: "https://example.invalid/board".to_string(),
             said: None,
             named: None,
-            forge: None,
         },
     )
     .await;
