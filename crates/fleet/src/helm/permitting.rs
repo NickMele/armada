@@ -51,6 +51,20 @@ where
         let on_the_wire = ManifestId::carried(served.manifest().id().as_str());
         let asks = self.helm().asks();
         let (waiting, answer) = asks.minted(&on_the_wire, &asking, &self.now());
+        // **Read after the ask is minted and before it is published**, so the
+        // call that runs unasked carries the same tool, detail and rule a card
+        // would have shown — one producer of those, never two. Nothing is on
+        // the table yet, so there is nothing to take off. `#1525`.
+        if super::because(&asking).is_none() {
+            asks.withdraw(&waiting.call);
+            return Ok(self.settled(
+                &waiting,
+                HelmCallSettled::RanUnasked,
+                RunOrNot::Allow {
+                    updated_input: asking.input,
+                },
+            ));
+        }
         let call = waiting.call.clone();
         let held = asks.hold();
         self.events()

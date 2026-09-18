@@ -200,6 +200,15 @@ pub struct HelmCallAnswered {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HelmCallSettled {
+    /// Nobody was asked. Fleet read the call as none of the three a person is
+    /// put in front of — destructive, pushing code to a shared space, writing
+    /// off this machine — and it ran. `#1525`.
+    ///
+    /// **Published for a call no card was ever drawn for**, which is why the
+    /// record matters more here than anywhere else in this enum: it is the only
+    /// account of what Helm did unasked, and the thing that catches a rule drawn
+    /// too wide.
+    RanUnasked,
     /// A person allowed it, this once.
     AllowedOnce,
     /// A person allowed it and Fleet wrote the rule into their settings.

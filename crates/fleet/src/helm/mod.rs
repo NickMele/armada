@@ -9,6 +9,7 @@ mod admitting;
 mod asking;
 mod brief;
 mod conversation;
+mod deciding;
 mod hosting;
 mod permitting;
 mod reach;
@@ -20,6 +21,7 @@ pub(crate) mod unanswered;
 pub use asking::{Asks, HelmAskHold, NotAnswerable, Said};
 pub use brief::{brief, Brief, Voice};
 pub use conversation::{ConversationKey, Conversations};
+pub use deciding::{because, Because};
 #[cfg(test)]
 pub(crate) use hosting::REPLY_BUDGET;
 pub use hosting::{Carried, Carry, Carrying, Heard, Hosting, ProcessHost};

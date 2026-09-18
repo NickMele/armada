@@ -80,12 +80,19 @@ export type HelmAskingToRun = {
  * not a reason to refuse them. `unanswered` is fleet's bound running out, which
  * answers deny: silence is not consent.
  *
+ * `ran_unasked` is a call fleet read as none of the three a person is put in
+ * front of — destructive, pushing code to a shared space, writing off this
+ * machine — so it ran and no card was ever drawn. **It is the only account of
+ * what helm did unasked**, which is why it is published at all. Since protocol
+ * 17.4.
+ *
  * `every_read_allowed` is its own end rather than `allowed_and_remembered`,
  * because the two write different amounts into a person's own file and a
  * record that called them the same could not say which happened. Since
  * protocol 17.3.
  */
 export type HelmCallSettled =
+  | "ran_unasked"
   | "allowed_once"
   | "allowed_and_remembered"
   | "every_read_allowed"

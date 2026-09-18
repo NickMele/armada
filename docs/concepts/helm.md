@@ -74,7 +74,25 @@ Helm may call any command it is offered once you ask it to, in this conversation
 
 **Helm edits your checkout when you ask it to, with no worktree and no gate between the ask and the file.** A deliberate exception to "work happens in a Job", taken with the owner on 17 Sep 2026 because a terminal session does it and the app should. There is no Judge on the change, no branch, and no approval — the ask was the approval. Every write is `helm.changed_checkout`, below.
 
-**Your own settings decide, and what they do not cover is put to you.** Helm runs in the mode a terminal session runs — `default` — with the door's own permission tool named, so a call your `allow` rules cover runs silently, a call your `deny` rules refuse is refused, and everything else waits for you in the dock while the session sits inside its own tool call. `../spikes/019-is-auto-mode-reachable-for-a-helm-session.md` measured the path, and `../spikes/018-what-can-a-helm-session-do-in-each-permission-mode.md` measured what the modes do without it.
+**Your settings decide what they decide, and Fleet decides the rest.** Helm runs in the mode a terminal session runs — `default` — with the door's own permission tool named, so a call your `allow` rules cover runs silently and a call your `deny` rules refuse is refused. Everything else reaches Fleet, which used to put all of it in front of you and now puts three classes of it: *What Helm asks about*, below. `../spikes/019-is-auto-mode-reachable-for-a-helm-session.md` measured the path, and `../spikes/018-what-can-a-helm-session-do-in-each-permission-mode.md` measured what the modes do without it.
+
+## What Helm asks about
+
+**Three classes, and they are the owner's own words of 18 Sep 2026**: Helm runs *"in auto mode unless something is destructive, pushes code to a shared space, or writes something to something that is not on the local machine."* Everything else runs, and you are not asked.
+
+| Class | What it is | What it looks like |
+|---|---|---|
+| Destructive | It removes or overwrites something that does not come back | `rm`, `git reset --hard`, `git branch -D`, `kill`, a truncating `>`, overwriting a file that exists, `kill_job`, `delete_branch`, `edit_manifest` |
+| Pushes to shared | It sends code where other people read it | `git push`, `gh pr merge`, `cargo publish`, `scp`, `merge_pull_request`, `approve_dispatch` |
+| Writes off this machine | It writes to something that is not this machine | `curl -X POST`, `gh issue create`, `kubectl apply`, `file_finding_issue`, `clone_repository` |
+
+**Auto *unless*, which is why there is no allowlist.** A command Armada does not recognise runs. An allowlist would put you back at a card the first time you ran something nobody had listed, which is the state this exists to end, and the safety is in recognising the risky set rather than enumerating the safe one.
+
+**A line Armada cannot read asks on that ground.** `eval`, a backtick and a command substitution each carry a command nothing here ever sees, and those are the lines worth getting right. Every chained segment is read on its own, so `cd crates && rm -rf target` asks on its second half.
+
+**Everything that runs unasked is on the record** as `ran_unasked`, in the same `helm.call_answered` that carries every answer you gave. That record is what catches a class drawn too wide, and it is the reason the classes can be this generous.
+
+**This reverses your ask of 17 Sep** — *"it should still respect my permission settings"* — which it did by asking about everything the settings did not name. It respects them still; they no longer decide what is worth interrupting you for.
 
 **Auto mode was asked for and is not reachable.** The CLI accepts `--permission-mode auto` for a spawned session, reports `default` on its `init` line and makes no classifier call: auto mode is the harness's rather than a session's. So the ask reaching a person is not a substitute for it — it is what a spawned session has instead, and it is the same answer arrived at by a person rather than by a classifier.
 
@@ -103,7 +121,7 @@ Rung 3 carries no MCP operation for Helm to reach for, ladder or no. A Job Helm 
 
 **A Helm write to your checkout is `helm.changed_checkout`**, naming the repository, the tool and the path, published as the session's stream says it happened. A person who finds a file changed and did not change it reads this to see that Helm did. It names writes Armada can name: a shell line Helm ran may have written something too and nothing says whether it did, so those calls are on the conversation's own thread and produce no event.
 
-**Every ask and every answer is `helm.asking_to_run` and `helm.call_answered`**, naming the repository, the tool, the one-line argument and the rule. The second says which of the seven ends it was — allowed once, allowed and remembered, every read allowed, allowed where the rule would not write, refused, unanswered, or the session gone — so a person who finds a command was run can see that they allowed it, and a person who finds one was not can see that the hold ran out.
+**Every ask and every answer is `helm.asking_to_run` and `helm.call_answered`**, naming the repository, the tool, the one-line argument and the rule. The second says which of the eight ends it was — ran unasked, allowed once, allowed and remembered, every read allowed, allowed where the rule would not write, refused, unanswered, or the session gone — so a person who finds a command was run can see that they allowed it, and a person who finds one was not can see that the hold ran out.
 
 **On a Studio, Helm's act is `studio.helm_acted`**, published beside the `studio.changed` every write publishes, naming the Studio, the act and what it added. A person's act on a Studio publishes `studio.changed` alone, so the two are told apart by kind rather than by a field someone has to remember to read. **The record keeps it too**: each node and edge carries `added_by` and a Studio its `named_by`, a person or Helm, so a client that was not connected when Helm acted reads who did what off `get_studio`.
 

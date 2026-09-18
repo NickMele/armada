@@ -108,13 +108,13 @@ async fn published(watching: &mut Subscription) -> Vec<ipc::Event> {
 async fn a_shell_line_is_put_to_a_person_and_runs_on_their_allow() {
     let home = TempDir::new();
     let fleet = fleet(&home);
-    let sent = shell("gh issue list --milestone Helm");
+    let sent = shell("git push -u origin helm/some-branch");
     let call = held(&fleet, sent.clone());
 
     let asked = waiting(&fleet).await;
     assert_eq!(asked.tool, "Bash");
-    assert_eq!(asked.detail, "gh issue list --milestone Helm");
-    assert_eq!(asked.rule, "Bash(gh issue list:*)");
+    assert_eq!(asked.detail, "git push -u origin helm/some-branch");
+    assert_eq!(asked.rule, "Bash(git push:*)");
     assert_eq!(
         asked.offers,
         vec![
@@ -176,7 +176,7 @@ async fn a_refusal_carries_the_persons_own_words_to_the_session() {
 async fn allow_and_remember_writes_the_rule_a_person_read_and_nothing_else() {
     let home = TempDir::new();
     let fleet = fleet(&home);
-    let call = held(&fleet, shell("gh pr view 1389 --json title"));
+    let call = held(&fleet, shell("gh pr merge 1389 --merge"));
 
     let asked = waiting(&fleet).await;
     answer(&fleet, &asked.call, HelmCallAnswer::AllowAndRemember, None).await;
@@ -184,9 +184,9 @@ async fn allow_and_remember_writes_the_rule_a_person_read_and_nothing_else() {
 
     let at = home.path().join(adapters::PERSONAL_SETTINGS);
     let written = std::fs::read_to_string(&at).expect("the settings were written");
-    assert!(written.contains("\"Bash(gh pr view:*)\""), "{written}");
+    assert!(written.contains("\"Bash(gh pr merge:*)\""), "{written}");
     assert!(
-        !written.contains("--json"),
+        !written.contains("1389"),
         "the whole command is a rule a person would add again tomorrow: {written}"
     );
 }
@@ -198,7 +198,7 @@ async fn allow_and_remember_writes_the_rule_a_person_read_and_nothing_else() {
 async fn nobody_answering_ends_the_wait_as_a_refusal_and_never_as_an_allow() {
     let home = TempDir::new();
     let fleet = fleet(&home);
-    let call = held(&fleet, shell("gh issue list"));
+    let call = held(&fleet, shell("rm -rf /tmp/everything"));
 
     let asked = waiting(&fleet).await;
     assert_eq!(asked.holding_for_seconds, 2, "the fixture's own bound");
@@ -253,7 +253,7 @@ async fn the_ask_and_the_answer_are_each_helms_own_event() {
     let home = TempDir::new();
     let fleet = fleet(&home);
     let mut watching = fleet.events().subscribe();
-    let call = held(&fleet, shell("gh issue list"));
+    let call = held(&fleet, shell("git push --force"));
 
     let asked = waiting(&fleet).await;
     answer(&fleet, &asked.call, HelmCallAnswer::AllowOnce, None).await;
@@ -278,7 +278,7 @@ async fn the_ask_and_the_answer_are_each_helms_own_event() {
         .expect("the answer is published");
     assert_eq!(answered.call, asked.call);
     assert_eq!(answered.settled, HelmCallSettled::AllowedOnce);
-    assert_eq!(answered.rule, "Bash(gh issue list:*)");
+    assert_eq!(answered.rule, "Bash(git push:*)");
 }
 
 /// A tool that is not a shell line is named by itself, because that is the rule
@@ -289,115 +289,103 @@ async fn a_tool_that_is_not_a_command_is_its_own_rule() {
     let fleet = fleet(&home);
     let call = held(
         &fleet,
-        asking("{\"tool_name\":\"mcp__gitnexus__list_repos\",\"input\":{}}"),
+        asking("{\"tool_name\":\"mcp__notion__delete_page\",\"input\":{}}"),
     );
 
     let asked = waiting(&fleet).await;
-    assert_eq!(asked.rule, "mcp__gitnexus__list_repos");
+    assert_eq!(asked.rule, "mcp__notion__delete_page");
     assert_eq!(asked.detail, "", "a tool with no argument this names");
 
     answer(&fleet, &asked.call, HelmCallAnswer::AllowOnce, None).await;
     call.await.expect("the task").expect("an answer");
 }
 
-/// A door read offers a fourth answer, and the three other kinds of call do
-/// not. **What a person presses has to mean what its words say**: over a shell
-/// line "allow every read" would be allowing something they were never shown.
-/// `#1518`.
+/// **`#1518`'s fourth answer is unreachable while Fleet classifies**, and this
+/// is the case that says so rather than a deleted test nobody can find.
+///
+/// `allow_every_read` was offered on a read of Armada's own door. `#1525` made
+/// a door read run without anybody being asked, so no card is drawn over one
+/// and the answer has nothing to appear on. The variant is still on the wire —
+/// removing it is a major bump and a reversal of a decision the owner took an
+/// hour before this landed, which is his to make and not this branch's.
 #[tokio::test]
-async fn only_a_read_on_armadas_own_door_offers_to_allow_every_read() {
+async fn a_read_on_armadas_own_door_draws_no_card_at_all_now() {
     let home = TempDir::new();
     let fleet = fleet(&home);
 
-    let read = held(&fleet, tool("mcp__armada-fleet__get_job"));
-    let asked = waiting(&fleet).await;
-    assert_eq!(
-        asked.offers,
-        vec![
-            HelmCallAnswer::AllowOnce,
-            HelmCallAnswer::AllowAndRemember,
-            HelmCallAnswer::AllowEveryRead,
-            HelmCallAnswer::Refuse,
-        ]
-    );
-    answer(&fleet, &asked.call, HelmCallAnswer::AllowOnce, None).await;
-    read.await.expect("the task").expect("an answer");
+    let decided = fleet
+        .ask_the_person(tool("mcp__armada-fleet__get_check_output"), None)
+        .await
+        .expect("an answer");
 
-    for not_a_read in [
-        tool("mcp__armada-fleet__kill_job"),
-        tool("Edit"),
-        shell("gh pr view 1518"),
-    ] {
-        let call = held(&fleet, not_a_read);
-        let asked = waiting(&fleet).await;
-        assert_eq!(
-            asked.offers,
-            vec![
-                HelmCallAnswer::AllowOnce,
-                HelmCallAnswer::AllowAndRemember,
-                HelmCallAnswer::Refuse,
-            ],
-            "{} is not a read the door offers",
-            asked.tool
-        );
-        answer(&fleet, &asked.call, HelmCallAnswer::Refuse, None).await;
-        call.await.expect("the task").expect("an answer");
-    }
-}
-
-/// One press, every read, and **no act among them**. The 40-odd rules are
-/// derived from `operations.toml` rather than listed, so this asserts the two
-/// properties that hold whatever the inventory grows: the call's own tool is
-/// allowed, and nothing the door calls a command is.
-#[tokio::test]
-async fn allow_every_read_writes_a_rule_for_each_read_and_for_no_act() {
-    let home = TempDir::new();
-    let fleet = fleet(&home);
-    let call = held(&fleet, tool("mcp__armada-fleet__get_check_output"));
-
-    let asked = waiting(&fleet).await;
-    answer(&fleet, &asked.call, HelmCallAnswer::AllowEveryRead, None).await;
-    let decided = call.await.expect("the task").expect("an answer");
+    assert!(matches!(decided, RunOrNot::Allow { .. }));
     assert!(
-        matches!(decided, RunOrNot::Allow { .. }),
-        "the call they allowed still runs"
-    );
-
-    let at = home.path().join(adapters::PERSONAL_SETTINGS);
-    let written = std::fs::read_to_string(&at).expect("the settings were written");
-    assert!(
-        written.contains("\"mcp__armada-fleet__get_check_output\""),
-        "the call a person answered is among them: {written}"
-    );
-    assert!(
-        written.contains("\"mcp__armada-fleet__list_jobs\""),
-        "so is every other read: {written}"
-    );
-    assert!(
-        !written.contains("kill_job") && !written.contains("merge_pull_request"),
-        "an act is not a read and is not in the press that allowed one: {written}"
+        fleet
+            .list_helm_calls()
+            .await
+            .expect("the list")
+            .waiting
+            .is_empty(),
+        "a read is not a card, so there is nothing to offer a fourth answer on"
     );
 }
 
-/// The event says which of the ends it was, so a person reading the record
-/// later can tell one rule from forty. `docs/concepts/helm.md`, *Audit trail*.
+/// The whole of `#1525` in one case: a call none of the owner's three classes
+/// names **never reaches the dock**. Nothing is put on the table, the session
+/// gets its allow inside the same call, and the record says it ran unasked.
 #[tokio::test]
-async fn the_record_tells_allowing_every_read_apart_from_allowing_one() {
+async fn a_call_in_none_of_the_three_classes_runs_without_anybody_being_asked() {
     let home = TempDir::new();
     let fleet = fleet(&home);
     let mut watching = fleet.events().subscribe();
-    let call = held(&fleet, tool("mcp__armada-fleet__get_job"));
+
+    let decided = fleet
+        .ask_the_person(shell("python3 -c print(1)"), None)
+        .await
+        .expect("an answer");
+
+    assert!(
+        matches!(decided, RunOrNot::Allow { .. }),
+        "it runs, and nobody was asked"
+    );
+    assert!(
+        fleet
+            .list_helm_calls()
+            .await
+            .expect("the list")
+            .waiting
+            .is_empty(),
+        "nothing was ever put on the table"
+    );
+    let events = published(&mut watching).await;
+    let kinds: Vec<String> = events.iter().map(ipc::Event::kind).collect();
+    assert!(
+        !kinds.contains(&String::from("helm.asking_to_run")),
+        "no card was drawn: {kinds:?}"
+    );
+    let answered = events
+        .iter()
+        .find_map(|event| match event {
+            ipc::Event::HelmCallAnswered(answered) => Some(answered),
+            _ => None,
+        })
+        .expect("what ran unasked is still on the record");
+    assert_eq!(answered.settled, HelmCallSettled::RanUnasked);
+    assert_eq!(answered.rule, "Bash(python3:*)");
+}
+
+/// And the other half: a line in one of the three still waits for a person.
+#[tokio::test]
+async fn a_destructive_line_still_waits_for_a_person() {
+    let home = TempDir::new();
+    let fleet = fleet(&home);
+    let call = held(&fleet, shell("rm -rf crates/fleet"));
 
     let asked = waiting(&fleet).await;
-    answer(&fleet, &asked.call, HelmCallAnswer::AllowEveryRead, None).await;
-    call.await.expect("the task").expect("an answer");
+    assert_eq!(asked.detail, "rm -rf crates/fleet");
+    answer(&fleet, &asked.call, HelmCallAnswer::Refuse, None).await;
 
-    let settled = published(&mut watching)
-        .await
-        .into_iter()
-        .find_map(|event| match event {
-            ipc::Event::HelmCallAnswered(answered) => Some(answered.settled),
-            _ => None,
-        });
-    assert_eq!(settled, Some(HelmCallSettled::EveryReadAllowed));
+    let RunOrNot::Deny { .. } = call.await.expect("the task").expect("an answer") else {
+        panic!("a refusal is a deny");
+    };
 }
