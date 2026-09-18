@@ -44,7 +44,7 @@ pub struct HelmDebugInfo {
     pub tools: Vec<String>,
     /// How many MCP servers the session came up with, as its own `init` line
     /// last said. **Not Armada's count**: a conversation resolves the person's
-    /// own Claude configuration (`#1373`), and this is what that resolved.
+    /// own agent configuration (`#1373`), and this is what that resolved.
     /// Absent where nothing has run in this conversation yet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub servers: Option<usize>,

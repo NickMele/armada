@@ -19,7 +19,7 @@ const RECORD: HelmDebugInfo = {
   manifest_id: MANIFEST_ID,
   checkout: "/Users/user/armada",
   authority: "acting",
-  model: "claude-opus-4-1",
+  model: "a-model",
   brief: "You are Helm, in Armada.",
   door: "armada-fleet",
   tools: ["list_jobs", "get_events_since"],

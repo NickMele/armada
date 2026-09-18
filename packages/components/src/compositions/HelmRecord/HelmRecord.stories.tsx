@@ -7,7 +7,7 @@ import { helmRecord } from "./record";
 
 /** One Helm session, read before it is copied — #1367. */
 const meta: Meta<typeof HelmRecord> = {
-  title: "Compositions/Helm session record",
+  title: "Compositions/Helm record",
   component: HelmRecord,
   parameters: { layout: "fullscreen" },
   render: (args) => (
@@ -30,9 +30,9 @@ const BRIEF = [
 
 const record: HelmDebugInfo = {
   manifest_id: "armada",
-  checkout: "/Users/someone/Development/armada",
+  checkout: "/Users/user/Development/armada",
   authority: "acting",
-  model: "claude-opus-4-1",
+  model: "a-model",
   brief: BRIEF,
   door: "armada-fleet",
   tools: ["list_jobs", "get_job", "get_events_since", "start_checkout_run", "ask_the_person", "approve_dispatch"],
