@@ -27,6 +27,16 @@ export type PanelProps = {
   narrow?: boolean;
   /** The dot's tone at `narrow`, and nothing else — Panel carries no colour of its own. */
   dotTone?: "success" | "warn" | "escalated" | "muted";
+  /**
+   * What the `narrow` dot says in words. **Absent leaves it silent** — a named
+   * region around an `aria-hidden` mark, so a reader hears "Fleet" and never
+   * "running", which is every collapsed panel's state before 18 Sep 2026.
+   *
+   * The sentence is the caller's because only the caller has one: Fleet passes
+   * `fleetSaid(label)`, and Stats' dot is a rollup of six rows with no wording
+   * specified for it, so it passes none. See design-system.md → Left column.
+   */
+  dotLabel?: string;
   children: ReactNode;
 };
 
@@ -37,12 +47,19 @@ export function Panel({
   onOpenChange,
   narrow = false,
   dotTone = "muted",
+  dotLabel,
   children,
 }: PanelProps) {
   if (narrow) {
     return (
       <section className="armada-panel armada-glass" data-narrow aria-label={typeof label === "string" ? label : undefined}>
-        <div className="armada-panel__head">
+        {/* The head carries the name, and the dot keeps its `aria-hidden`: a
+            6px `title` target is one a person misses, and the region's own
+            name has to stay put rather than follow a status. */}
+        <div
+          className="armada-panel__head"
+          {...(dotLabel === undefined ? {} : { role: "img", "aria-label": dotLabel, title: dotLabel })}
+        >
           <span className="armada-panel__dot" data-tone={dotTone} aria-hidden />
         </div>
       </section>

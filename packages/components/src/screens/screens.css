@@ -137,18 +137,12 @@
   width: var(--sidebar-rail);
 }
 
-/* The column folded away under --window-fold-left: the work takes the whole
-   window and has to supply the leading inset the column's own padding used to.
-   Without it the Board's rows and a Job's run tree start at the window's edge
-   while the dock still holds --space-4 off the other one, which reads as the
-   layout having come apart rather than as room having been made.
-
-   Keyed on the column's absence rather than on a modifier class, the same way
-   the handle's own `:has()` rules above and below this one are — `TheShell`
-   simply does not render it, and nothing has to be told twice. */
-.armada-shell__body:not(:has(.armada-shell__left)) .armada-shell__work {
-  margin-left: var(--space-4);
-}
+/* #1435 kept a rule here for the column being absent — the work supplying the
+   leading inset the column's own padding used to. The column is never absent:
+   under --window-fold-left it collapses to the rail above rather than leaving,
+   so its padding is always there and the rule was dead the moment the owner
+   corrected that on 18 Sep 2026. Removed rather than left as a `:not(:has())`
+   that can never match. */
 
 .armada-shell__panel {
   flex: 1;
@@ -748,10 +742,18 @@
 
      window  1512  1400  1300  1280  1200  1150  1100  1000   900   768
      was      424   312   212   192   112    62   528   428   328   196
-     now      424   332   332   332   252   202   528   428   332   332
+     #1428    424   332   332   332   252   202   528   428   332   332
+     now      424   332   332   332   332   332   528   428   332   332
 
    1100 and below draw no dock, which is why those two columns do not move and
-   why the band was worst at exactly laptop width.
+   why the band was worst at exactly laptop width. The third row is what the
+   token pair alone could do; the fourth is 1200 and 1150 getting their floor
+   back once the left column collapses to its rail there rather than holding
+   200px — remeasured on the same fixture after that landed.
+
+   **1101-1127 is the one band still short**, by up to 27px, because the rail
+   costs 80px where #1435's absence cost 16. The rule below is what carries it:
+   305px measured at 1101, nothing clipped and no word broken.
 
    **Three tracks, and each says one thing.** `minmax(--w-run-column-min,
    --w-run-column)` is the run: it rests at 380 and gives up width down to its
@@ -768,8 +770,8 @@
    what the grid can actually afford, so the panel keeps its floor wherever the
    window has it and degrades smoothly where it does not, with the run column
    holding 240 throughout. Nothing clips at any width, measured at every step
-   of the table above. What that band really wants is the dock, and the dock is
-   not this file's to move.
+   of the table above and at 1101. What is left wanting pixels is 1101-1127,
+   and what it wants is the dock, which is not this file's to move.
 
    The middle track is the rule between them. Half a gap either side, so the
    drawn 24px gutter still measures 24 with a hairline down the middle of it
