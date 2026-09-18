@@ -190,18 +190,45 @@ impl Asks {
     }
 }
 
-/// What a person may answer about one call.
+/// What a person may answer about one call, in the order a surface draws them.
 ///
 /// **A rule is offered only where one can be written.** `allow_and_remember`
 /// writes a settings rule, and a tool whose rule would be its bare name is
-/// still a rule the CLI honours — so every tool offers all three, and the
+/// still a rule the CLI honours — so every tool offers those three, and the
 /// narrowing that a Drone's `offers` does by policy has no equivalent here.
-fn offers_for(_tool: &str) -> Vec<HelmCallAnswer> {
-    vec![
-        HelmCallAnswer::AllowOnce,
-        HelmCallAnswer::AllowAndRemember,
-        HelmCallAnswer::Refuse,
-    ]
+///
+/// **`allow_every_read` is the one that is not offered on everything.** It is
+/// a decision about Armada's own door and nothing else: a person pressing it
+/// says Helm may read this Fleet without asking. Offered over a shell line or
+/// an edit it would be the same words meaning something a person never said,
+/// so it appears only where the call is itself one of those reads. `#1518`.
+fn offers_for(tool: &str) -> Vec<HelmCallAnswer> {
+    let mut offers = vec![HelmCallAnswer::AllowOnce, HelmCallAnswer::AllowAndRemember];
+    if door_reads().iter().any(|read| read == tool) {
+        offers.push(HelmCallAnswer::AllowEveryRead);
+    }
+    offers.push(HelmCallAnswer::Refuse);
+    offers
+}
+
+/// Every read Armada's own door offers, each spelled as the rule that allows
+/// it — `mcp__armada-fleet__get_job`.
+///
+/// **Derived from the inventory, never listed here.** `api::offerable` is the
+/// same iterator the door itself is built from and `super::recording::tools`
+/// already reads, so a query added to `crates/ipc/operations.toml` is covered
+/// by this answer the day it lands. A list written out here is how an
+/// operation gets added to the file and stays behind a card forever.
+///
+/// **Queries alone.** A command the door offers is an act — merging a pull
+/// request, ending a Job — and `fleet::helm::reach::may` already holds those
+/// behind the machine's authority setting. Allowing them in the press that
+/// allowed reading a log would be a person answering a question nobody asked.
+pub fn door_reads() -> Vec<String> {
+    api::offerable()
+        .filter(|row| row.kind == "query")
+        .map(|row| format!("mcp__{}__{}", ipc::door::SERVER, row.operation))
+        .collect()
 }
 
 /// The rule that would have to allow this call, in the CLI's own settings
@@ -233,7 +260,9 @@ pub fn rule_for(tool: &str, detail: &str) -> String {
 /// why.
 pub fn answering(asking: &AskingToRun, said: &Said) -> RunOrNot {
     match said.answer {
-        HelmCallAnswer::AllowOnce | HelmCallAnswer::AllowAndRemember => RunOrNot::Allow {
+        HelmCallAnswer::AllowOnce
+        | HelmCallAnswer::AllowAndRemember
+        | HelmCallAnswer::AllowEveryRead => RunOrNot::Allow {
             updated_input: asking.input.clone(),
         },
         HelmCallAnswer::Refuse => RunOrNot::Deny {

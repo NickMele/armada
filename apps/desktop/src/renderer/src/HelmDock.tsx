@@ -1,10 +1,15 @@
 // Helm's conversation zone, under the dock's questions — #944. `App.tsx` only
 // wires this in; which repository Helm answers for is main's own decision,
 // made in `main/helm.ts`, and this draws whatever it publishes.
+//
+// It carries Helm's own permission asks too, since #1519: a Drone's question
+// and a Judge's stay in the block above, and an ask that stopped this
+// conversation is drawn in it.
 
 import { useState } from "react";
-import { copyHelmRecord, HelmComposer, HelmRecord, HelmThread } from "@armada/components";
+import { copyHelmRecord, DockQuestions, HelmComposer, HelmRecord, HelmThread } from "@armada/components";
 import type {
+  DockQuestion,
   HelmApprovalCard,
   HelmApprovalCardState,
   HelmComposerChip,
@@ -47,6 +52,13 @@ export type HelmDockProps = {
   onSaid: (sentence: string) => void;
   /** Approve, answered: the card waits on this, and a refusal puts it back to ready. #1117. */
   onApprove: (jobId: string) => Promise<{ ok: boolean }>;
+  /**
+   * Every permission ask this session is held inside, already worded by
+   * `dockQuestionsOf` — #1519. Drawn under the thread and over the message
+   * box, which is where the reply it stopped is and where the person is
+   * looking. Oldest first, and empty draws nothing.
+   */
+  asks?: readonly DockQuestion[];
 };
 
 /**
@@ -71,6 +83,7 @@ export function HelmDock({
   onCopied,
   onSaid,
   onApprove,
+  asks = [],
 }: HelmDockProps) {
   const [draft, setDraft] = useState("");
   const [record, setRecord] = useState<Read>({ open: false });
@@ -135,6 +148,11 @@ export function HelmDock({
   return (
     <div className="armada-helm-dock">
       <HelmThread rows={rows} replying={replying} notice={notice} emptyNote={emptyNote} />
+      {/* Between the thread and the message box: the reply is held open above
+          it and the person is typing below it, so the ask is in the one place
+          neither of them has to be left to find it — #1519. The same
+          `DockQuestions` the dock draws, so there is one card and not two. */}
+      <DockQuestions questions={asks} />
       <HelmComposer
         current={current}
         repositories={options}

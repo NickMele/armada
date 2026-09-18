@@ -17,7 +17,7 @@
 // failure is on screen, and `palette.ts` for what the palette can reach.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { dockQuestionsOf, jobNumber, ofPicked } from "@armada/screens";
+import { dockCardsOf, jobNumber, ofPicked } from "@armada/screens";
 import type { Outstanding } from "@armada/screens";
 import type { HelmContext, JobSummary } from "@armada/protocol";
 import { useDockAnswering } from "./dock-answering";
@@ -560,8 +560,10 @@ export function App() {
     (_question: Outstanding, job: JobSummary) => pointHelm(job.owner_manifest_id),
     [],
   );
-  const questions = useMemo(
-    () => dockQuestionsOf(state.questions, state.jobs, repositories, now, { ...dockAnswering, onDiscuss: onDiscussHelm }),
+  // `questions` is the dock's own block; `asks` is Helm's, drawn at the end of
+  // its thread where the reply they stopped is — #1519.
+  const { questions, asks } = useMemo(
+    () => dockCardsOf(state.questions, state.jobs, repositories, now, { ...dockAnswering, onDiscuss: onDiscussHelm }),
     [state.questions, state.jobs, repositories, now, dockAnswering, onDiscussHelm],
   );
   // The Board's own menu, drawn at the top of its content now that #1090
@@ -596,8 +598,10 @@ export function App() {
         onSearch={palette.onOpen}
         boardJobs={boardJobs}
         questions={questions}
+        asking={asks.length}
         helm={
           <HelmDock
+            asks={asks}
             helm={state.helm}
             repositories={repositories}
             jobs={state.jobs}
