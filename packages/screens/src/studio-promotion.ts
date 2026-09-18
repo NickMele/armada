@@ -23,6 +23,9 @@ const ON_A_FORGE = ["issue", "pull_request", "epic"] as const;
 
 const isOneOf = (kinds: readonly string[], node: StudioNode) => kinds.includes(node.kind);
 
+/** Whether the node carries an address of its own — a Link, an Issue, a Pull request or an Epic. */
+export const keepsAnAddress = (node: StudioNode): boolean => isOneOf(KEEPS_AN_ADDRESS, node);
+
 /** Which acts the current selection offers. Each is one control on the whiteboard's aside. */
 export type StudioActs = {
   /** Two or more Notes: they can be accepted as one Cluster. */
@@ -86,13 +89,13 @@ export function actsOn(studio: Studio, selected: readonly string[]): StudioActs 
     writeUp: (WRITABLE_UP as readonly string[]).includes(one.kind) && !ended,
     defer: !ended,
     edit: one.kind === "issue_draft",
-    editLink: isOneOf(KEEPS_AN_ADDRESS, one),
+    editLink: keepsAnAddress(one),
     dispatch: dispatchedAs(one) !== null,
     settle: one.kind === "contradiction" && !ended,
     // **Offered on every node with an address**, because which addresses are
     // sources is `crates/adapters`' to know and a rule copied here would drift
     // from it. A Link to a board comes back refused, which is the answer.
-    readIn: isOneOf(KEEPS_AN_ADDRESS, one),
+    readIn: keepsAnAddress(one),
   };
 }
 

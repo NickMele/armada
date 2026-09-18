@@ -1,0 +1,23 @@
+/* What is picked on a Studio, and the one control on it — #1399. Two rows and
+   no more, whatever the selection offers, so the card cannot outgrow the board
+   it floats over. */
+
+.armada-studio-picked {
+  display: flex;
+  flex-direction: column;
+  /* The trigger keeps its own width: stretched, it would be the card's. */
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+/* A node's title is prose and a Note's can be a paragraph. Two lines, because
+   the card on the board carries the rest and this only says which one. */
+.armada-studio-picked__said {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}

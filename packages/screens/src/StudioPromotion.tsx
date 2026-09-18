@@ -8,16 +8,22 @@
 // holds every rule; what is drawn is what a person may reach and what came back when they pressed.
 //
 // **The acts and their dialog are two renderings of one state**, because they belong in two places:
-// the acts float over the whiteboard in its own aside, and the dialog cannot be in there at all —
-// React Flow paints its nodes over anything inside its subtree, so a dialog drawn there is read
-// through the Notes it was opened from. Delete node was already outside for the same reason.
+// the acts are entries in the whiteboard aside's one control, and the dialog cannot be in the board
+// at all — React Flow paints its nodes over anything inside its subtree, so a dialog drawn there is
+// read through the Notes it was opened from. Delete node was already outside for the same reason.
+//
+// **The rungs are entries and not buttons** since #1399: `StudioPicked` draws them, and what is
+// offered is a list rather than a row that grows with the kinds.
 
 import { useState, type ReactNode } from "react";
-import { Button, Dialog, Input, Select, Textarea } from "@armada/components";
+import { Dialog, Input, Select, Textarea, type StudioPickedAct } from "@armada/components";
 import type { Outcome, Studio, StudioNode, StudioPromotion } from "@armada/protocol";
 
 import { nodeNamed } from "./studio";
 import { actsOn, aWriteUp, dispatchedAs, placedBeside, selectedNodes } from "./studio-promotion";
+
+/** One rung as the aside's control offers it. */
+type Rung = StudioPickedAct & { id: Filling };
 
 /** Which rung a person is filling in, or `null`. */
 type Filling =
@@ -42,8 +48,15 @@ export type StudioPromotionProps = {
   onAnswered: (outcome: Outcome) => void;
 };
 
-/** The acts the selection offers, and the dialog whichever one opened. */
-export type StudioPromotionParts = { acts: ReactNode; dialog: ReactNode };
+/**
+ * The rungs the selection offers, what to do when one is chosen, and the dialog
+ * whichever one opened.
+ */
+export type StudioPromotionParts = {
+  acts: readonly StudioPickedAct[];
+  onAct: (id: string) => void;
+  dialog: ReactNode;
+};
 
 /** The acts the selection offers, each one press from its dialog. */
 export function useStudioPromotion(props: StudioPromotionProps): StudioPromotionParts {
@@ -134,25 +147,28 @@ export function useStudioPromotion(props: StudioPromotionProps): StudioPromotion
     }
   }
 
-  const drawn = (
-    // Named as a group: a whiteboard has a Dispatch of its own and so does the shell, and what
-    // tells them apart for a reader is which panel each is in.
-    <div className="armada-studio__acts" role="group" aria-label="Acts on what is selected">
-      {acts.cluster ? <Act label="Cluster Notes" onPress={() => fill("cluster")} /> : null}
-      {acts.outline ? <Act label="Outline" onPress={() => fill("outline")} /> : null}
-      {acts.writeUp ? <Act label="Write up" onPress={() => fill("write_up")} /> : null}
-      {acts.defer ? <Act label="Defer" onPress={() => fill("defer")} /> : null}
-      {acts.edit ? <Act label="Edit draft" onPress={() => fill("edit")} /> : null}
-      {acts.editLink ? <Act label="Edit line" onPress={() => fill("line")} /> : null}
-      {acts.dispatch ? <Act label="Dispatch" onPress={() => fill("dispatch")} /> : null}
-      {acts.readIn ? <Act label="Read in" onPress={() => fill("read_in")} /> : null}
-      {acts.settle ? <Act label="Not a problem" onPress={() => fill("settled")} /> : null}
-      {acts.settle ? <Act label="Resolved here" onPress={() => fill("resolved")} /> : null}
-    </div>
-  );
+  // In the order a person climbs them: what several nodes become, then what one
+  // node becomes, then how a Contradiction ends.
+  const rung = (id: Filling, label: string, offers: boolean): Rung[] => (offers ? [{ id, label }] : []);
+  const offered: Rung[] = [
+    ...rung("cluster", "Cluster Notes", acts.cluster),
+    ...rung("outline", "Outline", acts.outline),
+    ...rung("write_up", "Write up", acts.writeUp),
+    ...rung("defer", "Defer", acts.defer),
+    ...rung("edit", "Edit draft", acts.edit),
+    ...rung("line", "Edit line", acts.editLink),
+    ...rung("dispatch", "Dispatch", acts.dispatch),
+    ...rung("read_in", "Read in", acts.readIn),
+    ...rung("settled", "Not a problem", acts.settle),
+    ...rung("resolved", "Resolved here", acts.settle),
+  ];
 
   return {
-    acts: drawn,
+    acts: offered,
+    onAct: (id) => {
+      const chosen = offered.find((act) => act.id === id);
+      if (chosen !== undefined) fill(chosen.id);
+    },
     dialog: (
       <Dialog
         open={filling !== null}
@@ -178,14 +194,6 @@ export function useStudioPromotion(props: StudioPromotionProps): StudioPromotion
       </Dialog>
     ),
   };
-}
-
-function Act({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Button size="sm" onClick={onPress}>
-      {label}
-    </Button>
-  );
 }
 
 /**
