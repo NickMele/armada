@@ -42,6 +42,7 @@ use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
 use crate::tests::planted::Held;
 use crate::tests::tmp::TempDir;
+use crate::tests::transcript::reading::Transcript;
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
@@ -245,20 +246,16 @@ async fn a_drone_that_outlives_its_fleet_is_picked_up_by_the_next_one() {
     // Polled, because a row is queued to the writer task rather than written
     // by the caller — see `transcript::Tap`, which may not block the loop that
     // advances the Job.
-    let at = crate::transcript::transcript_of(
-        &home.path().to_string_lossy(),
+    let rows = Transcript::of(
+        &home,
         &second.load(&job).await.expect("the Job").handle(),
         &drone,
-    );
-    let mut rows = String::new();
-    let deadline = tokio::time::Instant::now() + A_CHILD_HAS_LONG_ENOUGH;
-    while tokio::time::Instant::now() < deadline {
-        rows = std::fs::read_to_string(&at).expect("the transcript the first Fleet opened");
-        if rows.contains("not recoverable") {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
+    )
+    .until(A_CHILD_HAS_LONG_ENOUGH, |rows| {
+        rows.contains("not recoverable")
+    })
+    .await
+    .unwrap_or_else(|stood| stood);
     assert!(
         rows.contains("kept working") && rows.contains("not recoverable"),
         "the transcript carries the unobserved stretch:\n{rows}"
