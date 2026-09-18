@@ -83,7 +83,14 @@ export function helmRowsOf(items: readonly HelmThreadItem[]): HelmFoldedRow[] {
         id: item.id,
         at: clock(item.ts),
         actor: "helm",
-        message: "The stored session could not be resumed. This reply starts a new one.",
+        // **Lower case, because Fleet's own sentences sit in this column** —
+        // `crates/fleet/src/helm/unanswered.rs` writes them that way and
+        // cannot do otherwise, since `claude` and `codex` lead some of them
+        // and the lexicon refuses a program name promoted to an actor. One
+        // clause and not two sentences, which is the record's own wording for
+        // this line (`HelmRecord/record.ts`). The rule is in
+        // `docs/contracts/design-system.md`, *Prose rules*.
+        message: "the stored session could not be resumed, so this reply starts a new one",
       });
       continue;
     }
