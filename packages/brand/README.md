@@ -20,12 +20,23 @@ colour, and it is the only custom glyph Armada owns.
 |---|---|---|
 | Ink | `#E4E9EF` | The mark on dark grounds |
 | Ink, dark | `#0F1419` | The mark on light grounds |
-| Accent | `#4A9EDB` | Rules, meta text, the accent app icon body |
-| App body, dark | `#161C23` | The macOS icon body |
+| Accent | `#4A9EDB` | Rules, meta text, the app icon's pool of light |
+| App body, dark | `#1A2330` → `#0C1116` | The macOS icon body, top to bottom |
 
 The mark is monotone. It is never given a gradient, a shadow, an outline, or a
 second colour, with one exception: `ArmadaMarkDuo` holds the two trailing hulls
 back, and only at 32px and above.
+
+**The macOS icon body is the exception, and only the body.** It was a flat
+`#161C23` until the app grew depth, and a flat tile then read as a dead one
+beside a window built from lit glass. It is now Bridge's own canvas at icon
+scale: the `--bg-glass` to `--bg-base` grade, `--accent` in the same pool of
+light at the top leading corner, a glass rim, and the shadow Apple's 824-of-1024
+inset exists to hold. The mark inside it is still one flat fill in one colour.
+**The light goes behind the mark, never on it** — no gradient in the hulls, no
+glow drawn as part of the glyph. Nothing else in this package takes a gradient:
+`svg/`, `png/`, `web/` and `src/` stay flat, because a mark with no body has
+nothing to light.
 
 ## Clear space
 
@@ -63,11 +74,28 @@ and the mark should not be used — set the wordmark alone instead.
 ## Rebuilding the macOS icon
 
 ```
+pnpm --filter @armada/brand build:appicon
 iconutil -c icns packages/brand/macos/AppIcon.iconset
 ```
 
-The `.icns` here was assembled directly, so it can be regenerated on any
-machine; `iconutil` is only needed if the iconset changes.
+The first command draws both SVG masters and renders all ten iconset PNGs; the
+second packs them. Run both after changing anything in
+`scripts/build-appicon.mjs`, which is the only place the icon's geometry and
+colour live — the masters and the PNGs are output, and editing one by hand is
+undone by the next build.
+
+**The rasteriser is `@resvg/resvg-js`, a devDependency of this package**, so the
+build needs no system library and no Homebrew. It also needs one thing the
+browser does not: **every filter carries
+`color-interpolation-filters="sRGB"`.** Without it resvg converts each filter
+region to linearRGB and back, and the conversion leaves a visible horizontal
+seam where the region ends — two bands across the body, at the drop shadow's
+edge and the halo's. WebKit hides the bug because it composites the whole page
+the same way.
+
+Only the dark master goes into the iconset. `appicon-accent.svg` is drawn
+alongside it and nothing consumes it; it exists so the light-bodied tone stays
+in step if it is ever wanted.
 
 ## The wordmark
 

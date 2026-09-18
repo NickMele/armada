@@ -1,4 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Armada">
-  <rect x="100.0" y="100.0" width="824" height="824" rx="185.4" ry="185.4" fill="#4A9EDB"/>
-  <g fill="#FFFFFF"><path transform="translate(299.7099,483.6947) scale(3.145038)" d="M32 4 C 40 17, 50 35, 53 44 L36 46 C 34 34, 33 24, 31 18 C 28 25, 24 38, 19 52 L2 54 C 11 36, 24 15, 32 4 Z"/><path transform="translate(425.5115,357.8931) scale(3.145038)" d="M32 4 C 40 17, 50 35, 53 44 L36 46 C 34 34, 33 24, 31 18 C 28 25, 24 38, 19 52 L2 54 C 11 36, 24 15, 32 4 Z"/><path transform="translate(551.3130,452.2443) scale(3.145038)" d="M32 4 C 40 17, 50 35, 53 44 L36 46 C 34 34, 33 24, 31 18 C 28 25, 24 38, 19 52 L2 54 C 11 36, 24 15, 32 4 Z"/></g>
+  <defs>
+    <clipPath id="accent-body"><rect x="100" y="100" width="824" height="824" rx="185.4" ry="185.4"/></clipPath>
+    <linearGradient id="accent-ground" x1="0" y1="100" x2="0" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6FB8EC"/>
+      <stop offset="1" stop-color="#2A6E9F"/>
+    </linearGradient>
+    <radialGradient id="accent-pool" cx="0" cy="0" r="1" gradientTransform="translate(180 168) scale(760 520)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.46"/>
+      <stop offset="0.48" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="accent-rim" x1="140" y1="110" x2="900" y2="920" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.03"/>
+    </linearGradient>
+    <filter id="accent-halo" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+    <filter id="accent-contact" x="-25%" y="-25%" width="150%" height="160%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="14" stdDeviation="22" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+  <g filter="url(#accent-contact)"><rect x="100" y="100" width="824" height="824" rx="185.4" ry="185.4" fill="url(#accent-ground)"/></g>
+  <g clip-path="url(#accent-body)">
+    <rect x="100" y="100" width="824" height="824" rx="185.4" ry="185.4" fill="url(#accent-pool)"/>
+    <g filter="url(#accent-halo)" opacity="0.75"><g fill="#0F1419"><path transform="translate(299.7099,483.6947) scale(3.145038)" d="M32 4 C 40 17, 50 35, 53 44 L36 46 C 34 34, 33 24, 31 18 C 28 25, 24 38, 19 52 L2 54 C 11 36, 24 15, 32 4 Z"/><path transform="translate(425.5115,357.8931) scale(3.145038)" d="M32 4 C 40 17, 50 35, 53 44 L36 46 C 34 34, 33 24, 31 18 C 28 25, 24 38, 19 52 L2 54 C 11 36, 24 15, 32 4 Z"/><path transform="translate(551.313,452.2443) scale(3.145038)" d="M32 4 C 40 17, 50 35, 53 44 L36 46 C 34 34, 33 24, 31 18 C 28 25, 24 38, 19 52 L2 54 C 11 36, 24 15, 32 4 Z"/></g></g>
+  </g>
+  <g fill="#FFFFFF"><path transform="translate(299.7099,483.6947) scale(3.145038)" d="M32 4 C 40 17, 50 35, 53 44 L36 46 C 34 34, 33 24, 31 18 C 28 25, 24 38, 19 52 L2 54 C 11 36, 24 15, 32 4 Z"/><path transform="translate(425.5115,357.8931) scale(3.145038)" d="M32 4 C 40 17, 50 35, 53 44 L36 46 C 34 34, 33 24, 31 18 C 28 25, 24 38, 19 52 L2 54 C 11 36, 24 15, 32 4 Z"/><path transform="translate(551.313,452.2443) scale(3.145038)" d="M32 4 C 40 17, 50 35, 53 44 L36 46 C 34 34, 33 24, 31 18 C 28 25, 24 38, 19 52 L2 54 C 11 36, 24 15, 32 4 Z"/></g>
+  <rect x="101.5" y="101.5" width="821" height="821" rx="183.9" ry="183.9" fill="none" stroke="url(#accent-rim)" stroke-width="3"/>
 </svg>
