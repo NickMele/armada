@@ -23,10 +23,10 @@ use std::process::ExitCode;
 
 use adapters::UnmergedWork;
 use armada::clean::Scope;
-use armada::cli::{self, Usage, Verb};
+use armada::cli::{self, LandAct, Usage, Verb};
 use armada::declared::Registry;
 use armada::serve::PROVISIONAL_CHECK_BUDGET;
-use armada::{clean, declared, say, serve};
+use armada::{clean, declared, land, say, serve};
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -58,7 +58,75 @@ async fn main() -> ExitCode {
         // verb is a pipe with one message in flight; nothing else is running
         // to be starved. `armada::mcp` holds the argument.
         Verb::Mcp => armada::mcp::speak(),
+        Verb::Land(act) => land_verb(act),
     }
+}
+
+/// `armada land`'s three visible forms, plus the hidden `--runner` the
+/// detached runner starts itself with. Every message here closely
+/// paraphrases `scripts/land`'s own prints — this is a person-facing CLI,
+/// not a wire contract — and every exit code matches
+/// `docs/practices/running-locally.md`'s table.
+fn land_verb(act: LandAct) -> ExitCode {
+    let env = land::Env::read();
+    if let LandAct::Runner { common_git_dir } = act {
+        return land::run_runner(&common_git_dir, &env);
+    }
+    let cwd = match std::env::current_dir() {
+        Ok(cwd) => cwd,
+        Err(why) => {
+            eprintln!("the working directory could not be read: {why}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match act {
+        LandAct::Runner { .. } => unreachable!("handled above"),
+        LandAct::Preflight => match land::preflight(&cwd, &env) {
+            Ok(done) => {
+                println!(
+                    "ready: {}, pull request #{}, tree {}",
+                    done.branch,
+                    done.pull_request,
+                    short(&done.tree)
+                );
+                let checks = if done.checks.is_empty() {
+                    "none".to_string()
+                } else {
+                    done.checks.join(", ")
+                };
+                println!(
+                    "Checks this change hits: {checks}. Each should have passed on this tree."
+                );
+                println!("When the owner says merge: armada land");
+                ExitCode::SUCCESS
+            }
+            Err(why) => refused(&why),
+        },
+        LandAct::Join => match land::land(&cwd, &env) {
+            Ok(queued) => {
+                println!(
+                    "queued: {}, #{}, {} ahead",
+                    queued.branch, queued.pull_request, queued.ahead
+                );
+                println!("poll: armada land --status {}", queued.branch);
+                ExitCode::SUCCESS
+            }
+            Err(why) => refused(&why),
+        },
+        LandAct::Status { branch } => match land::status(&cwd, branch.as_deref()) {
+            Ok(code) => ExitCode::from(code),
+            Err(why) => refused(&why),
+        },
+    }
+}
+
+fn refused(why: &land::Refused) -> ExitCode {
+    eprintln!("land: {why}");
+    ExitCode::from(1)
+}
+
+fn short(sha: &str) -> &str {
+    sha.get(..10).unwrap_or(sha)
 }
 
 /// Run one Check or one Command in the repository the caller is standing in.

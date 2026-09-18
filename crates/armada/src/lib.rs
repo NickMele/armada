@@ -28,11 +28,17 @@
 //! root owns the runtime and nothing below it may spawn a task.
 //! [`locating`](mod@locating) reads a folder a person adds into one more
 //! repository Fleet serves, and holds every watch.
+//!
+//! [`land`](mod@land) is `armada land`, ported from `scripts/land` in
+//! stages — state on disk, the gate's pure comparisons, and now the two
+//! reused worktrees, the turn lock and the detached runner. **Not yet a
+//! verb**: `cli` does not dispatch to it.
 
 pub mod agent;
 pub mod clean;
 pub mod cli;
 pub mod declared;
+pub mod land;
 pub mod locating;
 pub mod loopback;
 pub mod mcp;

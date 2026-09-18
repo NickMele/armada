@@ -538,10 +538,25 @@ combination nothing checked. `armada check hooks_test` proves the hook, and
 needs nothing built.
 
 **What it needs:** a clean tree, the branch pushed, an open pull request against
-`main`, `gh` signed in, and an `armada` on `PATH` that has the `covers` verb.
-Until a build carrying it is installed, point `ARMADA_LAND_ARMADA` at that
-binary by its **absolute** path — the gate runs in a worktree of its own, so a
-relative one is refused.
+`main`, `gh` signed in, and an `armada` on `PATH` that knows the `land` verb —
+`scripts/land` is a shim that execs into `armada land`. `ARMADA_LAND_ARMADA`
+is the one knob for which `armada` that is, read both for this and for what a
+*gated turn* shells out to for `covers`, `check` and `run`; unset, both
+default to `PATH`. Give it an **absolute** path when you set it — the gate
+runs in a worktree of its own, so a relative one is refused.
+
+**A change to the line needs `scripts/restart` before it is what runs.**
+`armada land` comes from the *installed* binary on `PATH`, not from the tree
+you are standing in, so editing `crates/armada/src/land/` and running
+`scripts/land` again still runs whatever was installed before your edit.
+`scripts/restart` rebuilds and reinstalls it; until you run that (or point
+`ARMADA_LAND_ARMADA` at a binary you built yourself, by its absolute path),
+you are testing the old one. **The shim falls back to `scripts/land_py`,
+kept for one release, whenever the resolved `armada` is missing or does not
+yet know the `land` verb** — the case every agent's installed binary is in
+the moment this file itself reaches `main` — so the line stays open while
+installs catch up; it says so on stderr, naming `scripts/restart`, whenever
+it does.
 
 **A gated turn takes minutes.** It keeps two worktrees under `.armada/land/` —
 one for the candidate, one for `main` itself — resets each to the commit it

@@ -19,6 +19,10 @@ checks-runner = { path = "../checks-runner" }
 adapters = { path = "../adapters" }
 fleet = { path = "../fleet" }
 api = { path = "../api" }
+# For `#[derive(Serialize, Deserialize)]` on `land`'s own state types. Bytes
+# still cross only through `ipc::decode`/`ipc::encode` — no `serde_json` here,
+# same as `fleet`'s own dependency on this crate for its runtime file.
+serde = { version = "1", features = ["derive"] }
 # The composition root owns the runtime, and it is the only crate that does.
 # `net` for the one listener, `signal` because a clean exit is what removes the
 # runtime file and a signal is how a daemon is told to take one.
@@ -33,6 +37,11 @@ axum = "0.7"
 # `macos_fsevent` is named to satisfy its own `cfg` rather than because
 # anything here subscribes to FSEvents. It adds `notify-types`, `walkdir`,
 # `same-file` and `fsevent-sys` to the graph, and no async runtime.
+# The merge line's turn lock (`land/lock.rs`) — a real `flock`, wrapped with
+# no `unsafe` at the call site, since `unsafe_code = "forbid"` rules out
+# calling `libc::flock` directly and nothing already in this workspace's
+# dependency graph wraps it.
+fd-lock = "4"
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
 
 # **Declared dev-only, against the crate table, deliberately.** The table lists
