@@ -6,6 +6,11 @@
 //! the bound on how many run at once; the second holds that saying so changed
 //! nothing the gate rules on.
 //!
+//! **The bound is read off the stream, so the stream has to be true to it**
+//! (#1436). What a message shows started and not finished is the reading, and
+//! [`more_checks_running_than_the_bound_allows_is_read_as_a_breach`] is what
+//! holds that reading to a run that really does exceed its room.
+//!
 //! Real commands, for `crate::tests::checking`'s reason: the claims here are
 //! about processes starting and ending, and a fake runner would be asserting
 //! this file's guess at both.
@@ -42,13 +47,42 @@ fn named(name: &str, run: &str) -> ResolvedCheck {
     }
 }
 
+/// The most places this run was ever **published** as holding: the largest, over
+/// every message, of the places taken by the Checks a message shows started and
+/// not yet finished.
+///
+/// **Places, not rows**, because that is the unit the bound is in — a Check
+/// declaring `places: 2` holds two of them (#1102), and counting rows would
+/// read a run of two such Checks as two against a bound of four.
+///
+/// **The reading the bound is asserted through**, so it is named once and the
+/// case that proves it catches a breach reads the same function. #1436.
+fn most_places_at_once(said: &[ipc::JobChecking]) -> u32 {
+    said.iter()
+        .filter_map(|one| one.checking.as_ref())
+        .map(|state| {
+            state
+                .checks
+                .iter()
+                .filter(|check| check.started_at.is_some() && check.ran.is_none())
+                .map(|check| check.places.unwrap_or(1))
+                .sum()
+        })
+        .max()
+        .unwrap_or(0)
+}
+
 /// Every `job.checking` message one pass over `checks` published, in order,
 /// and the slot once the writer was dropped.
 ///
 /// **Drained to its end rather than to a count**, for the Judge's marking
 /// test's reason: both senders are dropped before the read, so a third message
 /// nobody expected would be counted rather than missed.
-async fn heard_over(checks: &[ResolvedCheck], repo: &TempDir) -> (Vec<ipc::JobChecking>, Underway) {
+async fn heard_over(
+    checks: &[ResolvedCheck],
+    repo: &TempDir,
+    at_once: usize,
+) -> (Vec<ipc::JobChecking>, Underway) {
     let underway = Underway::default();
     let events = api::Broadcaster::new();
     let mut heard = events.subscribe();
@@ -69,7 +103,7 @@ async fn heard_over(checks: &[ResolvedCheck], repo: &TempDir) -> (Vec<ipc::JobCh
         false,
         repo.path(),
         Duration::from_secs(30),
-        &Room::ignoring_the_machine(ChecksAtOnce::of(AT_ONCE)),
+        &Room::ignoring_the_machine(ChecksAtOnce::of(at_once)),
         &announcing,
         &std::collections::BTreeMap::new(),
         &[],
@@ -102,7 +136,7 @@ async fn each_check_is_said_to_start_and_to_finish_in_order_under_the_slot_bound
     let checks: Vec<ResolvedCheck> = (0..declared)
         .map(|n| named(&format!("check_{n}"), "/bin/sleep 0.3"))
         .collect();
-    let (said, underway) = heard_over(&checks, &repo).await;
+    let (said, underway) = heard_over(&checks, &repo, AT_ONCE).await;
 
     let first = said
         .first()
@@ -135,15 +169,15 @@ async fn each_check_is_said_to_start_and_to_finish_in_order_under_the_slot_bound
         "a start and a finish per Check, and nothing per second"
     );
 
+    assert!(
+        most_places_at_once(&said) <= AT_ONCE as u32,
+        "the run was published as holding {} of {AT_ONCE} places",
+        most_places_at_once(&said)
+    );
+
     let mut starts: Vec<Option<usize>> = vec![None; declared];
     let mut finishes: Vec<Option<usize>> = vec![None; declared];
     for (n, state) in between.iter().enumerate() {
-        let running = state
-            .checks
-            .iter()
-            .filter(|check| check.started_at.is_some() && check.ran.is_none())
-            .count();
-        assert!(running <= AT_ONCE, "message {n} says {running} are running");
         for (at, check) in state.checks.iter().enumerate() {
             if check.started_at.is_some() && starts[at].is_none() {
                 starts[at] = Some(n);
@@ -189,6 +223,28 @@ async fn each_check_is_said_to_start_and_to_finish_in_order_under_the_slot_bound
         underway.on(&ipc::JobId::carried(JOB), &ipc::StepId::carried(STEP)),
         None,
         "the slot is empty once the writer is dropped"
+    );
+}
+
+/// **The reading above is not vacuous.** The same Checks over a room of twice
+/// the places are published as holding more than `AT_ONCE` of them, so the
+/// assertion the case above makes still refuses a run that really does exceed
+/// its bound, rather than a run whose stream lags behind it. #1436.
+#[tokio::test]
+async fn more_checks_running_than_the_bound_allows_is_read_as_a_breach() {
+    let repo = TempDir::new();
+    let declared = AT_ONCE + 2;
+    let checks: Vec<ResolvedCheck> = (0..declared)
+        .map(|n| named(&format!("check_{n}"), "/bin/sleep 0.5"))
+        .collect();
+    let (said, _) = heard_over(&checks, &repo, AT_ONCE * 2).await;
+
+    let most = most_places_at_once(&said);
+    assert!(
+        most > AT_ONCE as u32,
+        "a room of {} published no more than {AT_ONCE} at once, so the bound's \
+         own assertion would pass a run that broke it",
+        AT_ONCE * 2
     );
 }
 
