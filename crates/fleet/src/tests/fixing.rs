@@ -234,12 +234,13 @@ async fn the_call_answers_before_the_test_on_main_finishes() {
 }
 
 /// **A pass on main is the Drone's own change**, and nothing is drafted.
-/// **Skipped while the machine is loaded, `#1467`.** It passes alone and
-/// fails only when the whole suite runs on a saturated machine, which is
-/// what the merge line does — so it refused every branch on the night it
-/// was switched off. `#1467` carries the causes already found and what is
-/// left to read; switching it back on is that issue's, not this file's.
-#[ignore = "flaky under load, #1467"]
+///
+/// **Back on with [`told_fix`]'s wait, `#1467`.** What failed here was the
+/// read, not the claim: the transcript was read once, straight after the call
+/// that produced the turn, and the row goes to a writer task nothing awaits —
+/// so on a loaded machine the file was still empty and the panic carried `[]`
+/// as the whole of the evidence. Reproduced with the writer made to miss its
+/// first two hundred reads; the wait absorbs it and the single read does not.
 #[tokio::test]
 async fn a_test_passing_on_main_drafts_nothing() {
     let home = TempDir::new();
