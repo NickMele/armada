@@ -713,19 +713,50 @@
 
 /* The run on the left, the panel on the right, at every state.
 
-   THE LEFT COLUMN NEVER CHANGES WIDTH. `--w-run-column` is the drawn 380px and
-   the panel takes every pixel of slack — that is the drawing's own rule and it
-   is what the tokens file argues for at length.
+   `--w-run-column` is the drawn 380px and the panel takes every pixel of
+   slack — that is the drawing's own rule and it is what the tokens file argues
+   for at length.
 
    It was a 2fr/3fr pair here, defended in a comment that read well and was
    wrong: a proportional rail widens with the window, so the tree of six short
    names grew to half a maximised screen while the panel that has to hold a
-   diff grew by the same fraction rather than by the surplus. The old note
-   worried that a fixed track "keeps demanding its width in a narrow window".
-   380px against `--window-floor`'s 768 leaves 363 for the panel at the
-   narrowest window Bridge opens, which is tight and never sideways-scrolling —
-   and `minmax(0, 1fr)` on the panel is what keeps one long path from pushing
-   the pair wider than the window.
+   diff grew by the same fraction rather than by the surplus.
+
+   **THE RUN COLUMN YIELDS WHEN THE SLACK RUNS OUT, and the panel has a floor.**
+   The fixed track that replaced the ratio had no give at all, and the old note
+   that worried it "keeps demanding its width in a narrow window" was right
+   about the symptom even though it was wrong about the cure. The arithmetic
+   this comment used to carry — "380px against `--window-floor`'s 768 leaves
+   363 for the panel" — forgot the 48px rail, the shell's own four gutters and
+   this card's padding. The real figure at that window is 196px, and with
+   Helm's dock beside the content the same 196 arrives at 1280, where the owner
+   found it: `Extract selectColumnOrder into its own module` one letter a line.
+   Measured in the mock on `job/workingAPlan`, at heights 860:
+
+     window  1512  1400  1300  1280  1200  1150  1100  1000   900   768
+     was      424   312   212   192   112    62   528   428   328   196
+     now      424   332   332   332   252   202   528   428   332   332
+
+   1100 and below draw no dock, which is why those two columns do not move and
+   why the band was worst at exactly laptop width.
+
+   **Three tracks, and each says one thing.** `minmax(--w-run-column-min,
+   --w-run-column)` is the run: it rests at 380 and gives up width down to its
+   floor, and it is what gives first because a list of step names and elapsed
+   times reads narrower than a diff does. The panel's own min is what reserves
+   its floor *before* the run grows — a plain `minmax(0, 1fr)` beside a fixed
+   track is exactly the bug, since grid maximises the fixed track to its limit
+   and hands the flexible one the remainder.
+
+   **The panel's floor is `min()`, not the token alone.** Below about 1280 with
+   the dock open the window cannot pay for both floors, and two hard minimums
+   there overflow this card and clip the log mid-word — which is the defect
+   again, wearing the other hat. `calc(100% - gutter - the run's floor)` is
+   what the grid can actually afford, so the panel keeps its floor wherever the
+   window has it and degrades smoothly where it does not, with the run column
+   holding 240 throughout. Nothing clips at any width, measured at every step
+   of the table above. What that band really wants is the dock, and the dock is
+   not this file's to move.
 
    The middle track is the rule between them. Half a gap either side, so the
    drawn 24px gutter still measures 24 with a hairline down the middle of it
@@ -734,7 +765,9 @@
    height and can scroll inside it rather than pushing the screen taller. */
 .armada-inside {
   display: grid;
-  grid-template-columns: var(--w-run-column) minmax(0, 1fr);
+  grid-template-columns:
+    minmax(var(--w-run-column-min), var(--w-run-column))
+    minmax(min(var(--w-step-panel-min), calc(100% - var(--space-6) - var(--w-run-column-min))), 1fr);
   column-gap: var(--space-6);
   row-gap: var(--space-4);
   align-items: stretch;

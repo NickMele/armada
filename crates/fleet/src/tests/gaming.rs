@@ -50,7 +50,7 @@ const HONEST: &str = "diff --git a/src/limiter.ts b/src/limiter.ts\n\
 fn workflow(flag_if: &[&str], baseline: Option<&str>) -> ResolvedWorkflow {
     testkit::resolved(&[
         Sketch {
-            id: "scope",
+            id: "plan",
             label: "Scope",
             evidence_type: Some("facts_note"),
             gates: &[],
@@ -87,7 +87,7 @@ fn judging() -> Judging {
 
 fn recorded() -> Vec<(StepId, StepEvidence)> {
     vec![(
-        StepId::new("scope"),
+        StepId::new("plan"),
         StepEvidence {
             evidence_type: EvidenceType::FactsNote,
             claimed: "the rollover tests hold the window boundary".to_string(),
@@ -108,7 +108,7 @@ async fn ruled_as(
     recorded: &[(StepId, StepEvidence)],
     clearing: bool,
 ) -> Ruling {
-    let workflow = workflow(flag_if, Some("scope.evidence"));
+    let workflow = workflow(flag_if, Some("plan.evidence"));
     let worktree = worktree();
     let at = AtStep::named(
         workflow.frozen(),
@@ -284,7 +284,7 @@ async fn a_step_that_asks_nothing_about_gaming_is_never_looked_at() {
 /// type to reach a later step's, which is the shape rather than a check.
 #[test]
 fn a_baseline_naming_a_later_step_or_this_one_resolves_to_nothing() {
-    let workflow = workflow(&["check_config_edited"], Some("scope.evidence"));
+    let workflow = workflow(&["check_config_edited"], Some("plan.evidence"));
     let worktree = worktree();
     let ahead = vec![(StepId::new("regression_verify"), recorded().remove(0).1)];
     let at = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
@@ -292,7 +292,7 @@ fn a_baseline_naming_a_later_step_or_this_one_resolves_to_nothing() {
     let forward = EvidenceRef::parse("regression_verify.evidence").expect("a reference");
     assert!(at.baseline(&forward, &ahead).is_none(), "a step ahead");
 
-    let itself = EvidenceRef::parse("scope.evidence").expect("a reference");
+    let itself = EvidenceRef::parse("plan.evidence").expect("a reference");
     assert!(
         at.baseline(&itself, &recorded()).is_none(),
         "a step comparing against itself compares against nothing"
@@ -307,7 +307,7 @@ fn a_baseline_naming_a_later_step_or_this_one_resolves_to_nothing() {
     .expect("a step of the workflow");
     let held = recorded();
     let (named, evidence) = second.baseline(&itself, &held).expect("an earlier step");
-    assert_eq!(named.as_str(), "scope");
+    assert_eq!(named.as_str(), "plan");
     assert!(evidence.claimed.contains("rollover tests"));
 }
 

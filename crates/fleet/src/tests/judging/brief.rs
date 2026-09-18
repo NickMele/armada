@@ -89,8 +89,8 @@ async fn the_call_carries_the_patch_and_the_facts_and_nothing_the_drone_wrote() 
 fn writing_workflow() -> ResolvedWorkflow {
     testkit::resolved(&[
         Sketch {
-            id: "scope",
-            label: "Scope the change",
+            id: "plan",
+            label: "Plan the change",
             evidence_type: Some("facts_note"),
             gates: &[],
             judged_on: &[(
@@ -113,7 +113,7 @@ fn writing_workflow() -> ResolvedWorkflow {
                 diff_check: false,
                 at_step_start: false,
                 exclude: &[],
-                references: &["scope.evidence"],
+                references: &["plan.evidence"],
             }),
             gaming: None,
         },
@@ -190,7 +190,7 @@ async fn a_later_step_is_measured_against_what_an_earlier_one_established() {
     let work = FakeWorkProduct::changed(&["src/log.rs"]).showing("+    let n = n - 1;\n");
     let judge = Arc::new(FakeJudge::with_no_objection());
     let judging = judged_by_shared(Arc::clone(&judge));
-    let recorded = vec![(StepId::new("scope"), note_evidence().recorded())];
+    let recorded = vec![(StepId::new("plan"), note_evidence().recorded())];
     // The step's scope asks the Drone where its work will be, so it declares.
     // That is unrelated to the yardstick and is what the block's other key is
     // for — `context_paths` and `reference_docs` stay separate on purpose.
@@ -223,7 +223,7 @@ async fn a_later_step_is_measured_against_what_an_earlier_one_established() {
     assert!(ruling.advanced(), "{ruling:?}");
     let question = &judge.asked()[0];
     assert!(
-        question.contains("`scope` established: The path is derived from the repo name."),
+        question.contains("`plan` established: The path is derived from the repo name."),
         "the yardstick the step names did not reach the call: {question}"
     );
     assert!(
@@ -293,12 +293,12 @@ async fn a_step_with_nothing_to_show_costs_no_call_and_draws_no_verdict() {
 #[tokio::test]
 async fn a_criterion_asking_what_was_requested_reaches_a_call_that_carries_it() {
     let workflow = testkit::resolved(&[Sketch {
-        id: "scope",
-        label: "Scope the change",
+        id: "plan",
+        label: "Plan the change",
         evidence_type: Some("facts_note"),
         gates: &[],
         judged_on: &[(
-            "scope",
+            "plan",
             "Does this scope note address what was actually requested, without \
              expanding beyond it?",
         )],

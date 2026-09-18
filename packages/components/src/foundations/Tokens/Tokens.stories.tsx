@@ -175,6 +175,8 @@ export const Shape: Story = {
   "sidebar-max",
   "sidebar-rail",
   "w-run-column",
+  "w-run-column-min",
+  "w-step-panel-min",
   "w-dialog",
   "w-sheet",
   "w-dialog-wide",
