@@ -19,10 +19,11 @@ const BINDING = "c";
  * binding, one producer, and an expanded view rendering the string the control
  * copies (`docs/contracts/design-system.md`, *The debug payload*).
  *
- * **A sheet rather than a control in the dock.** The dock is `--w-dock` wide
- * and this is mono text with a brief in it, so a row there could offer the
- * copy and never the reading — and a record that leaves the machine is the one
- * thing a person is made to look at first.
+ * **The reading half of the banner form.** The dock's own row copies on one
+ * press and opens this beside it: the moment this exists for is a bad answer
+ * somebody wants to carry now, and the reading is what they want second. It is
+ * a sheet because the dock is `--w-dock` wide and this is mono text with a
+ * brief in it.
  */
 export type HelmRecordProps = {
   open: boolean;

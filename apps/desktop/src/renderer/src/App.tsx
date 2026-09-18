@@ -579,6 +579,7 @@ export function App() {
             onSwitch={(manifestId) => pointHelm(manifestId)}
             onReadRecord={helmDebugInfo}
             onCopied={setCopied}
+            onSaid={setTelling}
             onApprove={commands.approve}
           />
         }

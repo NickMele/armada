@@ -1,8 +1,8 @@
 // Carrying a bad Helm answer to somebody who could fix it, through `App` — #1367.
 //
-// The dock's own control opens the record, the record is read on screen, and
-// the control inside it puts that same string on the clipboard. Fleet's answer
-// is the scenario's, because a mock Fleet hosts no session.
+// The dock's own control copies the record on one press; the control beside it
+// opens the same artifact to read, and what is on screen is what was copied.
+// Fleet's answer is the scenario's, because a mock Fleet hosts no session.
 
 import type { HelmDebugInfo } from "@armada/protocol";
 import { expect, test } from "vitest";
@@ -52,7 +52,7 @@ function talking(): Scenario {
 
 const dock = () => page.getByRole("complementary", { name: "Helm" });
 
-test("the dock opens the session record, and the control copies what is on screen", async () => {
+test("one press in the dock copies the record, and the reading beside it is the same string", async () => {
   const written: string[] = [];
   // `navigator.clipboard` is a getter, so the write is replaced rather than the object.
   Object.defineProperty(navigator, "clipboard", {
@@ -62,7 +62,13 @@ test("the dock opens the session record, and the control copies what is on scree
   mount(talking());
   await expect.element(dock()).toBeVisible();
 
-  await page.getByRole("button", { name: "Session record" }).click();
+  // One press, with no sheet in the way: this is reached when Helm has just
+  // answered badly and somebody wants to carry it now.
+  await page.getByRole("button", { name: "Copy debug info" }).click();
+  await expect.poll(() => written).toHaveLength(1);
+  await expect.element(page.getByText("The debug info is on the clipboard.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Details" }).click();
   const sheet = page.getByRole("dialog", { name: "Session record" });
   await entered(sheet);
 
@@ -75,14 +81,16 @@ test("the dock opens the session record, and the control copies what is on scree
   expect(text).toContain("refused Read · the person refused it");
   expect(text).toContain("$0.0243 · 3 turns · 1 refused");
 
-  await page.getByRole("button", { name: "Copy debug info" }).click();
-  await expect.poll(() => written).toHaveLength(1);
-  // The same string, which is what one producer buys.
+  // The same string the dock already copied, which is what one producer buys.
   expect(written[0]).toBe(text);
+  await page.getByRole("button", { name: "Copy debug info" }).nth(1).click();
+  await expect.poll(() => written).toHaveLength(2);
+  expect(written[1]).toBe(text);
 });
 
-test("Helm pointed at no repository offers no record, because there is no session to report", async () => {
+test("Helm pointed at no repository offers neither control, because there is no session to report", async () => {
   mount("empty-store");
   await expect.element(dock()).toBeVisible();
-  expect(page.getByRole("button", { name: "Session record" }).query()).toBeNull();
+  expect(page.getByRole("button", { name: "Copy debug info" }).query()).toBeNull();
+  expect(page.getByRole("button", { name: "Details" }).query()).toBeNull();
 });

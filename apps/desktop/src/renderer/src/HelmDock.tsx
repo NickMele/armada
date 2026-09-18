@@ -3,7 +3,7 @@
 // made in `main/helm.ts`, and this draws whatever it publishes.
 
 import { useState } from "react";
-import { HelmComposer, HelmRecord, HelmThread } from "@armada/components";
+import { copyHelmRecord, HelmComposer, HelmRecord, HelmThread } from "@armada/components";
 import type {
   HelmApprovalCard,
   HelmApprovalCardState,
@@ -44,6 +44,8 @@ export type HelmDockProps = {
   onReadRecord: () => Promise<HelmDebugRead>;
   /** Told after the record's clipboard write, either way. */
   onCopied: (what: string) => void;
+  /** Told why the record could not be read, where nothing could be copied. */
+  onSaid: (sentence: string) => void;
   /** Approve, answered: the card waits on this, and a refusal puts it back to ready. #1117. */
   onApprove: (jobId: string) => Promise<{ ok: boolean }>;
 };
@@ -69,6 +71,7 @@ export function HelmDock({
   onSwitch,
   onReadRecord,
   onCopied,
+  onSaid,
   onApprove,
 }: HelmDockProps) {
   const [draft, setDraft] = useState("");
@@ -97,14 +100,30 @@ export function HelmDock({
         : undefined;
 
   /**
-   * Read the record, then draw it. **Asked each time it is opened**, never
-   * held: it is one artifact taken at a moment, and a stale one quoted into an
-   * issue is worse than none.
+   * Read the record, then draw it. **Asked each time**, never held: it is one
+   * artifact taken at a moment, and a stale one quoted into an issue is worse
+   * than none.
    */
   function openRecord(): void {
     setRecord({ open: true });
     void onReadRecord().then((read) =>
       setRecord(read.ok ? { open: true, record: read.record } : { open: true, failed: whyRecord(read) }),
+    );
+  }
+
+  /**
+   * One press, and the record is on the clipboard — the banner form: this is
+   * reached when Helm has just answered badly and somebody wants to carry it
+   * now, and the reading is what they want second.
+   *
+   * **The read is between the press and the write**, so a Fleet that would not
+   * answer must say so rather than leave a silent control: a failed clipboard
+   * write and a dead control look the same, and so does a copy that never had
+   * anything to copy.
+   */
+  function copyRecord(): void {
+    void onReadRecord().then((read) =>
+      read.ok ? copyHelmRecord(read.record, onCopied) : onSaid(whyRecord(read)),
     );
   }
 
@@ -131,6 +150,7 @@ export function HelmDock({
         // does not hide it either — Discuss, or the switch itself, points
         // Helm away from the picked repository without moving the rail.
         onSwitch={onSwitch}
+        onCopyRecord={current === undefined ? undefined : copyRecord}
         onOpenRecord={current === undefined ? undefined : openRecord}
         onStartFresh={onStartFresh}
         startFreshDisabled={replying}

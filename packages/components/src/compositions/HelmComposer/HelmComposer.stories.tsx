@@ -78,6 +78,7 @@ export const AtRest: Story = {
     repositories: [repositories[0]!],
     onSwitch: fn(),
     onStartFresh: fn(),
+    onCopyRecord: fn(),
     onOpenRecord: fn(),
   },
   play: async ({ canvas }) => {
@@ -87,14 +88,23 @@ export const AtRest: Story = {
 };
 
 /**
- * The session record, which is how a bad answer is carried to somebody who
- * could fix it — `#1367`. **A disclosure and not the copy itself**: the record
- * is read before it leaves the machine, and the copy is inside the reading.
+ * How a bad answer is carried to somebody who could fix it — `#1367`. **The
+ * banner form**: *Copy debug info* acts on one press and *Details*
+ * opens the same artifact to read. The dock is a standing surface, which is
+ * what that row is for.
  */
-export const RecordOpens: Story = {
-  args: { current: repositories[0]!.id, repositories: [repositories[0]!], onOpenRecord: fn() },
+export const RecordCopiedAndRead: Story = {
+  args: {
+    current: repositories[0]!.id,
+    repositories: [repositories[0]!],
+    onCopyRecord: fn(),
+    onOpenRecord: fn(),
+  },
   play: async ({ args, canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole("button", { name: "Session record" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Copy debug info" }));
+    await expect(args.onCopyRecord).toHaveBeenCalled();
+    await expect(args.onOpenRecord).not.toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole("button", { name: "Details" }));
     await expect(args.onOpenRecord).toHaveBeenCalled();
   },
 };
