@@ -169,17 +169,21 @@ describe("what the summary says", () => {
     expect(summarised(held({ held: "none" }), null)?.nothingRunningIsWrong).toBe(false);
   });
 
-  // `healthy` is a finding, and a block that promoted a directory on disk to a
-  // verdict would spend a person's suspicion and return nothing.
-  it("says the worktree is on disk, and calls it healthy only where a look did", () => {
-    expect(summarised(held(), null)?.worktree).toBe("on disk");
+  // #1484. The row said `on disk` over a `Size on disk` row, and `on disk` was
+  // a constant: nothing looks at a worktree unless a person presses `Look now`,
+  // so it was the same word on every Job anyone ever opened. The size is the
+  // row now, and it is also the evidence the checkout is there.
+  it("draws the worktree as the size it takes, with or without a look", () => {
+    expect(summarised(held(), null)?.worktree).toBe("1.2 GiB");
     expect(
       summarised(held(), looked([{ asked: "worktree", found: "working", said: "on disk" }]))
         ?.worktree,
-    ).toBe("healthy");
+    ).toBe("1.2 GiB");
   });
 
-  it("says the worktree is gone, and marks it wrong", () => {
+  // The fault takes the size's place rather than joining it: a size for a
+  // directory that is not there is a figure about nothing.
+  it("says the worktree is gone instead of its size, and marks it wrong", () => {
     const said = summarised(
       held(),
       looked([{ asked: "worktree", found: "not_working", said: "the worktree is not there" }]),
@@ -200,22 +204,20 @@ describe("what the summary says", () => {
   });
 
   it("resolves the unit, and never draws a byte count", () => {
-    expect(summarised(held(), null)?.size).toBe("1.2 GiB");
+    expect(summarised(held(), null)?.worktree).toBe("1.2 GiB");
   });
 
   // A walk that ran past its bound is itself worth knowing, and it is not zero.
   it("says a size was not measured rather than showing one", () => {
     expect(
-      summarised(held({ worktree: { path: "p", branch: "b", bytes: undefined } }), null)?.size,
+      summarised(held({ worktree: { path: "p", branch: "b", bytes: undefined } }), null)?.worktree,
     ).toBe("not measured");
   });
 
-  // No checkout means no size row at all. `sized(0)` is a figure, and a figure
-  // claims something was measured.
-  it("drops the size where there is nothing on disk", () => {
-    const said = summarised(held({ worktree: undefined }), null);
-    expect(said?.worktree).toBe("none on disk");
-    expect(said?.size).toBeUndefined();
+  // Words rather than a figure, in the slot the figure takes. `sized(0)` is a
+  // figure, and a figure claims something was walked.
+  it("says there is nothing on disk rather than sizing it at zero", () => {
+    expect(summarised(held({ worktree: undefined }), null)?.worktree).toBe("none on disk");
   });
 });
 

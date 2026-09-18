@@ -96,15 +96,39 @@ around `nodeIntegration: false`.
 
 ## The injected layer
 
-> **Rule.** The layer runs in the page's own world, injected by main after the
-> first load and after every accepted navigation.
+**Narrowed once, deliberately, on 18 Sep 2026.** This section was reviewed
+describing a layer that persists in the page: injected after the first load and
+after every accepted navigation, adding document-level listeners while capture
+was armed and removing them when it was not. *The layer runs inside the page*
+was named as one of this design's three costs when the review was taken. **What
+was built does not pay it**, and the two rules that described a persistent layer
+are gone because nothing persists for them to be about. Every guarantee below is
+the one that was reviewed, and *Refused outright*'s last rule binds this section
+exactly as it did: putting a layer back into the page is a capability added to
+this window, and that is another security review. `#1294`.
+
+> **Rule.** The layer runs in the page's own world.
 > Why: a component name is read off the `__reactFiber$` expando the page sets,
 > and a contextIsolated world cannot see one —
 > `apps/desktop/src/renderer/src/annotate/fiber.ts`.
 
+> **Rule.** The source travels with each ask, and the page is left
+> byte-identical: no global, no listener, nothing to remove, and nothing to
+> inject again after a navigation.
+> Why: the promise `executeJavaScript` answers on is then the page's only
+> channel to main, and it exists only while main is holding it. A layer that
+> persisted would be a thing to keep bounded; this is a thing with no lifetime
+> to bound.
+
+> **Rule.** The pointer is tracked by Bridge's own view over the page, never by
+> the page.
+> Why: the outline is drawn there anyway, by the two rules below it — nothing is
+> written into the page, and what a person types never reaches it. So a listener
+> in the page could only read what it had no way to send, which is what leaves
+> the rule above nothing to trade away.
+
 > **Rule.** It reads the page and writes nothing to it: no node, no attribute,
-> no style. It adds document-level listeners while capture is armed and removes
-> them when it is not.
+> no style.
 > Why: an overlay drawn in the page is an overlay the page can read, restyle and
 > forge — and a Note about how something looks, taken through it, would be a
 > Note about Bridge's own box.

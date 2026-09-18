@@ -633,6 +633,21 @@ export const CHANNELS = {
   startStudioRun: "bridge:start-studio-run",
   startStudioServer: "bridge:start-studio-server",
   openStudioNode: "bridge:open-studio-node",
+  // The capture window — #1294. **Opened from Bridge, driven from its own
+  // bar**: the first channel is the Studio surface's, and the rest are the
+  // bar's own document talking to the window it belongs to. The page below the
+  // bar reaches none of them, because it holds no preload at all.
+  openCaptureWindow: "bridge:open-capture-window",
+  captureWindowChanged: "bridge:capture-window-changed",
+  captureWindowRead: "bridge:capture-window-read",
+  captureWindowArm: "bridge:capture-window-arm",
+  captureWindowAim: "bridge:capture-window-aim",
+  captureWindowHold: "bridge:capture-window-hold",
+  captureWindowRelease: "bridge:capture-window-release",
+  captureWindowSave: "bridge:capture-window-save",
+  captureWindowReload: "bridge:capture-window-reload",
+  captureWindowFollowRefused: "bridge:capture-window-follow-refused",
+  captureWindowScroll: "bridge:capture-window-scroll",
   // A press Fleet answered, felt on the trackpad. Sent, never invoked: nothing waits on it.
   tap: "bridge:tap",
 } as const;

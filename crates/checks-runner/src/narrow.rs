@@ -138,12 +138,12 @@ pub fn one_test(run: &str, test: &str) -> Option<String> {
 /// nothing narrower to say about this change, and the caller runs the Check
 /// whole rather than running something that names no file.
 ///
-/// **`{pkg}` is the Check's, `{files}` is the Drone's.** The first is a fact
+/// **`{dir}` is the Check's, `{files}` is the Drone's.** The first is a fact
 /// about where this Check runs and is substituted whether the Check declared
 /// one or not; a template naming it against a Check that declares none has
 /// nothing to put there, and that is the `None` above rather than an empty
 /// argument in the middle of a command.
-pub fn run_changed(template: &str, pkg: Option<&str>, files: &[String]) -> Option<String> {
+pub fn run_changed(template: &str, dir: Option<&str>, files: &[String]) -> Option<String> {
     if !template.contains("{files}") {
         return None;
     }
@@ -157,13 +157,13 @@ pub fn run_changed(template: &str, pkg: Option<&str>, files: &[String]) -> Optio
     if named.is_empty() || !named.iter().all(|path| spellable(path)) {
         return None;
     }
-    let command = match (template.contains("{pkg}"), pkg) {
+    let command = match (template.contains("{dir}"), dir) {
         (true, None) => return None,
-        (true, Some(pkg)) if !spellable(pkg) => {
-            let _ = pkg;
+        (true, Some(dir)) if !spellable(dir) => {
+            let _ = dir;
             return None;
         }
-        (true, Some(pkg)) => template.replace("{pkg}", &quoted(pkg)),
+        (true, Some(dir)) => template.replace("{dir}", &quoted(dir)),
         (false, _) => template.to_string(),
     };
     let spelled = named
@@ -178,7 +178,7 @@ pub fn run_changed(template: &str, pkg: Option<&str>, files: &[String]) -> Optio
 mod tests {
     use super::run_changed;
 
-    const VITEST: &str = "pnpm --dir {pkg} exec vitest related {files} --run";
+    const VITEST: &str = "pnpm --dir {dir} exec vitest related {files} --run";
 
     fn paths(of: &[&str]) -> Vec<String> {
         of.iter().map(|path| path.to_string()).collect()
@@ -235,7 +235,7 @@ mod tests {
         );
     }
 
-    /// A runner rooted at the repository declares no `{pkg}`, and a Check
+    /// A runner rooted at the repository declares no `{dir}`, and a Check
     /// driven by it needs none.
     #[test]
     fn a_template_naming_no_package_needs_none() {

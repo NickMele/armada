@@ -5,10 +5,10 @@
 //! a kind cannot be said twice in two places that disagree.
 
 use core_model::{
-    CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, EpicRead, EpicTake, ForgeFacts,
-    ForgeState, JobId, ScoutCheckout, ScoutEnded, ScoutOutcome, ScoutSource, ScoutSourceKind,
-    StudioCapture, StudioFinding, StudioNodeContent, StudioNodeKind, StudioPosition, StudioRun,
-    StudioRunKept, Ulid,
+    CaptureBounds, CaptureElement, CaptureFrame, CaptureServed, CaptureWindow, EpicRead, EpicTake,
+    ForgeFacts, ForgeState, JobId, ScoutCheckout, ScoutEnded, ScoutOutcome, ScoutSource,
+    ScoutSourceKind, StudioCapture, StudioFinding, StudioNodeContent, StudioNodeKind,
+    StudioPosition, StudioRun, StudioRunKept, Ulid,
 };
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
@@ -596,6 +596,14 @@ fn capture_written(capture: &StudioCapture) -> Value {
             }),
         );
     }
+    // Absent on every Note captured on Bridge, which is every Note before
+    // `#1294` — so no stored row is rewritten to keep saying what it said.
+    if let Some(served) = &capture.served {
+        object.insert(
+            "served".into(),
+            json!({ "run": served.run, "name": served.name, "address": served.address }),
+        );
+    }
     Value::Object(object)
 }
 
@@ -682,6 +690,14 @@ fn capture_read(stored: &Value) -> Result<StudioCapture, UnreadableContent> {
                     .ok_or(missing("capture.frame.byte_size"))?,
                 width: whole(Some(frame), "width")?,
                 height: whole(Some(frame), "height")?,
+            }),
+        },
+        served: match stored.get("served") {
+            None => None,
+            Some(served) => Some(CaptureServed {
+                run: said(served, "run")?,
+                name: said(served, "name")?,
+                address: said(served, "address")?,
             }),
         },
     })

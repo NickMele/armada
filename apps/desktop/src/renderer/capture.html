@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      Bridge's own CSP, unchanged and unloosened. This is an Armada document
+      loaded from disk, so `default-src 'self'` is exactly as binding here as it
+      is on Bridge's window — and `127.0.0.1` is refused here too.
+
+      The page this bar sits above loads no Armada document and carries none of
+      this. It is governed by whatever its own server sends, which is the whole
+      of `docs/practices/capture-window.md`'s argument: Bridge's promise about
+      Bridge is untouched because Bridge is not what is rendering there.
+
+      No `blob:` and no `armada-frame:`: this document draws no picture. A
+      Note's frame is taken by main and never reaches here.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'" />
+    <title>Capture</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./src/capture-window/main.tsx"></script>
+  </body>
+</html>

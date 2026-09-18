@@ -45,10 +45,14 @@ export function span(from: string, to: string | number): string | null {
  * A whole-Job elapsed, from `JobSummary.started_at` — `undefined` where the
  * Job has never run, `#1008`'s own rule. **The one place that absence is
  * read**, so every surface that draws a run time — the Board row, the Job
- * detail's `Elapsed` fact, the run header, and a verdict's "took" — shares one
- * answer for a Job waiting at the approval gate or in the queue for a slot:
- * nothing, rather than a figure measured from `created_at` that counts the
- * wait.
+ * detail's `Run time` fact, the run header, and a verdict's "took" — shares
+ * one answer for a Job waiting at the approval gate or in the queue for a
+ * slot: nothing, rather than a figure measured from `created_at` that counts
+ * the wait.
+ *
+ * **Where it stops is the caller's, and `Row.tsx`'s `elapsedOf` is what
+ * decides it** for the two surfaces that draw a whole Job's: now while it
+ * runs, `ended_at` once it is over.
  */
 export function elapsedSince(startedAt: string | undefined, to: string | number): string | undefined {
   return startedAt === undefined ? undefined : (span(startedAt, to) ?? undefined);

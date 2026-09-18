@@ -76,9 +76,12 @@ const SAID: Readonly<Record<string, string>> = {
   brief:
     "What was asked for, in the requester's own words, with the acceptance criteria written " +
     "beside it. Every step is read against it.",
-  elapsed:
-    "Wall clock since this Job was dispatched, including whatever it spent queued or waiting on " +
-    "a person.",
+  "run time":
+    "Wall clock since this Job first started running, stopping where the Job stopped. Time it " +
+    "spent waiting for approval, or queued for a slot before its first run, is not in it.",
+  job:
+    "What a person calls this Job — the number it came from and its title, which is also the " +
+    "name on its branch and its worktree.",
   "spend, estimated":
     "What the Job has cost so far, from the tokens its Drone reported. Estimated rather than " +
     "measured, which is why it is marked approximate.",

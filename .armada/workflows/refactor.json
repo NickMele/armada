@@ -95,7 +95,11 @@
             {
               "criterion_id": "tasks_match_the_diff",
               "question": "Does the diff do every task set to done, and does each dropped task's reason hold?"
-            }
+            },
+          {
+            "criterion_id": "the_evidence_accounts_for_itself",
+            "question": "For each task the plan records as done, does what it recorded under `shown` either demonstrate what that task recorded under `expects`, or say why the work proved it another way? A task that proved its work differently and says so is not a refusal on this criterion -- what is refused is a `shown` that neither matches nor accounts for itself. A task with no `expects` recorded, and a task not set to done, are both outside this question."
+          }
           ],
           "gaming_check": {
             "enabled": true,

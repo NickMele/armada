@@ -115,11 +115,11 @@ pub struct ProposedCheck {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProposedRunner {
     pub name: String,
-    /// What `{pkg}` resolves to in that description's templates. **`None` on a
+    /// What `{dir}` resolves to in that description's templates. **`None` on a
     /// workspace that is the repository root**, where there is no package
     /// below it to name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pkg: Option<String>,
+    pub dir: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -633,6 +633,8 @@ pub fn a_capture_sent() -> ipc::CaptureStudioNote {
             markup: MARKUP.to_string(),
             source: None,
             frame: None,
+            // Captured on Bridge, which is what carries none — `#1294`.
+            served: None,
         },
         position: ipc::StudioPosition { x: 0, y: 0 },
         frame: Some(ipc::StagedFrame {

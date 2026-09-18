@@ -894,40 +894,42 @@ exists to show.
 within the detail view — staying in the queue without splitting the
 layout. Not an inspector.
 
-#### The trail
+#### Job detail's own head
 
 **Job detail is the one screen that keeps its own head**, because it has to
 say which Job rather than repeat what Navigation already says — #1090 ended
 the page head every other screen used to spend on its own name. Its head
-carries the trail: where this Job was opened from, then the Job itself.
+carries the Job's name, its badge, the acts that end or replace it, and one
+line of facts beneath.
 
 | | |
 |---|---|
 | Placement | Job detail's own head, leading edge, before the status badge |
-| Type | Prior segment `--text-xs`, `--fg-subtle`; current segment (the Job's title) `--text-base`, `--fg-default`, body weight |
-| Separator | `chevron-right` at 12px in `--fg-subtle` |
-| Segments | Exactly two — where the Job was opened from, then the Job |
+| Type | The Job's title `--text-base`, `--fg-default`, body weight |
+| Facts | One line beneath, `--text-2xs`, `--fg-muted`, labels set back |
 
-> **Rule.** A trail segment is a control, never an `a`.
-> Why: the anchor rule is about addresses leaving the shell, and a trail that
-> was an anchor would be the one control able to break it.
+> **Rule.** No screen carries a breadcrumb trail.
+> Why: Navigation is already the answer to where you are. Job detail carried a
+> two-segment one — `Overview ›` and then the Job — and #1484 took it out: the
+> first segment named the screen Bridge opens on whichever screen you actually
+> came from, and it was never wired, so it read as a way back and was not one.
 
-> **Rule.** A surface reached from Navigation carries no trail.
-> Why: Navigation is already the answer to where you are, and a one-segment
-> trail repeats the title underneath it.
+> **Rule.** Every fact on the head's line is a reading, never a value a person
+> came to fetch.
+> Why: *Where things are* is the region for a value you want — the repository,
+> the branch, the worktree, the Drone — and a value drawn in both is two values
+> that can disagree. The head is what you read on the way past.
 
-> **Rule.** The last segment is the current destination and does not act.
-> Why: a control that returns you where you already are is a control that does
-> nothing.
+> **Rule.** A fact carrying a machine value carries a word naming it.
+> Why: the run was four bare strings, two of them the same string, and the
+> owner read his own branch off it and asked whether it was a branch, a
+> worktree or an id.
 
-> **Rule.** The repository is never a trail segment.
-> Why: it is a fact about the Job, read in the header's own field run one line
-> down, not a place the trail can open.
-
-**It replaces a back control rather than joining one.** A back button names one
-step and says nothing about where that step sits; the trail names the whole
-path, which is what a route reached from a dock rather than from Navigation
-needs.
+> **Rule.** How long a Job ran is `Run time`, wherever it is drawn, and it
+> stops at the instant the Job stopped.
+> Why: the Board column and job detail's head answer the same question off the
+> same two instants. Two spellings read as two figures, and a figure still
+> climbing on a Job that died reads as a Job still working.
 
 ### Responsive behaviour
 
