@@ -217,6 +217,10 @@ async fn called<D: Tools>(
             let input = asked.input.clone();
             match served.daemon().permission(caller, asked).await {
                 PermissionAnswer::Allow => Answered::Permitted { id, input },
+                PermissionAnswer::Instead(command) => Answered::Permitted {
+                    id,
+                    input: mcp::running(&input, &command),
+                },
                 PermissionAnswer::Deny(message) => Answered::Withheld { id, message },
             }
         }

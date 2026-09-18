@@ -28,6 +28,14 @@ use ipc::mcp::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PermissionAnswer {
     Allow,
+    /// It runs, with this input in place of the one the Drone sent.
+    ///
+    /// **The harness's own `updatedInput`.** A command Fleet will not grant as
+    /// typed but whose question it can answer is answered by running the thing
+    /// the repository declared for it — so what the transcript records is the
+    /// command that ran, and the answer is a yes rather than a no carrying a
+    /// result it did not earn.
+    Instead(String),
     /// It does not run. The words are what the Drone reads.
     Deny(String),
 }
