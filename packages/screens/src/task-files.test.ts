@@ -167,7 +167,8 @@ describe("the files no task's edits account for", () => {
     const edits = [
       { id: "1", path: `${TREE}crates/fleet/src/evidence.rs`, added: 4, task: "T2" },
       { id: "2", path: `${TREE}crates/store/src/pending_evidence.rs`, added: 82, task: "T1" },
-      // Edited while no task was working: that is outside every task's edits too.
+      // Placed by neither a window nor a declaration, so it is outside every
+      // task's edits too.
       { id: "3", path: `${TREE}crates/store/src/lib.rs`, added: 2 },
     ];
     expect(unownedOf(edits, DIFF).map((file) => file.path)).toEqual(["crates/store/src/lib.rs"]);
