@@ -44,6 +44,7 @@ use crate::job::runs_at::RunsAt;
 use crate::job::scope::EvidenceScope;
 use crate::job::source::WorkflowSource;
 use crate::job::verdict::GateVerdict;
+use crate::job::Runner;
 
 /// A deterministic assertion with everything it needs already in hand.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,6 +104,10 @@ pub enum ResolvedCheck {
         /// number is what `${width}` resolves to — a declared one may lower
         /// that and never raise it. Frozen for `narrow`'s reason. #1444.
         width: Option<NonZeroU32>,
+        /// Which runner drives this Check, and the package it runs in.
+        /// **`None` where the Manifest names none**, and then nothing resolves
+        /// out of a runner's description for it. Frozen for `narrow`'s reason.
+        runner: Option<Runner>,
     },
     /// The step produced a non-empty diff.
     DiffNonempty,
@@ -261,6 +266,18 @@ impl ResolvedCheck {
     /// How many concurrent workers the Manifest says this Check may start.
     /// **`None` on a built-in and on a Check that declares no `width`**, which
     /// is the same answer: the machine's own number applies. #1444.
+    /// Which runner drives this Check. **`None` on a built-in and on a Check
+    /// naming none**, which is the same answer: nothing resolves out of a
+    /// runner's description for it.
+    pub fn runner(&self) -> Option<&Runner> {
+        match self {
+            ResolvedCheck::ManifestCheck { runner, .. } => runner.as_ref(),
+            ResolvedCheck::DiffNonempty
+            | ResolvedCheck::ArtifactExists { .. }
+            | ResolvedCheck::PlanRecorded { .. } => None,
+        }
+    }
+
     pub fn width(&self) -> Option<NonZeroU32> {
         match self {
             ResolvedCheck::ManifestCheck { width, .. } => *width,

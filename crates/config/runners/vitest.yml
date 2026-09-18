@@ -1,0 +1,31 @@
+# The vitest runner, as Armada ships it.
+#
+# **Data, not code.** Every value here is a file signature or a template
+# string. Nothing in it runs as a program on Fleet's side — Fleet interpolates
+# into a fixed template and nothing else. `docs/concepts/runner-adapter.md`.
+name: vitest
+
+# What marks a package as running vitest. Read by the Manifest proposer when it
+# meets a repository nobody has configured; a Check that names `runner: vitest`
+# is already answered and never consults this.
+detect:
+  manifest: package.json
+  dependency: vitest
+  files: ["vitest.config.*"]
+
+commands:
+  # Tests that reach the named files, by vitest's own import graph — never a
+  # guess at which test file covers which source file. `related` takes the
+  # source paths a Drone changed and finds the tests that import them, directly
+  # or through anything between.
+  #
+  # **`--passWithNoTests=false` is the whole of why this is safe.** Without it
+  # a run that matched no test at all exits zero and reads as a pass, which is
+  # #1204 and the reason verification of a narrowing has to be three-valued.
+  # With it the runner says so itself: exit 1 where nothing matched, exit 0
+  # only where tests ran and passed.
+  #
+  # **`exec`, never the package script.** `pnpm -C <dir> test -- …` reaches
+  # vitest with the arguments after a bare `--` read as positionals and
+  # discarded, silently (#1205, #1216). There is no script in the way here.
+  run_changed: "pnpm --dir {pkg} exec vitest related {files} --run --passWithNoTests=false"

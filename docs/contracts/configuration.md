@@ -321,6 +321,43 @@ Rules that follow:
   step and no handoff, only the whole tree.
 - **It is frozen with the workflow**, beside the Check's command.
 
+## Which runner drives a Check
+
+Added 18 September 2026, with `checks.<name>.runner` and `#1456`. Every way of
+running less than a whole Check used to be written on the Check, so the same
+command was written once per Check and again in every repository using that
+runner. A Check now names the runner instead, and the commands are written once
+per runner in its own description — `docs/concepts/runner-adapter.md`.
+
+| Key | Required | What it says |
+| --- | --- | --- |
+| `name` | yes | Which runner description answers for this Check |
+| `pkg` | no | What `{pkg}` resolves to in that description's templates. Absent on a runner rooted at the repository |
+
+```yaml
+checks:
+  screens_test:
+    run: pnpm --dir packages/screens exec vitest run
+    runner:
+      name: vitest
+      pkg: packages/screens
+```
+
+Rules that follow:
+
+- **A Check's own narrowing is answered first.** Where it declares `narrow`,
+  that is what a narrowed run uses and the runner is not consulted. The runner
+  answers where the file said nothing.
+- **A runner with nothing to say leaves the Check whole**, and every reason is
+  the same answer: no description answers to that name, the description
+  declares no such shape, the template names a `{pkg}` the Check does not, or
+  no path can be spelled as one argument. Whole is never less than narrow.
+- **A name nothing answers to is not refused at load.** A repository may name a
+  runner this Fleet has no description of, and the Checks driven by it run
+  whole until one exists.
+- **It is frozen with the workflow**, and `after_merge` drops it for the reason
+  it drops `narrow`: what merged is the whole tree.
+
 ## How wide a Check runs
 
 Added 18 September 2026, with `checks.<name>.width`, `${width}` and `#1444`.

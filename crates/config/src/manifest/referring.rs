@@ -157,6 +157,9 @@ pub(super) fn after_merge(
                 // same suite on the same machine, and the machine is no wider
                 // for the merge having happened. #1444.
                 width: check.width(),
+                // Dropped for `narrow`'s reason: a proof after a merge reads
+                // the whole tree, so there is no narrowing to resolve.
+                runner: None,
             }),
             None => out.push(Refusal::new(
                 key,
@@ -210,6 +213,7 @@ pub(super) fn required_by(
                 runs_at: draft.runs_at,
                 places: draft.places,
                 width: draft.width,
+                runner: draft.runner,
             },
         );
     }

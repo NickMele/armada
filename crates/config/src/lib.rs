@@ -34,6 +34,7 @@ mod loops;
 mod manifest;
 mod resolve;
 mod roster;
+mod runners;
 mod scope;
 mod workflow;
 mod yaml;
@@ -56,6 +57,7 @@ pub use manifest::{
 };
 pub use resolve::ResolvedWorkflow;
 pub use roster::Roster;
+pub use runners::{shipped, RunnerDescription};
 pub use workflow::{MechanicalCheck, Step, Structure, WorkflowDef};
 
 // Re-exported, not re-declared. A Job carries its resolved workflow, so these

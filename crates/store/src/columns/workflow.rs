@@ -129,7 +129,7 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                 })),
             })).collect::<Vec<Value>>(),
             "checks": step.checks().iter().map(|check| match check {
-                ResolvedCheck::ManifestCheck { name, run, expect_exit_code, when, requires, narrow, one_test, runs_at, places, width } => json!({
+                ResolvedCheck::ManifestCheck { name, run, expect_exit_code, when, requires, narrow, one_test, runs_at, places, width, runner } => json!({
                     "type": MANIFEST_CHECK,
                     "check": name,
                     // Absent where it runs everywhere, which is how every row
@@ -144,6 +144,14 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                     // here, because the machine that runs this workflow later
                     // may not be the one that froze it. #1444.
                     "width": width.map(|workers| workers.get()),
+                    // Absent where the Check names no runner, which is how
+                    // every row written before the key reads back. `pkg` is
+                    // absent on a runner rooted at the repository, and absent
+                    // and null read back the same way.
+                    "runner": runner.as_ref().map(|runner| json!({
+                        "name": runner.name(),
+                        "pkg": runner.pkg(),
+                    })),
                     // Null where the Check declares no `one_test`, which reads back as none. #999.
                     "one_test": one_test,
                     "run": run,
@@ -640,6 +648,21 @@ fn read_gaming_check(judge: &Map<String, Value>) -> Result<Option<GamingCheck>, 
     Ok(Some(GamingCheck::declared(baseline, flag_if)))
 }
 
+/// `checks[].runner`, absent on every row written before the key and on every
+/// Check that names none.
+fn read_runner(entry: &Map<String, Value>) -> Result<Option<core_model::Runner>, Malformed> {
+    let held = match entry.get("runner") {
+        None | Some(Value::Null) => return Ok(None),
+        Some(Value::Object(held)) => held,
+        Some(_) => return Err("`runner` is not an object".to_string()),
+    };
+    let pkg = match held.get("pkg") {
+        None | Some(Value::Null) => None,
+        Some(_) => Some(text(held, "pkg")?),
+    };
+    Ok(Some(core_model::Runner::declared(text(held, "name")?, pkg)))
+}
+
 fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {
     let named = text(entry, "type")?;
     match named.as_str() {
@@ -676,6 +699,7 @@ fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {
             },
             // Absent and null both read as none, for `places`' reason — and
             // none is the machine's own number rather than one. #1444.
+            runner: read_runner(entry)?,
             width: match entry.get("width") {
                 None | Some(Value::Null) => None,
                 Some(_) => Some(

@@ -273,6 +273,10 @@ where
                 // Kept: one test out of a suite still runs under the suite's
                 // own runner, which reads the same flag. #1444.
                 width,
+                // Dropped: this is already the one-test shape, resolved from
+                // the Check's own `one_test`. Reaching a runner's description
+                // for a second narrowing of it would narrow a narrowing.
+                runner: None,
             },
             expect_exit_code,
             record,
