@@ -1,0 +1,4 @@
+{"t": 1789759735.244, "event": "start", "wait": 0.0, "answer": "allow"}
+{"t": 1789759735.271, "event": "notification", "method": "notifications/initialized"}
+{"t": 1789759737.628, "event": "asked", "tool_name": "Bash", "input": {"command": "touch asked-marker.txt && echo ASKED-RAN", "description": "Run the requested command"}}
+{"t": 1789759737.628, "event": "answered", "after": 0.0, "body": {"behavior": "allow", "updatedInput": {"command": "touch substituted-marker.txt && echo SUBSTITUTED-RAN", "description": "Run the requested command"}}}

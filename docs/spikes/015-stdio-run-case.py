@@ -19,7 +19,8 @@ os.makedirs(work, exist_ok=True)
 mcp = {"mcpServers": {"stub": {
     "command": "python3",
     "args": [os.path.join(here, "stub_mcp.py")],
-    "env": {"STUB_LOG": os.path.join(out, "stub.log"), "WAIT_SECONDS": wait, "ANSWER": answer},
+    "env": {"STUB_LOG": os.path.join(out, "stub.log"), "WAIT_SECONDS": wait, "ANSWER": answer,
+            "SUBSTITUTE": os.environ.get("SUBSTITUTE", "")},
 }}}
 with open(os.path.join(out, "mcp.json"), "w") as f:
     json.dump(mcp, f)

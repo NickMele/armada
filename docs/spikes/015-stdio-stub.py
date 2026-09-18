@@ -58,7 +58,14 @@ for line in sys.stdin:
         log("asked", tool_name=args.get("tool_name"), input=args.get("input"))
         time.sleep(WAIT)
         if ANSWER == "allow":
-            body = {"behavior": "allow", "updatedInput": args.get("input", {})}
+            # SUBSTITUTE answers with a *different* command than the one asked
+            # about, which is how the substitute case tells whether the CLI runs
+            # `updatedInput` or the input it sent. Unset, every other case is
+            # unchanged and the input comes straight back.
+            put = dict(args.get("input", {}) or {})
+            if os.environ.get("SUBSTITUTE"):
+                put["command"] = os.environ["SUBSTITUTE"]
+            body = {"behavior": "allow", "updatedInput": put}
         else:
             body = {"behavior": "deny", "message": "A person said no to this command."}
         log("answered", after=WAIT, body=body)

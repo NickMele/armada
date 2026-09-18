@@ -7,7 +7,8 @@ by default, and after 300 seconds without a reply once that is raised.
 
 ## Provenance
 
-Measured on 2026-09-11 against Claude Code 2.1.268 with `--model haiku`. The `015-stdio-*` cases
+Measured on 2026-09-11 against Claude Code 2.1.268 with `--model haiku`, and
+`stdio-substitute` on 2026-09-18 against 2.1.277. The `015-stdio-*` cases
 used a stdio stub for the tool; the `015-fleet-*` and `015-http-*` cases used the flags
 `crates/adapters/src/harness.rs` renders and a stub served over HTTP the way Armada serves its
 tools. Every case asked the Drone to write a file, because a read-only command is never put to
@@ -32,6 +33,7 @@ scrubbed.
 | `stdio-allow-dontask` | `dontAsk` | allow | no | the tool was never asked |
 | `fleet-dontask` | `dontAsk`, no tool | none | no | a `system/permission_denied` line |
 | `fleet-tool-deny` | asking | deny | no | no `system/permission_denied` line; one `permission_denials` entry |
+| `stdio-substitute` | asking | allow, with a different command | yes | the substituted command ran; the asked one never did |
 
 - **A tool's deny leaves no `system/permission_denied` line.** That line is what
   `crates/adapters/src/transcript.rs` reads a refusal from, so Fleet records a refusal its own
@@ -39,7 +41,36 @@ scrubbed.
 - **The tool is not in the model's tool list.** The `init` line of every asking case names none
   of the stub server's tools.
 - **The answer is one text content item holding JSON:** `{"behavior":"allow","updatedInput":…}`
-  with the input it was given, or `{"behavior":"deny","message":…}`.
+  or `{"behavior":"deny","message":…}`. `updatedInput` need not be the input the tool was
+  given — see *Substituting the command*.
+
+## Substituting the command
+
+**A tool may answer `allow` with a command other than the one it was asked about, and the CLI
+runs the substitute.** The asked command never runs at all.
+
+| | |
+|---|---|
+| Asked | `touch asked-marker.txt && echo ASKED-RAN` |
+| Answered | `updatedInput.command` = `touch substituted-marker.txt && echo SUBSTITUTED-RAN` |
+| On disk afterwards | `substituted-marker.txt`, and no `asked-marker.txt` |
+
+The marker file is what settles it rather than the model's account, which is a separate
+finding: **the agent sees the substitution and says so unprompted.** Asked to report what the
+command printed, it replied *"It printed `SUBSTITUTED-RAN` instead of the expected
+`ASKED-RAN`."* Nothing told it a substitution had happened, and nothing hid one.
+
+`SUBSTITUTE` in `015-stdio-stub.py` is what drives this case. Unset — which is every other
+case — the input comes straight back and nothing about them changes.
+
+**A read-only command never reaches the tool, so it cannot be substituted.** A first attempt
+used `echo` on both sides, the stub logged no `asked` event, and the CLI ran the asked command
+without consulting anything. That is the same rule the Provenance section states, met from the
+other direction.
+
+**Why it was measured.** `#1516` answers a Drone that types a Check's own runner by
+substituting the Check's command, and Armada had never exercised `updatedInput` as anything but
+an echo — every path handed the same input back. The feature was documented and unproven here.
 
 ## How long the CLI waits on the tool
 
