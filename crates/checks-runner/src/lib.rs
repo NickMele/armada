@@ -17,6 +17,10 @@
 //! up while a second runs against it — and it is here because the three process
 //! rules are [`run`]'s: no shell, a group of its own, the whole group ended.
 //!
+//! [`CheckWidth`] is how wide one Check may run and [`resolve_width`] is the
+//! `${width}` a Manifest writes it into — a number handed to a runner, never a
+//! cap imposed on one. #1444.
+//!
 //! [`split`] is the one splitter in the workspace and is public for that
 //! reason. `fleet::drifting` asks whether what a `run` line names is still in
 //! the repository, which is the same resolution this crate does before it
@@ -38,6 +42,7 @@ mod matched;
 mod narrow;
 mod run;
 mod serving;
+mod width;
 
 #[cfg(test)]
 mod tests;
@@ -47,3 +52,4 @@ pub use matched::{one_test_ran, OneTestRan};
 pub use narrow::{narrowed, one_test, Narrowed};
 pub use run::{run, run_until, run_writing, run_writing_with_env, split, Attempt, Output, Writing};
 pub use serving::Served;
+pub use width::{resolve_width, CheckWidth, WIDTH_ENV};

@@ -23,6 +23,13 @@
 //! **Started fastest first, reported in the step's order.** [`Room`] carries
 //! the repository's past durations; each result still lands in its own slot.
 //!
+//! **How wide each command runs is a number handed to it, not a cap.** The
+//! machine's own is divided by the Jobs that may share it, a Check's own
+//! declaration may lower it, and the repository spells the flag its runner
+//! reads — `${width}` in the command, or `ARMADA_CHECK_WIDTH` in its
+//! environment for a `run` that reaches its runner through a script. Nothing
+//! here stops a process spawning what it likes. #1444.
+//!
 //! **Each command holds one or more of the machine's places while it runs** —
 //! most take one, a Check may declare more — in one line with every other
 //! Job's. `crate::places`. #1063, #1102.
@@ -37,7 +44,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use adapter_traits::Footprint;
-use checks_runner::{Attempt as RunAttempt, Narrowed, Output, Writing};
+use checks_runner::{
+    resolve_width, Attempt as RunAttempt, CheckWidth, Narrowed, Output, Writing, WIDTH_ENV,
+};
 use core_model::{Attempt, Prerequisite, ResolvedCheck, RunsAt, TaskCounts};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
@@ -276,12 +285,23 @@ impl NotMet {
 /// section reaches every Command string, not only a `setup.requires` one —
 /// see `crate::ports::resolve_ports` for the substitution and
 /// `crate::ports::env_vars` for what `env` holds.
+/// What one Check runs at: the machine's own number, lowered by the Check's
+/// declaration where it has one.
+///
+/// **Lower only, and that is [`CheckWidth::narrowed_to`]'s rule rather than
+/// this function's.** A repository saying `width: 16` on a machine handing out
+/// four is a repository claiming a machine it does not own. #1444.
+fn width_of(check: &ResolvedCheck, machine: CheckWidth) -> CheckWidth {
+    machine.narrowed_to(check.width())
+}
+
 async fn beforehand(
     needed: &[&Prerequisite],
     worktree: &Path,
     budget: Duration,
     ports: &BTreeMap<String, u16>,
     env: &[(String, String)],
+    width: CheckWidth,
     stop: &Stop,
 ) -> (Vec<String>, Option<NotMet>) {
     let mut met = Vec::new();
@@ -289,7 +309,12 @@ async fn beforehand(
         if met.iter().any(|had: &String| had == prerequisite.name()) {
             continue;
         }
-        let run = resolve_ports(prerequisite.run(), ports);
+        // **The machine's own number, un-narrowed.** A prerequisite is shared
+        // by every Check that names it and is run once for the batch, so there
+        // is no one Check whose declaration could lower it. A command with no
+        // `${width}` is returned unchanged, which is every prerequisite this
+        // repository declares. #1444.
+        let run = resolve_width(&resolve_ports(prerequisite.run(), ports), width);
         let attempt = checks_runner::run_until(
             &run,
             worktree,
@@ -397,6 +422,10 @@ pub(crate) async fn ran(
     attempt: Attempt,
     footprint_now: Option<&Footprint>,
 ) -> Vec<Completed> {
+    // The machine's number for this batch, before any Check's own declaration
+    // lowers it. Carried on the room for `crate::places::Room::width`'s
+    // reason. #1444.
+    let width = room.width();
     let trusted = reuse::trusted(dry_run, attempt, footprint_now);
     let mut planned: Vec<Planned> = checks
         .iter()
@@ -456,7 +485,7 @@ pub(crate) async fn ran(
             };
             drop(ask);
             announcing.behind(0);
-            let met = beforehand(&needed, worktree, budget, ports, env, stop).await;
+            let met = beforehand(&needed, worktree, budget, ports, env, width, stop).await;
             drop(place);
             met
         }
@@ -495,7 +524,10 @@ pub(crate) async fn ran(
                 run, narrowed_to, ..
             } => Some((
                 at,
-                resolve_ports(&narrowed_to.clone().unwrap_or_else(|| run.clone()), ports),
+                resolve_width(
+                    &resolve_ports(&narrowed_to.clone().unwrap_or_else(|| run.clone()), ports),
+                    width_of(&checks[at], width),
+                ),
             )),
             Planned::Already(_) | Planned::Blocked { .. } => None,
         })
@@ -580,7 +612,15 @@ pub(crate) async fn ran(
                 };
                 own_places += checks[at].places().get() as usize;
                 let worktree: PathBuf = worktree.clone();
-                let env = env.clone();
+                // **Cloned and added to per Check, not once for the batch**:
+                // the number is this Check's own, lowered where it declared
+                // one, and the batch holds Checks that declared different
+                // ones. #1444.
+                let mut env = env.clone();
+                env.push((
+                    WIDTH_ENV.to_string(),
+                    width_of(&checks[at], width).get().to_string(),
+                ));
                 let log = announcing.log_for(at);
                 let writing = log.clone();
                 let stop = stop.clone();

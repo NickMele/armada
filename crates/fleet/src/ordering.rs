@@ -59,6 +59,7 @@ mod tests {
             requires: Vec::new(),
             narrow: None,
             one_test: None,
+            width: None,
             runs_at: core_model::RunsAt::Everywhere,
             places: std::num::NonZeroU32::MIN,
         }

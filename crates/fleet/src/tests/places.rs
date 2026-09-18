@@ -20,6 +20,7 @@ fn asking(places: &Places, asking: Asking) -> Room {
         asking,
         Arc::new(Plentiful),
         Headroom::of(Spare::percent(15), Bytes::gibibytes(10)),
+        checks_runner::CheckWidth::read(1),
     )
 }
 

@@ -240,6 +240,7 @@ async fn two_gates_at_once_never_run_more_checks_between_them_than_the_machine_a
         Asking::Gate,
         Arc::new(Plentiful),
         shipped_headroom(),
+        checks_runner::CheckWidth::read(1),
     );
     let other = one.clone();
     let began = Instant::now();
@@ -295,8 +296,20 @@ async fn every_room_one_fleet_hands_out_shares_the_machines_limit() {
 #[tokio::test]
 async fn on_a_short_machine_another_jobs_first_check_waits_for_the_one_running() {
     let places = Places::of(ChecksAtOnce::of(4));
-    let one = Room::sharing(&places, Asking::Gate, Arc::new(Full), shipped_headroom());
-    let other = Room::sharing(&places, Asking::Gate, Arc::new(Full), shipped_headroom());
+    let one = Room::sharing(
+        &places,
+        Asking::Gate,
+        Arc::new(Full),
+        shipped_headroom(),
+        checks_runner::CheckWidth::read(1),
+    );
+    let other = Room::sharing(
+        &places,
+        Asking::Gate,
+        Arc::new(Full),
+        shipped_headroom(),
+        checks_runner::CheckWidth::read(1),
+    );
     let held = one.place().await;
     let waiting = tokio::spawn(async move { other.place().await });
     tokio::time::sleep(Duration::from_millis(100)).await;
