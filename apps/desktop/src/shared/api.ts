@@ -823,6 +823,18 @@ export type BridgeApi = {
    */
   promoteOnStudio: (studioId: string, promotion: StudioPromotion) => Promise<Outcome>;
   /**
+   * Run one Check or Command in this Studio's own checkout, as a Run node where
+   * the person is looking — #1289.
+   */
+  startStudioRun: (studioId: string, name: string, position: StudioPosition) => Promise<Outcome>;
+  /**
+   * Start a Command with `serve` in the same checkout, as a Run node holding
+   * the instance — #1345. **Its own capability**, as `startServer` is beside
+   * `startCheckoutRun`: a server is held rather than run, and `start_run`
+   * refuses a name carrying `serve`.
+   */
+  startStudioServer: (studioId: string, name: string, position: StudioPosition) => Promise<Outcome>;
+  /**
    * Open what one Studio node points at, in whatever browses the web on this
    * machine — #1406. **A Studio id and a node id, never an address**, which is
    * `openPullRequest`'s rule: main reads the address off the Studio it

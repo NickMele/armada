@@ -63,6 +63,30 @@ export const Run: Story = {
   },
 };
 
+/**
+ * A server, which is a Run node of its own — #1345. **It never reads passed**:
+ * staying up is the whole of what one is for, so it comes up, serves, and ends
+ * failed or stopped.
+ */
+export const Server: Story = {
+  render: () => (
+    <Row>
+      <StudioNode kind="run" state="starting" title="storybook_dev" facts={["pnpm storybook dev -p 41207"]} />
+      <StudioNode kind="run" state="serving" title="storybook_dev" facts={["up 5m 00s", "localhost:41207"]} />
+      <StudioNode kind="run" state="failed" title="storybook_dev" facts={["pnpm storybook dev", "exit 7", "up 1.2s"]} />
+      <StudioNode kind="run" state="stopped" title="mock" facts={["pnpm dev --port 6006", "up 41m 10s"]} />
+    </Row>
+  ),
+  play: async ({ canvas }) => {
+    // **Both halves of being up pulse.** A server Armada is holding is Armada
+    // working, from the moment it is asked for to the moment it goes.
+    for (const words of ["starting", "serving"]) {
+      await expect(canvas.getByText(words).closest("[aria-busy]")).not.toBeNull();
+    }
+    await expect(canvas.queryByText("passed")).toBeNull();
+  },
+};
+
 /** No state: fixed at capture, and nothing writes to it. */
 export const Note: Story = {
   args: {

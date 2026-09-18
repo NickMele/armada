@@ -216,6 +216,13 @@
   --run-passed: var(--status-completed-success);
   --run-failed: var(--status-completed-failed);
   --run-stopped: var(--status-killed);
+
+  /* A server's two states, #1345. starting and serving both alias running:
+     a server that is up is Armada still working, not a thing that passed —
+     nothing about it has succeeded, and it never will, because staying up is
+     the whole of what it is for. It ends failed or stopped like any run. */
+  --run-starting: var(--status-running);
+  --run-serving: var(--status-running);
 }
 
 /* The error treatment: one red, told apart from a Job status by shape.

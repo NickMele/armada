@@ -48,7 +48,7 @@ A monorepo's root `armada.yml` appears as its own entry in the switcher, since i
 > **Rule.** Output goes to a panel on this surface — the result in Job colours with its exit code, duration, and the output — and stays until dismissed.
 > Why: there is no Job, so no Job Board row and no Evidence, and a toast would throw away the thing you ran it to read.
 
-A server started here runs in the main checkout and draws its ports from that checkout's span; it stops on Stop, exit, or Fleet stopping.
+A server started here runs in the main checkout and draws its ports from that checkout's span; it stops on Stop, exit, or Fleet stopping. A [Studio](../concepts/studio.md) starts one in the same checkout, on the same span and the same one instance, and holds it on a Run node.
 
 ### A passing Check leaves no verdict behind — but the output is a log
 
@@ -128,6 +128,9 @@ A Command with `serve` stays running, on ports from the Job's span. [Manifest](.
 
 > **Rule.** A link hands its address to the system browser.
 > Why: no surface in Bridge navigates, per the design system's hard rules.
+
+> **Rule.** A server a Studio holds reads the same, on its node: *starting*, then *serving* with its uptime, a link each and Stop. Closing the Studio leaves it running, as closing this sheet does.
+> Why: a run reads the same wherever it appears, and a Studio's whiteboard is a drag surface — so each of those is an act on the node rather than a button on its card. #1345.
 
 ### What a run leaves
 

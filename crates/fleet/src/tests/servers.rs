@@ -27,7 +27,7 @@ use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fittings, worktree_directory};
 use crate::tests::tmp::TempDir;
 
-type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
+pub(super) type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
 /// `storybook` serves and answers; `falls_over` exits on its first line while
 /// its `ready` never passes; `never_built`'s `run` fails, so its `serve` never
@@ -123,7 +123,7 @@ async fn next_event(watching: &mut Subscription, wanted: impl Fn(&Event) -> bool
 
 /// This server serving — or a failure naming how it ended instead, rather
 /// than a wait that runs out and says nothing.
-async fn serving(watching: &mut Subscription, id: &str) -> ServerState {
+pub(super) async fn serving(watching: &mut Subscription, id: &str) -> ServerState {
     match next_event(watching, |event| {
         matches!(
             event,
@@ -138,7 +138,7 @@ async fn serving(watching: &mut Subscription, id: &str) -> ServerState {
     }
 }
 
-async fn exited(watching: &mut Subscription, id: &str) -> ServerState {
+pub(super) async fn exited(watching: &mut Subscription, id: &str) -> ServerState {
     match next_event(
         watching,
         |event| matches!(event, Event::ServerExited(state) if state.id == id),

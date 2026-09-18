@@ -65,11 +65,23 @@ flowchart LR
 
 > **Rule.** A Run on a Studio writes no Evidence, the same as every run outside a Job.
 
+> **Rule.** A Command with `serve` is a Run node, and not a kind of its own. It reads *starting*, then *serving* with how long it has been up, a button per link and Stop; a server that exits on its own reads as a failure with its exit code, whatever that code is.
+> Why: it is a Manifest command started from the Studio, which is what a Run node holds, and Run is one of only two kinds that may take status colour — which both of a server's states need. See [Run and edit a Manifest](../journeys/run-and-edit-a-manifest.md), *A server*.
+
+> **Rule.** A Run node holding a server reads the live instance Fleet is holding, and keeps no copy of it. One already serving is handed to the Studio that asks, and no second copy starts.
+> Why: [Fleet](fleet.md) holds one instance per Job or checkout, and a state written onto the node would be right once. A server's ports come from the checkout's own span, never from the Studio.
+
+> **Rule.** Closing a Studio leaves a server running, the way closing a run sheet does. Stop on its node is what ends it.
+> Why: a person closes a whiteboard to look at what the server is drawing.
+
 > **Rule.** A Run node keeps its log's tail and its result — command, exit code and duration — once the run's retention passes, marked partial.
 > Why: a Studio is kept until a person deletes it, and a run's full log is not.
 
 > **Rule.** What it keeps is taken before the sweep, never after, and a run whose node could not keep it is not swept.
 > Why: a tail read after the directory was removed is no tail, and the node would be left naming a run nobody can read.
+
+> **Rule.** A server's node keeps the same the instant the server ends, and the log's tail with it.
+> Why: a run's record is a directory that outlives Fleet, so the sweep is the last moment it can be read; a server's is Fleet's own memory, which a restart takes. The rule is the same one — keep it at the last moment it is readable — and where that moment falls is who holds it.
 
 > **Rule.** The kept tail is the log's last lines, bounded, and it lives in the node's own content.
 > Why: a runner prints what failed last. A Studio crosses the wire whole on every write and is kept until a person deletes it, so a whole log on one is a cost with no end — and a file beside the Studio would be a second thing to sweep, which is the failure this rule exists against.

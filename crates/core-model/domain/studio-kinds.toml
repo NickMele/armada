@@ -47,13 +47,13 @@
 
 [nodes.run]
 name = "Run"
-holds = "A Manifest command started from the Studio, and its log until retention takes it"
+holds = "A Manifest command started from the Studio — a Check, a Command or a server — and its log until retention takes it"
 states = []
 status_colour = true
 added_by_hand = false
 dispatches = false
 not_called = []
-notes = "Its state is the run's own, so it declares none here. `run` is on the lexicon's *Never* list under Job — which bans calling a *Job* a run, and this node is a run. The gate sanctions the one word and refuses every other collision."
+notes = "Its state is the run's own, so it declares none here. **A server is this kind and not a fifteenth**: a Command with `serve` is a Manifest command started from the Studio, and Run is one of only two kinds that may take status colour — which *starting* and *serving* both need. `#1345`. `run` is on the lexicon's *Never* list under Job — which bans calling a *Job* a run, and this node is a run. The gate sanctions the one word and refuses every other collision."
 
 [nodes.note]
 name = "Note"

@@ -2,7 +2,7 @@
 
 use core_model::{
     ManifestId, Studio, StudioAuthor, StudioId, StudioName, StudioNode, StudioNodeContent,
-    StudioNodeId, StudioPosition, StudioRunKept, Timestamp, Ulid,
+    StudioNodeId, StudioPosition, StudioRun, StudioRunKept, Timestamp, Ulid,
 };
 
 use crate::tests::{open, TempDir};
@@ -29,7 +29,7 @@ fn a_run_node(store: &mut Store, studio: &StudioId, id: &str, run_id: &str) -> S
     let node = StudioNode::added(
         StudioNodeId::carried(Ulid::carried(id)),
         StudioNodeContent::Run {
-            run_id: run_id.to_string(),
+            run: StudioRun::Checkout(run_id.to_string()),
             kept: None,
         },
         StudioPosition { x: 0, y: 0 },
@@ -87,10 +87,14 @@ fn a_swept_runs_result_and_tail_are_kept_on_the_node_that_held_it() {
 
     drop(store);
     let store = open(&dir);
-    let StudioNodeContent::Run { run_id, kept } = content_of(&store, &studio, &node) else {
+    let StudioNodeContent::Run { run, kept } = content_of(&store, &studio, &node) else {
         panic!("a Run node");
     };
-    assert_eq!(run_id, "01RUN", "it still says which run it was");
+    assert_eq!(
+        run,
+        StudioRun::Checkout(String::from("01RUN")),
+        "it still says which run it was, and whose"
+    );
     assert_eq!(kept, Some(a_tail()), "field for field, through the column");
     assert_eq!(
         store.studio(&studio).expect("reads").studio.touched_at,
@@ -132,7 +136,7 @@ fn a_run_no_node_holds_changes_nothing_and_a_kept_tail_is_not_written_over() {
     assert_eq!(
         content_of(&store, &studio, &other),
         StudioNodeContent::Run {
-            run_id: String::from("01OTHERRUN"),
+            run: StudioRun::Checkout(String::from("01OTHERRUN")),
             kept: None,
         },
         "the other run is still there to read"

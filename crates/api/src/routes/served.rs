@@ -244,6 +244,14 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/studios/:studio_id/start_run",
     },
+    // A server started from a Studio, `#1345`. Beside `start_run` and not
+    // folded into it: a server is held rather than run, and the two answers
+    // are read back by different readers.
+    Route {
+        operation: "start_studio_server",
+        method: "POST",
+        path: "/studios/:studio_id/start_server",
+    },
     // Fleet's reading of its own Manifest, and singular where `/manifests` is
     // plural on purpose: that route lists what Fleet holds, and this one is the
     // single `armada.yml` Fleet is running on and watching. Not under `/jobs`

@@ -186,6 +186,38 @@ export class StudioReads {
   }
 
   /**
+   * Run one Check or Command in this Studio's own checkout, as a Run node —
+   * #1289. **The Studio names the repository**, so nothing here does.
+   */
+  async startRun(studioId: string, name: string, position: StudioPosition): Promise<Outcome> {
+    return this.started(member(studioId, "/start_run"), { name, position });
+  }
+
+  /**
+   * Start a Command with `serve` in the same checkout, as a Run node holding
+   * the instance — #1345. **Its own route**: `start_run` refuses a name
+   * carrying `serve`, because a server is held rather than run.
+   */
+  async startServer(studioId: string, name: string, position: StudioPosition): Promise<Outcome> {
+    return this.started(member(studioId, "/start_server"), { name, position });
+  }
+
+  /**
+   * A start's answer, which carries the Studio **beside** what it started
+   * rather than being it. The node and the run or instance are not folded in:
+   * what is up is read off `/servers` and `/manifest/run_sheet`, which this
+   * window already holds, so a copy taken here would be one that goes stale.
+   */
+  private async started(path: string, body: unknown): Promise<Outcome> {
+    const port = this.port();
+    if (port === null) return NOT_CONNECTED;
+    const answer = await ask(port, "POST", path, body);
+    if (!answer.ok) return answer.outcome;
+    this.changed((answer.body as { studio: Studio }).studio);
+    return { ok: true };
+  }
+
+  /**
    * One rung of promotion — #1291. **`act` picks the route and is not sent**: each of Fleet's
    * operations takes its own body, and the tag is how one capability on the bridge reaches them
    * all. Every one answers with the Studio whole, so they all fold the one way.

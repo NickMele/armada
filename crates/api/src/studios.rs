@@ -376,6 +376,32 @@ pub(crate) async fn start_studio_run<D: Studios>(
     answered(&served, StatusCode::ACCEPTED, started)
 }
 
+/// 202: the server is up or coming up, and the Studio holds a node for it.
+/// **`#1345`, and 202 for `start_studio_run`'s reason**: `ready` has not
+/// necessarily passed when this answers.
+pub(crate) async fn start_studio_server<D: Studios>(
+    State(served): State<Served<D>>,
+    Path(studio_id): Path<String>,
+    scope: Scope,
+    helm: Option<Extension<HelmCalled>>,
+    bytes: Bytes,
+) -> Response {
+    let asked = match body(&served, "a server to start from a Studio", &bytes) {
+        Ok(asked) => asked,
+        Err(response) => return response,
+    };
+    let started = served
+        .shared()
+        .start_studio_server(
+            StudioId::carried(studio_id),
+            asked,
+            acting(helm),
+            within(scope),
+        )
+        .await;
+    answered(&served, StatusCode::ACCEPTED, started)
+}
+
 // Promotion — `#1291`. Every one answers with the Studio whole, as every other
 // write on one does. Only the two Helm may take on a person's ask read `helm`;
 // the rest are a person's and nothing places a Helm session on them.
