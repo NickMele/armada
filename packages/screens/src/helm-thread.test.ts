@@ -16,6 +16,20 @@ const ENDED: HelmThreadItem = {
   id: "2",
   turn: { ts: "2026-09-13T10:00:03.000Z", seq: 2, by: "drone", saw: { event: "ended", turns: 3, cost_micros: 12_000, refusals: 0 } },
 };
+/** The stored session was gone — the one row of this thread Bridge words itself. */
+const FRESH: HelmThreadItem = {
+  kind: "fresh",
+  id: "4",
+  ts: "2026-09-13T10:00:04.000Z",
+  because: "session_not_found",
+};
+/** Fleet's own sentence, whole and unframed — `crates/fleet/src/helm/unanswered.rs`. */
+const UNANSWERED: HelmThreadItem = {
+  kind: "unanswered",
+  id: "5",
+  ts: "2026-09-13T10:00:05.000Z",
+  why: "no reply came within 900 seconds, so the session was ended",
+};
 const STARTED: HelmThreadItem = {
   kind: "row",
   id: "3",
@@ -66,8 +80,40 @@ describe("helmRowsOf", () => {
   });
 
   it("says why a stored session could not be resumed", () => {
-    const fresh: HelmThreadItem = { kind: "fresh", id: "4", ts: "2026-09-13T10:00:00.000Z", because: "session_not_found" };
-    expect(helmRowsOf([fresh])[0]?.message).toMatch(/could not be resumed/);
+    expect(helmRowsOf([FRESH])[0]?.message).toBe(
+      "the stored session could not be resumed, so this reply starts a new one",
+    );
+  });
+
+  // The thread draws three voices' words in one column: the person's, the
+  // model's, and the two rows about the conversation itself — `fresh`, which
+  // Bridge words here, and `unanswered`, which is Fleet's whole sentence. Those
+  // last two read in one case or a reader sees a seam between them, and Fleet's
+  // is the case that can hold everywhere: `crates/fleet/src/helm/unanswered.rs`
+  // leads some of its sentences with the program that would not start, which
+  // the lexicon refuses to capitalise into an actor. So Bridge's own row
+  // lowered to meet Fleet's rather than the other way about —
+  // `docs/contracts/design-system.md`, *Prose rules*.
+  //
+  // Every row one thread can draw is pinned whole here, so a string reworded
+  // into sentence case fails on the line that changed it.
+  it("draws every row it can in one case, Bridge's own among Fleet's", () => {
+    const rows = helmRowsOf([ASKED, SAID, ENDED, FRESH, UNANSWERED]);
+    expect(rows.map((row) => row.actor)).toEqual(["you", "helm", "helm", "helm"]);
+    expect(rows[0]?.message).toBe("Why did job 12 stall?");
+    expect(rows[1]?.message).toBe("It is waiting on a command.");
+    expect(rows[1]?.meta).toBe("~$0.01 · 3 turns");
+    expect(rows[2]?.message).toBe("the stored session could not be resumed, so this reply starts a new one");
+    expect(rows[3]?.message).toBe("no reply came within 900 seconds, so the session was ended");
+  });
+
+  // A person's own words and the model's are quoted, never recased, and
+  // Fleet's sentence is pinned on Fleet's side. `fresh` is the one row Bridge
+  // words for this thread, so it is the one this rule binds — and it opens on
+  // a common noun, which is where a capital would be a choice rather than a
+  // name's own spelling.
+  it("opens the one row it words itself in lower case", () => {
+    expect(String(helmRowsOf([FRESH])[0]?.message)).not.toMatch(/^[A-Z]/);
   });
 
   // The row drew `No reply came. ${why}` until the reply budget's own sentence

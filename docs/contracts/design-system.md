@@ -2196,6 +2196,23 @@ read plausibly under a different job has failed.
 - **Sentence case everywhere.** No title case, no ALL CAPS except table
   headers at `--text-2xs` with `0.04em` tracking. Lexicon proper nouns
   keep their capitals inside sentence case.
+- **One column, one case — and the case is the one that can hold for
+  every line in it.** Where two producers write lines into the same
+  column, the lines read alike or a reader sees a seam where there is no
+  difference in kind. Helm's thread and its session record are the case:
+  Fleet writes the *no reply came* sentences
+  (`crates/fleet/src/helm/unanswered.rs`) and Bridge words the row about
+  a session it could not resume. Fleet's open lower case and cannot do
+  otherwise — some of them lead with the program that would not start,
+  `claude` or `codex`, and the lexicon refuses a model or program name
+  promoted to an actor — so on **2026-09-18 Bridge's own thread lines
+  lowered to meet Fleet's**, rather than capitalising a program into an
+  actor to meet Bridge's. A proper noun still keeps its capital wherever
+  it falls, so a line opening on Fleet or Helm reads as it always did.
+  **The exception is the column and nothing around it**: a button, a
+  heading, a dialog's title and a table's own headings on the same
+  surface stay sentence case, because no other producer's prose sits
+  beside them.
 - **Name things by what the person controls.** "Approve dispatch", not
   "Submit job payload".
 - **No mid-sentence asides.** The rule targets the reflex rather than
