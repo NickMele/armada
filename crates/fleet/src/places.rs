@@ -18,6 +18,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use tokio::sync::Notify;
 
+use checks_runner::CheckWidth;
+
 use crate::headroom::{Bytes, Headroom, Machine, Reading, Spare};
 use crate::ordering::Past;
 
@@ -100,6 +102,10 @@ struct Shared {
 
 struct State {
     at_once: ChecksAtOnce,
+    /// How wide one command may run, derived from the machine and the Jobs
+    /// bound in force. Kept here rather than read at the point of use so the
+    /// number is reachable without the roster's lock. #1444.
+    width: CheckWidth,
     held: usize,
     /// Counts places given back, so a waiter that found the machine short reads
     /// it again only once something has finished.
@@ -146,9 +152,19 @@ impl State {
 
 impl Places {
     pub fn of(at_once: ChecksAtOnce) -> Places {
+        // **A line of places sharing the machine with nothing**, so nothing
+        // divides the width. `Places::sized` is what the composition root
+        // builds, knowing the Jobs bound. #1444.
+        Places::sized(at_once, CheckWidth::read(1))
+    }
+
+    /// A line of places at a width, which is what a Fleet serving several Jobs
+    /// at once builds. #1444.
+    pub fn sized(at_once: ChecksAtOnce, width: CheckWidth) -> Places {
         Places(Arc::new(Shared {
             state: Mutex::new(State {
                 at_once,
+                width,
                 held: 0,
                 given_back: 0,
                 asked: 0,
@@ -167,6 +183,17 @@ impl Places {
     pub(crate) fn limit(&self, at_once: ChecksAtOnce) {
         self.state().at_once = at_once;
         self.0.changed.notify_waiters();
+    }
+
+    /// How wide one command may run right now. #1444.
+    pub fn width(&self) -> CheckWidth {
+        self.state().width
+    }
+
+    /// Put a width in force, after a saved Jobs bound moved. It counts from the
+    /// next batch that starts; nothing running is re-sized. #1444.
+    pub(crate) fn widen(&self, width: CheckWidth) {
+        self.state().width = width;
     }
 
     /// How many places are held right now.
@@ -338,12 +365,26 @@ pub struct Room {
     headroom: Headroom,
     /// How long each Check took before, which decides which starts first.
     past: Past,
+    /// How wide one command in this batch may run.
+    ///
+    /// **Here rather than threaded beside it**, because it is the same fact
+    /// this type already carries: what of the machine a batch may take. The
+    /// places bound how many run at once; this bounds what one of them spawns
+    /// once it is running. A caller holding one already holds the other. #1444.
+    width: CheckWidth,
 }
 
 impl Room {
     /// A gate's room with places of its own, sharing the machine with nothing.
     pub fn of(at_once: ChecksAtOnce, machine: Arc<dyn Machine>, headroom: Headroom) -> Room {
-        Room::sharing(&Places::of(at_once), Asking::Gate, machine, headroom)
+        Room::sharing(
+            &Places::of(at_once),
+            Asking::Gate,
+            machine,
+            headroom,
+            // Sharing with nothing, so nothing divides it.
+            CheckWidth::read(1),
+        )
     }
 
     /// A room in `places`, asking as `asking`.
@@ -352,6 +393,7 @@ impl Room {
         asking: Asking,
         machine: Arc<dyn Machine>,
         headroom: Headroom,
+        width: CheckWidth,
     ) -> Room {
         Room {
             places: places.clone(),
@@ -359,6 +401,7 @@ impl Room {
             machine,
             headroom,
             past: Past::default(),
+            width,
         }
     }
 
@@ -366,6 +409,18 @@ impl Room {
     /// first. #1062.
     pub(crate) fn knowing(self, past: Past) -> Room {
         Room { past, ..self }
+    }
+
+    /// How wide one command in this batch may run, before any Check's own
+    /// declaration lowers it. #1444.
+    pub(crate) fn width(&self) -> CheckWidth {
+        self.width
+    }
+
+    /// The same room, at a width a test can name. [`Room::knowing`]'s shape.
+    #[cfg(test)]
+    pub(crate) fn wide(self, width: CheckWidth) -> Room {
+        Room { width, ..self }
     }
 
     pub(crate) fn past(&self) -> &Past {

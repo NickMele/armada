@@ -219,7 +219,7 @@ where
             .workflow()
             .step(&step)
             .ok_or(NotFixed::NothingIsWorking)?;
-        let (expect_exit_code, requires, template, places) = declared
+        let (expect_exit_code, requires, template, places, width) = declared
             .checks()
             .iter()
             .find_map(|c| match c {
@@ -229,12 +229,14 @@ where
                     requires,
                     one_test,
                     places,
+                    width,
                     ..
                 } if name == check => Some((
                     *expect_exit_code,
                     requires.clone(),
                     one_test.clone(),
                     *places,
+                    *width,
                 )),
                 _ => None,
             })
@@ -268,6 +270,9 @@ where
                 one_test: None,
                 runs_at: core_model::RunsAt::Everywhere,
                 places,
+                // Kept: one test out of a suite still runs under the suite's
+                // own runner, which reads the same flag. #1444.
+                width,
             },
             expect_exit_code,
             record,

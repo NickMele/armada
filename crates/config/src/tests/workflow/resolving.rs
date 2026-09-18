@@ -52,6 +52,7 @@ fn a_resolved_workflow_carries_the_command_not_the_name() {
                 one_test: None,
                 runs_at: core_model::RunsAt::Everywhere,
                 places: std::num::NonZeroU32::MIN,
+                width: None,
             },
             ResolvedCheck::ManifestCheck {
                 name: "test".to_string(),
@@ -63,6 +64,7 @@ fn a_resolved_workflow_carries_the_command_not_the_name() {
                 one_test: None,
                 runs_at: core_model::RunsAt::Everywhere,
                 places: std::num::NonZeroU32::MIN,
+                width: None,
             },
             ResolvedCheck::DiffNonempty,
         ]

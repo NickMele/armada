@@ -281,6 +281,31 @@ Rules that follow:
 - **A Check wider than `checks-at-once` still runs**: it takes every place the machine has rather than waiting for room that can never exist, clamped at the moment it asks — the limit can change while Fleet runs.
 - **It is frozen with the workflow**, beside the Check's command, and `after_merge` keeps it: a proof still spends the machine for real.
 
+### How wide a Check runs
+
+**A Check's command may write `${width}`, and Armada substitutes how many concurrent workers it may start.**
+
+```yaml
+checks:
+  screens_test:
+    run: pnpm -C packages/screens test -- --maxWorkers=${width}
+    width: 2
+```
+
+Decided 18 Sep 2026 for #1444. Every test runner defaults to the width of the machine it finds, and Fleet runs several Jobs at once by design, so a Job reaching a test step claimed the whole machine as many times over as there were Jobs at one. On 17 Sep one Drone's `desktop_test` started sixteen headless Chromium workers and took the load average to 73, and the owner found out because his machine stopped responding.
+
+**A number handed to a runner, never a cap imposed on one.** Nothing here stops a process spawning what it likes; the repository spells the flag its own runner reads. That is why the key is a number and not a mechanism, and why a runner that sizes itself from a config file rather than an argument reads `ARMADA_CHECK_WIDTH` from the Check's environment instead — the same second channel a port has.
+
+Rules that follow:
+
+- **Absent means the machine's own number**, which is half its cores divided by how many Jobs may run at once, floored at two and capped at eight. Unlike `places`, absent is not a default written down here: nothing that reads the Manifest knows the machine.
+- **A declared `width` only ever lowers it.** A repository asking for more of a machine than the machine allows is asking about a machine it does not own, which is the opposite of a timeout, where patience is the repository's to spend.
+- **Zero, a negative number and anything that is not a whole number are refused at load**, as `places` is.
+- **A command with no `${width}` is left alone**, which is every Check that sizes itself — `cargo fmt --all --check` has no width to be told.
+- **Do not widen a timeout to compensate.** A bounded suite that no longer fits its budget is a budget to raise deliberately and say so.
+- **It is frozen with the workflow**, beside the Check's command, and `after_merge` keeps it for `places`' reason: the machine is no wider for the merge having happened.
+- **The terminal resolves it too.** `armada check` substitutes the same way, so a Check a person runs is the Check a Drone is measured by. It reads the shipped Jobs bound rather than a saved one, and where those differ the gate is the authority.
+
 ### Running one test by name
 
 **A Check may declare `one_test`, and it is what Fleet runs against a checkout of main before a Drone's `draft_fix` drafts anything.** The Configuration contract holds the syntax.

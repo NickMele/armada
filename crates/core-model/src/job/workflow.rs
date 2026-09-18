@@ -98,6 +98,11 @@ pub enum ResolvedCheck {
         /// after — a browser suite starting a dozen Chromium processes is not
         /// the common case. Frozen for `narrow`'s reason. #1102.
         places: NonZeroU32,
+        /// How many concurrent workers the Manifest says this Check may start.
+        /// **`None` where it declares no `width`**, and then the machine's own
+        /// number is what `${width}` resolves to — a declared one may lower
+        /// that and never raise it. Frozen for `narrow`'s reason. #1444.
+        width: Option<NonZeroU32>,
     },
     /// The step produced a non-empty diff.
     DiffNonempty,
@@ -250,6 +255,18 @@ impl ResolvedCheck {
             ResolvedCheck::DiffNonempty
             | ResolvedCheck::ArtifactExists { .. }
             | ResolvedCheck::PlanRecorded { .. } => NonZeroU32::MIN,
+        }
+    }
+
+    /// How many concurrent workers the Manifest says this Check may start.
+    /// **`None` on a built-in and on a Check that declares no `width`**, which
+    /// is the same answer: the machine's own number applies. #1444.
+    pub fn width(&self) -> Option<NonZeroU32> {
+        match self {
+            ResolvedCheck::ManifestCheck { width, .. } => *width,
+            ResolvedCheck::DiffNonempty
+            | ResolvedCheck::ArtifactExists { .. }
+            | ResolvedCheck::PlanRecorded { .. } => None,
         }
     }
 

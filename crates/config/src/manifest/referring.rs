@@ -153,6 +153,10 @@ pub(super) fn after_merge(
                 // spends the machine's places for real, and a browser suite
                 // costs what it always costs.
                 places: check.places(),
+                // Kept for `places`' reason: a proof after a merge runs the
+                // same suite on the same machine, and the machine is no wider
+                // for the merge having happened. #1444.
+                width: check.width(),
             }),
             None => out.push(Refusal::new(
                 key,
@@ -205,6 +209,7 @@ pub(super) fn required_by(
                 one_test: draft.one_test,
                 runs_at: draft.runs_at,
                 places: draft.places,
+                width: draft.width,
             },
         );
     }

@@ -13,6 +13,7 @@ mod plan;
 mod resolving;
 mod runs_at;
 mod step;
+mod width;
 
 use core_model::{AdvanceGate, EvidenceType};
 
