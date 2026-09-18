@@ -1380,7 +1380,7 @@ it said killed, and nothing on any surface said the work had carried on somewher
 **No new record, and deliberately no second column.** `JobSummary.redispatched_from` already
 crosses and is the one fact; Fleet reads it as a predicate over `jobs` rather than writing the
 forward edge, so the two directions cannot disagree and forgetting a replacement takes the link
-with it. `store::lineage` is the read and `V81` is its index.
+with it. `store::lineage` is the read and `V82` is its index.
 
 **On the detail and not on the summary.** The Board draws a row per Job and already folds a
 lineage into one; a field here is one indexed read on the open of a Job, where a read per row
@@ -1393,6 +1393,9 @@ newer.
 
 **Additive, so a Fleet ahead of a Bridge sends a field it ignores** and the callout simply does
 not draw, which is what an older Bridge already does with every Job.
+
+**This was written as 16.1 and is 16.2**, because 16.1 landed underneath it while the branch was
+open — the same collision 16.0's own note records, caught at the merge this time.
 
 ## Open questions
 
