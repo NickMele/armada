@@ -28,6 +28,7 @@
 mod declared;
 mod harness;
 mod referring;
+mod runner;
 mod seed;
 mod serving;
 
@@ -96,8 +97,6 @@ const RUNS_AT_LEGAL: &[&str] = &["everywhere", "gate", "handoff"];
 const NARROW_KEYS: &[&str] = &["run", "each", "from", "under", "except"];
 /// The keys read inside `checks.<name>.one_test`. #999.
 const ONE_TEST_KEYS: &[&str] = &["run"];
-/// The keys read inside `checks.<name>.runner`.
-const RUNNER_KEYS: &[&str] = &["name", "pkg"];
 /// The keys M1 reads inside `commands.<name>`.
 const COMMAND_KEYS: &[&str] = &["run", "destructive", "serve", "ready", "links"];
 /// The keys M1 reads inside `ports.<name>`.
@@ -781,7 +780,7 @@ fn check_entry(
     // `yaml::positive`, the same reader `places` uses. #1444.
     let runner = table
         .optional("runner")
-        .and_then(|value| runner(&table.at("runner"), value, out));
+        .and_then(|value| runner::runner(&table.at("runner"), value, out));
     let width_key = table.at("width");
     let width = match table.optional("width") {
         None => Ok(None),
@@ -807,28 +806,6 @@ fn check_entry(
         width: width.ok()?,
         runner,
     })
-}
-
-/// `checks.<name>.runner`: which runner drives this Check, and the package it
-/// runs in.
-///
-/// **A name and nothing else about how to run it.** Every command a runner can
-/// make is written once in that runner's own description, never here — see
-/// `docs/concepts/runner-adapter.md`. `pkg` is what `{pkg}` resolves to in
-/// those templates, and a Check whose runner is rooted at the repository omits
-/// it.
-fn runner(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<Runner> {
-    let mut table = Table::open(at, value, out)?;
-    let name_key = table.at("name");
-    let name = table
-        .required("name", out)
-        .and_then(|value| yaml::text(&name_key, value, out));
-    let pkg_key = table.at("pkg");
-    let pkg = table
-        .optional("pkg")
-        .and_then(|value| yaml::text(&pkg_key, value, out));
-    table.close(RUNNER_KEYS, out);
-    Some(Runner::declared(name?, pkg))
 }
 
 /// `checks.<name>.one_test`: how this Check runs one test by name, which Fleet
