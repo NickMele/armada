@@ -577,6 +577,11 @@ const api: BridgeApi = {
   openPullRequest: (jobId: string): Promise<Followed> =>
     ipcRenderer.invoke(CHANNELS.openPullRequest, jobId),
 
+  // What a Studio node points at — #1406. `openPullRequest`'s reason: a Studio
+  // id and a node id, never an address the renderer composed.
+  openStudioNode: (studioId: string, nodeId: string): Promise<Followed> =>
+    ipcRenderer.invoke(CHANNELS.openStudioNode, studioId, nodeId),
+
   // One comment's own link, `openPullRequest`'s reason exactly: a Job id and a
   // comment id, never an address the renderer composed.
   openRemarkLink: (jobId: string, remarkId: string): Promise<Followed> =>

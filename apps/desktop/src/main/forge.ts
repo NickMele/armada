@@ -146,3 +146,26 @@ export async function openFindingIssue(
   if (!job) return { ok: false, why: "unknown_job" };
   return opened(issueAddressOf(state, jobId, finding));
 }
+
+/**
+ * The address a Studio node carries, off the Studio main is holding — #1406.
+ * `addressOf`'s reason: the renderer draws it and does not send it.
+ */
+function nodeAddressOf(state: BridgeState, studioId: string, nodeId: string): string | undefined {
+  const studio = state.studio;
+  if (studio.state !== "read" || studio.studio.id !== studioId) return undefined;
+  const node = studio.studio.nodes.find((one) => one.id === nodeId);
+  return node !== undefined && "address" in node ? node.address : undefined;
+}
+
+/**
+ * Open what one Studio node points at — a Link, an Issue, a Pull request or an
+ * Epic. A Job node is not this: opening a Job opens Job detail.
+ */
+export async function openStudioNode(
+  state: BridgeState,
+  studioId: string,
+  nodeId: string,
+): Promise<Followed> {
+  return opened(nodeAddressOf(state, studioId, nodeId));
+}
