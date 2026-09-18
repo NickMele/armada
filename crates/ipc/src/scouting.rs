@@ -40,7 +40,18 @@ pub struct ReadInLink {
     pub node_id: StudioNodeId,
     /// Where the first node it makes is placed. The rest are laid out from
     /// there, because a Studio is laid out by hand and a stack is not a layout.
+    ///
+    /// **An Epic already read in keeps its own origin and this is ignored** —
+    /// `#1405`. One Epic has one block of issues for its life, so widening it
+    /// fills the gaps in that block rather than starting a second one wherever
+    /// the person happens to be looking.
     pub position: StudioPosition,
+    /// Which of an Epic's issues to take. **Absent on every other kind**,
+    /// which has one thing to read and nothing to ask about; absent from an
+    /// older peer, and read as every issue, which is what it used to do.
+    /// `#1405`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub take: Option<crate::studio::EpicTake>,
 }
 
 /// How a scout ended, and what it cost.

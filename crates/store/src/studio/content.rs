@@ -5,9 +5,10 @@
 //! a kind cannot be said twice in two places that disagree.
 
 use core_model::{
-    CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, EpicRead, ForgeFacts, ForgeState,
-    JobId, ScoutCheckout, ScoutEnded, ScoutOutcome, ScoutSource, ScoutSourceKind, StudioCapture,
-    StudioFinding, StudioNodeContent, StudioNodeKind, StudioRunKept, Ulid,
+    CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, EpicRead, EpicTake, ForgeFacts,
+    ForgeState, JobId, ScoutCheckout, ScoutEnded, ScoutOutcome, ScoutSource, ScoutSourceKind,
+    StudioCapture, StudioFinding, StudioNodeContent, StudioNodeKind, StudioPosition, StudioRunKept,
+    Ulid,
 };
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
@@ -119,10 +120,21 @@ pub(super) fn written(content: &StudioNodeContent) -> String {
         } => {
             let mut node = forge_written(address, number, said, title);
             if let Some(read_in) = read_in {
-                node.insert(
-                    "read_in".into(),
-                    json!({ "issues": read_in.issues, "total": read_in.total }),
-                );
+                // **What the answer left out and what it kept are written as
+                // numbers**, so an Epic read back says the same thing it said
+                // on the board — `#1405`.
+                let mut read = serde_json::Map::new();
+                read.insert("issues".into(), json!(read_in.issues));
+                read.insert("total".into(), json!(read_in.total));
+                read.insert("left_out".into(), json!(read_in.left_out));
+                read.insert("kept".into(), json!(read_in.kept));
+                if let Some(took) = read_in.took {
+                    read.insert("took".into(), json!(took.as_wire()));
+                }
+                if let Some(from) = read_in.laid_out_from {
+                    read.insert("laid_out_from".into(), json!({ "x": from.x, "y": from.y }));
+                }
+                node.insert("read_in".into(), Value::Object(read));
             }
             Value::Object(node)
         }
@@ -226,6 +238,22 @@ pub(super) fn read(kind: &str, stored: &str) -> Result<StudioNodeContent, Unread
                             field: "read_in.total",
                         },
                     )?,
+                    // **An Epic read in before `#1405` reads back saying
+                    // nothing about which issues it took**, rather than
+                    // claiming an answer nobody gave it. The three that follow
+                    // are absent the same way, and a count nobody wrote is nought.
+                    took: match read.get("took").and_then(Value::as_str) {
+                        None => None,
+                        Some(spelled) => Some(EpicTake::from_wire(spelled).ok_or_else(|| {
+                            UnreadableContent::UnknownValue {
+                                field: "read_in.took",
+                                value: spelled.to_string(),
+                            }
+                        })?),
+                    },
+                    left_out: read.get("left_out").and_then(Value::as_u64).unwrap_or(0),
+                    kept: read.get("kept").and_then(Value::as_u64).unwrap_or(0),
+                    laid_out_from: read.get("laid_out_from").and_then(a_position),
                 }),
             };
             made.resolved(&ForgeFacts {
@@ -257,6 +285,16 @@ pub(super) fn read(kind: &str, stored: &str) -> Result<StudioNodeContent, Unread
 /// The three fields every forge kind keeps, as its object holds them. `said`
 /// and `title` are left out where there is none, which is the shape every row
 /// a paste wrote has until it is read in.
+/// A position a stored object holds, and `None` where it holds none or holds
+/// one missing a coordinate. **Absent rather than nought**, because `0, 0` is
+/// somewhere a read-in could genuinely have laid its issues out.
+fn a_position(stored: &Value) -> Option<StudioPosition> {
+    Some(StudioPosition {
+        x: stored.get("x")?.as_i64()?,
+        y: stored.get("y")?.as_i64()?,
+    })
+}
+
 fn forge_written(
     address: &str,
     number: &str,

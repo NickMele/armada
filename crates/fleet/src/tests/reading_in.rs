@@ -170,6 +170,15 @@ fn reading_in(node_id: &ipc::StudioNodeId) -> ReadInLink {
     ReadInLink {
         node_id: node_id.clone(),
         position: StudioPosition { x: 400, y: 0 },
+        take: None,
+    }
+}
+
+/// A read-in that answers what to take, which only an Epic is asked. `#1405`.
+fn taking(node_id: &ipc::StudioNodeId, take: ipc::EpicTake) -> ReadInLink {
+    ReadInLink {
+        take: Some(take),
+        ..reading_in(node_id)
     }
 }
 
@@ -493,4 +502,137 @@ async fn a_board_stays_a_link_and_a_note_is_not_read_in() {
         .await
         .expect_err("reading in is a Link's own rung");
     assert_eq!(code(&refused), "fleet.studio_not_a_link");
+}
+
+/// `#1405`'s definition of done: **reading a milestone in asks what to take,
+/// and reading it in again with the other answer narrows what is on the board
+/// — except what a person has worked on.**
+///
+/// The stand-in forge holds three issues, one of them closed. Taking every
+/// issue and then only the open ones takes the closed one back; a Note written
+/// against it keeps it, and the Epic counts it.
+#[tokio::test]
+async fn narrowing_takes_back_a_closed_issue_and_keeps_one_a_note_hangs_off() {
+    let home = TempDir::new();
+    let fleet = reading(&home);
+    let address = format!("https://{}o/r/milestone/17", adapters::FORGE_HOST);
+
+    // One board where nothing was worked on, and one where a Note was written
+    // against the closed issue.
+    for note_it in [false, true] {
+        let (studio, link) = a_link(&fleet, &address).await;
+        let read = Arc::clone(&fleet)
+            .read_in_link(
+                studio.id.clone(),
+                taking(&link, ipc::EpicTake::Everything),
+                Redirector::Person,
+                None,
+            )
+            .await
+            .expect("read in");
+        assert_eq!(kinds(&read), ["epic", "issue", "issue"]);
+        assert_eq!(
+            epic_read(&read),
+            Some((2, 3, Some(ipc::EpicTake::Everything), 0, 0)),
+            "both issues, and nothing left out"
+        );
+        let closed = read.nodes[2].id.clone();
+
+        if note_it {
+            fleet
+                .add_studio_node(
+                    studio.id.clone(),
+                    AddStudioNode {
+                        content: StudioNodeContent::Note {
+                            said: "this one shipped without the legend".to_string(),
+                            capture: None,
+                        },
+                        position: StudioPosition { x: 900, y: 0 },
+                        produced_by: Some(closed.clone()),
+                    },
+                    Redirector::Person,
+                    None,
+                )
+                .await
+                .expect("a Note against the closed issue");
+        }
+
+        let narrowed = Arc::clone(&fleet)
+            .read_in_link(
+                studio.id.clone(),
+                taking(&link, ipc::EpicTake::Open),
+                Redirector::Person,
+                None,
+            )
+            .await
+            .expect("read in again");
+        let standing: Vec<&ipc::StudioNodeId> =
+            narrowed.nodes.iter().map(|node| &node.id).collect();
+        match note_it {
+            false => {
+                assert_eq!(
+                    kinds(&narrowed),
+                    ["epic", "issue"],
+                    "the closed one is gone"
+                );
+                assert_eq!(
+                    epic_read(&narrowed),
+                    Some((1, 3, Some(ipc::EpicTake::Open), 1, 0)),
+                    "one of three, one left out, none kept"
+                );
+            }
+            true => {
+                assert_eq!(kinds(&narrowed), ["epic", "issue", "issue", "note"]);
+                assert!(
+                    standing.contains(&&closed),
+                    "a node a person worked on is not the read-in's to remove"
+                );
+                assert_eq!(
+                    epic_read(&narrowed),
+                    Some((2, 3, Some(ipc::EpicTake::Open), 1, 1)),
+                    "one taken and one kept, and the Epic says it kept one"
+                );
+            }
+        }
+
+        // Widening puts it back, in the block it already had.
+        let widened = Arc::clone(&fleet)
+            .read_in_link(
+                studio.id.clone(),
+                taking(&link, ipc::EpicTake::Everything),
+                Redirector::Person,
+                None,
+            )
+            .await
+            .expect("read in again");
+        assert_eq!(
+            epic_read(&widened).map(|read| (read.0, read.3, read.4)),
+            Some((2, 0, 0)),
+            "both issues back, nothing left out and nothing to keep"
+        );
+        let block: Vec<ipc::StudioPosition> = widened
+            .nodes
+            .iter()
+            .filter(|node| matches!(node.content, StudioNodeContent::Issue { .. }))
+            .map(|node| node.position)
+            .collect();
+        assert_eq!(
+            block,
+            [
+                StudioPosition { x: 400, y: 0 },
+                StudioPosition { x: 400, y: 180 }
+            ],
+            "one block, and a widening fills its gaps"
+        );
+    }
+}
+
+/// What an Epic says about itself, as the five numbers `#1405` added.
+fn epic_read(studio: &ipc::Studio) -> Option<(u64, u64, Option<ipc::EpicTake>, u64, u64)> {
+    studio.nodes.iter().find_map(|node| match &node.content {
+        StudioNodeContent::Epic { read_in, .. } => {
+            read_in.map(|read| (read.issues, read.total, read.took, read.left_out, read.kept))
+        }
+        _ => None,
+    })
 }
