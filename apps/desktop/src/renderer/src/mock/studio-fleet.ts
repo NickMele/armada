@@ -45,6 +45,7 @@ export type StudioRoutes = Pick<
   | "readStudioFrame"
   | "moveStudioNode"
   | "removeStudioNode"
+  | "removeStudioNodes"
   | "decideStudioEdge"
   | "promoteOnStudio"
   | "openStudioNode"
@@ -259,6 +260,23 @@ export function keeping(seeded: readonly Studio[] = []): StudioKeeping {
           ...studio,
           nodes: studio.nodes.filter((node) => node.id !== nodeId),
           edges: studio.edges.filter((edge) => edge.from !== nodeId && edge.to !== nodeId),
+        }));
+        return answer.ok ? OK : answer.outcome;
+      },
+      // **All of them or none**, as Fleet's one write is — #1411. Every name is
+      // checked before anything is dropped, so a selection carrying one node
+      // this Studio does not hold leaves it whole and says so.
+      removeStudioNodes: async (studioId, nodeIds) => {
+        const held = store.get(studioId)?.nodes ?? [];
+        const missing = nodeIds.find((wanted) => !held.some((node) => node.id === wanted));
+        if (nodeIds.length === 0 || missing !== undefined) {
+          return unanswered(`/studios/${studioId}/remove_nodes`);
+        }
+        const going = new Set(nodeIds);
+        const answer = write(studioId, (studio) => ({
+          ...studio,
+          nodes: studio.nodes.filter((node) => !going.has(node.id)),
+          edges: studio.edges.filter((edge) => !going.has(edge.from) && !going.has(edge.to)),
         }));
         return answer.ok ? OK : answer.outcome;
       },

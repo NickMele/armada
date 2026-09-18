@@ -3,8 +3,8 @@
 // **Reopened read-only.** A Studio is kept to be reread (`docs/concepts/studio.md`), so one opened
 // from the list moves nothing and draws no act until Continue; one a person just started opens
 // editable. **A person's acts live here and nowhere else**: accepting or rejecting a proposed
-// relation, deleting a node, which confirms because its edges go with it, and every rung of
-// promotion, which is `StudioPromotion.tsx`'s panel. What is drawn is what Fleet wrote — every act
+// relation, deleting a node or everything picked, which confirms because its edges go with it,
+// and every rung of promotion, which is `StudioPromotion.tsx`'s panel. What is drawn is what Fleet wrote — every act
 // answers with the Studio whole, and main folds it into `studio`.
 //
 // **The whiteboard's selection is held here, not in `App`.** Clustering is of several nodes, and
@@ -54,6 +54,7 @@ import {
   whiteboardNodes,
 } from "./studio";
 import { useStudioFrames, type ReadStudioFrame } from "./studio-frames";
+import { clearingLabel, clearingOf, clearingSaid } from "./studio-clearing";
 import { keepsAnAddress } from "./studio-promotion";
 import { useAddNodeKeys } from "./studio-keys";
 import type { StudioAnswer, StudioRead, StudiosRead } from "./studio-reads";
@@ -106,6 +107,12 @@ export type StudiosProps = {
   onAddNode: (node: StudioNodeByHand, position: StudioPosition) => Promise<Outcome>;
   onMoveNode: (nodeId: string, position: { x: number; y: number }) => Promise<Outcome>;
   onRemoveNode: (nodeId: string) => Promise<Outcome>;
+  /**
+   * Delete everything picked, as one write — #1411. **All of them or none**:
+   * Fleet takes the whole selection in one transaction, so a refusal leaves
+   * every node standing and there is no half a board to reconcile.
+   */
+  onRemoveNodes: (nodeIds: readonly string[]) => Promise<Outcome>;
   onDecideEdge: (edgeId: string, accepted: boolean) => Promise<Outcome>;
   /** The picture one Note kept, as bytes. The screen mints the `blob:` and revokes it — #1352. */
   onReadFrame: ReadStudioFrame;
@@ -290,6 +297,8 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
   const { graph: studio, open, jobs, live, selectedNode, onSelectNode, onBack, onContinue } = props;
   const [refused, setRefused] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  /** Whether the confirmation for deleting everything picked is up — #1411. */
+  const [clearing, setClearing] = useState(false);
   const [deciding, setDeciding] = useState<string | null>(null);
   /** The Note whose frame is open, full size. */
   const [opened, setOpened] = useState<string | null>(null);
@@ -365,6 +374,19 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
       : [{ id: "job", label: "Open Job", press: () => props.onOpenJob(openable.id) }]),
     ...(editable && selected !== undefined
       ? [{ id: "remove", label: "Delete node", danger: true, press: () => setRemoving(selected.id) }]
+      : []),
+    // **Counted, not named** — #1411: the act says how many go, because
+    // eighteen titles is the panel that overflowed the window. One picked keeps
+    // the act above, which names it and confirms on its own terms.
+    ...(editable && onBoard.length > 1
+      ? [
+          {
+            id: "remove-picked",
+            label: clearingLabel(onBoard.length),
+            danger: true,
+            press: () => setClearing(true),
+          },
+        ]
       : []),
   ];
 
@@ -527,6 +549,25 @@ function Board(props: StudiosProps & { open: OpenStudio; graph: Studio }) {
             it is.
           </p>
         )}
+      </Dialog>
+      {/* Everything picked, as one write — #1411. **The count is the name**, in the act, in the
+          title and on the confirm, and what goes with them is said before the press. */}
+      <Dialog
+        open={clearing && onBoard.length > 1}
+        tone="destructive"
+        title={clearingLabel(onBoard.length)}
+        confirmLabel={clearingLabel(onBoard.length)}
+        onCancel={() => setClearing(false)}
+        onConfirm={() => {
+          const going = [...onBoard];
+          setClearing(false);
+          onSelectNode(null);
+          void props.onRemoveNodes(going).then(answered);
+        }}
+      >
+        {clearingSaid(clearingOf(studio, onBoard)).map((line) => (
+          <p key={line}>{line}</p>
+        ))}
       </Dialog>
     </div>
   );

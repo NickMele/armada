@@ -11,7 +11,7 @@ import { page, userEvent } from "vitest/browser";
 import { repository } from "@armada/screens/src/fixtures/build/base";
 
 import { mountApp, type Mounted } from "./mount";
-import { studying } from "./studio-fleet";
+import { everyKind, studying } from "./studio-fleet";
 import { entered } from "./testing";
 
 const windows: { app: Mounted; host: HTMLElement }[] = [];
@@ -595,4 +595,66 @@ test("a node holding an address opens in the browser, and a node without one off
   await openActs();
   expect(offered("Open").query()).toBeNull();
   await expect.element(page.getByRole("heading", { name: "The Board's legend" })).toBeVisible();
+});
+
+/** Every node the board has drawn, in the order React Flow laid them out. */
+const everyNode = () => Array.from(document.querySelectorAll<HTMLElement>(".react-flow__node"));
+
+/**
+ * Pick the whole board, the way a person does: hold the key that joins to the
+ * selection and take each node in turn.
+ *
+ * **A click on the element, not a pointer at a point.** Eighteen nodes fitted to
+ * the viewport sit under the board's own asides, and a pointer press lands on
+ * whatever is drawn on top. **And a click rather than `Enter`**: React Flow
+ * reads the held key through `useKeyPress`, which clears every key it is
+ * holding on the *first* keyup it sees — so the second `Enter` would arrive
+ * with the selection no longer joining and replace all of it.
+ */
+async function pickEvery(): Promise<void> {
+  await userEvent.keyboard("{Meta>}");
+  for (const one of everyNode()) one.click();
+  await userEvent.keyboard("{/Meta}");
+}
+
+/**
+ * #1411's own claim, and the owner's own case on 17 Sep: he picked every node
+ * on a Studio to clear it out and there was no act for it.
+ *
+ * **One act, one confirmation, one write.** The act counts rather than naming —
+ * eighteen titles is the panel that overflowed the window — and what goes with
+ * them is said before the press: the edges on them, the picture a captured Note
+ * keeps, and that a Job node's Job is left alone.
+ */
+test("every node picked is deleted by one act, confirmed once, and the Studio is left empty", async () => {
+  const fleet = studying([everyKind("01JOBEVERYKIND0000000000000")]);
+  open(fleet.scenario);
+  await page.getByRole("button", { name: "Studios", exact: true }).first().click();
+  await page.getByRole("button", { name: "Every kind of node and edge", exact: true }).click();
+  await expect.element(node(/^Note: The legend under the step bar is unreadable/)).toBeVisible();
+  // Reopened read-only, so nothing is deleted until a person continues it.
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect.poll(() => everyNode().length).toBe(18);
+
+  await pickEvery();
+  await openActs();
+  // Counted, never named, and the single-node act is not what is offered here.
+  await expect.element(offered("Delete 18 nodes")).toBeVisible();
+  expect(offered("Delete node").query()).toBeNull();
+
+  await offered("Delete 18 nodes").click();
+  const confirm = page.getByRole("dialog");
+  await entered(confirm);
+  await expect.element(page.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  // What goes with them, before the press.
+  await expect.element(confirm.getByText("18 nodes go from this Studio, with the 15 edges on them.")).toBeVisible();
+  await expect.element(confirm.getByText(/1 Note going keeps a picture/)).toBeVisible();
+  await expect.element(confirm.getByText(/The Job it names is untouched/)).toBeVisible();
+  await expect.element(confirm.getByText("There is no undo.")).toBeVisible();
+
+  await confirm.getByRole("button", { name: "Delete 18 nodes" }).click();
+  // One write: the Studio is empty, and every edge went with the nodes.
+  await expect.poll(() => fleet.studios()[0]!.nodes).toEqual([]);
+  expect(fleet.studios()[0]!.edges).toEqual([]);
+  await expect.element(page.getByText("Nothing on this Studio yet.", { exact: false })).toBeVisible();
 });

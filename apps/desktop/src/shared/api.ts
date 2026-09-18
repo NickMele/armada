@@ -774,6 +774,12 @@ export type BridgeApi = {
   moveStudioNode: (studioId: string, nodeId: string, position: StudioPosition) => Promise<Outcome>;
   /** Delete a node and every edge on it. A person's act, and only from the Studios surface. */
   removeStudioNode: (studioId: string, nodeId: string) => Promise<Outcome>;
+  /**
+   * Delete everything picked as one write — #1411. **All of them or none**:
+   * Fleet takes the whole selection in one transaction, so nothing here has to
+   * say which half of a loop landed.
+   */
+  removeStudioNodes: (studioId: string, nodeIds: readonly string[]) => Promise<Outcome>;
   /** Accept a proposed relation, or reject it, which removes it. A person's act, as above. */
   decideStudioEdge: (studioId: string, edgeId: string, accepted: boolean) => Promise<Outcome>;
   /**
