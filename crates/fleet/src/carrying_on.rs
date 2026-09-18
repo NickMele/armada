@@ -41,7 +41,12 @@ where
     /// **The guard is on the replacement, never on the original**, so no Job
     /// is ever drawn twice. Ordinarily there is no Studio at all, and this is
     /// two reads and no write.
-    pub(crate) async fn carried_on_studios(&self, replaced: &JobId, replacement: &JobId, at: &Timestamp) {
+    pub(crate) async fn carried_on_studios(
+        &self,
+        replaced: &JobId,
+        replacement: &JobId,
+        at: &Timestamp,
+    ) {
         let (holding, already) = {
             let store = self.store().lock().await;
             (

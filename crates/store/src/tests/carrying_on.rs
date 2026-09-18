@@ -114,7 +114,14 @@ fn a_node_that_already_produced_one_says_how_many() {
     let mut store = open(&dir);
     let studio = a_studio(&mut store, "01STUDIOA");
     let failed = a_job_node(&mut store, &studio, "01NODEA", "01JOBFAILED", 100, None);
-    a_job_node(&mut store, &studio, "01NODEB", "01JOBAGAIN", 440, Some(&failed));
+    a_job_node(
+        &mut store,
+        &studio,
+        "01NODEB",
+        "01JOBAGAIN",
+        440,
+        Some(&failed),
+    );
 
     let found = store.job_on_studios(&job_id("01JOBFAILED")).expect("reads");
 
@@ -122,8 +129,7 @@ fn a_node_that_already_produced_one_says_how_many() {
 
     let replacement = store.job_on_studios(&job_id("01JOBAGAIN")).expect("reads");
     assert_eq!(
-        replacement[0].produced,
-        0,
+        replacement[0].produced, 0,
         "the replacement has produced nothing, so its own replacement takes the first row"
     );
 }

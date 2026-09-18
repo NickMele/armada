@@ -201,12 +201,19 @@ async fn a_replacement_that_is_itself_redispatched_adds_the_next_node_to_the_cha
     worktree_directory(&home, &fleet.load(&second).await.expect("the replacement"));
     dispatched(&fleet, &second).await.expect("released to run");
     fleet.kill_job(&second).await.expect("ended by hand");
-    let third = fleet.redispatch(&second).await.expect("a second replacement");
+    let third = fleet
+        .redispatch(&second)
+        .await
+        .expect("a second replacement");
 
     let after = read_back(&fleet, &studio).await;
     assert_eq!(
         jobs_on(&after),
-        vec![first.as_str(), second.as_str(), third.dispatched.id().as_str()],
+        vec![
+            first.as_str(),
+            second.as_str(),
+            third.dispatched.id().as_str()
+        ],
         "three Jobs, in the order the work went in"
     );
     assert_eq!(
@@ -230,7 +237,10 @@ async fn a_job_redispatched_twice_draws_each_replacement_once_and_no_job_twice()
     let was_there = a_job_node(&fleet, &studio, &killed, LEFT_AT).await;
 
     let first = fleet.redispatch(&killed).await.expect("a replacement");
-    let second = fleet.redispatch(&killed).await.expect("a second replacement");
+    let second = fleet
+        .redispatch(&killed)
+        .await
+        .expect("a second replacement");
 
     let after = read_back(&fleet, &studio).await;
     assert_eq!(
