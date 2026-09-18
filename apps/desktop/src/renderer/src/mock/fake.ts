@@ -262,7 +262,21 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
     // with nothing connected already draws — never an invented record.
     helmDebugInfo: async () => refused("/helm/debug"),
     startHelmFresh: async () => OK,
-    pointHelm: async () => undefined,
+    /**
+     * The dock's own switch, and *Discuss with Helm* on a card. **Which
+     * repository Helm answers for is main's decision and not Fleet's**
+     * (`main/helm.ts`), so the fake takes it rather than dropping it: this was
+     * a no-op, and a mock where the one control that points Helm does nothing
+     * is a mock where nothing pointed can be reached at all.
+     *
+     * What it publishes is a conversation with nothing in it, which is what
+     * main's own socket publishes on a fresh connection whose backfill found
+     * none — never an invented exchange. A scenario that holds one answers
+     * this itself; `helm-talking` is pointed from the start and draws no
+     * switch, so nothing there passes through here.
+     */
+    pointHelm: async (manifestId) =>
+      publish({ helm: { state: "open", manifestId, replying: false, skipped: 0, missed: 0, items: [] } }),
     // The mock provides no haptics, so nothing calls this; answered for the type.
     tap: () => undefined,
   };
