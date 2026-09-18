@@ -239,7 +239,11 @@ impl Checking {
     /// acts on is worse than the vague sentence it replaces if what runs is
     /// sometimes less, so a step holding a path-scoped Check says so — on the
     /// same reading `crate::dry_run` skips by, and never in schema words.
-    pub fn at(workflow: &FrozenWorkflow, step: &ResolvedStep) -> Option<Checking> {
+    pub fn at(
+        workflow: &FrozenWorkflow,
+        step: &ResolvedStep,
+        allowance: Option<crate::briefing::Allowance>,
+    ) -> Option<Checking> {
         if step.mid_step_checks().is_empty() {
             return None;
         }
@@ -290,10 +294,21 @@ impl Checking {
             "\n\nIt is not a verdict and it advances nothing. A run in which \
              everything passes does not finish this part; the checks are run \
              again when you submit, and that run is the one that decides. \
-             Submitting is still the only way to report. There is a limit on \
-             how many times one part may ask for every check at once, and \
-             none on asking about one.",
+             Submitting is still the only way to report.",
         );
+        // **The number, where the caller knows it.** "There is a limit" and no
+        // number is what a part read on 17 Sep before it stopped asking
+        // altogether: it could not tell whether spending one early risked
+        // running out at the second task of seven, so it spent none and ran
+        // the commands by hand. A brief assembled outside a spawn has no
+        // allowance to state and says nothing rather than guessing. #1456.
+        match allowance.and_then(|allowance| allowance.said()) {
+            Some(said) => block.push_str(&format!(" {said}")),
+            None => block.push_str(
+                " There is a limit on how many times one part may ask for every check \
+                 at once, and none on asking about one.",
+            ),
+        }
         Some(Checking(block))
     }
 

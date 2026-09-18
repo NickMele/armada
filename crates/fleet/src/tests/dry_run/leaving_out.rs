@@ -68,7 +68,7 @@ fn the_brief_says_which_checks_a_run_leaves_out_and_where_they_run() {
     let frozen = workflow.frozen();
 
     let implement = frozen.step(&StepId::new("implement")).expect("the step");
-    let told = Checking::at(frozen, implement)
+    let told = Checking::at(frozen, implement, None)
         .expect("an offer")
         .text()
         .to_string();
@@ -82,7 +82,7 @@ fn the_brief_says_which_checks_a_run_leaves_out_and_where_they_run() {
     );
 
     let tests = frozen.step(&StepId::new("tests")).expect("the step");
-    let told = Checking::at(frozen, tests)
+    let told = Checking::at(frozen, tests, None)
         .expect("an offer")
         .text()
         .to_string();
