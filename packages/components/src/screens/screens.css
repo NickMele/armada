@@ -1277,7 +1277,12 @@
   gap: var(--space-2);
 }
 
+/* The acts on what is picked, in an aside one node wide. **It wraps**: a
+   Contradiction offers four, which together are wider than the aside, and a row
+   that does not wrap runs out of the whiteboard and under Helm's dock — where
+   Resolved here was drawn off the surface and could not be pressed at all. */
 .armada-studio__acts {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
