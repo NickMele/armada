@@ -23,7 +23,6 @@ const A_PERSONS: &[&str] = &[
     "delete_studio",
     "capture_studio_note",
     "move_studio_node",
-    "remove_studio_node",
     "remove_studio_nodes",
     "decide_studio_edge",
 ];

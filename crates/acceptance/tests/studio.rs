@@ -381,7 +381,6 @@ fn a_captured_note_keeps_where_it_was_pointed_and_no_route_can_rewrite_it() {
             "capture_studio_note",
             "group_studio_nodes",
             "move_studio_node",
-            "remove_studio_node",
             "remove_studio_nodes",
             "write_up_studio_node",
         ],
@@ -430,9 +429,7 @@ fn no_agent_is_offered_a_persons_act_on_a_studio() {
     };
     for persons in [
         "decide_studio_edge",
-        "remove_studio_node",
-        // #1411: clearing a Studio out is the same act over a selection, and
-        // it is a person's for the same reason one node is.
+        // #1411: one node or eighteen, deleting is one act and a person's.
         "remove_studio_nodes",
         "delete_studio",
         "ask_scout",

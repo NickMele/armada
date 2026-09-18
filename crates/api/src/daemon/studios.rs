@@ -15,9 +15,9 @@ use std::sync::Arc;
 use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, DeferOnStudio,
     DispatchStudioDraft, EditStudioDraft, EditStudioLink, GroupStudioNodes, ManifestId,
-    MoveStudioNode, ProposeStudioEdge, ReadInLink, RemoveStudioNode, RemoveStudioNodes,
-    RenameStudio, SettleContradiction, StartScout, StartStudioRun, StopScout, Studio,
-    StudioDeleted, StudioId, StudioList, StudioNodeId, StudioRunStarted, WriteUpStudioNode,
+    MoveStudioNode, ProposeStudioEdge, ReadInLink, RemoveStudioNodes, RenameStudio,
+    SettleContradiction, StartScout, StartStudioRun, StopScout, Studio, StudioDeleted, StudioId,
+    StudioList, StudioNodeId, StudioRunStarted, WriteUpStudioNode,
 };
 
 use crate::daemon::{Redirector, Refusal};
@@ -99,14 +99,6 @@ pub trait Studios: Send + Sync + 'static {
         &self,
         studio_id: StudioId,
         moving: MoveStudioNode,
-        within: Option<ManifestId>,
-    ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
-
-    /// `remove_studio_node`.
-    fn remove_studio_node(
-        &self,
-        studio_id: StudioId,
-        removing: RemoveStudioNode,
         within: Option<ManifestId>,
     ) -> impl Future<Output = Result<Studio, Refusal>> + Send;
 

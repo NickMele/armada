@@ -243,7 +243,7 @@ fn removing_a_node_takes_its_edges_and_deleting_a_studio_takes_everything_on_it(
         .expect("proposed");
 
     store
-        .remove_studio_node(&studio, &second, &at(3))
+        .remove_studio_nodes(&studio, &[second], &at(3))
         .expect("removed");
     let left = store.studio(&studio).expect("reads");
     assert_eq!(left.nodes.len(), 1);

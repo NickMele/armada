@@ -315,22 +315,15 @@ notes = """
 Position only. A Studio is laid out by hand, so no agent is offered a move; a node Helm adds is placed by the request that adds it.
 """
 
-[operations.remove_studio_node]
-kind = "command"
-transport = "HTTP"
-agent_access = "Bridge only"
-description = "Remove a node and every edge on it, and answer with the Studio"
-notes = """
-**A person's act**, whatever Helm's authority setting says. Removing a node a person did not want is how a proposed one is turned down.
-"""
-
 [operations.remove_studio_nodes]
 kind = "command"
 transport = "HTTP"
 agent_access = "Bridge only"
 description = "Remove every node named and every edge on them, as one write, and answer with the Studio"
 notes = """
-**A person's act**, whatever Helm's authority setting says, and the same act as `remove_studio_node` over a selection rather than a repeat of it. **All of them or none**: one transaction, so a name that is not on this Studio refuses with every node still standing. Naming no node is refused as `fleet.studio_no_nodes_named`. `#1411`.
+**A person's act**, whatever Helm's authority setting says. Removing a node a person did not want is how a proposed one is turned down.
+
+**The only delete on a Studio's nodes, one node or eighteen.** `remove_studio_node` was retired here: two routes for one act is two paths that drift, and they had — the single one left a captured Note's frame on disk. **All of them or none**: one transaction, so a name that is not on this Studio refuses with every node still standing. Naming no node is refused as `fleet.studio_no_nodes_named`. `#1411`.
 """
 
 [operations.propose_studio_edge]

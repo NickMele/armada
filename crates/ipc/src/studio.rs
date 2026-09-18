@@ -421,12 +421,6 @@ pub struct MoveStudioNode {
     pub position: StudioPosition,
 }
 
-/// `remove_studio_node`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RemoveStudioNode {
-    pub node_id: StudioNodeId,
-}
-
 /// `remove_studio_nodes`: everything a person picked, deleted as one write.
 /// `#1411`.
 ///

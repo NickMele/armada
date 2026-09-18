@@ -607,7 +607,6 @@ export const CHANNELS = {
   renameStudio: "bridge:rename-studio",
   addStudioNode: "bridge:add-studio-node",
   moveStudioNode: "bridge:move-studio-node",
-  removeStudioNode: "bridge:remove-studio-node",
   // Everything picked, deleted as one write — #1411. Its own channel because it
   // is its own operation on the wire, not a loop over the one above.
   removeStudioNodes: "bridge:remove-studio-nodes",

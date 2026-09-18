@@ -217,23 +217,6 @@ pub(crate) async fn move_studio_node<D: Studios>(
     answered(&served, StatusCode::OK, moved)
 }
 
-pub(crate) async fn remove_studio_node<D: Studios>(
-    State(served): State<Served<D>>,
-    Path(studio_id): Path<String>,
-    scope: Scope,
-    bytes: Bytes,
-) -> Response {
-    let removing = match body(&served, "a node to remove", &bytes) {
-        Ok(removing) => removing,
-        Err(response) => return response,
-    };
-    let removed = served
-        .daemon()
-        .remove_studio_node(StudioId::carried(studio_id), removing, within(scope))
-        .await;
-    answered(&served, StatusCode::OK, removed)
-}
-
 pub(crate) async fn remove_studio_nodes<D: Studios>(
     State(served): State<Served<D>>,
     Path(studio_id): Path<String>,

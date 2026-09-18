@@ -21,9 +21,9 @@ use std::sync::Arc;
 use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CreateStudio, DecideStudioEdge, DeferOnStudio,
     DispatchStudioDraft, EditStudioDraft, EditStudioLink, GroupStudioNodes, HelmStudioAct,
-    ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNode, RemoveStudioNodes,
-    RenameStudio, SettleContradiction, StartScout, StartStudioRun, StopScout, StudioDeleted,
-    StudioHelmActed, StudioList, StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
+    ManifestId, MoveStudioNode, ProposeStudioEdge, RemoveStudioNodes, RenameStudio,
+    SettleContradiction, StartScout, StartStudioRun, StopScout, StudioDeleted, StudioHelmActed,
+    StudioList, StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
 };
 use store::{LoadJobError, Store, StudioError};
 
@@ -579,20 +579,6 @@ where
         let to = moving.position.to_domain();
         self.written(&studio_id, within, |store, id| {
             store.move_studio_node(id, &node, to, &at)
-        })
-        .await
-    }
-
-    async fn remove_studio_node(
-        &self,
-        studio_id: ipc::StudioId,
-        removing: RemoveStudioNode,
-        within: Option<ManifestId>,
-    ) -> Result<ipc::Studio, Refusal> {
-        let at = self.now();
-        let node = removing.node_id.to_domain();
-        self.written(&studio_id, within, |store, id| {
-            store.remove_studio_node(id, &node, &at)
         })
         .await
     }

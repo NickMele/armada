@@ -45,7 +45,6 @@ export type StudioRoutes = Pick<
   | "captureStudioNote"
   | "readStudioFrame"
   | "moveStudioNode"
-  | "removeStudioNode"
   | "removeStudioNodes"
   | "decideStudioEdge"
   | "promoteOnStudio"
@@ -253,14 +252,6 @@ export function keeping(seeded: readonly Studio[] = []): StudioKeeping {
         const answer = write(studioId, (studio) => ({
           ...studio,
           nodes: studio.nodes.map((node) => (node.id === nodeId ? { ...node, position } : node)),
-        }));
-        return answer.ok ? OK : answer.outcome;
-      },
-      removeStudioNode: async (studioId, nodeId) => {
-        const answer = write(studioId, (studio) => ({
-          ...studio,
-          nodes: studio.nodes.filter((node) => node.id !== nodeId),
-          edges: studio.edges.filter((edge) => edge.from !== nodeId && edge.to !== nodeId),
         }));
         return answer.ok ? OK : answer.outcome;
       },

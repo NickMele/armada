@@ -8,10 +8,10 @@ use ipc::{
     AddStudioNode, AskScout, CaptureStudioNote, CheckoutRunUnderway, ContradictionSettled,
     CreateStudio, DecideStudioEdge, DeferOnStudio, DispatchStudioDraft, EditStudioDraft,
     EditStudioLink, GroupStudioNodes, Instant, ManifestId, MoveStudioNode, ProposeStudioEdge,
-    RemoveStudioNode, RemoveStudioNodes, RenameStudio, SettleContradiction, StartScout,
-    StartStudioRun, StopScout, Studio, StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind,
-    StudioEdgeStanding, StudioId, StudioList, StudioNode, StudioNodeContent, StudioNodeId,
-    StudioNodeState, StudioPosition, StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
+    RemoveStudioNodes, RenameStudio, SettleContradiction, StartScout, StartStudioRun, StopScout,
+    Studio, StudioDeleted, StudioEdge, StudioEdgeId, StudioEdgeKind, StudioEdgeStanding, StudioId,
+    StudioList, StudioNode, StudioNodeContent, StudioNodeId, StudioNodeState, StudioPosition,
+    StudioRunStarted, StudioSummary, WireError, WriteUpStudioNode,
 };
 
 use super::FakeDaemon;
@@ -268,21 +268,6 @@ impl Studios for FakeDaemon {
             {
                 node.position = moving.position;
             }
-            Ok(studio.clone())
-        })
-    }
-
-    async fn remove_studio_node(
-        &self,
-        studio_id: StudioId,
-        removing: RemoveStudioNode,
-        within: Option<ManifestId>,
-    ) -> Result<Studio, Refusal> {
-        self.changing(&studio_id, within, |studio| {
-            studio.nodes.retain(|node| node.id != removing.node_id);
-            studio
-                .edges
-                .retain(|edge| edge.from != removing.node_id && edge.to != removing.node_id);
             Ok(studio.clone())
         })
     }

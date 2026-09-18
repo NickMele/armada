@@ -174,7 +174,12 @@ test("a Studio named by hand, with a note typed and a link pasted, survives a re
   await expect.element(node(/^Link: docs\/contracts\/design-system\.md/)).toBeVisible();
 });
 
-test("Delete node confirms, with Cancel first, and takes the node's edges with it", async () => {
+/**
+ * One node picked reaches the same act, the same route and the same
+ * confirmation as eighteen — #1411. Two of each was two paths that drifted, and
+ * the single one left a captured Note's picture on disk.
+ */
+test("Delete 1 node confirms, with Cancel first, and takes the node's edges with it", async () => {
   const fleet = studying([]);
   open(fleet.scenario);
   await page.getByRole("button", { name: "Studios", exact: true }).first().click();
@@ -185,12 +190,14 @@ test("Delete node confirms, with Cancel first, and takes the node's edges with i
 
   node(/^Finding: /).element().focus();
   await userEvent.keyboard("{Enter}");
-  await act("Delete node");
+  await act("Delete 1 node");
   // Scaling up, so the press inside it waits for it to land — #1323.
   const confirm = page.getByRole("dialog");
   await entered(confirm);
   await expect.element(page.getByRole("button", { name: "Cancel" })).toHaveFocus();
-  await confirm.getByRole("button", { name: "Delete node" }).click();
+  // What goes with it is said before the press, the same sentences a selection gets.
+  await expect.element(confirm.getByText("1 node goes from this Studio, with the 1 edge on it.")).toBeVisible();
+  await confirm.getByRole("button", { name: "Delete 1 node" }).click();
 
   await expect.poll(() => fleet.studios()[0]!.nodes.map((one) => one.kind)).toEqual(["note"]);
   expect(fleet.studios()[0]!.edges).toEqual([]);
@@ -693,7 +700,6 @@ test("every node picked is deleted by one act, confirmed once, and the Studio is
   await openActs();
   // Counted, never named, and the single-node act is not what is offered here.
   await expect.element(offered("Delete 18 nodes")).toBeVisible();
-  expect(offered("Delete node").query()).toBeNull();
 
   await offered("Delete 18 nodes").click();
   const confirm = page.getByRole("dialog");

@@ -1283,14 +1283,18 @@ one — which is the same rule `title` and `state` already follow at 14.18.
 `laid_out_from` is Fleet's own bookkeeping on the wire: the corner of the block an Epic's issues sit
 in, so a widening fills that block's gaps and a node dragged out of it is readable as dragged.
 
-## Protocol 14.21: everything picked, deleted as one write
+## Protocol 15.0: one delete on a Studio's nodes, one node or eighteen
 
-`#1411`. One new route, `POST /studios/:studio_id/remove_nodes`, and one new DTO,
-`RemoveStudioNodes { node_ids }`. `Bridge only`, like the single-node act beside it.
+`#1411`. `remove_studio_node` is gone — the route, the DTO, the `Studios` method, the store write
+and the capability Bridge reached it by. `remove_studio_nodes` replaces it, `POST
+/studios/:studio_id/remove_nodes` carrying `RemoveStudioNodes { node_ids }`, `Bridge only`.
+**Removing an operation is a major bump by this document's own table**, as at 14.0, so the major
+moves and the minor resets.
 
-**A new operation rather than a wider `RemoveStudioNode`.** Retyping `node_id` into a list is a
-field retyped, which is a major bump and would break every Bridge already built. Both operations
-stand: `remove_studio_node` is untouched and nothing about what an older peer parses changes.
+**Two routes for one act is two paths that drift, and these had.** The single-node write left a
+captured Note's frame on disk; the selection write deletes it. Retiring the first closes that leak
+rather than writing it down. A Bridge built before this presses a route that answers
+`fleet.route_not_found`, which the major is what stops it reaching.
 
 **All of them or none is the store's transaction, not the caller's care.** Every name is checked
 before anything is deleted, so a selection carrying one name the Studio does not hold refuses with
