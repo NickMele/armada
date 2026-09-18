@@ -15,6 +15,7 @@ import type {
   CheckoutRunUnderway,
   CheckoutVerify,
   EditManifest,
+  KitInventory,
   KitServerRow,
   ManifestDeclared,
   ManifestDriftRead,
@@ -226,6 +227,101 @@ export const GH_ISSUE_VIEW: AllowedCommandRow = {
 };
 
 /**
+ * The setup a person already works with, as the mock's own machine holds it —
+ * #1491. **No vendor here**: the harness names itself over the wire, and the
+ * mock is not the adapter.
+ */
+export const KIT_INVENTORY: KitInventory = {
+  harness: "An agent CLI",
+  home: "/Users/someone/.agent",
+  present: true,
+  kinds: [
+    {
+      kind: "skills",
+      read: {
+        what: "read",
+        items: [
+          {
+            name: "humanizer",
+            says: "Rewrite AI-sounding text so it reads like the writer without changing what it says.",
+            source: "/Users/someone/.agent/skills/humanizer",
+          },
+          {
+            name: "impact-analysis",
+            says: "Use when the user wants to know what will break if they change something.",
+            source: "/Users/someone/.agent/skills/impact-analysis",
+          },
+        ],
+        unreadable: [
+          {
+            source: "/Users/someone/.agent/skills/half/SKILL.md",
+            why: "front matter opens and never closes",
+          },
+        ],
+      },
+    },
+    {
+      kind: "plugins",
+      read: {
+        what: "read",
+        items: [
+          {
+            name: "code-simplifier@official",
+            says: "version 1.0.0",
+            source: "/Users/someone/.agent/plugins/cache/code-simplifier/1.0.0",
+          },
+        ],
+        unreadable: [],
+      },
+    },
+    {
+      kind: "agent_file",
+      read: {
+        what: "read",
+        items: [
+          {
+            name: "AGENTS.md",
+            says: "21 lines, opening # Global Instructions",
+            source: "/Users/someone/.agent/AGENTS.md",
+          },
+        ],
+        unreadable: [],
+      },
+    },
+    { kind: "sub_agents", read: { what: "read", items: [], unreadable: [] } },
+    { kind: "commands", read: { what: "read", items: [], unreadable: [] } },
+    {
+      kind: "mcp_servers",
+      read: {
+        what: "read",
+        items: [
+          {
+            name: "gitnexus",
+            says: "a program this machine starts",
+            source: "/Users/someone/.agent.json",
+          },
+        ],
+        unreadable: [],
+      },
+    },
+    {
+      kind: "allowlist",
+      read: {
+        what: "not_read",
+        why: "a rule drawn out of its two tiers reads as a grant, and the tiers are #41",
+      },
+    },
+    {
+      kind: "models",
+      read: {
+        what: "not_read",
+        why: "which models a Job may use is resolved against a Manifest, and that is #41",
+      },
+    },
+  ],
+};
+
+/**
  * A kit with both tiers already saying something, so the mock shows a Drone
  * here getting one server and withheld from another. #1275.
  */
@@ -334,6 +430,8 @@ export type Manifesting = {
   alwaysAllowed?: AllowedCommandRow[];
   /** What Kit holds, and what this repository has said about each. #1275. */
   kitServers?: KitServerRow[];
+  /** The setup this machine already has, read to be shown. #1491. */
+  kitInventory?: KitInventory;
   save?: SaveGoesTo;
   diff?: CheckoutRunDiff;
   drift?: ManifestDriftRead;
@@ -417,6 +515,7 @@ function behaviour(fleet: FleetHandle, options: Manifesting): Partial<BridgeApi>
       return { state: "saved", saved: { path: MANIFEST_PATH, at: WROTE_AT } };
     },
     readManifestSpend: async () => ({ ok: true, spend }),
+    readKitInventory: async () => ({ ok: true, setup: options.kitInventory ?? KIT_INVENTORY }),
     listKitServers: async () => ({ ok: true, kit: { servers } }),
     addKitServer: async (adding) => {
       const added: KitServerRow = {

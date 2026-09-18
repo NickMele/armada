@@ -1,0 +1,130 @@
+/* The setup a person already has — #1491. A reading and not a control: no
+   button, no field, nothing that changes anything. Every value is a token. */
+
+.armada-kit-setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.armada-kit-setup__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-kit-setup__title {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}
+
+.armada-kit-setup__where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+}
+
+.armada-kit-setup__home {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-subtle);
+  overflow-wrap: anywhere;
+}
+
+.armada-kit-setup__kind {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-kit-setup__kind-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}
+
+/* The count, which is the answer to the question this surface was opened with. */
+.armada-kit-setup__count {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-body);
+  color: var(--fg-subtle);
+}
+
+.armada-kit-setup__note,
+.armada-kit-setup__none,
+.armada-kit-setup__not-read,
+.armada-kit-setup__reading {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+.armada-kit-setup__none,
+.armada-kit-setup__not-read {
+  color: var(--fg-subtle);
+}
+
+.armada-kit-setup__items,
+.armada-kit-setup__unreadable {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+/* One line each where there is room, wrapping rather than truncating: a
+   description a person wrote is the reason they would recognise the row. */
+.armada-kit-setup__item,
+.armada-kit-setup__unreadable > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.armada-kit-setup__item-name {
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.armada-kit-setup__item-says {
+  flex: 1 1 20ch;
+  min-width: 0;
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* Where it came from, kept quiet: it is provenance rather than the row. */
+.armada-kit-setup__item-source {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-subtle);
+  overflow-wrap: anywhere;
+}

@@ -86,6 +86,7 @@ import {
   listRepositoryAllowedCommands,
   removeRepositoryAllowedCommand,
   listKitServers,
+  readKitInventory,
   addKitServer,
   forgetKitServer,
   setKitServerReach,
@@ -979,8 +980,8 @@ export function App() {
               onPick={pick}
             />
           ) : kitting ? (
-            /* Kit's servers, both tiers, and what a Drone dispatched against
-               the picked repository resolves. #1275. */
+            /* What a person already has, and then Kit's servers with both
+               tiers and what a Drone dispatched here resolves. #1275, #1491. */
             <Boundary region="Kit" {...guarded}>
               <Kit
                 // Another repository is another second tier. The machine-wide
@@ -991,6 +992,7 @@ export function App() {
                     ? "this repository"
                     : repositoryLabel(pickedRepository, repositories)
                 }
+                onReadKitInventory={readKitInventory}
                 onListKitServers={listKitServers}
                 onAddKitServer={addKitServer}
                 onForgetKitServer={forgetKitServer}

@@ -74,3 +74,65 @@ export type SetManifestServerReach = {
   name: string;
   reach: ManifestReach | null;
 };
+
+// The setup a person already works with, read from their agent harness's own
+// home and shown by kind. Since protocol 17.2. `crates/ipc/src/kit.rs`, #1491.
+//
+// **No address on any of it.** A row names a thing and says where it came from,
+// and there is nothing here a server a drone gets could be built out of —
+// reading is not granting, and allowing stays its own act on a kit row.
+
+/** One thing a person already has. */
+export type SetupItem = {
+  name: string;
+  /** Its own words for itself, where its file carries them. */
+  says?: string;
+  /** Where it came from, as a person would type it. */
+  source: string;
+};
+
+/** Something of the right shape in the right place that would not read. */
+export type SetupUnreadable = {
+  source: string;
+  why: string;
+};
+
+/**
+ * What became of one kind. **Tagged**, so an empty list is *you have none of
+ * these* and never *nothing looked*.
+ */
+export type WhatWasRead =
+  | { what: "read"; items: SetupItem[]; unreadable: SetupUnreadable[] }
+  | { what: "not_read"; why: string };
+
+/** Armada's word for one kind of thing, never a harness's. */
+export type SetupKind =
+  | "skills"
+  | "plugins"
+  | "agent_file"
+  | "sub_agents"
+  | "commands"
+  | "mcp_servers"
+  | "allowlist"
+  | "models";
+
+/** One kind, and what became of it. */
+export type SetupKindRow = {
+  kind: SetupKind;
+  read: WhatWasRead;
+};
+
+/** `get_kit_inventory`'s answer. */
+export type KitInventory = {
+  /**
+   * The harness, in its own name. **Drawn, never matched on** — it arrives as
+   * data an adapter produced, which is what lets a second harness draw here
+   * without this file changing.
+   */
+  harness: string;
+  home: string;
+  /** Whether that home is there at all. */
+  present: boolean;
+  /** Every kind, in a fixed order, including the ones nothing reads yet. */
+  kinds: SetupKindRow[];
+};

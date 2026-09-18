@@ -8,13 +8,18 @@
 //
 // **Both tiers stay on one screen**, because `resolves` is the answer over the
 // two and a surface showing one of them cannot say why a Drone gets a server.
+//
+// **What a person already has is read first and drawn first.** #1491: this
+// screen opened on *Nothing in your Kit yet* while fourteen skills and eight
+// plugins sat one directory away. What is read reaches no Drone — the servers
+// below are the only ones that can, and only once allowed.
 
 // Which repository "here" means is the rail's pick, the same pick every other
 // per-repository read follows. On All repositories there is no Manifest to
 // narrow, so the app asks for one rather than drawing a dead control — the
 // Manifest surface's own arrangement.
 
-import { KitServers } from "@armada/components";
+import { KitServers, KitSetup } from "@armada/components";
 
 import { said } from "./copy";
 import { addressReads, addressTyped, useKit, type KitSlice } from "./manifest-kit";
@@ -27,26 +32,29 @@ export type KitProps = KitSlice & {
 export function Kit(props: KitProps) {
   const kit = useKit(props);
   return (
-    <KitServers
-      here={props.repository}
-      servers={kit.kit?.servers.map((server) => ({
-        name: server.name,
-        address: addressReads(server.address),
-        kind: server.address.transport,
-        reachesByDefault: server.drones === "yes",
-        here: server.manifest,
-        resolves: server.resolves,
-      }))}
-      refused={kit.refused === null ? undefined : said(kit.refused)}
-      onAdd={({ name, kind, address }) => {
-        const typed = addressTyped(kind, address);
-        // Fleet refuses the same shapes and says why. What is refused here is
-        // an empty field, which has nothing to send and nothing to say.
-        if (typed !== null) kit.onAdd({ name, address: typed });
-      }}
-      onForget={kit.onForget}
-      onKitReach={(name, reaches) => kit.onKitReach(name, reaches ? "yes" : "no")}
-      onHereReach={kit.onManifestReach}
-    />
+    <div className="armada-kit">
+      <KitSetup setup={kit.setup} />
+      <KitServers
+        here={props.repository}
+        servers={kit.kit?.servers.map((server) => ({
+          name: server.name,
+          address: addressReads(server.address),
+          kind: server.address.transport,
+          reachesByDefault: server.drones === "yes",
+          here: server.manifest,
+          resolves: server.resolves,
+        }))}
+        refused={kit.refused === null ? undefined : said(kit.refused)}
+        onAdd={({ name, kind, address }) => {
+          const typed = addressTyped(kind, address);
+          // Fleet refuses the same shapes and says why. What is refused here is
+          // an empty field, which has nothing to send and nothing to say.
+          if (typed !== null) kit.onAdd({ name, address: typed });
+        }}
+        onForget={kit.onForget}
+        onKitReach={(name, reaches) => kit.onKitReach(name, reaches ? "yes" : "no")}
+        onHereReach={kit.onManifestReach}
+      />
+    </div>
   );
 }

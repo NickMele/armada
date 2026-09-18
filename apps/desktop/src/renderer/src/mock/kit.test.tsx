@@ -68,3 +68,36 @@ test("All repositories asks for one rather than drawing a tier that answers for 
   await kit({ kitServers: KIT_SERVERS, picked: false });
   await expect.element(page.getByText(/Pick a repository to see what its Drones are handed/)).toBeVisible();
 });
+
+/**
+ * #1491's own claim: the screen opens showing what this person already has,
+ * rather than asking them to type it in again. The counts are read from their
+ * harness's own home, and a file that would not read is named rather than
+ * quietly left out of them.
+ */
+test("Kit opens on the setup a person already works with", async () => {
+  await kit();
+
+  await expect.element(page.getByText("What you already have")).toBeVisible();
+  await expect.element(page.getByText("humanizer", { exact: true })).toBeVisible();
+  await expect.element(page.getByText("code-simplifier@official")).toBeVisible();
+  await expect.element(page.getByText(/would not read/)).toBeVisible();
+
+  // A kind nothing reads yet says so rather than drawing as empty, which is
+  // what made a full home directory read as an empty Kit.
+  await expect.element(page.getByText(/Not read yet/).first()).toBeVisible();
+});
+
+/**
+ * **Seeing a server is not granting one.** A server the person connected
+ * outside Armada is drawn, and the Kit list beside it is still empty — so no
+ * Drone dispatched here is handed it, and allowing it stays a second act.
+ */
+test("a server Armada can see is not a server a Drone gets", async () => {
+  await kit();
+
+  await expect.element(page.getByText("gitnexus", { exact: true })).toBeVisible();
+  await expect.element(page.getByText(/A drone here is handed none of them/)).toBeVisible();
+  await expect.element(page.getByText(/Nothing in your Kit yet/)).toBeVisible();
+  expect(page.getByText("Gets it").elements()).toHaveLength(0);
+});
