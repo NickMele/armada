@@ -18,6 +18,11 @@
      because Badge is nowrap and nothing clips it. Widening the fixed value is
      the tempting fix and postpones the same bug to the next longer verb. */
   --armada-track-badge: calc(var(--space-12) * 2 + var(--space-8) + var(--space-1));
+  /* 132px: the handle, leading the run. A FLOOR like every track below it, so
+     the column grows to the longest handle in the list where there is room and
+     truncates where there is not — 132px holds 17 mono characters, which is a
+     number and a short title. */
+  --armada-track-id: calc(var(--space-12) * 2 + var(--space-8) + var(--space-1));
   /* 168px: the branch or the workflow. The widest of the five, because a
      branch name is the longest machine value in the run. */
   --armada-track-origin: calc(var(--space-12) * 3 + var(--space-6));
@@ -67,9 +72,12 @@
 
      Three tracks and four, for the reason the table has both — a floor a
      column never fills reads as a value that failed to load, and Origin has
-     words but no carriage to Bridge yet. */
+     words but no carriage to Bridge yet. **The handle's track is in both and
+     counted in neither**: it is the row's own, not a fact the caller named, and
+     `JobSummary` carries a handle on every Job. */
   --armada-job-row-tracks-3:
     minmax(var(--armada-track-badge), max-content)
+    minmax(var(--armada-track-id), auto)
     minmax(var(--armada-track-origin), auto)
     minmax(var(--armada-track-progress), auto)
     minmax(var(--armada-track-time), auto)
@@ -77,6 +85,7 @@
     max-content;
   --armada-job-row-tracks-4:
     minmax(var(--armada-track-badge), max-content)
+    minmax(var(--armada-track-id), auto)
     minmax(var(--armada-track-origin), auto)
     minmax(var(--armada-track-progress), auto)
     minmax(var(--armada-track-time), auto)
@@ -189,6 +198,7 @@
 
 /* Dimming is a token, not an alpha. */
 .armada-job-row[data-dimmed] .armada-job-row__title,
+.armada-job-row[data-dimmed] .armada-job-row__id,
 .armada-job-row[data-dimmed] .armada-job-row__field {
   color: var(--fg-subtle);
 }
@@ -205,21 +215,28 @@
   min-width: 0;
 }
 
+/* **A grid, where this was a flex column.** Line two is the handle's cell and
+   the field run beside it, so the body needs a column boundary of its own; a
+   list replaces these tracks with the frame's subgrid below. */
 .armada-job-row__body {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--space-3);
+  align-content: center;
   /* **--space-2, where this was 2px.** The two were one block while the run was
      a single line of values: a headline over a row of tags reads as one thing,
      and 2px was what kept it one thing. Each fact carries its own name above
      its value now, so the run is a block in its own right — the title needs
      separating from it rather than joining to it, and at 2px the headline read
      as a fourth label in the group under it. */
-  gap: var(--space-2);
+  row-gap: var(--space-2);
   min-width: 0;
 }
 
-/* Line one: the headline sentence, with the job id set back beside it. */
+/* Line one: the headline sentence, on its own. The handle left it for the run
+   below, where it lines up with every other handle in the list. */
 .armada-job-row__headline {
+  grid-column: 1 / -1;
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
@@ -238,28 +255,39 @@
   white-space: nowrap;
 }
 
-/* The job id is metadata and machine-derived: set back, and mono.
+/* The handle's cell: the name over the value, the treatment every labelled
+   fact in the run takes, and the first column of that run. */
+.armada-job-row__id-cell {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  /* 2px, the pair-is-one-block gap `__field[data-labelled]` uses. */
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
 
-   **Shrinks and ellipses beside the title, rather than running past the row.**
-   `flex: none` held it at its full content width — invisible in a pane wide
-   enough to take it, and cut off mid-character inside a panel's own rounded
-   edge, which reads as broken rather than as a long name. `title` on the
-   element carries the full value the same way `armada-job-row__title` does. */
+/* Machine-derived, so mono. **--fg-default, where it was --fg-subtle beside the
+   title**: it is a labelled value in the run now, and the run's own hierarchy is
+   a --fg-subtle name over a value a step up. Subtle under subtle is one channel.
+
+   **Shrinks and ellipses inside its column, rather than running past the row.**
+   `title` on the element carries the full value the same way
+   `armada-job-row__title` does. */
 .armada-job-row__id {
-  flex: 0 1 auto;
+  max-width: 100%;
   min-width: 0;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
-  color: var(--fg-subtle);
+  color: var(--fg-default);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 /* What changed and how long ago, in the status hue, fading as the tint decays. It holds its width
-   and the handle gives way first, since the handle is on `title` and the age is not; in a table it
-   takes only the slack of the handle's line, so a mark arriving never wraps the headline. */
+   and the title gives way first, since the title is on `title` and the age is not. */
 .armada-job-row__changed {
   flex: none;
   font-family: var(--font-mono);
@@ -267,10 +295,6 @@
   line-height: var(--leading-2xs);
   white-space: nowrap;
   color: color-mix(in srgb, var(--armada-row-hue) calc(var(--armada-row-recent) * 100%), transparent);
-}
-
-.armada-job-row__headline:has(> .armada-job-row__changed) > .armada-job-row__id {
-  flex-shrink: 8;
 }
 
 .armada-job-row[data-view="table"] .armada-job-row__changed,
@@ -281,27 +305,26 @@
   text-overflow: ellipsis;
 }
 
-/* A table's headline holds the title and the handle (#884). The handle sits beside the title only while
-   the whole title fits, else under it, and breaks at hyphens only where wider than the cell (#925). */
+/* A table's title column holds the title over the handle (#884, #925). The two
+   were one wrapping line, which is what put the handle at a different x on
+   every row; they are two rows of one column now, and the handle still reads
+   whole — it wraps rather than truncating, breaking anywhere, because the
+   whole string is what a person quotes. */
 .armada-job-row[data-view="table"] .armada-job-row__headline,
 .armada-job-row-list[data-view="table"] .armada-job-row__headline {
-  flex-wrap: wrap;
-  row-gap: calc(var(--space-1) / 2);
   overflow: hidden;
 }
 
 .armada-job-row[data-view="table"] .armada-job-row__title,
 .armada-job-row-list[data-view="table"] .armada-job-row__title {
-  /* The whole title is the basis, so a title that would truncate sends the handle to the next line. */
   flex: 0 1 auto;
   min-width: 0;
 }
 
 .armada-job-row[data-view="table"] .armada-job-row__id,
 .armada-job-row-list[data-view="table"] .armada-job-row__id {
-  flex: 0 1 auto;
-  min-width: 0;
   white-space: normal;
+  overflow: visible;
   overflow-wrap: anywhere;
 }
 
@@ -367,7 +390,8 @@
   overflow: visible;
 }
 
-.armada-job-row__field[data-labelled] > .armada-job-row__field-label {
+.armada-job-row__field[data-labelled] > .armada-job-row__field-label,
+.armada-job-row__id-cell > .armada-job-row__field-label {
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
@@ -527,12 +551,21 @@
     align-content: center;
   }
 
-  .armada-job-row-list > .armada-job-row > .armada-job-row__body > .armada-job-row__headline,
-  .armada-job-row-list > .armada-job-row > .armada-job-row__body > .armada-job-row__fields {
+  .armada-job-row-list > .armada-job-row > .armada-job-row__body > .armada-job-row__headline {
     grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  /* The handle takes the body's first column and the run takes the rest, so
+     every handle in the list starts on the one x the frame's track gives it. */
+  .armada-job-row-list > .armada-job-row > .armada-job-row__body > .armada-job-row__id-cell {
+    grid-column: 1;
+    grid-row: 2;
   }
 
   .armada-job-row-list > .armada-job-row > .armada-job-row__body > .armada-job-row__fields {
+    grid-column: 2 / -1;
+    grid-row: 2;
     grid-template-columns: subgrid;
   }
 
@@ -614,6 +647,18 @@
   min-height: var(--h-row-table);
   padding-top: var(--space-2);
   padding-bottom: var(--space-2);
+  /* Two rows, for the title over its handle in one column, and the cells that
+     are not the title span both and stay centred against the pair. The 2px is
+     the row-gap the headline used while it wrapped the handle itself, and the
+     row's own --space-3 would read as a gap between lines rather than columns.
+
+     **`min-content`, not `auto`.** The row's height is settled by the frame's
+     track at --h-row-table, and `auto` rows are compressed into it — the pair
+     lost 4px of its leading and the two lines closed up. Measured: 52px rows
+     either way, so the table is no taller for this. */
+  grid-template-rows: min-content min-content;
+  row-gap: calc(var(--space-1) / 2);
+  align-content: center;
 }
 
 .armada-job-row[data-view="table"] {
@@ -637,6 +682,70 @@
   justify-content: flex-start;
 }
 
+/* ---- the table's own two rows -------------------------------------------
+
+   **Placed for both cases, where the placements used to be the list's alone.**
+   A standalone row auto-flowed into the right columns while its cells were one
+   per column; the handle is a second cell in the title's column now, so
+   auto-placement would put it in Workflow's. Placed, both read the same.
+
+   The title's column is the only one with two rows: everything else spans them
+   and centres against the pair. */
+.armada-job-row[data-view="table"] > .armada-job-row__badge,
+.armada-job-row-list[data-view="table"] > .armada-job-row > .armada-job-row__badge {
+  grid-column: 1;
+  grid-row: 1 / -1;
+}
+
+.armada-job-row[data-view="table"] .armada-job-row__headline,
+.armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__headline {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+/* The handle under the title, not beside it: beside, it started at a different
+   x on every row. Its label is the header's job in this view, and the list's
+   stylesheet takes it off the screen. */
+.armada-job-row[data-view="table"] .armada-job-row__id-cell,
+.armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__id-cell {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+}
+
+.armada-job-row[data-view="table"] > .armada-job-row__action,
+.armada-job-row-list[data-view="table"] > .armada-job-row > .armada-job-row__action {
+  grid-column: -2 / -1;
+  grid-row: 1 / -1;
+}
+
+/* Placed rather than left to flow. Auto-placement holds until one row
+   carries a field the row below it does not, and then a column means two
+   things — which is exactly the failure a header row makes visible. */
+.armada-job-row[data-view="table"] .armada-job-row__field:nth-child(1),
+.armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__field:nth-child(1) {
+  grid-column: 3;
+  grid-row: 1 / -1;
+}
+
+.armada-job-row[data-view="table"] .armada-job-row__field:nth-child(2),
+.armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__field:nth-child(2) {
+  grid-column: 4;
+  grid-row: 1 / -1;
+}
+
+.armada-job-row[data-view="table"] .armada-job-row__field:nth-child(3),
+.armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__field:nth-child(3) {
+  grid-column: 5;
+  grid-row: 1 / -1;
+}
+
+.armada-job-row[data-view="table"] .armada-job-row__field:nth-child(4),
+.armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__field:nth-child(4) {
+  grid-column: 6;
+  grid-row: 1 / -1;
+}
+
 /* A figure a person compares rather than reads sits against the column it is
    compared down, which for a duration is its right edge. */
 .armada-job-row[data-view="table"] .armada-job-row__field[data-mono="true"],
@@ -652,33 +761,6 @@
   .armada-job-row-list[data-view="table"] > .armada-job-row > .armada-job-row__body,
   .armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__fields {
     display: contents;
-  }
-
-  .armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__headline {
-    grid-column: 2;
-  }
-
-  /* Placed rather than left to flow. Auto-placement holds until one row
-     carries a field the row below it does not, and then a column means two
-     things — which is exactly the failure a header row makes visible. */
-  .armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__field:nth-child(1) {
-    grid-column: 3;
-  }
-
-  .armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__field:nth-child(2) {
-    grid-column: 4;
-  }
-
-  .armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__field:nth-child(3) {
-    grid-column: 5;
-  }
-
-  .armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__field:nth-child(4) {
-    grid-column: 6;
-  }
-
-  .armada-job-row-list[data-view="table"] > .armada-job-row > .armada-job-row__action {
-    grid-column: -2 / -1;
   }
 }
 

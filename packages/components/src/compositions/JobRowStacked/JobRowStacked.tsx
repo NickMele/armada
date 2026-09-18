@@ -101,7 +101,20 @@ export type JobRowStackedProps = {
    * person reads. `handle` is what a person sees.
    */
   jobId?: string;
-  /** The handle, in mono, set back beside the headline. Copies on click. */
+  /**
+   * The handle — what a person calls this Job, in mono. Copies on click.
+   *
+   * **It leads the field run as its own labelled column, and is not part of
+   * the headline.** At the end of the title it started at a different x on
+   * every row while the facts beneath it stood in columns; a column of its own
+   * is what puts every handle on one line down the list. The cost is the
+   * owner's own: the headline is title-only, so the handle is a line further
+   * from it, and the run carries a column more at narrow widths.
+   *
+   * `Job` is the label, not `ID`: the handle is what a person calls a Job
+   * (`crates/core-model/src/job/handle.rs`), and the id is `jobId`, which this
+   * row never draws.
+   */
   handle?: string;
   /**
    * The field run. One track per field, shared down the list so it reads down
@@ -315,15 +328,6 @@ export function JobRowStacked({
           <span className="armada-job-row__title" title={typeof headline === "string" ? headline : undefined}>
             {headline}
           </span>
-          {handle ? (
-            <Copyable
-              className="armada-job-row__id"
-              value={handle}
-              copyValue={handle}
-              onCopied={onCopied}
-              title={handle}
-            />
-          ) : null}
           {changed === undefined ? null : (
             <span
               className="armada-job-row__changed"
@@ -333,6 +337,24 @@ export function JobRowStacked({
             </span>
           )}
         </div>
+
+        {/* Line two leads with the handle, in the same labelled treatment the
+            facts beside it take, so every handle in the list starts on one x.
+            A sibling of the run rather than a member of it: the table places
+            its cells by position, and a fact that comes and goes — Tasks —
+            is why those positions are counted rather than flowed. */}
+        {handle ? (
+          <span className="armada-job-row__id-cell">
+            <span className="armada-job-row__field-label">Job</span>
+            <Copyable
+              className="armada-job-row__id"
+              value={handle}
+              copyValue={handle}
+              onCopied={onCopied}
+              title={handle}
+            />
+          </span>
+        ) : null}
 
         {/* The track list is a custom property rather than
             `grid-template-columns` itself, because an inline
