@@ -55,10 +55,7 @@ fn a_kit_nobody_added_to_reads_empty() {
 fn both_addresses_read_back_as_they_were_written() {
     let dir = TempDir::new();
     let mut store = open(&dir);
-    let piped = server(
-        "gh",
-        program("npx", &["-y", "@modelcontextprotocol/server-github"]),
-    );
+    let piped = server("gh", program("npx", &["-y", "@scope/server-tracker"]));
     let addressed = server(
         "nexus",
         ServerAddress::address("https://example.test/mcp").expect("an address"),

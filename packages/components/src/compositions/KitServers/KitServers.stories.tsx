@@ -17,8 +17,8 @@ export default meta;
 type Story = StoryObj<typeof KitServers>;
 
 const OFF: KitServerRowProps = {
-  name: "github",
-  address: "npx -y @modelcontextprotocol/server-github",
+  name: "tracker",
+  address: "npx -y @scope/server-tracker",
   kind: "stdio",
   reachesByDefault: false,
   resolves: false,
@@ -66,12 +66,12 @@ export const InKitAndUnreached: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByText("Does not")).toBeInTheDocument();
 
-    await userEvent.selectOptions(canvas.getByRole("combobox", { name: "Here: github" }), "extended");
-    await expect(args.onHereReach).toHaveBeenCalledWith("github", "extended");
+    await userEvent.selectOptions(canvas.getByRole("combobox", { name: "Here: tracker" }), "extended");
+    await expect(args.onHereReach).toHaveBeenCalledWith("tracker", "extended");
     await expect(args.onKitReach).not.toHaveBeenCalled();
 
-    await userEvent.selectOptions(canvas.getByRole("combobox", { name: "In Kit: github" }), "yes");
-    await expect(args.onKitReach).toHaveBeenCalledWith("github", true);
+    await userEvent.selectOptions(canvas.getByRole("combobox", { name: "In Kit: tracker" }), "yes");
+    await expect(args.onKitReach).toHaveBeenCalledWith("tracker", true);
   },
 };
 
@@ -114,11 +114,11 @@ export const Adding: Story = {
   name: "Adding",
   args: { servers: [], onAdd: fn() },
   play: async ({ args, canvas, userEvent }) => {
-    await userEvent.type(canvas.getByLabelText("Name"), "github");
+    await userEvent.type(canvas.getByLabelText("Name"), "tracker");
     await userEvent.type(canvas.getByLabelText("Program"), "npx -y @scope/server");
     await userEvent.click(canvas.getByRole("button", { name: "Add" }));
     await expect(args.onAdd).toHaveBeenCalledWith({
-      name: "github",
+      name: "tracker",
       kind: "stdio",
       address: "npx -y @scope/server",
     });

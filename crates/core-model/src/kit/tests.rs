@@ -37,10 +37,10 @@ fn every_set_reads_back_from_its_own_spelling() {
 /// the set both readers spell the same way.
 #[test]
 fn a_name_is_letters_digits_dash_and_underscore() {
-    assert!(ServerName::named("  github-mcp_2  ").is_some());
+    assert!(ServerName::named("  tracker-mcp_2  ").is_some());
     assert_eq!(
-        ServerName::named("  github  ").map(|n| String::from(n.as_str())),
-        Some(String::from("github")),
+        ServerName::named("  tracker  ").map(|n| String::from(n.as_str())),
+        Some(String::from("tracker")),
         "trimmed rather than refused"
     );
     for refused in ["", "   ", "two words", "dotted.name", "slash/ed", "★"] {
@@ -71,15 +71,15 @@ fn an_address_is_a_program_or_an_http_url() {
 /// widens nothing, because the constructor cannot make one that reaches.
 #[test]
 fn a_server_a_person_adds_reaches_no_drone() {
-    let added = server("github");
+    let added = server("tracker");
     assert_eq!(added.drones, ReachesDrones::No);
     assert!(!a_drone_resolves(&added, None));
 }
 
 #[test]
 fn the_manifests_word_wins_in_either_direction() {
-    let off = server("github");
-    let mut on = server("github");
+    let off = server("tracker");
+    let mut on = server("tracker");
     on.drones = ReachesDrones::Yes;
 
     assert!(

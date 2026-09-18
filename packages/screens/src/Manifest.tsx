@@ -149,7 +149,7 @@ export function Manifest(props: ManifestProps) {
     props.settingUp || onlySetup
       ? null
       : editing.view === "servers"
-        ? "The MCP servers a Drone dispatched against this repository is handed. Nothing else reaches one."
+        ? "The MCP servers you have connected, and which of them a Drone dispatched here is handed."
         : rootless || editing.view === "run"
           ? "Run one Check or Command against this checkout, as it is on disk. Nothing here is a verdict."
           : "Edit this repository's Manifest. Save writes the file to disk and stops, without staging or committing it.";

@@ -96,9 +96,8 @@ export function KitServers({
   return (
     <div className="armada-kit-servers">
       <p className="armada-kit-servers__lead">
-        The MCP servers you have connected. A server added here reaches no drone until you allow
-        it — in Kit for every repository, or in this one alone. A drone already running keeps what
-        it started with.
+A server reaches no drone until you allow it — in Kit, for every repository, or in this one
+        alone. A drone already running keeps what it started with.
       </p>
 
       {refused === undefined ? null : (
@@ -112,7 +111,7 @@ export function KitServers({
           id={`${group}-name`}
           label="Name"
           value={name}
-          placeholder="github"
+          placeholder="tracker"
           onChange={(event) => setName(event.target.value)}
         />
         <Select

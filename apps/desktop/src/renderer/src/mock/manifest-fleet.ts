@@ -185,6 +185,39 @@ export const GH_ISSUE_VIEW: AllowedCommandRow = {
 };
 
 /**
+ * A kit with both tiers already saying something, so the mock shows a Drone
+ * here getting one server and withheld from another. #1275.
+ */
+export const KIT_SERVERS: KitServerRow[] = [
+  {
+    name: "tracker",
+    address: { transport: "stdio", command: "npx", args: ["-y", "@scope/server-tracker"] },
+    drones: "no",
+    manifest: "extended",
+    resolves: true,
+    added_at: "2026-09-16T11:02:00Z",
+    by: "human",
+  },
+  {
+    name: "nexus",
+    address: { transport: "http", url: "https://nexus.example.com/mcp" },
+    drones: "yes",
+    manifest: "restricted",
+    resolves: false,
+    added_at: "2026-09-16T11:04:00Z",
+    by: "human",
+  },
+  {
+    name: "sentry",
+    address: { transport: "stdio", command: "sentry-mcp", args: [] },
+    drones: "no",
+    resolves: false,
+    added_at: "2026-09-17T08:30:00Z",
+    by: "human",
+  },
+];
+
+/**
  * What a save comes to, played the way Fleet plays it: the write answers,
  * then the watch re-reads and publishes. `refused` is a correction Fleet would
  * not adopt; `moved` is a pull that landed under the edit.
