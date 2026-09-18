@@ -34,8 +34,9 @@
 // still running, one in a repository with no remote, one that stopped before
 // it delivered. The rule `branchFact` and `landedFact` already keep.
 //
-// **Repository leads and dispatched-by closes the line, since #1115** — the
-// mock's own order, and the registry `Row.tsx` names the gap in.
+// **Repository leads and provenance closes the line, since #1115** — the
+// mock's own order, and the registry `Row.tsx` names the gap in. Since #1439
+// that tail is two: who dispatched this job, then which job it replaced.
 
 import { ORIGIN } from "@armada/components";
 import type { JobDetailField } from "@armada/components";
@@ -70,7 +71,22 @@ export function factsOf(job: JobSummary, whole: JobWhole | null, now: number): J
     ...spendFact(whole),
     ...turnsFact(whole),
     ...dispatchedByFact(job),
+    ...redispatchedFromFact(job),
   ];
+}
+
+/**
+ * Which job this one replaced, where a redispatch minted it — the quiet half
+ * of the callout on the job it replaced. `#1439`.
+ *
+ * **By its id, the way `sub_dispatched` names its parent**, and for that
+ * field's reason: `redispatched_from` is the predecessor's id and nothing else
+ * of the lineage, so the line says which job and leaves the walk to the reader.
+ * The board's own `foldLineages` is what counts a chain; this is one edge.
+ */
+function redispatchedFromFact(job: JobSummary): JobDetailField[] {
+  if (job.redispatched_from === undefined) return [];
+  return [{ label: "Redispatched from", value: job.redispatched_from, mono: true }];
 }
 
 /**

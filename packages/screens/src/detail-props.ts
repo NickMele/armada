@@ -190,6 +190,16 @@ export type JobDetailProps = {
    * `Opened`.
    */
   onOpenPullRequest: OpenPullRequest;
+  /**
+   * Open another Job in this same surface — today, the one that replaced this
+   * one. `#1439`.
+   *
+   * **Not a round trip like the two above it.** It is the shell's own
+   * navigation, which is why it is optional: a story or a harness that draws
+   * this screen alone has nowhere to go, and the callout then says what
+   * happened without offering a press that would do nothing.
+   */
+  onOpenJob?: (jobId: string) => void;
   onReadCall: ReadCall;
   /**
    * Read one Check's own output. **`onReadCall`'s shape one record over**, and
