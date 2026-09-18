@@ -65,12 +65,28 @@ describe("helmRowsOf", () => {
     expect(rows).toHaveLength(2);
   });
 
-  it("says why a stored session could not be resumed, and why no reply came", () => {
+  it("says why a stored session could not be resumed", () => {
     const fresh: HelmThreadItem = { kind: "fresh", id: "4", ts: "2026-09-13T10:00:00.000Z", because: "session_not_found" };
-    const unanswered: HelmThreadItem = { kind: "unanswered", id: "5", ts: "2026-09-13T10:00:00.000Z", why: "Fleet is shutting down." };
-    const rows = helmRowsOf([fresh, unanswered]);
-    expect(rows[0]?.message).toMatch(/could not be resumed/);
-    expect(rows[1]?.message).toMatch(/Fleet is shutting down\./);
+    expect(helmRowsOf([fresh])[0]?.message).toMatch(/could not be resumed/);
+  });
+
+  // The row drew `No reply came. ${why}` until the reply budget's own sentence
+  // started with the same words, so a person read it twice. Fleet writes the
+  // whole sentence now — `crates/fleet/src/helm/unanswered.rs`, pinned on
+  // Fleet's side by `crates/fleet/src/tests/helm_unanswered.rs` — and the
+  // record draws the same three in `HelmRecord.stories.tsx`.
+  it.each([
+    "no reply came within 900 seconds, so the session was ended",
+    "the session never started: the model provider refused this key (exit status: 1)",
+    "the conversation's stored session could not be reached: database is locked",
+  ])("draws Fleet's own sentence for a reply that never came: %s", (why) => {
+    const unanswered: HelmThreadItem = { kind: "unanswered", id: "5", ts: "2026-09-13T10:00:00.000Z", why };
+    const [row] = helmRowsOf([unanswered]);
+    expect(row?.message).toBe(why);
+    expect(String(row?.message).match(/no reply came/gi) ?? []).toHaveLength(
+      why.includes("no reply came") ? 1 : 0,
+    );
+    expect(row?.message).not.toMatch(/^No reply came\. /);
   });
 
   it("folds the owner's own sequence to their question, one reply, and its cost", () => {

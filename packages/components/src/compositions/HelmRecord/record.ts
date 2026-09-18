@@ -62,8 +62,11 @@ function line(said: HelmDebugLine): [string, string] {
       return [`${at}  turn`, ended(said.cost_micros, said.turns, said.refusals)];
     case "fresh":
       return [`${at}  fleet`, "the stored session was gone, so this reply started a new one"];
+    // Fleet's sentence whole. The `fleet` column already says who is
+    // speaking, and the lead-in that used to sit here doubled the
+    // reply-budget timeout — `crates/fleet/src/helm/unanswered.rs`.
     case "unanswered":
-      return [`${at}  fleet`, `no reply came: ${said.why}`];
+      return [`${at}  fleet`, said.why];
   }
 }
 

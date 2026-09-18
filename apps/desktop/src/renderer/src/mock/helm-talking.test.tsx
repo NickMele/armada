@@ -37,8 +37,10 @@ test("the dock opens on a conversation, both voices in it and the answer that ne
 
   // And the failure the record's controls exist for — a second ask with
   // nothing behind it. Without this the split button stands in no moment.
+  // Fleet's own sentence, whole and unframed on both surfaces — the thread's
+  // "No reply came. " and the record's "no reply came: " are gone.
   await expect
-    .element(page.getByText("No reply came. Helm's door would not be configured: Permission denied (os error 13)"))
+    .element(page.getByText("Helm's door would not be configured: Permission denied (os error 13)"))
     .toBeVisible();
 });
 
@@ -79,5 +81,6 @@ test("the record's split button offers both acts, and Details opens this session
   expect(text).toContain("why did 77 stop");
   expect(text).toContain("called get_job");
   expect(text).toContain("$0.0214 · 4 turns");
-  expect(text).toContain("no reply came: Helm's door would not be configured");
+  expect(text).toMatch(/fleet +Helm's door would not be configured: Permission denied \(os error 13\)/);
+  expect(text).not.toContain("no reply came: ");
 });
