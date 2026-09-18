@@ -8,12 +8,9 @@
 // holds every rule; what is drawn is what a person may reach and what came back when they pressed.
 //
 // **The acts and their dialog are two renderings of one state**, because they belong in two places:
-// the acts are entries in the whiteboard aside's one control, and the dialog cannot be in the board
-// at all — React Flow paints its nodes over anything inside its subtree, so a dialog drawn there is
-// read through the Notes it was opened from. Delete node was already outside for the same reason.
-//
-// **The rungs are entries and not buttons** since #1399: `StudioPicked` draws them, and what is
-// offered is a list rather than a row that grows with the kinds.
+// the rungs are entries in the aside's one control since #1399 — a list, not a row that grows with
+// the kinds — and the dialog cannot be in the board at all, since React Flow paints its nodes over
+// anything inside its subtree. Delete node was already outside for the same reason.
 
 import { useState, type ReactNode } from "react";
 import { Dialog, Input, Select, Textarea, type StudioPickedAct } from "@armada/components";
