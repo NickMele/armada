@@ -167,12 +167,21 @@ first.
 |---|---|
 | Shipped | Armada carries adapters for the runners it already knows. A repository on one of them is configured by being detected |
 | Learned | No shipped adapter's `detect` matches. The draft-and-verify path above produces a candidate, a person confirms it once, and Fleet keeps it |
-| Published | A learned adapter is sent back, and becomes a shipped one by pull request against Armada |
+| Published | A learned adapter is sent back to Armada's own repository, and becomes a shipped one by pull request |
 
 **A learned adapter is worth keeping beyond the machine that learned it.** The
 work of drafting one is a model call, a fixture run and a person's attention,
 and every repository on that runner afterwards would repeat all three. Sending
 it back is what makes the second repository on a runner cost nothing.
+
+**Publishing is a submission to the repository Armada itself is developed in**,
+not to a service Armada operates. Nothing has to be hosted, every submission is
+public and reviewable the moment it arrives, and an author needs the account
+they would need to file an issue. What that costs is the lookup: asking whether
+a runner is already known means reading what is in the repository, so it is not
+free the way an indexed registry's answer would be — and a draft-and-verify run
+that a lookup would have avoided is a model call, a fixture run and a person's
+attention.
 
 **The pull request is how a published adapter becomes a shipped one.** Receiving
 one opens a change against Armada rather than adding it to a live set, so an
@@ -188,9 +197,9 @@ for it.
 
 ## Deferred: sharing
 
-Nothing about naming, versioning or trust tiers is settled. What a publish layer
-would need is already true of this schema, so building one does not require
-reopening it:
+The target is settled above. Nothing about naming, versioning or trust tiers is,
+and what a publish layer would need is already true of this schema, so building
+one does not require reopening it:
 
 - a stable identity and version per adapter — the example above's comment
   is illustrative only, not a decided naming scheme
@@ -198,17 +207,3 @@ reopening it:
   executing anything to do so
 - nothing in `detect`, `requires`, `commands` or `output` that only makes
   sense scoped to one repository
-
-## Open questions
-
-- **[runner-adapter-publish-target]** Where does a learned adapter go when it is
-  published — a registry Armada hosts, or a repository on a forge? Both reach
-  the same end, a pull request against Armada opened by automation on receipt,
-  and they differ in what Armada has to run and what a publisher needs an
-  account for. A hosted registry can index `detect` and answer "is this runner
-  known" before a draft is attempted, which is the call that costs a model run;
-  a forge repository costs nothing to operate and makes every submission public
-  and reviewable by default, but answering that same question means fetching and
-  scanning what is there. What decides it: whether the pre-draft lookup is worth
-  operating a service for, and whether an adapter's author is expected to have
-  an account anywhere.
