@@ -591,7 +591,10 @@ export function App() {
                 ? undefined
                 : {
                     name: studioName(shownStudio),
-                    ...(studioNode === null ? {} : { node: nodeNamed(shownStudio, studioNode, state.jobs) }),
+                    ...(studioNode === null ? {} : { node: nodeNamed(shownStudio, studioNode, state.jobs, {
+                          servers: state.servers.servers,
+                          now,
+                        }) }),
                   }
             }
             onStartFresh={() => void startHelmFresh()}
