@@ -14,7 +14,7 @@
 //! | That a Studio survives a restart on disk | It touches a file. `store` and `fleet` reopen one in their own tests; what is asserted here is the record reading back through the wire |
 //! | That a sweep past retention is what fills a Run node in | It deletes a directory. `fleet`'s `studio_runs` drives a real run past a real sweep; what is asserted here is the tail that sweep takes and the node carrying it over the wire |
 //! | That a reopened Studio is read-only until Continue | A Bridge state; #1287's mock browser test proves it |
-//! | That a Link naming an issue dispatches its address, and that Dispatch is offered on that Link and no other | The route is `fleet`'s `promoting`, which drives a real dispatch to a Job at the gate; what Bridge offers off `forge` is #1379's mock browser test. What is asserted here is the field a Link carries on the wire |
+//! | That an Issue, a Pull request and an Epic dispatch their address, and that a Link does not | The route is `fleet`'s `promoting`, which drives a real dispatch to a Job at the gate; what Bridge offers off the kind is #1379's and #1394's mock browser tests. What is asserted here is the node each address makes, and the fields it carries on the wire |
 //! | Anything a person sees | Nothing here renders. The whiteboard is #1286 and #1287 |
 //! | That Helm keeps to what it is told | A model's. `fleet`'s `helm_studio` drives the door through a stand-in agent |
 //! | That a scout reads only the checkout, holds no write tool, and shows its cost when stopped | A process's, and nothing here spawns one: `adapters`' tests hold the launch to read tools under `--restricted`, and `fleet`'s run and stop it against a stand-in agent |
@@ -31,12 +31,71 @@ use ipc::{HelmStudioAct, StudioNodeContent};
 use bench::studio::{
     a_capture_sent, a_failed_run, a_long_log, a_studio_promoted_to_a_job,
     a_studio_with_a_captured_note, a_studio_with_a_frozen_finding,
-    a_studio_with_a_run_started_from_a_note, a_studio_with_sources_read_in,
-    a_studio_with_two_notes, an_issue_draft, held, helms_manifest, one_job_under, received_event,
-    received_request, received_studio, ASKED, COMMIT, COMPONENT, COST, CUT, DRAFT_TITLE,
-    FIRST_NOTE, FRAME_BYTES, FRAME_FILE, LEFT_AT, MARKUP, OWNERS, READ, READ_IN_NOTE, REPOSITORY,
-    SCREEN, SECOND_NOTE, SELECTOR, SIDES, SOURCES, STYLES, THE_COMMAND, THE_FAILURE, THE_RUN,
+    a_studio_with_a_node_of_each_forge_kind, a_studio_with_a_run_started_from_a_note,
+    a_studio_with_sources_read_in, a_studio_with_two_notes, an_issue_draft, held, helms_manifest,
+    one_job_under, received_event, received_request, received_studio, ASKED, A_PAGE, COMMIT,
+    COMPONENT, COST, CUT, DRAFT_TITLE, FIRST_NOTE, FRAME_BYTES, FRAME_FILE, LEFT_AT, MARKUP,
+    OWNERS, READ, READ_IN_NOTE, REPOSITORY, SCREEN, SECOND_NOTE, SELECTOR, SIDES, SOURCES, STYLES,
+    THE_COMMAND, THE_FAILURE, THE_RUN,
 };
+
+/// Step 5 of the claim, `#1394`: **a pasted address is the thing it names.**
+/// An issue's makes an Issue with its number as a field, a pull request's a
+/// Pull request, a milestone's an Epic; a documentation page is still a Link.
+/// `docs/concepts/studio.md`, *Nodes*.
+///
+/// **The failure this is against is what a node *is* living in a classifier
+/// read at render time.** A kind worked out on the way to the wire has nowhere
+/// to keep a number or a state, so each rides in a sentence and every reader
+/// parses it; and what a surface offers on a node then depends on a field that
+/// was never stored. What is held here is that the kind is on the record and
+/// each kind carries its own fields — and that the decision was the adapter's,
+/// because every node below was built by handing it an address.
+#[test]
+fn a_pasted_address_is_the_kind_it_names_with_its_own_fields_and_a_page_stays_a_link() {
+    let studio = received_studio(&a_studio_with_a_node_of_each_forge_kind());
+    let kinds: Vec<_> = studio
+        .nodes
+        .iter()
+        .map(|node| match &node.content {
+            StudioNodeContent::Issue { number, .. } => ("issue", number.clone()),
+            StudioNodeContent::PullRequest { number, .. } => ("pull_request", number.clone()),
+            StudioNodeContent::Epic { number, .. } => ("epic", number.clone()),
+            StudioNodeContent::Link { address, .. } => ("link", address.clone()),
+            other => panic!("nothing else is pasted: {other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            ("issue", "1394".to_string()),
+            ("pull_request", "1391".to_string()),
+            ("epic", "17".to_string()),
+            ("link", A_PAGE.to_string()),
+        ],
+        "each address's own kind, with its number as a field — and a page is a Link"
+    );
+
+    // **No node carries a state of Armada's.** Where something stands on a
+    // forge is a field on the node, and what a forge says is absent until
+    // something reads the node in — nothing here fetched.
+    assert!(
+        studio.nodes.iter().all(|node| node.state.is_none()),
+        "an address node holds no state of ours"
+    );
+    let StudioNodeContent::Issue { title, state, .. } = &studio.nodes[0].content else {
+        panic!("an Issue");
+    };
+    assert_eq!(
+        (title, state),
+        (&None, &None),
+        "what the forge calls it and where it stands wait on a read-in"
+    );
+    let StudioNodeContent::Epic { read_in, .. } = &studio.nodes[2].content else {
+        panic!("an Epic");
+    };
+    assert_eq!(*read_in, None, "how much of it is here waits on a read-in");
+}
 
 /// Step 6's near half: **two Notes are clustered, the Cluster is written up as
 /// an Issue draft, and the Job it was dispatched to stands on the Studio,
@@ -193,11 +252,7 @@ fn an_issue_drafts_text_alone_reaches_the_proposer_and_the_job_is_told_all_of_it
 fn a_studio_reads_back_with_every_node_where_it_was_left_and_its_proposal_unaccepted() {
     let graph = a_studio_with_two_notes();
     let studio = received_studio(&graph);
-    assert_eq!(
-        studio,
-        ipc::Studio::of(&graph, &adapters::forge_named),
-        "nothing lost on the wire"
-    );
+    assert_eq!(studio, ipc::Studio::of(&graph), "nothing lost on the wire");
     assert_eq!(
         studio.manifest_id.as_str(),
         REPOSITORY,
@@ -264,11 +319,7 @@ fn a_studio_reads_back_with_every_node_where_it_was_left_and_its_proposal_unacce
 fn a_captured_note_keeps_where_it_was_pointed_and_no_route_can_rewrite_it() {
     let graph = a_studio_with_a_captured_note();
     let studio = received_studio(&graph);
-    assert_eq!(
-        studio,
-        ipc::Studio::of(&graph, &adapters::forge_named),
-        "nothing lost on the wire"
-    );
+    assert_eq!(studio, ipc::Studio::of(&graph), "nothing lost on the wire");
 
     let note = studio.nodes.first().expect("the Note");
     assert_eq!(note.added_by.map(|by| by.as_wire()), Some("person"));
@@ -523,11 +574,7 @@ fn helm_proposes_unasked_acts_on_an_ask_and_its_acts_are_its_own_event() {
 fn a_scouts_finding_arrives_frozen_with_every_file_it_read_its_commit_and_its_cost() {
     let graph = a_studio_with_a_frozen_finding();
     let studio = received_studio(&graph);
-    assert_eq!(
-        studio,
-        ipc::Studio::of(&graph, &adapters::forge_named),
-        "nothing lost on the wire"
-    );
+    assert_eq!(studio, ipc::Studio::of(&graph), "nothing lost on the wire");
 
     let finding = studio.nodes.last().expect("the Finding");
     assert_eq!(
@@ -679,29 +726,24 @@ fn four_sources_read_in_leave_their_links_standing_with_what_came_back_hung_off_
     // it was handed. The checkout is recorded beside it, so a Finding says
     // both what state of the code it read and what came from outside it.
     for (n, (link, address, kind)) in SOURCES.iter().enumerate() {
+        // `#1394`: what an address names is the node's own kind, decided by
+        // `crates/adapters` when the node was made. **None of the four is on
+        // this repository's forge** — a page, a session and a thread never
+        // are, and the issue here is somebody else's — so each is still a
+        // Link, and a Studio drawing these offers Dispatch on none of them.
         let StudioNodeContent::Link {
             address: kept,
             said,
             named,
-            forge,
         } = &node(link).content
         else {
-            panic!("`{link}` is a Link");
+            panic!("`{link}` names nothing on this repository's forge, so it is a Link");
         };
         assert_eq!(kept, address, "a Link keeps its address whatever came back");
         assert_eq!(*said, None, "nobody wrote a line on these");
         assert_eq!(
             *named, None,
             "nothing a scout read renames the Link it read"
-        );
-        // `#1379`: what an address names on this repository's forge is read
-        // off it by Fleet and said here, so no surface reads an address. None
-        // of the four is on it — a page, a session and a thread never are, and
-        // the issue here is somebody else's forge — so each says nothing, and
-        // a Studio drawing these offers Dispatch on none of them.
-        assert_eq!(
-            *forge, None,
-            "`{address}` names nothing on this repository's forge"
         );
 
         let StudioNodeContent::Finding {
