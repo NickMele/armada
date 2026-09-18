@@ -968,15 +968,43 @@ line one (`Job 12 stalled at step 3`), labelled field run on line two
 (`api · 3 pokes · auth/session.rs · 12m · ~$1.80`). The badge stays
 leading on line one so status is still the first thing caught.
 
-**No field is dropped at any width.** Every field in the universal row exists
-because a decision depends on it, and responsive-hiding them contradicts P2,
-which requires the facts needed to decide to be on screen without a click.
-Narrow changes the row's shape, never its content.
+**Every field is drawn wherever the row has the width for it**, and which
+fields those are is what changes with width — never their order, and never
+which of them is first.
 
-> **Rule.** Above the desktop floor the field run holds one line, and a
-> secondary value truncates with a tooltip carrying the full string.
+This said *no field is dropped at any width* until the row could not honour
+it. The Board grew a column for the Job's handle and a column for Tasks, and
+the drawn floors then wanted 1085px on a four-fact row — measured at the
+frame — against a 720px content column at the desktop floor. Shrinking every
+other track to nothing still left that row 71px too wide at 954. The rule was
+written when the run was shorter, and something had to give: `JobRowStacked`
+had been dropping the trailing facts below 1100px for some time while this
+page still forbade it.
+
+**P2 is what decides which ones go, and it is why this is not a free hand.**
+The facts a person decides from are the leading ones — the badge, the
+headline, the identifier, the workflow and the step — and those never give
+way. What gives way is the tail: how long it ran, who sent it, its repository
+and its tasks, in that order, which is the order the Board draws them in. A
+decision that needs one of those is a decision made on the Job itself, one
+press away.
+
+> **Rule.** Above `--layout-breakpoint` every fact the row carries is drawn,
+> on one line, and a secondary value truncates with a tooltip carrying the
+> full string.
 > Why: a fixed shape is what lets the run read down a list, and a pointer can
 > always reach what truncation hid.
+
+> **Rule.** Below `--layout-breakpoint` the trailing facts give way, in the
+> order the Board draws them, and the identifier never does.
+> Why: a row is quoted by its handle, so the one field a person carries out of
+> the row is the one field that cannot be the one to go.
+
+> **Rule.** A count of facts the row can carry has a track list of its own.
+> Why: a count with no list falls through to another count's, and the facts
+> past it land in the slack track or in the action's column — measured at
+> three widths, and each looked like a different bug: crushed to 16px, wrapped
+> onto a second row, or printed under the action's button.
 
 > **Rule.** Below the desktop floor the field run wraps to as many lines as the
 > field set needs, and nothing truncates.
@@ -993,9 +1021,10 @@ Below 1100 the user may still expand the sidebar manually. It overlays
 the content in that case rather than compressing the table further — a
 720px table has no width to give back.
 
-**Validation:** the field set needs revisiting rather than the row where it
-cannot carry itself at 720px on one line, or at 358px wrapped. No field is
-dropped at either width.
+**Validation:** the field set needs revisiting rather than the row where its
+leading facts cannot carry themselves at 720px on one line, or at 358px
+wrapped. A trailing fact giving way above those widths is the row working; a
+leading one giving way is the field set being too long.
 
 ---
 
