@@ -72,12 +72,12 @@ requires:
   - vitest ^1.0.0
 
 commands:
-  run:         "pnpm -C {pkg} test"
-  one_test:    "pnpm -C {pkg} test -- -t {test}"
-  run_failed:  "pnpm -C {pkg} test -- --retry {failed}"
-  run_changed: "pnpm -C {pkg} test -- --changed {files}"
-  run_group:   "pnpm -C {pkg} test -- --project {group}"
-  run_pattern: "pnpm -C {pkg} test -- -t {glob}"
+  run:         "pnpm -C {dir} test"
+  one_test:    "pnpm -C {dir} test -- -t {test}"
+  run_failed:  "pnpm -C {dir} test -- --retry {failed}"
+  run_changed: "pnpm -C {dir} test -- --changed {files}"
+  run_group:   "pnpm -C {dir} test -- --project {group}"
+  run_pattern: "pnpm -C {dir} test -- -t {glob}"
 
 output:
   line: '^\s*(?<status>✓|×)\s+(?<test>.+?)\s+\d+ms$'

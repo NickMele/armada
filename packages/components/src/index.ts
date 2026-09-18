@@ -317,6 +317,7 @@ export * from "./compositions/DroneMessageBox/DroneMessageBox";
 export * from "./compositions/WorkNarration/WorkNarration";
 // A Studio's nodes, and the whiteboard React Flow draws them on. #1286.
 export * from "./compositions/StudioCapture/StudioCapture";
+export * from "./compositions/CaptureBar/CaptureBar";
 export * from "./compositions/StudioAddNode/StudioAddNode";
 export * from "./compositions/StudioName/StudioName";
 export * from "./compositions/StudioPicked/StudioPicked";

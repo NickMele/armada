@@ -1,27 +1,35 @@
-// The header's field run on job detail: four facts on one line, and a fifth
-// on the few Jobs that have one.
+// The header's field run on job detail: what a person reads about the Job,
+// and nothing they would go and fetch.
 //
 // It is here rather than in `JobDetail.tsx` because it is one job — turning a
 // served Job into a list of labelled facts — and the screen beside it is
 // another. Nothing in this file decides how a fact looks; `JobDetailField` is
 // the design system's shape and this only fills it in.
 //
-// # Three, and it used to be ten
+// # Readings, and the run is only readings now
 //
-// The branch, how long it has been alive and what it has spent. A fourth
-// joins them the moment Fleet opens a pull request, and says what became of
-// it once somebody has merged or closed it. **The workflow left for "The run"
-// panel's own head since #1093** — a Job already carries its own name here.
-// Step, Manifest, Model, Origin, Urgency, Drone, Scope and the write-scope
-// overlap were all in here as well, over two lines, and none of them is in the
-// drawing's header. The ones worth reaching are under *Where things are*, which
-// is the region for a value you want rather than one you are reading — and the
-// step is the panel's whole subject, so naming it again above it said the same
-// thing twice.
+// How long the Job has been going, what became of its pull request, who sent
+// it and what it replaced. **The repository and the branch left in #1481**,
+// and the argument is that they were already on the screen: *Where things are*
+// draws both, one column down, each behind its own glyph and its own label. A
+// value drawn twice is two values that can disagree, and the second copy was
+// the one nobody could name — the owner read `armada/2-show-what-s-running-in-
+// the-drones-stat` off this line and asked whether it was a branch, a worktree
+// or an id.
 //
-// **The branch is bare.** `Branch armada/01K…` was a label in front of a
-// 26-character identifier; the branch is the one value here that reads as
-// itself, so it takes the line the drawing gives it and no label.
+// **The branch was also the handle said again.** Fleet builds a branch out of
+// the Job's own handle, so the run opened with `2-show-what-s-running-in-the-
+// drones-stat` and then repeated it three values later with `armada/` in
+// front. Two thirds of the line was one string.
+//
+// **Spend and Turns went to Pulse in the same change.** They are worth
+// knowing and they are not what a person opens a Job to read; Pulse is the
+// region that answers *what is this costing and is it still working*, and both
+// figures belong beside its processes rather than above its run. Step,
+// Manifest, Model, Origin, Urgency, Drone and the write-scope overlap had all
+// left before them, on the same rule — the ones worth reaching are under
+// *Where things are*, which is the region for a value you want rather than one
+// you are reading.
 //
 // # The pull request is one fact, and what became of it continues it
 //
@@ -32,44 +40,38 @@
 //
 // **A Job with no pull request draws neither**, and that is most Jobs: one
 // still running, one in a repository with no remote, one that stopped before
-// it delivered. The rule `branchFact` and `landedFact` already keep.
+// it delivered. The rule `pullRequestFact` and `landedFact` already keep.
 //
-// **Repository leads and provenance closes the line, since #1115** — the
-// mock's own order, and the registry `Row.tsx` names the gap in. Since #1439
-// that tail is two: who dispatched this job, then which job it replaced.
+// **Provenance closes the line, since #1115** — the mock's own order, and the
+// registry `Row.tsx` names the gap in. Since #1439 that tail is two: who
+// dispatched this job, then which job it replaced.
 
 import type { JobDetailField } from "@armada/components";
 
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
-import { elapsedSince } from "./duration";
 import { freezeLineOf } from "./freeze";
 import { fromAStudio, originReading } from "./origin";
 import { leading } from "./reading";
-import { LANDED } from "./Row";
+import { LANDED, elapsedOf } from "./Row";
 
 /**
- * The run, in the order the drawing runs it: what branch this Job writes to,
- * how long it has been alive, what it has cost, and how many turns it has
- * taken. **Not the workflow** — #1093 moved that to "The run" panel's own
- * head, which names it beside the steps it governs rather than beside a Job
- * that already carries its own name.
+ * The run, in the order the drawing runs it: what is holding this Job, what
+ * became of its pull request, how long it has been going, and where it came
+ * from. **Every one of them a reading** — nothing here is a value a person
+ * came to fetch, and #1481 is where the two that were left.
  *
- * Elapsed is read off the row rather than off the detail. Both carry it and
- * cannot disagree — the detail's is built from the same record — and the row is
- * already in hand, so the fact is there on the first frame instead of appearing
- * when `GET /jobs/:job_id` lands.
+ * Run time is read off the row's own fields rather than off the detail. Both
+ * carry them and cannot disagree — the detail is built from the same record —
+ * and the row is already in hand, so the figure is there on the first frame
+ * instead of appearing when `GET /jobs/:job_id` lands.
  */
 export function factsOf(job: JobSummary, whole: JobWhole | null, now: number): JobDetailField[] {
   const address = whole?.delivery?.pull_request;
   return [
-    ...repositoryFact(job),
     ...freezeFact(job),
-    ...branchFact(job),
     ...pullRequestFact(address),
     ...landedFact(whole, address !== undefined),
-    ...elapsedFact(job, now),
-    ...spendFact(whole),
-    ...turnsFact(whole),
+    ...runTimeFact(job, now),
     ...dispatchedByFact(job),
     ...studioGoneFact(job, whole),
     ...redispatchedFromFact(job, whole),
@@ -100,19 +102,6 @@ function redispatchedFromFact(job: JobSummary, whole: JobWhole | null): JobDetai
   // that appears and then disappears is worse than one that arrives late.
   if (whole === null || job.redispatched_from === undefined) return [];
   return [{ label: "The job it replaced has been forgotten" }];
-}
-
-/**
- * The repository this Job's Manifest was read from, by the Manifest id.
- *
- * **Reads `owner_manifest_id` and nothing else.** `manifestLabel` gives a
- * Board row the same answer for a served Manifest, off a `RepositorySummary[]`
- * this header does not hold — a Job's own Manifest is served by construction,
- * so threading that list in here would answer a question this field already
- * answers.
- */
-function repositoryFact(job: JobSummary): JobDetailField[] {
-  return [{ value: job.owner_manifest_id, mono: true }];
 }
 
 /**
@@ -153,16 +142,6 @@ export const WORKFLOW_SOURCE: Readonly<Record<string, string>> = {
 export function sourceOf(source: string | undefined): string {
   if (source === undefined || source === "") return "";
   return `, ${WORKFLOW_SOURCE[source] ?? source}`;
-}
-
-/**
- * The branch, unlabelled, or the reason there is none. **Absent is a fact
- * here**, not a blank: a Job at the approval gate has no worktree, and saying
- * so is different from leaving the value out and letting somebody wonder.
- */
-function branchFact(job: JobSummary): JobDetailField[] {
-  if (job.branch === undefined) return [{ label: "No branch yet" }];
-  return [{ value: job.branch, mono: true, copyValue: job.branch }];
 }
 
 /**
@@ -269,49 +248,34 @@ function freezeFact(job: JobSummary): JobDetailField[] {
 }
 
 /**
- * How long the Job has been running, from `started_at`.
+ * How long the Job ran.
+ *
+ * **It ticks while the Job runs and stops where the Job stopped.** It read
+ * `Elapsed 10h 29m` on a Job that had been dead since the morning, because the
+ * figure was measured against the clock rather than against the instant the
+ * Job stopped. `elapsedOf` is where that is decided now, for the Board row and
+ * for this line both — #1481 fixed the same defect in the same subtraction.
+ *
+ * **Run time, not Elapsed.** Elapsed names a stopwatch and says nothing about
+ * what it is timing, and half of what this figure had to say was that it had
+ * stopped. Two words, the spelling the Board column already carries.
  *
  * **Absent, not from `created_at`, while the Job has never run** — waiting
  * for approval and waiting in the queue for a slot must not count.
  */
-function elapsedFact(job: JobSummary, now: number): JobDetailField[] {
-  const alive = elapsedSince(job.started_at, now);
-  return alive === undefined ? [] : [{ label: "Elapsed", value: alive, mono: true }];
+function runTimeFact(job: JobSummary, now: number): JobDetailField[] {
+  const ran = elapsedOf(job, now);
+  return ran === undefined ? [] : [{ label: "Run time", value: ran, mono: true }];
 }
 
-/**
- * What the Job has cost so far.
- *
- * **Hedged, always.** The design contract spells an estimated value `~$2.40`
- * and never `$2.40`, and the figure is notional besides — it is what the run
- * would have cost at list price, which is not what a subscription account is
- * billed. Absent on a Fleet that does not count, which draws nothing rather
- * than a zero: a Job that cost nothing and a Fleet with no figure are two
- * different facts.
- */
-function spendFact(whole: JobWhole | null): JobDetailField[] {
-  const spend = whole?.spend;
-  if (spend === undefined) return [];
-  return [{ label: "Spend", value: spent(spend.cost_micros, spend.unpriced), mono: true }];
-}
-
-/**
- * How many turns the Job has taken, against how many it may take.
- *
- * **Never hedged, unlike the spend beside it.** P4 hedges by source: a cost is
- * derived from list prices and wears a tilde, and a turn is counted. Writing
- * the two alike would lend the estimate the authority of the count.
- *
- * **The cap is drawn with it and not on its own line.** It is the second of the
- * two ceilings `over_budget` folds, it stopped a job that had passed every
- * Check, and until now nothing on this screen read either figure — so the
- * number a person is deciding a raise against was on no surface at all.
- */
-function turnsFact(whole: JobWhole | null): JobDetailField[] {
-  const spend = whole?.spend;
-  if (spend === undefined) return [];
-  return [{ label: "Turns", value: `${spend.turns} of ${spend.turn_cap}`, mono: true }];
-}
+// # The money spellings, which outlived the fact that needed them
+//
+// `spent` and `money` were written for the header's own `Spend`, and that fact
+// went to Pulse in #1481 while four other surfaces — the settings panel, a
+// Helm thread, a cap warning and a verdict — had already come here for the
+// spelling. They stay because that is what they are now: one way to write a
+// figure Fleet reports in millionths, kept in one place so two screens cannot
+// round the same dollar differently.
 
 /**
  * A spend, and whether it is the whole of one.
@@ -326,7 +290,7 @@ function turnsFact(whole: JobWhole | null): JobDetailField[] {
  * fact either way and this is the shortest way to say it; a reader who does not
  * care reads past two words, and one who does is not sent hunting.
  */
-function spent(micros: number, unpriced: number | undefined): string {
+export function spent(micros: number, unpriced: number | undefined): string {
   const shown = money(micros);
   return unpriced === undefined || unpriced === 0 ? shown : `at least ${shown}`;
 }

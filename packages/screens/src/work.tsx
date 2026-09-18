@@ -317,8 +317,8 @@ function servingRows(jobId: string, rehearsal: WorkRehearsal): JobLogReferenceRo
     .map((server) => ({
       iconLabel: "Serving",
       // The address, not the name — `WhereRow`'s own rule for a mono value.
-      // **No `meta` beside it**: the shared label column `853da1d9` fixed
-      // wide enough for "Size on disk" leaves this row's value area narrow,
+      // **No `meta` beside it**: the shared label column `853da1d9` fixed at
+      // 96px leaves this row's value area narrow,
       // and a note here squeezed the address down to one character before
       // its own ellipsis. The name is still on the sheet and on hover.
       value: servingValueOf(server),

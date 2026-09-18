@@ -96,6 +96,13 @@ export function said(outcome: Outcome): string {
       return "That job is already showing its work. It was not asked twice.";
     case "empty_note":
       return "Requesting changes needs a note. Nothing was sent, and the job is still waiting.";
+    case "nothing_held":
+      return "Nothing is held, so there is nothing to capture. Point at something on the page first.";
+    case "run_ended":
+      return (
+        "This run stopped serving while the note was being written, so nothing was captured — " +
+        "what is on the port now may not be the run. Start the server again and capture there."
+      );
     case "refused":
       // Drawn as a failure notice above, with everything it carries — except Fleet serving nothing, which is no fault.
       return servesNothing(outcome) ? `${NOTHING_SERVED.title}. ${NOTHING_SERVED.next}` : "";

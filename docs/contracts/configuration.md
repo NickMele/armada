@@ -332,7 +332,7 @@ per runner in its own description — `docs/concepts/runner-adapter.md`.
 | Key | Required | What it says |
 | --- | --- | --- |
 | `name` | yes | Which runner description answers for this Check |
-| `pkg` | no | What `{pkg}` resolves to in that description's templates. Absent on a runner rooted at the repository |
+| `dir` | no | What `{dir}` resolves to in that description's templates. Absent on a runner rooted at the repository |
 
 ```yaml
 checks:
@@ -340,7 +340,7 @@ checks:
     run: pnpm --dir packages/screens exec vitest run
     runner:
       name: vitest
-      pkg: packages/screens
+      dir: packages/screens
 ```
 
 Rules that follow:
@@ -350,7 +350,7 @@ Rules that follow:
   answers where the file said nothing.
 - **A runner with nothing to say leaves the Check whole**, and every reason is
   the same answer: no description answers to that name, the description
-  declares no such shape, the template names a `{pkg}` the Check does not, or
+  declares no such shape, the template names a `{dir}` the Check does not, or
   no path can be spelled as one argument. Whole is never less than narrow.
 - **A name nothing answers to is not refused at load.** A repository may name a
   runner this Fleet has no description of, and the Checks driven by it run

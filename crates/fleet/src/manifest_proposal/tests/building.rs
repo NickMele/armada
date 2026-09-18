@@ -208,7 +208,7 @@ fn a_test_script_naming_a_known_runner_proposes_it() {
     let runner = test.runner.as_ref().expect("vitest is detected");
     assert_eq!(runner.name, "vitest");
     assert_eq!(
-        runner.pkg, None,
+        runner.dir, None,
         "the root workspace is the repository, and there is no package below it to name"
     );
 }

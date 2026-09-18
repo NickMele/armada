@@ -185,8 +185,8 @@ pub use attempt::{ended_at, first_started_at, Move, StepAttempt};
 pub use breakage::{ClaimedBreakage, WaitingOnFix};
 pub use capacity::{AdmissionHold, FleetCapacity};
 pub use capturing::{
-    CaptureBounds, CaptureElement, CaptureFrame, CaptureStudioNote, CaptureWindow, StagedFrame,
-    StudioCapture,
+    CaptureBounds, CaptureElement, CaptureFrame, CaptureServed, CaptureStudioNote, CaptureWindow,
+    StagedFrame, StudioCapture,
 };
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};

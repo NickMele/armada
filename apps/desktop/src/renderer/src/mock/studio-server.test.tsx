@@ -156,3 +156,27 @@ test("the Run control starts a declared server through start_studio_server", asy
   await expect.poll(() => startStudioRun.mock.calls.length).toBe(1);
   expect(startStudioRun.mock.calls[0]![1]).toBe("typecheck");
 });
+
+/**
+ * #1294's definition of done, on the half `App` can reach: **Capture on a
+ * server's link is an act on the Run node**, and it hands main the server's id
+ * and that server's own address. The window itself is main's — this window
+ * opens none — so what is checked here is the seam, not the second window.
+ */
+test("capture on a running server's page names the server and its own link", async () => {
+  const fleet = serving();
+  const app = open(fleet.scenario);
+  await openTheStudio();
+
+  await expect.element(node(/^Run: storybook_dev, serving/)).toBeVisible();
+  node(/^Run: storybook_dev/).element().focus();
+  await userEvent.keyboard("{Enter}");
+
+  const openCaptureWindow = vi.spyOn(app.api, "openCaptureWindow");
+  await act("Capture on Storybook");
+  await expect.poll(() => openCaptureWindow.mock.calls.length).toBe(1);
+  expect(openCaptureWindow).toHaveBeenCalledWith(SERVING.id, SERVING.links[0]!.url);
+
+  // The mock holds no Studio for main, so the refusal is drawn rather than swallowed.
+  await expect.element(page.getByText(/nowhere to land/)).toBeVisible();
+});

@@ -1,11 +1,11 @@
-/* Job detail header actions — the trail on the leading edge, the act on the
-   trailing one, the facts on their own line beneath. Established container
-   for the facts' own query below.
+/* Job detail header actions — the title and badge on the leading edge, the
+   acts on the trailing one, the facts on their own line beneath. Established
+   container for the facts' own query below.
 
-   **Two rows, not one that wraps.** The trail, the badge and the acts used to
-   share a row with the title beneath them; #1093 folded the title into the
-   trail, which leaves one row for identity and acts and a second, quieter one
-   for the facts — the crowding the header existed to fix. */
+   **Two rows, not one that wraps.** One row for identity and acts and a
+   second, quieter one for the facts — the crowding the header existed to fix.
+   #1093 got there by folding the title into a trail; #1481 took the trail out
+   and left the title where it stood. */
 .armada-job-head {
   display: flex;
   flex-direction: column;
@@ -14,11 +14,10 @@
   container-type: inline-size;
 }
 
-/* The trail and badge on the leading edge, the acts on the trailing one. It
+/* The title and badge on the leading edge, the acts on the trailing one. It
    wraps rather than squeezing: at a width too narrow for both, the acts drop
-   to a line of their own under the trail, the same shape the identity block
-   and the acts traded before #1093 — `--w-run-column` is not borrowed for its
-   number, it is what job detail's own left column measures. */
+   to a line of their own under the title — `--w-run-column` is not borrowed
+   for its number, it is what job detail's own left column measures. */
 .armada-job-head__top {
   display: flex;
   flex-wrap: wrap;
@@ -36,52 +35,15 @@
   flex: 1 1 var(--w-run-column);
 }
 
-/* Where this Job was opened from, then its name. `overflow: hidden` with
-   `white-space: nowrap` on the nav itself, so the name is the one segment
-   that shrinks — the crumb and the chevron are fixed points either side of
-   it. */
-.armada-job-head__trail {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-1);
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  font-size: var(--text-xs);
-  line-height: var(--leading-xs);
-  color: var(--fg-subtle);
-}
-
-.armada-job-head__crumb {
-  flex: none;
-}
-
-/* A real button where `onLeave` is wired, plain text otherwise — see the
-   file header on the one caller shape that leaves this inert. */
-button.armada-job-head__back {
-  padding: var(--space-1) var(--space-2);
-  margin: calc(var(--space-1) * -1) calc(var(--space-2) * -1);
-  border-radius: var(--radius-sm);
-  color: var(--fg-muted);
-  transition: color var(--duration-fast) var(--ease), background var(--duration-fast) var(--ease);
-}
-
-button.armada-job-head__back:hover {
-  color: var(--fg-default);
-  background: var(--bg-hover);
-}
-
-.armada-job-head__chevron {
-  flex: none;
-  color: var(--fg-subtle);
-}
-
-/* The name, at the trail's own size step up from its crumb — it is what the
-   trail is for, so it reads as the destination and not another segment. */
+/* The Job's name. It shrinks before the badge does, and clips rather than
+   wrapping: the row is one line tall at every width, and the whole of the
+   title is on the element's own `title`. */
 .armada-job-head__here {
   min-width: 0;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
+  margin: 0;
   font-size: var(--text-base);
   font-weight: var(--weight-body);
   color: var(--fg-default);
@@ -105,7 +67,9 @@ button.armada-job-head__back:hover {
 
 /* The job id, leading the facts rather than trailing the title: it
    identifies and does not describe, so it recedes into the run of things a
-   person did not open the Job to read. */
+   person did not open the Job to read. Its own word in front of it, since
+   #1481 — an unlabelled handle beside an unlabelled branch was read as
+   neither. */
 .armada-job-head__id {
   color: var(--fg-subtle);
 }
@@ -117,7 +81,7 @@ button.armada-job-head__back:hover {
 /* Mono means machine-derived, and it is already at the smallest step here, so
    it takes the family alone. */
 .armada-job-head__value[data-mono],
-.armada-job-head__id[data-mono] {
+.armada-job-head__id [data-mono] {
   font-family: var(--font-mono);
 }
 

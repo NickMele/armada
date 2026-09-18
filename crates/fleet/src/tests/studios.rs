@@ -449,6 +449,7 @@ fn a_capture(said: &str, staged: Option<&std::path::Path>) -> ipc::CaptureStudio
             markup: "<button class=\"armada-chip\">Queued 3</button>".to_string(),
             source: None,
             frame: None,
+            served: None,
         },
         position: StudioPosition { x: 0, y: 0 },
         frame: staged.map(|path| ipc::StagedFrame {
