@@ -453,8 +453,14 @@ async fn implements_judge_reads_the_plan_fleet_holds_not_the_drones_words_about_
     );
 
     let asked = judge.asked();
-    assert_eq!(asked.len(), 1, "one criterion, one call: {asked:?}");
-    let brief = &asked[0];
+    // **One call per criterion, and the step declares two since `#1432`.** The
+    // rule this pins is the ratio, not the number: a broad question produces
+    // agreeable prose, so each criterion is asked on its own.
+    assert_eq!(asked.len(), 2, "one call per criterion: {asked:?}");
+    let brief = asked
+        .iter()
+        .find(|brief| brief.contains("Does the diff do every task set to done"))
+        .expect("tasks_match_the_diff was asked");
     for expected in [
         "T1",
         "done",
@@ -563,5 +569,54 @@ fn a_person_drops_a_task_with_a_reason_and_it_shows_struck_through() {
         "settled",
     ] {
         assert!(wire.contains(expected), "{expected} missing from {wire}");
+    }
+}
+
+/// **The account a Drone gives of its own evidence reaches a Judge.** `#1432`
+/// gave a task `expects` and `shown`; nothing asked about them, so a task
+/// could prove something other than what it set out to prove and only a person
+/// reading both lines would know. The question is the Judge's now, and this is
+/// the proof it arrives with what it needs to answer.
+///
+/// **Both criteria are asked, and separately.** `tasks_match_the_diff` reads
+/// the diff, which is ground truth; this one reads the Drone's prose about it.
+/// One call per criterion is Judge's own rule — a broad question produces
+/// agreeable prose.
+#[tokio::test]
+async fn the_evidence_a_task_claims_reaches_the_judge_with_what_it_expected() {
+    let mut planned = Planned::created("fix the reader's bound");
+    planned.kept(called("record_plan", FOUR_TASKS), PLAN, 1);
+    let plan = planned.kept(
+        called(
+            "update_task",
+            r#"{"task":"T1","state":"done","reason":"","shown":"left-column.test.ts covers it, not the fixture the plan named"}"#,
+        ),
+        IMPLEMENT,
+        1,
+    );
+
+    let judge = Arc::new(FakeJudge::with_no_objection());
+    let ruling = gated_on_implement(&planned, plan, judge.clone()).await;
+    assert!(
+        matches!(ruling, fleet::Ruling::Advanced { .. }),
+        "{ruling:?}"
+    );
+
+    let asked = judge.asked();
+    assert_eq!(asked.len(), 2, "one call per criterion: {asked:?}");
+    let evidence = asked
+        .iter()
+        .find(|brief| brief.contains("accounts for itself") || brief.contains("`shown`"))
+        .expect("the evidence criterion was asked");
+    for expected in [
+        // What the plan asked of the task, written before the work.
+        "a test for the last row",
+        // What the work says proved it, written after — and different.
+        "left-column.test.ts covers it, not the fixture the plan named",
+    ] {
+        assert!(
+            evidence.contains(expected),
+            "the Judge cannot answer without `{expected}`: {evidence}"
+        );
     }
 }

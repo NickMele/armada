@@ -72,6 +72,9 @@ steps:
           - criterion_id: tasks_match_the_diff
             question: "Does the diff do every task set to done, and does each dropped task's reason hold?"
             on_refusal: refuse
+          - criterion_id: the_evidence_accounts_for_itself
+            question: "For each task the plan records as done, does what it recorded under `shown` either demonstrate what that task recorded under `expects`, or say why the work proved it another way?"
+            on_refusal: refuse
     delivers: false
     advance_gate: auto_if_judge_passes
   - id: handoff
