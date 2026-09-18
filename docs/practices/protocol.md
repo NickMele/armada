@@ -1165,6 +1165,9 @@ through the proposer takes — **a value already on the wire, so it moves no
 number.** What it changes is what a row says: *Found by Fleet* names work
 Armada noticed by itself, and a draft somebody wrote up and sent is neither.
 
+**Superseded at 16.4**, which takes the pair to `studio_dispatched` and
+`studio_helm_drafted` so that the row says where from as well as who pressed.
+
 ## Protocol 14.14: a person names a Studio and puts a node on one
 
 `#1364`. No shape moves. `rename_studio` and `add_studio_node` are reached from Bridge as well as
@@ -1428,6 +1431,36 @@ because a server that exits on its own has failed whatever its code.
 
 **This was written as 16.2 and is 16.3**, because `#1439` took 16.2 underneath it while the branch
 was open — the third time this file records that collision, and caught at the merge again.
+
+## Protocol 16.4: a Job dispatched from a Studio says so, and reaches it
+
+`#1362`. Two `origin` values, `studio_dispatched` and `studio_helm_drafted`,
+replacing the `manual` and `helm_drafted` 14.13 gave a Studio dispatch; and
+`JobDetail.from_studio`, additive — `{ studio_id, name?, node_id }`, the Studio
+that produced the Job and the node to select on landing.
+
+**Minor, on `queued_reason`'s precedent.** Bridge types `origin` as `string`
+and reads it through the generated vocabulary rather than matching on it, and
+that map already answers `undefined` for a key it does not hold — so an older
+Bridge meeting either value draws no provenance rather than the wrong one. The
+values are Fleet's own writing: Bridge proposes `manual` and cannot send these,
+so the strict direction is never exercised. **The condition is the same one**:
+the moment either side branches on this value rather than rendering it,
+widening the set is a major bump.
+
+**Two values and not one, and that is the whole shape of the change.** One
+column answers one question, and the row has to keep answering two — where the
+Job came from, and who pressed. A single value meaning *a Studio* would have
+put *dispatched by you* in a second place nothing checks, which is the argument
+`sub_dispatched`'s own registry row already makes.
+
+**`from_studio` is derived and no column is added.** The `produced` edge from
+the Issue draft to the Job node is the record; `store::studio::tracing` reads it
+backwards, the way `store::lineage` reads `redispatched_from`. So the field is
+absent on a Job whose Studio was deleted — the nodes cascade with it — and
+`origin` is what still says the Job came off one. Job detail draws that pair as
+*that Studio is no longer there*, with no control, which is `job-board.md`'s *A
+Board outlives its Workspace* one scope smaller.
 
 ## Open questions
 

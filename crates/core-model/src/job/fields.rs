@@ -23,6 +23,14 @@ use crate::job::ids::{CriterionId, JobId, ManifestId, RepoPath, StepId};
 /// That rule is structural here: [`Origin::SubDispatched`] is written by the
 /// sub-dispatch constructor and by nothing else, and the top-level constructor
 /// cannot name it — see [`TopLevelOrigin`].
+///
+/// **Three values are not written from `dispatched_by`.**
+/// [`WorkflowTriggered`](Self::WorkflowTriggered) because the Job that named
+/// it is over, and the two Studio values because the record they denormalise
+/// is not on the Job at all: a Studio's `produced` edge into its Job node,
+/// which lives on the Studio. The pair says *which* person pressed as well as
+/// *where from*, because one column answers one question and the row has to
+/// keep answering both — see [`from_a_studio`](Self::from_a_studio).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Origin {
     AutoDetected,
@@ -32,6 +40,10 @@ pub enum Origin {
     WorkflowTriggered,
     /// Drafted by a working Drone for a test Fleet confirmed broken on main. #999.
     DroneDrafted,
+    /// Dispatched off a Studio, by the person. #1362.
+    StudioDispatched,
+    /// Dispatched off a Studio, by Helm on the person's ask. #1362.
+    StudioHelmDrafted,
 }
 
 impl Origin {
@@ -42,6 +54,8 @@ impl Origin {
         Origin::SubDispatched,
         Origin::WorkflowTriggered,
         Origin::DroneDrafted,
+        Origin::StudioDispatched,
+        Origin::StudioHelmDrafted,
     ];
 
     pub fn as_wire(&self) -> &'static str {
@@ -52,7 +66,20 @@ impl Origin {
             Origin::SubDispatched => "sub_dispatched",
             Origin::WorkflowTriggered => "workflow_triggered",
             Origin::DroneDrafted => "drone_drafted",
+            Origin::StudioDispatched => "studio_dispatched",
+            Origin::StudioHelmDrafted => "studio_helm_drafted",
         }
+    }
+
+    /// Whether this Job reached the Board off a Studio.
+    ///
+    /// **The predicate the way back is drawn from**, and the reason the pair
+    /// is stored rather than derived: the `produced` edge that names *which*
+    /// Studio goes when the Studio is deleted, and this does not — so a Job
+    /// whose Studio is gone can still say where it came from and that the
+    /// Studio is no longer there.
+    pub fn from_a_studio(&self) -> bool {
+        matches!(self, Origin::StudioDispatched | Origin::StudioHelmDrafted)
     }
 
     pub fn from_wire(value: &str) -> Option<Origin> {
@@ -75,6 +102,8 @@ impl Origin {
             Origin::HelmDrafted => Some(TopLevelOrigin::HelmDrafted),
             Origin::WorkflowTriggered => Some(TopLevelOrigin::WorkflowTriggered),
             Origin::DroneDrafted => Some(TopLevelOrigin::DroneDrafted),
+            Origin::StudioDispatched => Some(TopLevelOrigin::StudioDispatched),
+            Origin::StudioHelmDrafted => Some(TopLevelOrigin::StudioHelmDrafted),
             Origin::SubDispatched => None,
         }
     }
@@ -97,6 +126,14 @@ pub enum TopLevelOrigin {
     /// A fix a working Drone drafted. Top-level, because it waits for approval
     /// like any proposal; the breakage it claims says which Job reported it. #999.
     DroneDrafted,
+    /// Dispatched off a Studio by the person. Top-level, and at the ordinary
+    /// gate: a Studio dispatch goes through the Job proposer like any other.
+    /// #1362.
+    StudioDispatched,
+    /// Dispatched off a Studio by Helm, on the person's ask. Drafted rather
+    /// than dispatched for [`HelmDrafted`](Self::HelmDrafted)'s reason — it
+    /// still takes the person's approval. #1362.
+    StudioHelmDrafted,
 }
 
 impl From<TopLevelOrigin> for Origin {
@@ -107,6 +144,8 @@ impl From<TopLevelOrigin> for Origin {
             TopLevelOrigin::HelmDrafted => Origin::HelmDrafted,
             TopLevelOrigin::WorkflowTriggered => Origin::WorkflowTriggered,
             TopLevelOrigin::DroneDrafted => Origin::DroneDrafted,
+            TopLevelOrigin::StudioDispatched => Origin::StudioDispatched,
+            TopLevelOrigin::StudioHelmDrafted => Origin::StudioHelmDrafted,
         }
     }
 }

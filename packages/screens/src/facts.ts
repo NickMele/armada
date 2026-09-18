@@ -38,12 +38,12 @@
 // mock's own order, and the registry `Row.tsx` names the gap in. Since #1439
 // that tail is two: who dispatched this job, then which job it replaced.
 
-import { ORIGIN } from "@armada/components";
 import type { JobDetailField } from "@armada/components";
 
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import { elapsedSince } from "./duration";
 import { freezeLineOf } from "./freeze";
+import { fromAStudio, originReading } from "./origin";
 import { leading } from "./reading";
 import { LANDED } from "./Row";
 
@@ -71,6 +71,7 @@ export function factsOf(job: JobSummary, whole: JobWhole | null, now: number): J
     ...spendFact(whole),
     ...turnsFact(whole),
     ...dispatchedByFact(job),
+    ...studioGoneFact(job, whole),
     ...redispatchedFromFact(job),
   ];
 }
@@ -103,26 +104,30 @@ function repositoryFact(job: JobSummary): JobDetailField[] {
 }
 
 /**
- * Who or what dispatched this Job, in the registry's own words —
- * `enum-verbs.toml`'s `origin` table, carried to Bridge as `ORIGIN` since
- * #1115 closed the gap `Row.tsx` names.
- *
- * **`sub_dispatched` fills its own slot, since #1165.** Its verb,
- * `"Sub-dispatched by {dispatched_by.job_id}"`, is the one templated row the
- * registry carries; `job.dispatched_by` is now the parent's id and nothing
- * else of the graph — `crates/ipc/src/job.rs` still leaves `dependencies` and
- * `gate_manifests` off the wire. A Fleet built before this field existed
- * sends the origin with nothing to fill the slot, so the line still draws
- * nothing rather than the literal template.
+ * Who or what dispatched this Job, in the registry's own words. The reading is
+ * `origin.ts`'s, shared with the board row that draws the same words since
+ * #1362 — two spellings of one sentence is the thing that file exists to stop.
  */
 function dispatchedByFact(job: JobSummary): JobDetailField[] {
-  const verb = ORIGIN[job.origin]?.verb;
-  if (verb === null || verb === undefined) return [];
-  if (verb.includes("{")) {
-    if (job.dispatched_by === undefined) return [];
-    return [{ value: verb.replace("{dispatched_by.job_id}", job.dispatched_by) }];
-  }
-  return [{ value: verb }];
+  const reading = originReading(job);
+  return reading === undefined ? [] : [{ value: reading }];
+}
+
+/**
+ * That the Studio a Job came off is gone. **Only where there is nothing to
+ * open** — the Studio that is still there is named under *Where things are*,
+ * beside the worktree, where a value you want to reach lives.
+ *
+ * `origin` says the Job came off a Studio and `from_studio` says which, and
+ * only the first survives the Studio being deleted. Saying so is what keeps a
+ * dead end from reading as a Job nobody dispatched from one. `#1362`.
+ */
+function studioGoneFact(job: JobSummary, whole: JobWhole | null): JobDetailField[] {
+  if (!fromAStudio(job)) return [];
+  // Before the read lands there is nothing to claim either way: a sentence
+  // that appears and then disappears is worse than one that arrives late.
+  if (whole === null || whole.from_studio !== undefined) return [];
+  return [{ label: "That Studio has been deleted" }];
 }
 
 /** Where a workflow came from, in Fleet's own words for `WorkflowSource` — #425. */

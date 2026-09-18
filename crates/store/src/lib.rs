@@ -157,5 +157,5 @@ pub use review::Review;
 pub use showing::KeptFrame;
 pub use shown_again::{ShownAgain, SpecNamed};
 pub use spend::{DroneSpend, PastSpend, Spend};
-pub use studio::{JobOnStudio, StudioError, Unreadable, UnreadableContent};
+pub use studio::{DispatchedFrom, JobOnStudio, StudioError, Unreadable, UnreadableContent};
 pub use work_plan::{PlanHand, PlanNotKept};

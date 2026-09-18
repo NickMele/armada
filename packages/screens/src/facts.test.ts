@@ -221,6 +221,52 @@ describe("who dispatched it", () => {
   it("draws nothing for a wire origin the registry has no row for", () => {
     expect(factsOf(job({ origin: "unknown-origin" }), null, now)).toEqual(baseline);
   });
+
+  // #1362. Where a job came from leads the sentence, and who pressed continues
+  // it: one column answers two questions and neither reading may be dropped.
+  it("says where from and who pressed, for a job dispatched off a Studio", () => {
+    expect(factsOf(job({ origin: "studio_dispatched" }), null, now).at(-1)).toEqual({
+      value: "From a Studio, dispatched by you",
+    });
+    expect(factsOf(job({ origin: "studio_helm_drafted" }), null, now).at(-1)).toEqual({
+      value: "From a Studio, drafted in Helm",
+    });
+  });
+});
+
+// #1362. The Studio that is still there is named under *Where things are*,
+// where a value you reach lives. What the header carries is the other half:
+// that the Studio is gone, which nothing else on the screen could say.
+describe("a Studio that has been deleted", () => {
+  const now = Date.now();
+  const offAStudio = job({ origin: "studio_dispatched" });
+  const gone = () => factsOf(offAStudio, detail(undefined), now);
+
+  it("says so, once the read has answered with no Studio", () => {
+    expect(gone().at(-1)).toEqual({ label: "That Studio has been deleted" });
+  });
+
+  it("says nothing while the Studio is still there — the row under Where things are has it", () => {
+    const whole = {
+      ...detail(undefined),
+      from_studio: { studio_id: "01STUDIO", node_id: "01JOBNODE" },
+    };
+    expect(factsOf(offAStudio, whole, now).at(-1)).toEqual({
+      value: "From a Studio, dispatched by you",
+    });
+  });
+
+  it("claims nothing before the read lands", () => {
+    expect(factsOf(offAStudio, null, now).at(-1)).toEqual({
+      value: "From a Studio, dispatched by you",
+    });
+  });
+
+  it("says nothing on a job that never came off a Studio", () => {
+    expect(factsOf(job({ origin: "manual" }), detail(undefined), now).at(-1)).toEqual({
+      value: "Dispatched by you",
+    });
+  });
 });
 
 // The quieter half of #1439: the job that took the work on says where it came

@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use crate::asking::{JudgeQuestion, WhenRefused};
 use crate::commanding::{CommandAnswer, CommandInFlight, WhenBlocked};
 use crate::enums::{CriterionSource, DependencyDirection, Recourse};
-use crate::ids::{CriterionId, Instant, JobId, StepId};
+use crate::ids::{CriterionId, Instant, JobId, StepId, StudioId, StudioNodeId};
 use crate::job::{JobSummary, Subject};
 use crate::overlap::ScopeOverlap;
 use crate::waiting::{QuestionInFlight, RedirectInFlight, RedirectWaiting};
@@ -302,6 +302,33 @@ pub struct JobDetail {
     /// [`JobSummary::redispatched_from`]: crate::JobSummary::redispatched_from
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replaced_by: Option<ReplacedBy>,
+    /// The Studio this Job was dispatched from, and the node to land on.
+    ///
+    /// **Derived from the `produced` edge, never stored forwards** —
+    /// `store::studio::tracing`. Filled after [`JobDetail::of`], like
+    /// `replaced_by`. Since 16.4.
+    ///
+    /// **Absent is two facts, and `origin` tells them apart.** A Job nobody
+    /// dispatched from a Studio carries neither; a Job whose `origin` says it
+    /// came off one carries none here because the Studio has been deleted, and
+    /// the detail says so rather than drawing a control that opens nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_studio: Option<FromStudio>,
+}
+
+/// The Studio a Job came off: what to call it, and where on it to land.
+///
+/// **The node is not optional.** It is the edge's own end — the read that
+/// finds the Studio finds it through that node — and landing on the Studio
+/// without it would put a person at a whiteboard with nothing selected.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FromStudio {
+    pub studio_id: StudioId,
+    /// `None` on a Studio nobody has named. Bridge already has one word for
+    /// an untitled Studio and this is not a second place to write it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    pub node_id: StudioNodeId,
 }
 
 /// The Job that replaced another: what to call it, and what to open.
@@ -684,6 +711,7 @@ impl JobDetail {
             workflow_source: job.workflow().source().as_wire().to_string(),
             work_plan: None,
             replaced_by: None,
+            from_studio: None,
         }
     }
 }

@@ -376,7 +376,9 @@ function atTheGate(handle: FleetHandle, studio: Studio): void {
     id: node.job_id,
     handle: mint("dispatched-from-a-studio-"),
     title,
-    origin: "manual",
+    // A person pressed Dispatch on a Studio, so the row says where from as
+    // well as who — #1362.
+    origin: "studio_dispatched",
     created_at: tick(),
     branch: undefined,
     assigned_drone: undefined,
@@ -430,6 +432,11 @@ const TOUCHED = "2026-09-17T08:40:00Z";
  * `every-state` carries for Studios, the way it carries a Job in every state. `jobId` is a row on
  * that Board, so the Job node draws the state the Board holds rather than a bare id.
  */
+export const EVERY_KIND_STUDIO = "01STUDIOEVERYKIND0000000000";
+
+/** Its name, held so the Job it dispatched can be built naming the same Studio. */
+export const EVERY_KIND_NAME = "Every kind of node and edge";
+
 export function everyKind(jobId: string): Studio {
   const nodes: StudioNode[] = [
     // A Link is an address no adapter recognised — #1394 — so what stands here
@@ -500,9 +507,9 @@ export function everyKind(jobId: string): Studio {
     ["every-answers-asked", "every-finding-asked", "every-deferral", "answers", "proposed"],
   ] as const).map(([id, from, to, kind, standing]) => ({ id, from, to, kind, standing, created_at: MADE }));
   return {
-    id: "01STUDIOEVERYKIND0000000000",
+    id: EVERY_KIND_STUDIO,
     manifest_id: MANIFEST_ID,
-    name: "Every kind of node and edge",
+    name: EVERY_KIND_NAME,
     created_at: MADE,
     touched_at: TOUCHED,
     nodes,

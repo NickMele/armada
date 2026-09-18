@@ -486,6 +486,26 @@ export function App() {
     if (surfaceId !== SURFACE.manifest) setSettingUp(false);
   }
 
+  /**
+   * Go back to the Studio a Job was dispatched from, landing on its own node —
+   * #1362. **The Job closes**: this is leaving the Job for the whiteboard it
+   * came from, not opening a second thing over it, and `goTo` is already the
+   * clear-then-set every other destination goes through.
+   *
+   * **Read-only, like opening one from the list.** Rereading is not editing,
+   * and Continue is what makes a Studio editable.
+   */
+  function openStudioFrom(studioId: string, nodeId: string): void {
+    // A Studio belongs to one repository and the surface asks for one on All,
+    // so the Job's own repository is picked first — otherwise the press lands
+    // on the picker rather than on the whiteboard.
+    const owner = repositories.find((one) => one.manifest?.id === reading?.owner_manifest_id);
+    if (owner !== undefined && state.repository !== owner.root) pickRepository(owner.root);
+    goTo(SURFACE.studios);
+    setOpenStudio({ id: studioId, editable: false });
+    setStudioNode(nodeId);
+  }
+
   /** A repository nobody set up opens on Setup when picked: there is nothing else to do with it yet. `null` is All. */
   function pick(root: string | null): void {
     pickRepository(root);
@@ -681,6 +701,7 @@ export function App() {
                 // The replacement opens over the board, the way a Studio's Job
                 // node does — the same state, so Escape still returns here.
                 onOpenJob={setOpenJob}
+                onOpenStudio={openStudioFrom}
                 onReadCall={readCall}
                 onReadCheckOutput={readCheckOutput}
                 onReadFrame={readFrame}

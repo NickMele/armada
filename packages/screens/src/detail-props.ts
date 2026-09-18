@@ -49,6 +49,7 @@ import type { OpenArtifact, OpenPullRequest } from "./opening";
 import type { FollowCheckOutput, ReadCheckOutput } from "./outputs";
 import type { AddTask, DropTask, PlanEditAnswer } from "./plan-edits";
 import type { RunSheetSlice } from "./rehearsal";
+import type { OpenStudioFrom } from "./work";
 
 export type JobDetailProps = {
   job: JobSummary;
@@ -200,6 +201,15 @@ export type JobDetailProps = {
    * happened without offering a press that would do nothing.
    */
   onOpenJob?: (jobId: string) => void;
+  /**
+   * Open the Studio this Job was dispatched from, landing on its own node.
+   * `#1362`.
+   *
+   * **`onOpenJob`'s shape, and optional for its reason**: it is the shell's
+   * own navigation, so a story or a harness drawing this screen alone offers
+   * no press rather than a dead one.
+   */
+  onOpenStudio?: OpenStudioFrom;
   onReadCall: ReadCall;
   /**
    * Read one Check's own output. **`onReadCall`'s shape one record over**, and
