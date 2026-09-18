@@ -20,7 +20,7 @@ use crate::error::{fault, RowError, WriteError};
 use crate::open::Store;
 use crate::row::{column, enum_value};
 
-/// Version 80 — the servers a person put in their Kit, and each Manifest's
+/// Version 81 — the servers a person put in their Kit, and each Manifest's
 /// word over one.
 ///
 /// **`name` is the primary key of the first table** because it is the key in
@@ -34,7 +34,7 @@ use crate::row::{column, enum_value};
 /// The second table cascades: a Manifest's word about a server Kit no longer
 /// holds is a rule about nothing, and leaving it would let a re-added name
 /// arrive already extended.
-pub(crate) const V80: &str = r#"
+pub(crate) const V81: &str = r#"
 CREATE TABLE kit_mcp_servers (
     name      TEXT NOT NULL PRIMARY KEY,
     transport TEXT NOT NULL,

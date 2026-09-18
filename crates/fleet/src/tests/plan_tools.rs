@@ -41,7 +41,7 @@ fn a_step(id: &str, evidence: Option<EvidenceType>, follows: bool) -> ResolvedSt
 fn a_recording() -> PlanChange {
     PlanChange::Recorded {
         approach: Approach::new("Bound the reader").expect("an approach"),
-        tasks: vec![NewTask::new("Stop at the end", "").expect("a title")],
+        tasks: vec![NewTask::new("Stop at the end", "", &[], "").expect("a title")],
     }
 }
 
@@ -49,12 +49,13 @@ fn an_update() -> PlanChange {
     PlanChange::Updated {
         task: TaskId::read("T1").expect("an id"),
         to: TaskUpdate::Done,
+        shown: None,
     }
 }
 
 fn an_addition() -> PlanChange {
     PlanChange::Added {
-        task: NewTask::new("Cover it", "").expect("a title"),
+        task: NewTask::new("Cover it", "", &[], "").expect("a title"),
         after: None,
     }
 }

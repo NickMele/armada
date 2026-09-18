@@ -63,7 +63,8 @@ pub use job::{
 };
 pub use job::{
     Approach, DropReason, NewTask, NotAnUpdate, PlanAuthor, PlanChange, PlanEntry, PlanRefused,
-    PlanTask, TaskCounts, TaskId, TaskState, TaskUpdate, WorkPlan, WorkingWindow, PLAN_RECORDED,
+    PlanTask, Shown, TaskCounts, TaskId, TaskState, TaskUpdate, WorkPlan, WorkingWindow,
+    PLAN_RECORDED,
 };
 pub use kit::{
     a_drone_resolves, KitServer, ManifestReach, ReachesDrones, ServerAddress, ServerName,

@@ -64,7 +64,50 @@ describe("planOf", () => {
     expect(read).toEqual({
       recorded: true,
       approach: "Split the reducer.",
-      tasks: [{ id: "T1", title: "Extract the selector", state: "open", reason: undefined }],
+      tasks: [
+        {
+          id: "T1",
+          title: "Extract the selector",
+          state: "open",
+          reason: undefined,
+          note: undefined,
+          scope: undefined,
+          expects: undefined,
+          shown: undefined,
+        },
+      ],
+    });
+  });
+
+  // `#1421`. The files and the evidence are why the region is worth opening on
+  // a task at all; a read that dropped them would draw a title and a mark.
+  it("carries a task's files and both ends of its evidence", () => {
+    const carrying: WorkPlan = {
+      ...RECORDED,
+      tasks: [
+        {
+          id: "T1",
+          title: "Reword the Drones stat",
+          state: "done",
+          note: 'the value becomes "1 running · 2 max"',
+          scope: ["packages/screens/src/overview.ts"],
+          expects: "overview.test.ts reads the new wording",
+          shown: "left-column.test.ts:24, not the file the plan named",
+        },
+      ],
+    };
+    const read = planOf(
+      whole([step({ step_id: "plan", label: "Plan the change" })], { work_plan: carrying }),
+    );
+    expect(read).toMatchObject({
+      recorded: true,
+      tasks: [
+        {
+          scope: ["packages/screens/src/overview.ts"],
+          expects: "overview.test.ts reads the new wording",
+          shown: "left-column.test.ts:24, not the file the plan named",
+        },
+      ],
     });
   });
 
