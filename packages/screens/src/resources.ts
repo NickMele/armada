@@ -131,12 +131,11 @@ export function nothingToAsk(resources: Holds): NothingToAsk | undefined {
  * **`null` is not a Job holding nothing**, and the summary's `note` is what
  * says which — the same split the full reading keeps.
  *
- * **The size is dropped rather than zeroed where there is no worktree.**
- * `sized(0)` is a figure, and a figure says something was measured; the
- * worktree row above it already says there is nothing on disk.
- *
- * **`sized` is the panel's own formatter**, imported rather than retyped:
- * binary units, because `du` and `df` answer in them.
+ * **One worktree row, not two, since #1481.** It drew `Worktree on disk` over
+ * `Size on disk 1.2 GiB`, and the first of those was a constant: nothing in
+ * Armada looks at a worktree unless a person presses `Look now` in the sheet,
+ * so every Job anyone opened said `on disk` and said it forever. Two rows, one
+ * of which never varied, for a fact the other one carried with a number on it.
  */
 export function summarised(
   reading: Held | null,
@@ -149,12 +148,6 @@ export function summarised(
     nothingRunningIsWrong: nothingRunningIsAFault(reading, examined),
     worktree: worktree.said,
     worktreeIsWrong: worktree.wrong,
-    size:
-      reading.worktree === undefined
-        ? undefined
-        : reading.worktree.bytes === undefined
-          ? NOT_MEASURED
-          : sized(reading.worktree.bytes),
   };
 }
 
@@ -202,21 +195,33 @@ export function turnsTaken(whole: JobWhole | null): string | undefined {
 }
 
 /**
- * What became of the worktree, in a phrase.
+ * The worktree in one value: what it takes on disk, or what is wrong with it.
  *
- * **`healthy` is a finding and nothing may say it unasked.** Without a look
- * there is a directory on disk and no claim about it, which is `on disk` — a
- * summary that promoted the fact to a verdict would spend a person's suspicion
- * and return nothing, which is the failure the full reading's `cannot_tell`
- * arm exists for.
+ * **The size is the ordinary answer, and it is the evidence.** A figure in
+ * gibibytes is a directory that was walked, so it says the checkout is there
+ * without claiming anything a look has not found — which is what `on disk`
+ * was for, and `on disk` did not carry the number.
+ *
+ * **`healthy` is gone with it.** It was the word for a look that found nothing
+ * wrong, and a look is a press almost nobody makes; the size stands in its
+ * place, and a person who wants the verdict presses `Look now` and reads it on
+ * the sheet, which is where every other look's answer already is.
+ *
+ * **What a look finds wrong replaces the size rather than joining it.** `gone`
+ * and `1.2 GiB` in one row would be a size for a directory that is not there.
+ * `cannot_tell` is neither a fault nor a pass, the same as the full reading's
+ * own arm for it.
+ *
+ * **`sized` is the panel's own formatter**, imported rather than retyped:
+ * binary units, because `du` and `df` answer in them.
  */
 function standingOf(reading: Held, examined: JobExamined | null): { said: string; wrong?: boolean } {
-  if (reading.worktree === undefined) return { said: NONE_ON_DISK };
+  const worktree = reading.worktree;
+  if (worktree === undefined) return { said: NONE_ON_DISK };
   const look = examined?.looks.find((one) => one.asked === "worktree");
-  if (look === undefined) return { said: "on disk" };
-  if (look.found === "not_working") return { said: "gone", wrong: true };
-  if (look.found === "cannot_tell") return { said: "could not be read" };
-  return { said: "healthy" };
+  if (look?.found === "not_working") return { said: "gone", wrong: true };
+  if (look?.found === "cannot_tell") return { said: "could not be read" };
+  return { said: worktree.bytes === undefined ? NOT_MEASURED : sized(worktree.bytes) };
 }
 
 /** A walk that ran past its bound. Its own answer, and never a zero. */

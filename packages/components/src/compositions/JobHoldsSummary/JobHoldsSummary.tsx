@@ -27,6 +27,11 @@ import { FigureList, type Figure } from "../FigureList/FigureList";
  * the second is a reading, with `None` against the processes and the worktree
  * saying what became of it.
  *
+ * **The worktree is one row and not two, since #1481.** It drew `on disk` over
+ * `Size on disk 1.2 GiB` — and `on disk` was a constant, because nothing looks
+ * at a worktree unless somebody presses `Look now` in the sheet. The size is
+ * the row now, and what a look finds wrong replaces it.
+ *
  * **No `Look now` here, and no button.** Going and looking is an act on the
  * reading, and the reading is in the sheet. The control that opens it sits on
  * the region's title line, where the run keeps its elapsed figure.
@@ -61,17 +66,20 @@ export type HoldsFigures = {
    * this block would disagree with the sheet it opens.
    */
   nothingRunningIsWrong?: boolean;
-  /** The worktree in a phrase — `healthy`, `gone`, `could not be read`. */
-  worktree: string;
-  /** Whether that phrase is a fault. */
-  worktreeIsWrong?: boolean;
   /**
-   * What the worktree takes on disk, unit resolved — never a byte count.
-   * Absent where there is nothing on disk to size, and then the row is absent
-   * too: the worktree line above already says what became of it, and a size of
-   * nothing beside it would be a blank value drawn twice.
+   * The worktree in one value: what it takes on disk with its unit resolved —
+   * `1.2 GiB`, never a byte count — or what is wrong with it, `gone`,
+   * `could not be read`, `none on disk`.
+   *
+   * **A size and a fault are the same slot because they are the same
+   * question.** What a person wants off this row is whether the checkout is
+   * there and what it is costing; a figure answers both, and a fault replaces
+   * it rather than standing beside it — `gone · 1.2 GiB` would be a size for a
+   * directory that is not there.
    */
-  size?: string;
+  worktree: string;
+  /** Whether that value is a fault. */
+  worktreeIsWrong?: boolean;
 };
 
 export type JobHoldsSummaryProps = {
@@ -121,7 +129,6 @@ export function JobHoldsSummary({ latest, latestNote, figures, note, age, spend,
             wrong: figures.processes === 0 && figures.nothingRunningIsWrong,
           },
           { label: "Worktree", value: figures.worktree, wrong: figures.worktreeIsWrong },
-          ...(figures.size === undefined ? [] : [{ label: "Size on disk", value: figures.size }]),
         ]),
   ];
   return (
