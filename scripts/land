@@ -4,22 +4,73 @@
 # `crates/armada/src/land/`) — read `docs/capabilities/merge-line.md` for the
 # design and `docs/practices/running-locally.md`, "Landing a branch", for how
 # to run it. This file stays, under this name, because `work-issue` step 6
-# and agents' own muscle memory type `scripts/land`; it does nothing but
-# exec into the real binary, unmodified argv and all.
+# and agents' own muscle memory type `scripts/land`.
 #
-# `armada` is resolved on `$PATH`, the same prerequisite this line already
-# had for its `covers` verb (`docs/practices/running-locally.md`).
-# `scripts/test_land.py` is unmodified and is the proof this shim carries
-# every argument and every exit code through faithfully.
+# **Resolution order: `$ARMADA_LAND_ARMADA` if set, else `armada` on
+# `$PATH`.** The same variable this line already reads for its own
+# `covers`/`check`/`run` calls, so there is exactly one knob for "which
+# armada", never two that could disagree.
 #
-# The real default now lives in `crates/armada/src/land/env.rs`, kept
-# honest by that crate's own `the_setup_default_says_what_the_manifest_requires`
-# test. This exact substring — ARMADA_LAND_SETUP", "bootstrap browsers" —
-# is what `scripts/test_land.py`'s own copy of that test still scrapes out
-# of this file, unmodified; it must be kept in step with `env.rs`'s.
+# **Falls back to `scripts/land_py`, the kept Python implementation, when
+# the resolved binary is missing or does not yet know the `land` verb — and
+# only for those two reasons.** A real outcome from `armada land` (a red
+# gate, a conflict, anything the verb itself means to report) passes
+# straight through with its own exit code; it is never retried under
+# Python. This exists because every agent's *installed* `armada` predates
+# this verb the moment this file reaches `main`, and the fix for that,
+# `scripts/restart`, cannot itself go through the merge path — so falling
+# back is what keeps the line open in the meantime, and this prints one
+# line to stderr naming `scripts/restart` whenever it does.
+#
+# `scripts/land_py`'s own header says why it is still here and when it goes.
 
 import os
+import subprocess
 import sys
 
+FALLBACK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "land_py")
+
+
+def resolved_armada() -> str:
+    return os.environ.get("ARMADA_LAND_ARMADA") or "armada"
+
+
+def unavailable(result) -> bool:
+    """Whether `result` says the resolved `armada` cannot run `land` at
+    all — missing entirely, or built before the verb existed — rather than
+    a real outcome the verb itself produced."""
+    if isinstance(result, OSError):
+        return True
+    said = (result.stdout or "") + (result.stderr or "")
+    return "is not one of armada's verbs" in said
+
+
+def relay(result) -> int:
+    sys.stdout.write(result.stdout or "")
+    sys.stderr.write(result.stderr or "")
+    return result.returncode
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    binary = resolved_armada()
+    try:
+        result = subprocess.run([binary, "land", *args], capture_output=True, text=True)
+    except OSError as why:
+        result = why
+
+    if unavailable(result):
+        print(
+            f"land: `{binary} land` is not available yet (missing, or built "
+            "before this verb existed) — falling back to scripts/land_py. "
+            "Run `scripts/restart` to pick up the installed `armada` and "
+            "stop seeing this line.",
+            file=sys.stderr,
+        )
+        os.execv(sys.executable, [sys.executable, FALLBACK, *args])
+
+    return relay(result)
+
+
 if __name__ == "__main__":
-    os.execvp("armada", ["armada", "land", *sys.argv[1:]])
+    sys.exit(main())
