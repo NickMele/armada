@@ -26,7 +26,7 @@ const honest = {
   location: "/checkout",
   bounds: { x: 312, y: 148, width: 96, height: 28 },
   window: { width: 900, height: 600 },
-  styles: { color: "rgb(0, 0, 0)", "font-size": "14px" },
+  styles: { color: "rgb(0, 0, 0)", "text-align": "center" },
   markup: "<button>Pay now</button>",
 };
 

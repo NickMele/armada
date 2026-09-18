@@ -1,3 +1,6 @@
+// armada-allow-off-contract: the one colour here is Electron's own spelling for a view with no background of its own, not a design value
+// docs/practices/capture-window.md
+//
 // The capture window — #1294, `docs/practices/capture-window.md`.
 //
 // **Two views in one frame.** The page runs in a view with no preload, in a
@@ -124,6 +127,8 @@ export class CaptureWindow {
         nodeIntegration: false,
       },
     });
+    // Fully transparent: the bar paints its own strip and nothing else, so the
+    // page shows through this view wherever the bar does not draw.
     this.bar.setBackgroundColor("#00000000");
 
     this.window.contentView.addChildView(this.page);
