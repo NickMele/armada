@@ -29,6 +29,8 @@ extern crate alloc;
 
 mod envelope;
 mod job;
+/// Kit's MCP servers and the two tiers that reach a Drone. `docs/concepts/kit.md`.
+mod kit;
 /// A Studio, its nodes and its edges. `docs/concepts/studio.md`.
 mod studio;
 
@@ -62,6 +64,9 @@ pub use job::{
 pub use job::{
     Approach, DropReason, NewTask, NotAnUpdate, PlanAuthor, PlanChange, PlanEntry, PlanRefused,
     PlanTask, TaskCounts, TaskId, TaskState, TaskUpdate, WorkPlan, WorkingWindow, PLAN_RECORDED,
+};
+pub use kit::{
+    a_drone_resolves, KitServer, ManifestReach, ReachesDrones, ServerAddress, ServerName,
 };
 pub use studio::{
     CaptureBounds, CaptureElement, CaptureFrame, CaptureWindow, ContradictionOutcome, EdgeRefused,
