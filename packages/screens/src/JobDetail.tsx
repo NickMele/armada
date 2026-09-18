@@ -689,7 +689,8 @@ function OneJob({
       // one — since `add_task` is refused without a plan.
       onAddTask={
         plan?.recorded === true
-          ? (title, detail) => onAddTask(job.id, { title, detail, after: "" })
+          ? (title, note) =>
+              onAddTask(job.id, { title, note, scope: [], expects: "", after: "" })
           : undefined
       }
       onDropTask={(taskId, reason) => onDropTask(job.id, { task: taskId, reason })}

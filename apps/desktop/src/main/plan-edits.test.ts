@@ -62,12 +62,12 @@ it("reaches add_task with the title, the detail and where it goes", async () => 
   const { board, folded } = boardOn(await fleetRecording(asked));
   const edits = new PlanEdits(board);
 
-  const answer = await edits.add(JOB_ID, { title: "Add a regression test", detail: "", after: "" });
+  const answer = await edits.add(JOB_ID, { title: "Add a regression test", note: "", scope: [], expects: "", after: "" });
 
   expect(answer.ok).toBe(true);
   expect(asked).toHaveLength(1);
   expect(asked[0]?.path).toBe(`/jobs/${JOB_ID}/add_task`);
-  expect(asked[0]?.body).toEqual({ title: "Add a regression test", detail: "", after: "" });
+  expect(asked[0]?.body).toEqual({ title: "Add a regression test", note: "", scope: [], expects: "", after: "" });
   // The plan the answer carries is folded straight in — no second read.
   expect(folded).toEqual([{ jobId: JOB_ID, plan: A_PLAN }]);
 });
@@ -90,7 +90,7 @@ it("refuses a blank title before anything is sent", async () => {
   const { board } = boardOn(await fleetRecording(asked));
   const edits = new PlanEdits(board);
 
-  const answer = await edits.add(JOB_ID, { title: "   ", detail: "", after: "" });
+  const answer = await edits.add(JOB_ID, { title: "   ", note: "", scope: [], expects: "", after: "" });
 
   expect(answer).toEqual({ ok: false, outcome: { ok: false, why: "empty_task_title" } });
   expect(asked).toHaveLength(0);

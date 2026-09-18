@@ -109,7 +109,9 @@
   /* 380px: job detail's left column — the run tree and Where things are. THE
      DRAWN WIDTH, lifted from the `jdRun` frame of the Monitor active work
      journey, which sets `grid-template-columns: 380px minmax(0, 1fr)`. The
-     column never changes width and the panel takes every pixel of slack.
+     panel takes every pixel of slack; this is the width the column rests at
+     whenever there is slack to take. **It is no longer the width the column
+     always has** — see --w-run-column-min below.
 
      It was built as a 2fr/3fr ratio, which reads right at the drawn 1440px and
      wrong everywhere else: the rail widens with the window, so a maximised
@@ -127,6 +129,38 @@
      It sits here because it is layout, and the --w-* group above is floating
      layers. Reported. */
   --w-run-column: 380px;
+  /* The run column's floor, and the step panel's — the pair that stops one of
+     job detail's two columns being crushed by the other. **Neither existed**,
+     and that is the whole of the defect the owner hit on a 1280px window with
+     Helm's dock open: the rail, the run column and the dock all held their
+     widths, the step panel took what was left, and what was left was 192px.
+     `Extract selectColumnOrder into its own module` came out one letter a
+     line. Measured in the mock on `job/workingAPlan`, not assumed.
+
+     **The run column is what yields**, because it holds a list of step names
+     and elapsed times that reads narrower, and the panel beside it holds a
+     diff, an evidence bundle and a log, which do not.
+
+     The two numbers are what a 1280px window leaves, split where the run tree
+     stops being readable. At 1280 with the dock open `.armada-inside` is
+     596px: 240 + --space-6 + 332. At 240 every step name but the longest sits
+     beside its elapsed and that one ellipsises cleanly; at 208, which is what
+     a 364px panel would cost, the names come out `Reproduc` and `Root cau`
+     and the crush has only moved across the gutter. Both are on the 4px grid,
+     unlike --w-run-column itself, because they are chosen rather than drawn.
+
+     `screens.css` says why 364 is not the panel's floor even though that file
+     and `Chapter.stories.tsx` both name it: 364 is `--window-floor` less the
+     run column at its full 380, which is the panel's floor on the assumption
+     this pair replaces.
+
+     **Below 1280 with the dock open these do not both fit**, and nothing here
+     can make them — the window is out of pixels, not badly divided. The panel
+     gives way there rather than the layout clipping; `screens.css` carries the
+     rule that does it. What that band actually needs is the dock, and the dock
+     narrowing or closing earlier is not a value this file can decide. */
+  --w-run-column-min: 240px;
+  --w-step-panel-min: 332px;
   /* 380px: Helm's dock, beside the content on every surface at
      --layout-breakpoint and wider. Decided with the owner on 13 Sep (#948).
      The same number as --w-run-column and not borrowed from it: that one is a

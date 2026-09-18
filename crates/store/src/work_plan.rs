@@ -20,6 +20,45 @@ use crate::row::{column, maybe, maybe_number, string};
 
 const CHANGES: &str = "job_work_plan_changes";
 
+/// Version 80 — a task's own scope, the evidence expected of it, and the
+/// evidence the work showed.
+///
+/// **Added as columns rather than a new table**, because each belongs to one
+/// task of one recording and has no life apart from it. `shown` sits on the
+/// change rather than the task: it is written by a later update, by whoever
+/// worked the task, and the recording is not edited.
+///
+/// **Nothing to backfill.** A task recorded before this named its paths in
+/// prose, in the note, where the next step could not act on them; there is no
+/// reading of that prose that is more honest than an empty list.
+pub(crate) const V80: &str = r#"
+ALTER TABLE job_work_plan_tasks ADD COLUMN scope TEXT NOT NULL DEFAULT '';
+ALTER TABLE job_work_plan_tasks ADD COLUMN expects TEXT NOT NULL DEFAULT '';
+ALTER TABLE job_work_plan_changes ADD COLUMN scope TEXT;
+ALTER TABLE job_work_plan_changes ADD COLUMN expects TEXT;
+ALTER TABLE job_work_plan_changes ADD COLUMN shown TEXT;
+"#;
+
+/// The scope list, as one column. **Newline-separated**, because a repository
+/// path cannot hold one and every other separator this repository uses appears
+/// in a path somewhere.
+fn packed(paths: &[core_model::RepoPath]) -> String {
+    paths
+        .iter()
+        .map(|path| path.as_str())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn unpacked(packed: &str) -> Vec<String> {
+    packed
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(String::from)
+        .collect()
+}
+
 /// Version 59 — a Job's plan: its changes, and the tasks each recording named.
 ///
 /// **Nothing to backfill.** A plan written to a file before this is not one
@@ -190,42 +229,53 @@ fn appended(conn: &Connection, job_id: &JobId, entry: &PlanEntry) -> Result<(), 
         PlanAuthor::Step { step_id, attempt } => (Some(step_id.as_str()), Some(attempt.number())),
         PlanAuthor::Person => (None, None),
     };
-    let (kind, approach, task, title, detail, after, state, reason) = match &entry.change {
-        PlanChange::Recorded { approach, .. } => (
-            "recorded",
-            Some(approach.as_str()),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        ),
-        PlanChange::Added { task, after } => (
-            "added",
-            None,
-            None,
-            Some(task.title()),
-            Some(task.detail()),
-            after.map(TaskId::number),
-            None,
-            None,
-        ),
-        PlanChange::Updated { task, to } => (
-            "updated",
-            None,
-            Some(task.number()),
-            None,
-            None,
-            None,
-            Some(to.state().as_wire()),
-            to.reason(),
-        ),
+    let added_scope = match &entry.change {
+        PlanChange::Added { task, .. } => Some(packed(task.scope())),
+        _ => None,
     };
+    let (kind, approach, task, title, note, after, state, reason, expects, shown) =
+        match &entry.change {
+            PlanChange::Recorded { approach, .. } => (
+                "recorded",
+                Some(approach.as_str()),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ),
+            PlanChange::Added { task, after } => (
+                "added",
+                None,
+                None,
+                Some(task.title()),
+                Some(task.note()),
+                after.map(TaskId::number),
+                None,
+                None,
+                Some(task.expects()),
+                None,
+            ),
+            PlanChange::Updated { task, to, shown } => (
+                "updated",
+                None,
+                Some(task.number()),
+                None,
+                None,
+                None,
+                Some(to.state().as_wire()),
+                to.reason(),
+                None,
+                shown.as_ref().map(core_model::Shown::as_str),
+            ),
+        };
     conn.execute(
         "INSERT INTO job_work_plan_changes (job_id, seq, change, by_step, by_attempt, at, \
-         approach, task_id, title, detail, after_task, state, reason) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+         approach, task_id, title, detail, after_task, state, reason, scope, expects, shown) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
         rusqlite::params![
             job_id.as_str(),
             seq,
@@ -236,24 +286,29 @@ fn appended(conn: &Connection, job_id: &JobId, entry: &PlanEntry) -> Result<(), 
             approach,
             task,
             title,
-            detail,
+            note,
             after,
             state,
             reason,
+            added_scope,
+            expects,
+            shown,
         ],
     )
     .map_err(fault("appending a plan change"))?;
     if let PlanChange::Recorded { tasks, .. } = &entry.change {
         for (ordinal, task) in tasks.iter().enumerate() {
             conn.execute(
-                "INSERT INTO job_work_plan_tasks (job_id, seq, ordinal, title, detail) \
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO job_work_plan_tasks (job_id, seq, ordinal, title, detail, \
+                 scope, expects) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 rusqlite::params![
                     job_id.as_str(),
                     seq,
                     ordinal as i64,
                     task.title(),
-                    task.detail()
+                    task.note(),
+                    packed(task.scope()),
+                    task.expects(),
                 ],
             )
             .map_err(fault("appending a recorded task"))?;
@@ -266,7 +321,7 @@ fn history_in(conn: &Connection, job_id: &JobId) -> Result<Vec<PlanEntry>, RowEr
     let reading = "reading a plan's recorded tasks";
     let mut asked = conn
         .prepare(
-            "SELECT seq, title, detail FROM job_work_plan_tasks \
+            "SELECT seq, title, detail, scope, expects FROM job_work_plan_tasks \
              WHERE job_id = ?1 ORDER BY seq, ordinal",
         )
         .map_err(fault(reading))
@@ -278,14 +333,19 @@ fn history_in(conn: &Connection, job_id: &JobId) -> Result<Vec<PlanEntry>, RowEr
                 row.get::<_, i64>("seq"),
                 string(row, "title"),
                 string(row, "detail"),
+                string(row, "scope"),
+                string(row, "expects"),
             ))
         })
         .map_err(fault(reading))
         .map_err(RowError::Database)?
     {
-        let (seq, title, detail) = row.map_err(fault(reading)).map_err(RowError::Database)?;
+        let (seq, title, note, scope, expects) =
+            row.map_err(fault(reading)).map_err(RowError::Database)?;
         let seq = seq.map_err(column("job_work_plan_tasks", "seq"))?;
-        let task = NewTask::new(&title?, &detail?)
+        let scope = unpacked(&scope?);
+        let scope: Vec<&str> = scope.iter().map(String::as_str).collect();
+        let task = NewTask::new(&title?, &note?, &scope, &expects?)
             .ok_or_else(|| malformed("title", "a recorded task has no title"))?;
         recorded.push((seq, task));
     }
@@ -337,14 +397,20 @@ fn entry_of(row: &Row<'_>, recorded: &[(i64, NewTask)]) -> Result<PlanEntry, Row
                 .map(|(_, task)| task.clone())
                 .collect(),
         },
-        "added" => PlanChange::Added {
-            task: NewTask::new(
-                &maybe(row, "title")?.unwrap_or_default(),
-                &maybe(row, "detail")?.unwrap_or_default(),
-            )
-            .ok_or_else(|| malformed("title", "an added task has no title"))?,
-            after: task_id("after_task")?,
-        },
+        "added" => {
+            let scope = unpacked(&maybe(row, "scope")?.unwrap_or_default());
+            let scope: Vec<&str> = scope.iter().map(String::as_str).collect();
+            PlanChange::Added {
+                task: NewTask::new(
+                    &maybe(row, "title")?.unwrap_or_default(),
+                    &maybe(row, "detail")?.unwrap_or_default(),
+                    &scope,
+                    &maybe(row, "expects")?.unwrap_or_default(),
+                )
+                .ok_or_else(|| malformed("title", "an added task has no title"))?,
+                after: task_id("after_task")?,
+            }
+        }
         "updated" => PlanChange::Updated {
             task: task_id("task_id")?
                 .ok_or_else(|| malformed("task_id", "an update names no task"))?,
@@ -353,6 +419,9 @@ fn entry_of(row: &Row<'_>, recorded: &[(i64, NewTask)]) -> Result<PlanEntry, Row
                 &maybe(row, "reason")?.unwrap_or_default(),
             )
             .map_err(|why| malformed("state", &format!("{why:?}")))?,
+            shown: maybe(row, "shown")?
+                .as_deref()
+                .and_then(core_model::Shown::new),
         },
         other => return Err(malformed("change", &format!("`{other}` is not a change"))),
     };

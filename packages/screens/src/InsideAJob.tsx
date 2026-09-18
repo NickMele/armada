@@ -148,6 +148,13 @@ export type PlanTaskRow = {
   state: TaskMarkState;
   /** Present on a dropped task, and on nothing else. */
   reason?: string;
+  /** One line for what the other fields cannot hold. Absent where none. */
+  note?: string;
+  /** The paths the planner said this task touches. Absent where none. */
+  scope?: readonly string[];
+  /** What the planner said should prove it, and what the work said did. */
+  expects?: string;
+  shown?: string;
 };
 
 /**

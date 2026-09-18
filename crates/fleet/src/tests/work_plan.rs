@@ -31,8 +31,8 @@ async fn a_recorded_plan_is_served_whole_on_the_detail_and_counted_on_the_row() 
             &PlanChange::Recorded {
                 approach: Approach::new("Bound the reader").expect("an approach"),
                 tasks: vec![
-                    NewTask::new("Stop at the end", "").expect("a title"),
-                    NewTask::new("Cover it", "").expect("a title"),
+                    NewTask::new("Stop at the end", "", &[], "").expect("a title"),
+                    NewTask::new("Cover it", "", &[], "").expect("a title"),
                 ],
             },
             store::PlanHand::Step(&step),
@@ -45,6 +45,7 @@ async fn a_recorded_plan_is_served_whole_on_the_detail_and_counted_on_the_row() 
             &PlanChange::Updated {
                 task: TaskId::read("T1").expect("an id"),
                 to: TaskUpdate::Done,
+                shown: None,
             },
             store::PlanHand::Step(&step),
             &at,

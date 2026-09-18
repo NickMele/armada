@@ -484,7 +484,8 @@ fn a_plan_recording(pass: u32) -> PlanChange {
         approach: Approach::new(&format!("Migrate, then backfill — pass {pass}"))
             .expect("an approach"),
         tasks: vec![
-            NewTask::new(&format!("Write the migration, pass {pass}"), "").expect("a title"),
+            NewTask::new(&format!("Write the migration, pass {pass}"), "", &[], "")
+                .expect("a title"),
         ],
     }
 }
