@@ -113,7 +113,7 @@ shortcut = '⌘\'
 scope = "anywhere"
 destructive = false
 confirms = false
-notes = "No panel glyph is registered. Navigation is reachable by ⌘-digit without labels, which is why hiding it costs little; Stats and Fleet are not, and a hidden column takes both. Bridge folds the column on its own under --window-fold-left and this act is still unbuilt, so nothing hides it by hand."
+notes = "No panel glyph is registered. Navigation is reachable by ⌘-digit without labels, which is why hiding it costs little; Stats and Fleet are not, and a hidden column takes both. Bridge collapses the column to its 48px rail on its own under --layout-breakpoint and --window-fold-left, which keeps all three on screen — #1435 read that as hiding it and was corrected. Nothing hides the column at any width, and this act is still unbuilt."
 
 [actions.history]
 kind = "Action"

@@ -33,12 +33,12 @@
 // on this package for `statementOf`, and the reverse import would be a cycle.
 //
 // **And under `--window-fold-left` with Helm's dock beside the content, all
-// three are off screen** — `useTight` below. Navigation is still reached by
-// ⌘1–⌘8 and from the palette; Fleet's liveness is the title row's own dot for
-// as long as the fold lasts (#1437), carrying its state and no figures; Stats
-// is not reachable at all in that band. That is the cost the owner took on
-// 17 Sep 2026 rather than cut the dock's drag ceiling or fold the dock to its
-// sheet earlier.
+// three collapse to the 48px rail** — `useTight` below, which joins
+// `useNarrow` into one `collapsed`. Navigation keeps its glyphs, Stats and
+// Fleet keep one status dot each, and nothing leaves the screen. #1435 took
+// the column away outright in that band and the owner corrected it on 18 Sep
+// 2026; the pixels the rail does not give back are paid under 1128 by the
+// step panel, not by the column disappearing.
 //
 // # The picker and Dispatch live in the title row, not here
 //
@@ -137,13 +137,15 @@ export function Shell({
   helm,
   children,
 }: ShellProps) {
-  const collapsed = useNarrow();
-  const dock = useDock(collapsed);
-  // The column folds only while the dock is actually taking the room: closed,
-  // or folded to its sheet under the breakpoint, the window has the pixels and
-  // there is nothing to pay for. `useDock` decides `open` without reading this,
-  // so the two do not chase each other.
-  const leftFolded = useTight() && dock.open && !collapsed;
+  const narrow = useNarrow();
+  const dock = useDock(narrow);
+  const tight = useTight();
+  // The rail, from two bands rather than one. Under `--layout-breakpoint` it
+  // is the width alone. Between there and `--window-fold-left` it is the width
+  // *and* the dock actually taking the room — closed, or folded to its sheet,
+  // the window has the pixels and there is nothing to pay for. `useDock`
+  // decides `open` without reading this, so the two do not chase each other.
+  const collapsed = narrow || (tight && dock.open);
   const [dockWidth, resizeDock] = useDockWidth();
   const [leftWidth, resizeLeft] = useLeftWidth();
   const live = connection.state === "connected";
@@ -152,7 +154,10 @@ export function Shell({
     <TheShell
       dock={{
         ...dock,
-        folded: collapsed,
+        // The breakpoint alone. The dock folds to its sheet where the title
+        // row has no room for its button, which is not the same question as
+        // whether the left column is at its rail.
+        folded: narrow,
         binding: HELM_KEY,
         questions: questions.length,
         width: dockWidth,
@@ -184,7 +189,6 @@ export function Shell({
       activeId={showing}
       onSelect={onSurface}
       collapsed={collapsed}
-      leftFolded={leftFolded}
       leftWidth={leftWidth}
       onResizeLeft={resizeLeft}
       repositoryPicker={
@@ -300,15 +304,16 @@ function useNarrow(): boolean {
 
 /**
  * Whether the window is under `--window-fold-left`, the width at which the left
- * column, Helm's dock at rest and job detail's two columns at their floors stop
- * adding up. **The bound is read from the token**, the same way `useNarrow`
- * reads `--layout-breakpoint` — the sum behind the number is in `spacing.css`
- * and is not repeated here.
+ * column *at its full width*, Helm's dock at rest and job detail's two columns
+ * at their floors stop adding up. Under it the column collapses to its rail,
+ * the same 48px `useNarrow` draws. **The bound is read from the token**, the
+ * same way `useNarrow` reads `--layout-breakpoint` — the sum behind the number
+ * is in `spacing.css` and is not repeated here.
  *
  * `width <` rather than `max-width:`, because the token names the narrowest
  * window that still fits rather than the widest that does not: at exactly 1280
- * both floors are met with the column drawn, and `max-width` would fold it one
- * pixel early and move a measurement that already landed.
+ * both floors are met with the column at 200px, and `max-width` would collapse
+ * it one pixel early and move a measurement that already landed.
  */
 function useTight(): boolean {
   const [tight, setTight] = useState(false);

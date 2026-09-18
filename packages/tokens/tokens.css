@@ -592,10 +592,10 @@
   --sidebar-default: 200px;
   --sidebar-min: 160px;
   --sidebar-max: 320px;
-  /* The rail is the narrowest the column is ever *drawn*. It no longer means
-     the column is always on screen: under --window-fold-left with Helm's dock
-     beside the content the column folds away entirely, which the owner decided
-     on 17 Sep against narrowing the dock instead. */
+  /* The rail is the narrowest the column is ever drawn, and it is also the
+     narrowest it ever gets: the column is on screen at every width. #1435
+     briefly made it disappear under --window-fold-left; the owner corrected
+     that on 18 Sep — under that width the column is *this*, not absent. */
   --sidebar-rail: 48px;
   --window-floor: 768px;  /* the desktop window's minWidth */
   --touch-floor: 390px;   /* the narrowest the touch client is drawn for */
@@ -674,7 +674,9 @@
      panel gives way rather than the layout clipping; `screens.css` carries the
      rule that does it, and it still fires wherever a drag spends the room.
      What that band wanted was pixels from outside this screen, and the left
-     column is where they come from now — --window-fold-left, below. */
+     column is where most of them come from now — --window-fold-left, below.
+     Most, not all: the column collapses to the rail rather than vanishing, so
+     1101–1127 is still short and the rule below still fires there. */
   --w-run-column-min: 240px;
   --w-step-panel-min: 332px;
   /* 380px: Helm's dock, beside the content on every surface at
@@ -703,17 +705,17 @@
      pane holding a diff is allowed to go, and the panel beside the dock is
      asked to hold the same kind of thing. */
   --w-work-min: 380px;
-  /* The window width the left column stops fitting under, so it folds away
-     entirely and hands its pixels to the content. **A sum, not a taste**, of
-     every term between the window's two edges when Helm's dock is beside the
-     content and a Job is open:
+  /* The window width the left column stops fitting at its full width under,
+     so it collapses to --sidebar-rail and hands the difference to the content.
+     **A sum, not a taste**, of every term between the window's two edges when
+     Helm's dock is beside the content and a Job is open:
 
        --sidebar-default               200   Navigation, Stats and Fleet
        + 2 x --space-4                  32   the column's own inset
        - 1 x --space-4                 -16   handed back into the gap
        + --space-2 + 2 x --space-1      16   the column's handle
        ----------------------------------
-                                       232   what the left column costs
+                                       232   what the full-width column costs
        + 2 x --pad-card                 40   the Job screen's own padding
        + --w-run-column-min            240
        + --space-6                      24   the gutter between the columns
@@ -724,22 +726,49 @@
        ----------------------------------
                                       1280
 
-     At exactly 1280 both floors are met with the column drawn, which is the
+     At exactly 1280 both floors are met with the column at 200px, which is the
      1280 `job-detail-width.test.tsx` already measures; a pixel under it and
      the step panel goes below --w-step-panel-min, which is the 202px band the
-     owner hit at 1150. Folding the column returns 216px to the content — the
-     232 above less the --space-4 the work takes back as its leading gutter —
-     so the panel holds its floor from --layout-breakpoint up.
+     owner hit at 1150.
 
-     **Below --layout-breakpoint this never fires**, because the dock takes
-     itself off screen there and its 412px leave the room: the column comes
-     back as the 48px rail. This threshold is read only while the dock is
-     actually beside the content, so a closed dock keeps the column too.
+     **What the column becomes under it is the rail, not nothing.** #1435
+     removed it outright and that was wrong — briefed as a fold and built as an
+     absence. The owner's correction, 18 Sep 2026: *"when I said collapse the
+     left panel I didn't mean completely hide it … the left panels collapse
+     into a single icon size column, not hidden away."* So this threshold keeps
+     its value — it is set by the 232 above, and the full-width column did not
+     change — and changes what it means. Below it the column is the same 48px
+     rail --layout-breakpoint already draws.
+
+     **The rail costs 80, so it returns 152 rather than 216.** Same terms,
+     with the handle gone (there is nothing to drag at 48px) and the body's own
+     --space-4 gap back in its place:
+
+       --sidebar-rail                   48
+       + 2 x --space-4                  32   the column's own inset
+       - 1 x --space-4                 -16   handed back into the gap
+       + --space-4                      16   the gap, with no handle in it
+       ----------------------------------
+                                        80   what the rail costs
+
+     Which puts the width at which the rail itself stops paying for both floors
+     at 80 + 1048 = **1128** — the other nine terms of the sum above, unchanged.
+     Between --layout-breakpoint and 1128 there is a 27px band, 1101 to 1127,
+     where the window is short by up to 27px and no arrangement of these parts
+     closes it. The panel gives way there, smoothly, on `.armada-inside`'s own
+     `min()` — 305px at 1101 rising to its 332 floor at 1128, against the 202px
+     that started all this. Nothing clips. This is the cost of the rail over
+     the absence, stated rather than hidden.
+
+     **Below --layout-breakpoint none of this fires**, because the dock takes
+     itself off screen there and its 412px leave the room. This threshold is
+     read only while the dock is actually beside the content, so a closed dock
+     keeps the column at its full width.
 
      Not one of the --layout-breakpoint-* collapse points above: nothing
-     spells a responsive variant against it, the fold is decided against the
-     dock's state as well as the width, and a Tailwind breakpoint would be a
-     media query no component writes. `Shell.tsx` is the one reader. */
+     spells a responsive variant against it, the collapse is decided against
+     the dock's state as well as the width, and a Tailwind breakpoint would be
+     a media query no component writes. `Shell.tsx` is the one reader. */
   --window-fold-left: 1280px;
   /* A node on a Studio's whiteboard. Its own width rather than a floating
      layer's, so a menu that widens does not resize a Studio. 240px holds a
