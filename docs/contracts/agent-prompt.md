@@ -787,7 +787,13 @@ answered, and from whether the command can be allowed at all.
 | Asked | The Job asks, and nobody answered inside the hold |
 | Already asking | The Job asks, and a person is already being asked about another call |
 | Rejected | A person said no while the call was held |
-| Withheld | The command is declared destructive, or the harness cannot grant it |
+| Withheld | The command is declared destructive, runs what one of the Manifest's Checks runs, or the harness cannot grant it |
+
+**A command that runs a Check is withheld under every `when_blocked`**, as a
+destructive one is: no person's setting widens what the repository already
+declared. Its refusal names the Check that covers what was typed and says to
+ask for it instead, and says that asking by name costs nothing — a Drone that
+believes asking is rationed runs the command itself, which is [#1174](https://github.com/NickMele/armada/issues/1174).
 
 The already-asking and ungrantable forms follow the same two sentences: what
 is happening, then what not to do. Neither is a final refusal of the first

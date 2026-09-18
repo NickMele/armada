@@ -203,6 +203,12 @@ pub enum First {
 pub enum Withheld {
     /// `armada.yml` declares it destructive, under this name.
     Destructive { name: String },
+    /// It runs a program one of the Manifest's Checks runs, so Fleet already
+    /// runs it under `run_checks` and a Drone reaching past that is spending
+    /// its own turns on work it can ask for. **Withheld under every
+    /// `when_blocked`**, for [`Withheld::Destructive`]'s reason: no person's
+    /// setting widens what the repository already declares. #1174.
+    RunsACheck { check: String, program: String },
     /// A tool rather than a command.
     NotACommand { tool: String },
     /// The harness could not grant it: a push, or a command its rules cannot
@@ -219,6 +225,9 @@ impl Withheld {
             Withheld::Destructive { name } => format!(
                 "armada.yml declares this destructive, as {name}, and no job runs it unattended"
             ),
+            Withheld::RunsACheck { check, program } => format!(
+                "{program} is what the {check} check runs, and fleet runs the checks itself"
+            ),
             Withheld::NotACommand { tool } => {
                 format!("{tool} is a tool, and only a command can be allowed from here")
             }
@@ -230,14 +239,16 @@ impl Withheld {
 /// The answer before anyone is asked.
 ///
 /// `destructive` is every destructive command the Manifest declares, as
-/// `(name, run)`, and `ungrantable` is the harness's refusal of this command
-/// where it has one — both handed in, so the answer is a function of what it
-/// is given.
+/// `(name, run)`, `check_runners` is every Check it declares as
+/// `(check name, program)`, and `ungrantable` is the harness's refusal of this
+/// command where it has one — all handed in, so the answer is a function of
+/// what it is given.
 pub fn first(
     tool: &str,
     command: Option<&str>,
     allowed: &[AllowedCommand],
     destructive: &[(String, String)],
+    check_runners: &[(String, String)],
     ungrantable: Option<String>,
     when: WhenBlocked,
 ) -> First {
@@ -256,6 +267,17 @@ pub fn first(
     }
     if let Some((name, _)) = destructive.iter().find(|(_, run)| covers(run, command)) {
         return First::Withheld(Withheld::Destructive { name: name.clone() });
+    }
+    // **Above the `when` match, which is what makes it hold under allow all.**
+    // `#737` put the pointer inside `Refusing::NotGranted`, so a Job set to
+    // allow everything never built one and its Drone was told nothing. On
+    // 17 Sep that Job ran eighteen build commands by hand, one of which took
+    // the machine to a load average of 73. #1174.
+    if let Some((check, program)) = runs_a_check(command, check_runners) {
+        return First::Withheld(Withheld::RunsACheck {
+            check: check.clone(),
+            program: program.clone(),
+        });
     }
     if let Some(why) = ungrantable {
         return First::Withheld(Withheld::Ungrantable { why });
@@ -367,40 +389,52 @@ pub enum Refusing {
     Unanswered,
 }
 
-/// Programs whose whole job is build, test or typecheck — exactly what
-/// `run_checks` already runs under the step's own frozen Checks.
+/// The Check whose runner `command` reaches for, where it reaches for one.
 ///
-/// **Named rather than pattern-matched on the command's flags.** A Drone
-/// reaching for one of these by name is reaching around a tool that does the
-/// same job, whatever it passed after the program — naming the runner is
-/// enough to point at the tool without parsing what it was asked to do.
-const CHECK_RUNNERS: &[&str] = &[
-    "cargo", "pnpm", "npm", "yarn", "go", "pytest", "make", "tox", "rustc",
-];
-
-/// Whether a command's own first word names a program `run_checks` already
-/// covers, so the refusal can name the tool instead of only the person.
-fn runs_what_checks_already_run(command: &str) -> bool {
+/// **Derived from the Manifest rather than named here.** `#737` shipped a
+/// hardcoded list of nine programs — `cargo`, `pnpm`, `npm` and six more — and
+/// a repository built with `bun` or `gradle` got nothing from it. Every Check's
+/// `run`, its `narrow.run` and its `one_test.run` already name the programs
+/// this repository's Checks use, so the list is the file's and nobody
+/// maintains a second copy.
+///
+/// **Every token, not the first.** On 17 Sep a Drone reached
+/// `npx --yes pnpm@11.6.0 --filter @armada/desktop test`, whose first word is
+/// `npx`, after finding `pnpm` was not on its PATH. `bash -c "cargo test"` is
+/// the same hole. A token starting with `-` is skipped, so a flag that happens
+/// to spell a program name is not one.
+fn runs_a_check<'a>(
+    command: &str,
+    runners: &'a [(String, String)],
+) -> Option<&'a (String, String)> {
     command
         .split_whitespace()
-        .next()
-        .is_some_and(|program| CHECK_RUNNERS.contains(&program))
+        .filter(|token| !token.starts_with('-'))
+        .find_map(|token| {
+            let named = program_named(token);
+            runners
+                .iter()
+                .find(|(_, program)| program_named(program) == named)
+        })
+}
+
+/// A token reduced to the program it names: the last path segment, and what
+/// stands before a version suffix. `/usr/bin/cargo` and `pnpm@11.6.0` are
+/// `cargo` and `pnpm`.
+fn program_named(token: &str) -> &str {
+    let last = token.rsplit('/').next().unwrap_or(token);
+    last.split('@').next().unwrap_or(last)
 }
 
 impl Refusing {
     /// The tool's reply. `what` is the command, or the tool where there is none.
     pub fn to_the_drone(&self, what: &str) -> String {
         match self {
-            // **Points at the tool, where the command is one `run_checks`
-            // already runs.** "A person decides" is true and teaches a Drone
-            // nothing it can act on; naming `run_checks` is the same
-            // refusal with something to do about it — `#737`, where the
-            // Drone reached for `cargo check` instead of asking.
-            Refusing::NotGranted if runs_what_checks_already_run(what) => format!(
-                "This Job is not granted `{what}`. Fleet already runs this part's checks \
-                 under `run_checks`, and the report it sends back names what failed. Ask for that instead \
-                 of running the command yourself."
-            ),
+            // **`#737`'s pointer moved to `Withheld::RunsACheck`.** It lived
+            // here, reachable only by building a refusal, so a Job set to allow
+            // everything never fired it. A check runner is now withheld before
+            // the setting is consulted at all, which is where the sentence
+            // belongs. #1174.
             Refusing::NotGranted => format!(
                 "This Job is not granted `{what}`. A person decides whether to allow it. \
                  Do not try to get the same result another way."
@@ -415,6 +449,13 @@ impl Refusing {
                  which arrives as your next turn, before reaching for `{what}`."
             ),
             Refusing::Rejected { note } => rejected(what, note.as_ref()),
+            Refusing::Withheld(Withheld::RunsACheck { check, .. }) => format!(
+                "This Job is not granted `{what}`. It runs what the `{check}` check runs, and \
+                 Fleet runs this part's checks itself under `run_checks` — name `{check}` and \
+                 the files you changed and the answer comes back in seconds, and asking that \
+                 way is not counted against you. Ask for that instead of running the command \
+                 yourself."
+            ),
             Refusing::Withheld(Withheld::Destructive { .. }) => format!(
                 "`{what}` is declared destructive in this repository, and an unattended Job \
                  never runs it. Do not try to get the same result another way."
@@ -511,21 +552,145 @@ mod tests {
 
     use super::{always_allow_rules, covers, first, First, Refusing, Withheld};
 
-    /// **`#737`'s other half.** "A person decides" told a Drone that reached
-    /// for `cargo check` nothing it could act on; naming the tool that runs
-    /// the same checks does.
+    /// The Manifest of a repository whose `format` check narrows to `rustfmt`,
+    /// which is the case a list built from `run` alone would miss.
+    fn runners() -> Vec<(String, String)> {
+        vec![
+            ("test".to_string(), "cargo".to_string()),
+            ("screens_test".to_string(), "pnpm".to_string()),
+            ("format".to_string(), "cargo".to_string()),
+            ("format".to_string(), "rustfmt".to_string()),
+        ]
+    }
+
+    /// **`#1174`, and the whole of why `#737` did not hold.** The pointer lived
+    /// inside a refusal, so a Job set to allow everything built none and its
+    /// Drone was told nothing — eighteen times in one step on 17 Sep. A check
+    /// runner is withheld before the setting is read at all.
     #[test]
-    fn a_refused_check_runner_is_pointed_at_run_checks() {
-        let said = Refusing::NotGranted.to_the_drone("cargo check --tests -p fleet");
+    fn a_check_runner_is_withheld_under_every_setting_including_allow_all() {
+        for when in WhenBlocked::ALL {
+            let decided = first(
+                "Bash",
+                Some("cargo check --tests -p fleet"),
+                &[],
+                &[],
+                &runners(),
+                None,
+                *when,
+            );
+            assert!(
+                matches!(
+                    decided,
+                    First::Withheld(Withheld::RunsACheck { ref check, .. }) if check == "test"
+                ),
+                "under {when:?}: {decided:?}"
+            );
+        }
+    }
+
+    /// The command that actually ran on 17 Sep, whose first word is `npx`.
+    #[test]
+    fn a_runner_reached_through_a_wrapper_and_a_version_is_still_caught() {
+        for command in [
+            "npx --yes pnpm@11.6.0 --filter @armada/desktop test",
+            "corepack pnpm -C apps/desktop test",
+            "/opt/homebrew/bin/cargo nextest run",
+        ] {
+            let decided = first(
+                "Bash",
+                Some(command),
+                &[],
+                &[],
+                &runners(),
+                None,
+                WhenBlocked::AllowAll,
+            );
+            assert!(
+                matches!(decided, First::Withheld(Withheld::RunsACheck { .. })),
+                "`{command}` reached past the checks: {decided:?}"
+            );
+        }
+    }
+
+    /// A `narrow.run` names a program the `run` above it does not, and a Drone
+    /// reaching for that one is reaching for the same check.
+    #[test]
+    fn a_program_only_a_narrowed_run_names_is_still_that_checks() {
+        let decided = first(
+            "Bash",
+            Some("rustfmt --check --edition 2021 src/lib.rs"),
+            &[],
+            &[],
+            &runners(),
+            None,
+            WhenBlocked::AllowAll,
+        );
         assert!(
-            said.contains("run_checks"),
-            "the refusal names the tool: {said}"
+            matches!(
+                decided,
+                First::Withheld(Withheld::RunsACheck { ref check, .. }) if check == "format"
+            ),
+            "{decided:?}"
         );
     }
 
-    /// A command that is not one `run_checks` already covers gets the plain
-    /// refusal — naming a tool that does not do the same job would teach the
-    /// wrong lesson.
+    /// A command no Check runs is not withheld, and under allow all it runs.
+    /// Withholding what a repository never declared would be this rule reaching
+    /// past what it is for.
+    #[test]
+    fn a_command_no_check_runs_is_untouched() {
+        assert_eq!(
+            first(
+                "Bash",
+                Some("git push origin HEAD"),
+                &[],
+                &[],
+                &runners(),
+                None,
+                WhenBlocked::AllowAll,
+            ),
+            First::Allowed
+        );
+    }
+
+    /// A flag that spells a program name is a flag.
+    #[test]
+    fn a_flag_is_never_read_as_a_program() {
+        assert_eq!(
+            first(
+                "Bash",
+                Some("git log --cargo --pnpm"),
+                &[],
+                &[],
+                &runners(),
+                None,
+                WhenBlocked::AllowAll,
+            ),
+            First::Allowed
+        );
+    }
+
+    /// The refusal says which check covers it and what to call instead — a
+    /// Drone told only "no" has nothing to act on, which is `#737`'s point and
+    /// still stands.
+    #[test]
+    fn the_refusal_names_the_check_and_the_call_to_make_instead() {
+        let said = Refusing::Withheld(Withheld::RunsACheck {
+            check: "test".to_string(),
+            program: "cargo".to_string(),
+        })
+        .to_the_drone("cargo check --tests -p fleet");
+        assert!(said.contains("run_checks"), "{said}");
+        assert!(said.contains("`test`"), "it names the check: {said}");
+        assert!(
+            said.contains("not counted against you"),
+            "a Drone that thinks asking is rationed will not ask: {said}"
+        );
+    }
+
+    /// A command that is not one `run_checks` covers gets the plain refusal —
+    /// naming a tool that does not do the same job would teach the wrong lesson.
     #[test]
     fn an_unrelated_refusal_still_names_no_tool() {
         let said = Refusing::NotGranted.to_the_drone("git push origin HEAD");
@@ -570,7 +735,7 @@ mod tests {
     fn a_tool_that_is_not_a_command_is_withheld_unless_everything_is_allowed() {
         for when in [WhenBlocked::RefuseAndHold, WhenBlocked::AskMe] {
             assert_eq!(
-                first("WebFetch", None, &[], &[], None, when),
+                first("WebFetch", None, &[], &[], &[], None, when),
                 First::Withheld(Withheld::NotACommand {
                     tool: "WebFetch".to_string()
                 })
@@ -586,6 +751,7 @@ mod tests {
                 "Bash",
                 Some("npm publish --tag next"),
                 &allows,
+                &[],
                 &[],
                 None,
                 WhenBlocked::RefuseAndHold
@@ -603,6 +769,7 @@ mod tests {
                 Some("rm -rf .armada"),
                 &[],
                 &destructive,
+                &[],
                 None,
                 WhenBlocked::AskMe
             ),
@@ -618,6 +785,7 @@ mod tests {
             first(
                 "Bash",
                 Some("git push origin HEAD"),
+                &[],
                 &[],
                 &[],
                 Some("it would push".to_string()),
@@ -637,6 +805,7 @@ mod tests {
                 Some("npm publish"),
                 &[],
                 &[],
+                &[],
                 None,
                 WhenBlocked::RefuseAndHold
             ),
@@ -646,6 +815,7 @@ mod tests {
             first(
                 "Bash",
                 Some("npm publish"),
+                &[],
                 &[],
                 &[],
                 None,
@@ -659,6 +829,7 @@ mod tests {
                 Some("npm publish"),
                 &[],
                 &[],
+                &[],
                 None,
                 WhenBlocked::AllowAll
             ),
@@ -670,7 +841,7 @@ mod tests {
     #[test]
     fn allow_all_allows_a_tool_that_is_not_a_command() {
         assert_eq!(
-            first("WebFetch", None, &[], &[], None, WhenBlocked::AllowAll),
+            first("WebFetch", None, &[], &[], &[], None, WhenBlocked::AllowAll),
             First::Allowed
         );
     }
@@ -686,6 +857,7 @@ mod tests {
                 Some("rm -rf .armada"),
                 &[],
                 &destructive,
+                &[],
                 None,
                 WhenBlocked::AllowAll
             ),
@@ -697,6 +869,7 @@ mod tests {
             first(
                 "Bash",
                 Some("git push origin HEAD"),
+                &[],
                 &[],
                 &[],
                 Some("it would push".to_string()),

@@ -333,9 +333,11 @@ where
         // Always allow still reads what a person allowed a different Job.
         // A Job no served repository owns is allowed its own row and nothing else.
         let mut destructive = Vec::new();
+        let mut check_runners = Vec::new();
         if let Ok(served) = self.served_by_id(job) {
             allowed.extend(self.repository_allowed_commands(&served).await);
             destructive = self.destructive_commands(&served);
+            check_runners = self.check_runners(&served);
         }
         let command = asked.command();
         first(
@@ -343,6 +345,7 @@ where
             command,
             &allowed,
             &destructive,
+            &check_runners,
             command.and_then(|run| self.ungrantable(run)),
             when,
         )
@@ -364,6 +367,38 @@ where
                     .then(|| (name.clone(), command.run().to_string()))
             })
             .collect()
+    }
+
+    /// Every Check the Manifest declares, as `(check name, program)`.
+    ///
+    /// **Three places per Check, because a Check names its runner in three.**
+    /// `run` is the whole command, `narrow.run` is what a narrowed run starts
+    /// from, and `one_test.run` is how one test is named — and this repository
+    /// already spells `rustfmt` in a `narrow.run` where the `run` above it says
+    /// `cargo`. A Drone reaching for `rustfmt` directly is reaching for the
+    /// `format` check, and a list built from `run` alone would miss it. #1174.
+    pub(super) fn check_runners(
+        &self,
+        served: &crate::repositories::Served,
+    ) -> Vec<(String, String)> {
+        let manifest = served.manifest();
+        let mut runners = Vec::new();
+        for name in manifest.checks_as_written() {
+            let Some(check) = manifest.check(name) else {
+                continue;
+            };
+            let lines = [
+                Some(check.run()),
+                check.narrow().map(core_model::Narrowing::run),
+                check.one_test(),
+            ];
+            for run in lines.into_iter().flatten() {
+                if let Some(program) = run.split_whitespace().next() {
+                    runners.push((name.clone(), program.to_string()));
+                }
+            }
+        }
+        runners
     }
 
     /// The harness's refusal of this command as a grant, where it has one.
@@ -449,6 +484,10 @@ where
             &self
                 .served_by(job)
                 .map(|served| self.destructive_commands(&served))
+                .unwrap_or_default(),
+            &self
+                .served_by(job)
+                .map(|served| self.check_runners(&served))
                 .unwrap_or_default(),
             ungrantable,
             WhenBlocked::AskMe,
