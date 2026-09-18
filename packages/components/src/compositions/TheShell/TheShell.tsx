@@ -22,10 +22,6 @@ import { HelmSheet } from "./HelmSheet";
  *
  * The panel scrolls; the left column and the dock do not. `min-height: 0` on
  * the scrolling child is what stops the window growing instead.
- *
- * **The column has three widths now, not two** — its drag range, the 48px
- * rail, and gone. `leftFolded` is the third, and the surface decides it the
- * same way it decides the other two: from the window.
  */
 export type TheShellProps = {
   /** Beneath the rail's own section label — nothing draws here since #1087
@@ -49,9 +45,10 @@ export type TheShellProps = {
   /** The 48px icon rail. The surface decides, from the window's width. */
   collapsed?: boolean;
   /**
-   * The column off screen entirely — no panels, no rail, no handle — so the
-   * content takes its 216px. The surface decides, from the window's width and
-   * whether Helm's dock is beside the content: `--window-fold-left`.
+   * The column's third width, after its drag range and the rail: gone. No
+   * panels, no rail, no handle, and the content takes its 216px. The surface
+   * decides, from the window's width and whether Helm's dock is beside the
+   * content — `--window-fold-left`.
    *
    * **This is the one state where Navigation, Stats and Fleet are not on
    * screen**, decided by the owner on 17 Sep 2026 over narrowing the dock or
