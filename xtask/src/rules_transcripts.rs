@@ -6,12 +6,11 @@
 //! reported as the absence of the row rather than as a race — `#1436`'s panic
 //! carried `[]` and nothing else.
 //!
-//! **Why a rule and not a written reading.** `restarting::until_spoken` already
-//! waited, correctly, with its reason in a doc comment, before either of the
-//! next two sites was written. The knowledge was in the crate and did not reach
-//! their authors. A paragraph in a practice doc is the same mechanism that
-//! already failed, so what changes is what is available to reach for: one
-//! waiting reader, and this rule refusing the way round it.
+//! **Why a rule and not a written reading is `docs/practices/rust.md` section
+//! 5**, which is also what a reader who finds this rule inconvenient owes
+//! itself before deleting it. The short of it: the crate already held a helper
+//! that did this correctly, with its reason in a doc comment, and that did not
+//! stop the next two authors writing the loop again.
 
 use std::fs;
 use std::path::Path;

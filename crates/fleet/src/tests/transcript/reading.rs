@@ -6,13 +6,11 @@
 //! the scheduler happened to have done — always enough idle, not enough on the
 //! merge line, where `#1436`'s panic was `[]` and said nothing else.
 //!
-//! **`restarting::until_spoken` already did this correctly before the next two
-//! sites were written**, and the knowledge did not reach their authors: each
-//! wrote the loop again, one of them only after it failed. So the answer is not
-//! a paragraph but a type with no bare read in it. A [`Transcript`] hands out
-//! neither its text nor its path unwaited, and `xtask`'s
-//! `no_bare_transcript_read_in_a_test` refuses the one way round it — naming
-//! `transcript_of` again in a test module.
+//! A [`Transcript`] hands out neither its text nor its path unwaited, and
+//! `xtask`'s `no_bare_transcript_read_in_a_test` refuses the one way round it.
+//! **Why that is a type and a rule rather than a written reading is
+//! `docs/practices/rust.md` section 5**, and deleting either without reading it
+//! puts the loop back.
 
 use std::path::PathBuf;
 use std::time::Duration;
