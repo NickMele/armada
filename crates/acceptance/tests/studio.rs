@@ -642,9 +642,10 @@ fn a_run_node_reads_its_state_off_the_run_and_keeps_its_tail_and_result_once_it_
         node.content,
         StudioNodeContent::Run {
             run_id: THE_RUN.to_string(),
+            held: None,
             kept: None,
         },
-        "a reference, while the run is still there to read"
+        "a reference to a run in the checkout, while it is still there to read"
     );
     let edge = &underway.edges[0];
     assert_eq!(
@@ -690,6 +691,7 @@ fn a_run_node_reads_its_state_off_the_run_and_keeps_its_tail_and_result_once_it_
         swept.nodes[1].content,
         StudioNodeContent::Run {
             run_id: THE_RUN.to_string(),
+            held: None,
             kept: Some(ipc::StudioRunKept::of(&kept)),
         },
         "the node carries all of it across the wire, and still says which run"

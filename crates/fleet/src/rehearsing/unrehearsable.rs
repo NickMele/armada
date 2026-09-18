@@ -207,7 +207,8 @@ impl fmt::Display for Unrehearsable {
             IsAServer { name } => write!(
                 out,
                 "`{name}` is a server — it declares `serve` and stays running — so it is \
-                 started with start_server and held for its owner, not run here"
+                 started and held for its owner rather than run here: start_server, or \
+                 start_studio_server from a Studio"
             ),
             WorktreeManifest { why } => write!(
                 out,

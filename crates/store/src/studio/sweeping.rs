@@ -1,4 +1,5 @@
-//! What a Run node keeps when the run it references is swept. `#1289`.
+//! What a Run node keeps when the run it references stops being readable — a
+//! checkout run swept, or a server ending. `#1289`, `#1345`.
 //!
 //! **The one write that makes new content**, and it is not on the seam: no
 //! request reaches it, and `core_model`'s `keeping` refuses anything but a Run
@@ -29,7 +30,34 @@ impl Store {
         run_id: &str,
         kept: &StudioRunKept,
     ) -> Result<Vec<StudioId>, StudioError> {
-        let holders = self.nodes_holding(run_id)?;
+        self.kept_on_nodes(kept, |content| {
+            content.checkout_run_still_read() == Some(run_id)
+        })
+    }
+
+    /// The same write for a **server** the node holds: what it said, onto every
+    /// Run node naming that instance. `#1345`.
+    ///
+    /// **Called as the server ends, not as its directory is swept.** A server's
+    /// result is Fleet's memory and nothing else — `crates/fleet`'s `Servers`
+    /// is never written down — so the instant it ends is the last moment there
+    /// is anything to keep.
+    pub fn keep_studio_server(
+        &mut self,
+        server_id: &str,
+        kept: &StudioRunKept,
+    ) -> Result<Vec<StudioId>, StudioError> {
+        self.kept_on_nodes(kept, |content| {
+            content.server_still_read() == Some(server_id)
+        })
+    }
+
+    fn kept_on_nodes(
+        &mut self,
+        kept: &StudioRunKept,
+        holds: impl Fn(&StudioNodeContent) -> bool,
+    ) -> Result<Vec<StudioId>, StudioError> {
+        let holders = self.nodes_holding(&holds)?;
         if holders.is_empty() {
             return Ok(Vec::new());
         }
@@ -57,16 +85,18 @@ impl Store {
         Ok(studios)
     }
 
-    /// Every Run node that still reads its state off `run_id`, as its id, its
-    /// Studio's id and its content.
+    /// Every Run node `holds` answers for, as its id, its Studio's id and its
+    /// content.
     ///
     /// **Filtered in Rust over the `run` rows**, not by a query into the JSON:
     /// the kind is a column with a `CHECK` over it, so the rows to read are
     /// already few, and the reference is read back through the one decoder the
-    /// rest of this module reads content with.
+    /// rest of this module reads content with — which is also what keeps a
+    /// server's id from ever matching a run's, since each is asked for by its
+    /// own variant rather than by string equality on one field.
     fn nodes_holding(
         &self,
-        run_id: &str,
+        holds: &impl Fn(&StudioNodeContent) -> bool,
     ) -> Result<Vec<(String, String, StudioNodeContent)>, StudioError> {
         let mut asking = self
             .conn
@@ -92,7 +122,7 @@ impl Store {
                 id: id.clone(),
                 why: Unreadable::Content(why),
             })?;
-            if content.run_still_read() == Some(run_id) {
+            if holds(&content) {
                 holding.push((id, studio_id, content));
             }
         }

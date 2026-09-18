@@ -449,7 +449,7 @@ pub fn a_studio_with_a_run_started_from_a_note(
     let run = StudioNode::added(
         StudioNodeId::carried(Ulid::carried("01RUNNODE")),
         StudioNodeContent::Run {
-            run_id: THE_RUN.to_string(),
+            run: core_model::StudioRun::Checkout(THE_RUN.to_string()),
             kept,
         },
         StudioPosition { x: 240, y: 0 },

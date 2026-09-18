@@ -355,16 +355,17 @@ impl From<StudioRelation> for StudioEdgeKind {
     }
 }
 
-/// What a Run node keeps of its run once the run's own retention has swept it:
-/// the result, and the log's last lines. `#1289`.
+/// What a Run node keeps of its run once the run stops being Fleet's to read:
+/// the result, and the log's last lines. `#1289`, `#1345`.
 ///
-/// **Only ever present on a run that is gone.** While the run's record is
-/// still on disk the node is a reference and nothing else, and its state is
-/// read off the run — so a node carrying one of these is saying that what is
-/// here is all there is, which is what *partial* means on a Studio.
+/// **Only ever present on a run nobody can read any more.** While it is still
+/// readable the node is a reference and nothing else, and its state is read
+/// off the run — so a node carrying one of these is saying that what is here
+/// is all there is, which is what *partial* means on a Studio.
 ///
-/// **Taken before the sweep, never after.** A tail read after the directory
-/// was removed is no tail at all, and the node would point at nothing.
+/// **Taken at the last moment it can be read, never after**, and which moment
+/// that is depends on who holds it: a checkout run's record is a directory, so
+/// before the sweep; a server's is Fleet's memory, so the instant it ends.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StudioRunKept {
     /// The entry the Manifest declared, by name.
@@ -373,7 +374,9 @@ pub struct StudioRunKept {
     pub command: String,
     /// `None` where the run was killed before it exited.
     pub exit_code: Option<i32>,
-    /// What the entry declared a pass to be, so the node keeps its colour.
+    /// What the entry declared a pass to be, so the node keeps its colour. **A
+    /// server's colour is not read off it**: one that exits on its own has
+    /// failed whatever its code — `docs/concepts/manifest.md`.
     pub expect_exit_code: i64,
     /// Whether a person stopped it.
     pub stopped: bool,
@@ -397,6 +400,33 @@ pub(super) fn trimmed(said: Option<String>) -> Option<String> {
         .filter(|line| !line.is_empty())
 }
 
+/// What a Run node holds: a run in the checkout, or a server Fleet is holding.
+/// `#1289`, `#1345`.
+///
+/// **Two ids that are not interchangeable, so they are not one field.** A
+/// checkout run's id names a directory under `.armada/runs` that outlives
+/// Fleet; a server's names an instance Fleet holds in memory and nothing else
+/// does. A single `run_id` would let either be handed to the reader of the
+/// other, and the reader would answer *no such run* about a server that is
+/// serving.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StudioRun {
+    /// A Check or a Command that runs and exits, by its run id.
+    Checkout(String),
+    /// A Command with `serve`, by the id Fleet holds the instance under.
+    Server(String),
+}
+
+impl StudioRun {
+    /// The id, whichever it is. **For writing it down and nothing else** —
+    /// which reader it is handed to is the variant's to decide.
+    pub fn id(&self) -> &str {
+        match self {
+            StudioRun::Checkout(id) | StudioRun::Server(id) => id,
+        }
+    }
+}
+
 /// What a node holds, one variant per kind.
 ///
 /// **The smallest each kind needs to be drawn and read.** A later step adds
@@ -404,9 +434,9 @@ pub(super) fn trimmed(said: Option<String>) -> Option<String> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StudioNodeContent {
     /// A reference to the run, never its status — and what was kept of it
-    /// once retention swept the run away. `#1289`.
+    /// once the run stopped being Fleet's to read. `#1289`, `#1345`.
     Run {
-        run_id: String,
+        run: StudioRun,
         kept: Option<StudioRunKept>,
     },
     /// What a person pointed at and said, fixed at capture. `capture` is
@@ -543,7 +573,7 @@ impl StudioNodeContent {
     /// The first field left blank, by name, or `None` where every one is said.
     pub fn blank(&self) -> Option<&'static str> {
         let fields: &[(&'static str, &str)] = match self {
-            StudioNodeContent::Run { run_id, .. } => &[("run_id", run_id)],
+            StudioNodeContent::Run { run, .. } => &[("run_id", run.id())],
             StudioNodeContent::Note { said, .. } => &[("said", said)],
             StudioNodeContent::Cluster { title } => &[("title", title)],
             StudioNodeContent::Finding(finding) => &[("asked", finding.ask())],
@@ -577,12 +607,35 @@ impl StudioNodeContent {
             .map(|(name, _)| *name)
     }
 
-    /// The run this node references, where it is a Run node whose run is still
-    /// the thing to read. `None` on every other kind, **and on a Run that has
-    /// already kept its tail**: what it references is gone.
-    pub fn run_still_read(&self) -> Option<&str> {
+    /// The **checkout run** this node references, where it is a Run node whose
+    /// run is still the thing to read. `None` on every other kind, on a node
+    /// holding a server, **and on a Run that has already kept its tail**: what
+    /// it references is gone.
+    ///
+    /// **A server is not answered here**, which is what stops a run sweep from
+    /// matching one: the two id spaces are separate and the readers are
+    /// separate, so each has its own question.
+    pub fn checkout_run_still_read(&self) -> Option<&str> {
         match self {
-            StudioNodeContent::Run { run_id, kept: None } => Some(run_id),
+            StudioNodeContent::Run {
+                run: StudioRun::Checkout(id),
+                kept: None,
+            } => Some(id),
+            _ => None,
+        }
+    }
+
+    /// The **server instance** this node references, where Fleet is still the
+    /// one to read it from. [`checkout_run_still_read`]'s rule, one holder
+    /// over. `#1345`.
+    ///
+    /// [`checkout_run_still_read`]: StudioNodeContent::checkout_run_still_read
+    pub fn server_still_read(&self) -> Option<&str> {
+        match self {
+            StudioNodeContent::Run {
+                run: StudioRun::Server(id),
+                kept: None,
+            } => Some(id),
             _ => None,
         }
     }
@@ -619,13 +672,19 @@ impl StudioNodeContent {
     /// This content with what was kept of its run written into it.
     ///
     /// **The only method here that makes new content**, and the reason a Note
-    /// stays fixed at capture: it takes a Run node whose run is about to be
-    /// swept and no other, so nothing can reach a node's words through it, and
-    /// a tail already kept is never written over.
+    /// stays fixed at capture: it takes a Run node whose run is about to stop
+    /// being readable and no other, so nothing can reach a node's words
+    /// through it, and a tail already kept is never written over.
+    ///
+    /// **Whichever it holds keeps holding it.** The reference is not rewritten
+    /// by keeping a tail: a node that named a server still names it, so the
+    /// log that is still on disk is still openable by its id.
     pub fn keeping(&self, kept: StudioRunKept) -> Option<StudioNodeContent> {
-        let run_id = self.run_still_read()?;
+        let StudioNodeContent::Run { run, kept: None } = self else {
+            return None;
+        };
         Some(StudioNodeContent::Run {
-            run_id: String::from(run_id),
+            run: run.clone(),
             kept: Some(kept),
         })
     }

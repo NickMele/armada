@@ -18,6 +18,7 @@ use crate::enums::{
 use crate::ids::{Instant, JobId, ManifestId, StudioEdgeId, StudioId, StudioNodeId};
 use crate::rehearsal::CheckoutRunUnderway;
 use crate::scouting::{ScoutCheckout, ScoutEnded, ScoutSource};
+use crate::servers::ServerState;
 
 /// Every Studio one repository keeps, the last touched first — `list_studios`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -84,9 +85,18 @@ pub struct StudioNode {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum StudioNodeContent {
     Run {
+        /// The run's id, or a server instance's. Which of the two is [`held`].
+        ///
+        /// [`held`]: StudioNodeContent::Run::held
         run_id: String,
-        /// Absent while the run is still there to read. Present is **partial**:
-        /// the run's own record has been swept and this is all there is.
+        /// Who holds what `run_id` names. **Absent is a run in the checkout**,
+        /// which is every node written before 16.2 — and the reader for each
+        /// is a different one, so a client that does not know this field asks
+        /// the run reader about a server and is told there is no such run.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        held: Option<StudioRunHeld>,
+        /// Absent while it is still there to read. Present is **partial**: the
+        /// run's own record is gone and this is all there is.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         kept: Option<StudioRunKept>,
     },
@@ -276,6 +286,59 @@ pub struct StudioRunKept {
     pub total_lines: u32,
     /// Whether `lines` is the whole log rather than its tail.
     pub whole: bool,
+}
+
+/// Who holds what a Run node's `run_id` names. `#1345`.
+///
+/// **Two readers, never one.** A checkout run is read from `.armada/runs` by
+/// `observe_checkout_run`; a server is read from Fleet's own memory by
+/// `observe_server`, `list_servers` and `stop_server`. Nothing can be asked of
+/// both, so which it is rides on the node.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StudioRunHeld {
+    /// A Check or a Command that runs and exits. **The default**, so a node
+    /// written before 16.2 reads back as what it is.
+    #[default]
+    Checkout,
+    /// A Command with `serve`, held by Fleet against the main checkout.
+    Server,
+}
+
+/// `start_studio_server`: start a Command with `serve` in the checkout the
+/// Studio's repository stands in, and put a Run node on the Studio for it.
+/// `#1345`.
+///
+/// **`start_studio_run`'s body without a workspace.** A server is declared in
+/// the Manifest Fleet holds for the repository, and `start_server` takes a
+/// name and no directory for the same reason.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartStudioServer {
+    /// The Command with `serve` the Manifest declares, by name.
+    pub name: String,
+    /// Where the Run node is placed.
+    pub position: StudioPosition,
+    /// The node this was started from. The Studio draws the `produced` edge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub produced_by: Option<StudioNodeId>,
+}
+
+/// `start_studio_server`'s answer: the server is up or coming up, and the
+/// Studio holds a node for it. `#1345`.
+///
+/// **The instance, live, and never a copy of it.** What the node draws is read
+/// off `list_servers` from then on; this is the first read, in the answer, so
+/// a client does not have to wait for the next event to draw the node it just
+/// made.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StudioServerStarted {
+    pub studio: Studio,
+    pub node_id: StudioNodeId,
+    pub server: ServerState,
+    /// **One instance per checkout**, so an ask for a server already serving
+    /// is answered with that one and this says so. The node is still made: it
+    /// records that this Studio asked for it.
+    pub already_up: bool,
 }
 
 /// `start_studio_run`: run one Manifest entry in the checkout and put a Run
@@ -732,8 +795,12 @@ impl From<&core_model::StudioNodeContent> for StudioNodeContent {
     fn from(content: &core_model::StudioNodeContent) -> StudioNodeContent {
         use core_model::StudioNodeContent as C;
         match content.clone() {
-            C::Run { run_id, kept } => StudioNodeContent::Run {
-                run_id,
+            C::Run { run, kept } => StudioNodeContent::Run {
+                run_id: run.id().to_string(),
+                held: match run {
+                    core_model::StudioRun::Checkout(_) => None,
+                    core_model::StudioRun::Server(_) => Some(StudioRunHeld::Server),
+                },
                 kept: kept.as_ref().map(StudioRunKept::of),
             },
             C::Note { said, capture } => StudioNodeContent::Note {
@@ -819,7 +886,13 @@ impl StudioNodeContent {
             // swept run is taken from the run's own record by the sweep, and
             // `add_studio_node` refuses a Run kind outright, so nothing on
             // this seam can name a result the run did not have.
-            StudioNodeContent::Run { run_id, .. } => C::Run { run_id, kept: None },
+            StudioNodeContent::Run { run_id, held, .. } => C::Run {
+                run: match held {
+                    None | Some(StudioRunHeld::Checkout) => core_model::StudioRun::Checkout(run_id),
+                    Some(StudioRunHeld::Server) => core_model::StudioRun::Server(run_id),
+                },
+                kept: None,
+            },
             StudioNodeContent::Note { said, capture } => C::Note {
                 said,
                 capture: capture.map(StudioCapture::to_domain),
