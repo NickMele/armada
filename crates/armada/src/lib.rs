@@ -29,9 +29,10 @@
 //! [`locating`](mod@locating) reads a folder a person adds into one more
 //! repository Fleet serves, and holds every watch.
 //!
-//! [`land`](mod@land) is `armada land`'s state on disk, ported from
-//! `scripts/land` in stages — this one holds the queue, the outcome and the
-//! preflight stamp. **Not yet a verb**: `cli` does not dispatch to it.
+//! [`land`](mod@land) is `armada land`, ported from `scripts/land` in
+//! stages — state on disk, the gate's pure comparisons, and now the two
+//! reused worktrees, the turn lock and the detached runner. **Not yet a
+//! verb**: `cli` does not dispatch to it.
 
 pub mod agent;
 pub mod clean;
