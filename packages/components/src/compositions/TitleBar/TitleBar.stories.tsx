@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
+import { FLEET_DOT_TONE, type FleetState } from "../FleetPanel/FleetPanel";
 import { Select } from "../../primitives/Select/Select";
 import { ShortcutRevealProvider } from "../../shortcut-reveal";
 import { TitleBar } from "./TitleBar";
@@ -70,6 +71,80 @@ export const HelmClosed: Story = {
 export const BeforeAnythingIsRead: Story = {
   args: {
     onSearch: () => {},
+  },
+};
+
+/**
+ * The left column is folded, so Fleet's dot is on the bar's trailing edge —
+ * the one width it is drawn at (#1437). It says liveness and no more: pid,
+ * port, protocol and uptime come back with the panel.
+ */
+export const FleetFolded: Story = {
+  args: {
+    ...Full.args,
+    helm: { questions: 3, binding: "⌘J", onOpen: () => {} },
+    fleet: { state: "running", label: "Running" },
+  },
+};
+
+/** Fleet is not running — `--status-escalated`, the panel's own hue for it, and the word in the name. */
+export const FleetFoldedNotRunning: Story = {
+  args: { ...FleetFolded.args, fleet: { state: "not-running", label: "Not running" } },
+};
+
+/** Alive and not answering — `--status-awaiting-review`, a state a dot alone could not tell from running. */
+export const FleetFoldedUnreachable: Story = {
+  args: { ...FleetFolded.args, fleet: { state: "unreachable", label: "Unreachable" } },
+};
+
+/** None of the three — reading, connecting, a refused runtime file — neutral, and the label names which. */
+export const FleetFoldedUnknown: Story = {
+  args: { ...FleetFolded.args, fleet: { state: "unknown", label: "Connecting" } },
+};
+
+/**
+ * What a rendering cannot show: that each state's dot carries the Fleet
+ * panel's own tone rather than one chosen here, and that the state is
+ * readable without sight. The tone is asserted against `FLEET_DOT_TONE`
+ * itself — the map the panel draws from — so a hue that moved in one place
+ * and not the other fails here rather than shipping two dots that disagree.
+ *
+ * The name and the tooltip are read as two properties because they are two
+ * doors: a pointer gets `title`, a screen reader gets the accessible name,
+ * and a dot that had only one of them would be silent for half its readers.
+ */
+export const FleetStates: Story = {
+  args: FleetFolded.args,
+  render: (args) => (
+    <>
+      {FLEET_SAID.map(({ state, label }) => (
+        <TitleBar key={state} {...args} fleet={{ state, label }} />
+      ))}
+    </>
+  ),
+  play: async ({ canvas }) => {
+    for (const { state, label } of FLEET_SAID) {
+      const said = `Fleet — ${label}`;
+      const dot = canvas.getByRole("img", { name: said });
+      await expect(dot).toHaveAttribute("title", said);
+      await expect(dot.firstElementChild).toHaveAttribute("data-tone", FLEET_DOT_TONE[state]);
+    }
+  },
+};
+
+/** Every Fleet state, with the word the panel puts beside its own dot for each. */
+const FLEET_SAID: { state: FleetState; label: string }[] = [
+  { state: "running", label: "Running" },
+  { state: "not-running", label: "Not running" },
+  { state: "unreachable", label: "Unreachable" },
+  { state: "unknown", label: "Connecting" },
+];
+
+/** Unfolded: the Fleet panel carries the dot, and this row draws none. Two would be one fact twice. */
+export const FleetUnfolded: Story = {
+  args: { ...Full.args, helm: { questions: 3, binding: "⌘J", onOpen: () => {} } },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole("img", { name: /^Fleet — / })).not.toBeInTheDocument();
   },
 };
 

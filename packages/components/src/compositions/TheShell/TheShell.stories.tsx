@@ -258,6 +258,10 @@ export const LeftColumnFolded: Story = {
   // What a rendering cannot show: that this is absent rather than hidden, and
   // that folding the column took nothing else with it — Helm's dock is the
   // whole point of the band and is still there.
+  //
+  // And that Fleet's own state did not go with the panel: the title row's dot
+  // is the one thing that survives the fold (#1437), carrying the same state
+  // this story hands the panel it just put away.
   play: async ({ canvas, canvasElement }) => {
     await expect(canvasElement.querySelector(".armada-shell__left")).toBe(null);
     await expect(canvas.queryByRole("separator", { name: "Resize the left column" })).not.toBeInTheDocument();
@@ -265,6 +269,7 @@ export const LeftColumnFolded: Story = {
     await expect(canvas.queryByRole("button", { name: /Job Board/ })).not.toBeInTheDocument();
     await expect(canvas.queryByText("Awaiting approval")).not.toBeInTheDocument();
     await expect(canvas.getByLabelText("Helm")).toBeInTheDocument();
+    await expect(canvas.getByRole("img", { name: `Fleet — ${shell.fleet.label}` })).toBeInTheDocument();
   },
 };
 

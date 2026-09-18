@@ -746,9 +746,11 @@ breakpoint.
 Frameless, `titleBarStyle: 'hiddenInset'`, macOS traffic lights inset over
 the **title row** — the bar across the window's top carrying the repository
 picker, search, Dispatch and Helm's reopen control (#1087 moved all four off
-the left column and into this row). Costs a custom drag region: the whole
-row is a drag region, and every interactive control inside it opts out by
-hand.
+the left column and into this row), and Fleet's status dot for as long as
+the left column is folded. Costs a custom drag region: the whole row is a
+drag region, and every control inside it opts out by hand — the dot included,
+since a drag region swallows the pointer and a tooltip inside one never
+opens.
 
 ### Left column
 
@@ -801,11 +803,36 @@ comes back when the window grows.
 Fleet keep their one status dot each, so a glance still says whether anything
 needs attention.
 
+**Fleet's liveness survives the fold, as one dot in the title row.** Settled
+by the owner on 17 Sep 2026, after the fold shipped with Fleet's state having
+no home in that band at all.
+
+> **Rule.** A status dot sits at the title row's trailing edge, drawn **only
+> while the left column is folded**, carrying Fleet's own state, its own
+> colour, and its state in words as both an accessible name and a tooltip.
+> It says liveness and nothing else.
+> Why: the two alternatives were shown and rejected. The same dot at every
+> width would draw the Fleet panel's own dot twice, and a mark that appeared
+> only when something was wrong would make silence mean healthy and broken
+> alike.
+
+The colour is the Fleet panel's, from the one map — the dot and the panel
+cannot disagree, because neither holds a table of its own. Status colour is
+mapped, never chosen; see [Iconography](iconography.md).
+
+**pid, port, protocol and uptime do not follow it.** They stay in the panel
+and come back with the column. A dot cannot carry a figure, and the title row
+is not where a person reads one.
+
+**Stats gets no equivalent.** Its rows are six counts, and a count has no
+single-dot form that is not a second, quieter place to check.
+
 **The cost, taken knowingly.** A surface that moves on its own is
-disorienting the first time, and while the column is folded Stats and Fleet
-are not on screen at all — Navigation is still reached by `⌘1`–`⌘8` and from
-the palette, and neither of the other two has a binding, so Fleet's liveness
-is unread in that band. The two alternatives were rejected on 17 Sep 2026:
+disorienting the first time, and while the column is folded Stats is not on
+screen at all — Navigation is still reached by `⌘1`–`⌘8` and from the palette,
+Fleet is the dot above, and Stats has neither. The title row also gains chrome
+that appears and disappears with the window. The two alternatives to the fold
+itself were rejected on 17 Sep 2026:
 correcting `--w-work-min` would cut the dock's drag ceiling on a 1512px
 screen from 868px to about 580 against #1176, and folding the dock to its
 sheet earlier puts Helm behind a scrim at a width that has room for it.
@@ -890,7 +917,7 @@ the desktop floor:**
 
 | | ≥ 1280px | 1100–1280px, dock open | < 1100px | Touch client |
 | --- | --- | --- | --- | --- |
-| Left column | Expanded, user-resizable — Navigation, Stats and Fleet together | **Folds away entirely**, and its 216px go to the content | Auto-collapses to the 48px rail; Stats and Fleet each keep one status dot | A bottom tab bar |
+| Left column | Expanded, user-resizable — Navigation, Stats and Fleet together | **Folds away entirely**, and its 216px go to the content; Fleet's dot moves to the title row | Auto-collapses to the 48px rail; Stats and Fleet each keep one status dot | A bottom tab bar |
 | Job row | One shape at every width — a stacked row carrying the badge, the headline sentence and the labelled field run beneath | The same row | The same row. Nothing reshapes | The same row, field run wrapped |
 | Helm's dock | Beside the content when open; closed draws nothing, and the title row's Helm button reopens it | Beside the content, unmoved — it is what the middle column is paying for | An edge strip; open draws it as a sheet over the content instead | Not built |
 
@@ -1819,6 +1846,11 @@ connection reading none of the three — reading the runtime file, connecting,
 a refused runtime file, a protocol Bridge does not speak — keeps a neutral
 dot and names itself in the label instead. It is not a glyph, so "this panel
 carries no icons" is unaffected; see [Iconography](iconography.md).
+
+**The dot has a second home and the mapping does not.** While the left column
+is folded the title row draws this dot, from the same four-state map and the
+same word — see Left column, above. Two tables would be two things that can
+disagree, which is the whole reason the hue is mapped rather than chosen.
 
 ```
 running       --status-completed-success dot

@@ -54,6 +54,10 @@ export type TheShellProps = {
    * screen**, decided by the owner on 17 Sep 2026 over narrowing the dock or
    * folding it to its sheet earlier. `collapsed` is read first where both are
    * set, since a folded column has no rail to collapse to.
+   *
+   * Fleet's liveness does not go with them: the title row draws its dot for
+   * as long as this holds, and gives it back to the panel when it does not
+   * (#1437). Stats has no such stand-in — its rows are counts, not one fact.
    */
   leftFolded?: boolean;
   onSelect?: (id: string) => void;
@@ -155,6 +159,9 @@ export function TheShell({
           onDispatch={onDispatch}
           dispatchDisabled={dispatchDisabled}
           helm={helmButtonOf(dock)}
+          // Folded only. The panel below is the reading everywhere else, and
+          // this row draws the same state from the same two fields — #1437.
+          fleet={leftFolded ? { state: fleet.state, label: fleet.label } : undefined}
         />
         <div className="armada-shell__body">
           {leftFolded ? null : (
