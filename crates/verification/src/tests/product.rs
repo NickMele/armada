@@ -21,8 +21,8 @@ use crate::{
 fn workflow() -> ResolvedWorkflow {
     testkit::resolved(&[
         Sketch {
-            id: "scope",
-            label: "Scope the change",
+            id: "plan",
+            label: "Plan the change",
             evidence_type: Some("facts_note"),
             gates: &[],
             judged_on: &[(
@@ -45,7 +45,7 @@ fn workflow() -> ResolvedWorkflow {
                 diff_check: false,
                 at_step_start: false,
                 exclude: &[],
-                references: &["scope.evidence"],
+                references: &["plan.evidence"],
             }),
             gaming: None,
         },
@@ -178,12 +178,12 @@ fn what_an_earlier_step_established_reaches_the_brief_labelled_as_the_yardstick(
         &step.judge_checks()[0].criteria()[0],
         Request::of(testkit::asked_for()),
         &product,
-        &[Reference::to("scope", &earlier)],
+        &[Reference::to("plan", &earlier)],
         Answered::of(&[], &[]),
     );
     let question = brief.question();
     assert!(
-        question.contains("`scope` established: The change is confined to the retry backoff"),
+        question.contains("`plan` established: The change is confined to the retry backoff"),
         "{question}"
     );
     assert!(

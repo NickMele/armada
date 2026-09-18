@@ -17,7 +17,7 @@
   },
   "steps": [
     {
-      "id": "scope",
+      "id": "plan",
       "order": 1,
       "required": true,
       "evidence": {
@@ -69,7 +69,7 @@
       "evidence_scope": {
         "context_source": "drone_declared",
         "reference_docs": [
-          "scope.evidence"
+          "plan.evidence"
         ],
         "max_context_size": 40,
         "scope_diff_check": true,
@@ -101,7 +101,7 @@
           "question": "Given the stated refactor, are the changes to test files justified by it - or has test scope been narrowed, have assertions been weakened, or have tests been skipped or deleted?",
           "gaming_check": {
             "enabled": true,
-            "baseline_ref": "scope.evidence",
+            "baseline_ref": "plan.evidence",
             "flag_if": [
               "test_scope_narrowed",
               "assertion_weakened",
@@ -114,7 +114,7 @@
       "evidence_scope": {
         "context_source": "hybrid",
         "reference_docs": [
-          "scope.evidence",
+          "plan.evidence",
           "refactor.evidence"
         ],
         "max_context_size": 40
@@ -142,7 +142,7 @@
       "evidence_scope": {
         "context_source": "hybrid",
         "reference_docs": [
-          "scope.evidence",
+          "plan.evidence",
           "regression_verify.evidence"
         ],
         "max_context_size": 40

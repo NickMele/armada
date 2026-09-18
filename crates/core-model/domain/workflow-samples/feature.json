@@ -17,7 +17,7 @@
   },
   "steps": [
     {
-      "id": "scope",
+      "id": "plan",
       "order": 1,
       "required": true,
       "evidence": {
@@ -78,7 +78,7 @@
       "evidence_scope": {
         "context_source": "drone_declared",
         "reference_docs": [
-          "scope.evidence"
+          "plan.evidence"
         ],
         "max_context_size": 20,
         "scope_diff_check": true,
@@ -111,7 +111,7 @@
           "question": "Do these tests exercise the behaviour the scope note described, rather than restating the implementation?",
           "gaming_check": {
             "enabled": true,
-            "baseline_ref": "scope.evidence",
+            "baseline_ref": "plan.evidence",
             "flag_if": [
               "assertion_weakened",
               "test_scope_narrowed",
@@ -124,7 +124,7 @@
       "evidence_scope": {
         "context_source": "drone_declared",
         "reference_docs": [
-          "scope.evidence",
+          "plan.evidence",
           "implement.evidence"
         ],
         "max_context_size": 30,
@@ -163,7 +163,7 @@
       "evidence_scope": {
         "context_source": "hybrid",
         "reference_docs": [
-          "scope.evidence",
+          "plan.evidence",
           "implement.evidence"
         ],
         "max_context_size": 40
@@ -191,7 +191,7 @@
         "context_source": "hybrid",
         "reference_docs": [
           "ticket",
-          "scope.evidence"
+          "plan.evidence"
         ],
         "max_context_size": 40
       },
