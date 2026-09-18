@@ -1,6 +1,6 @@
-//! `armada land` — the merge line. This stage is the state the line keeps on
-//! disk; the CLI verb, the two worktrees, the turn lock and the runner are
-//! later stages of the same port.
+//! `armada land` — the merge line. These stages are the state the line keeps
+//! on disk and the pure comparisons its gate makes; the CLI verb, the two
+//! worktrees, the turn lock and the runner are later stages of the same port.
 //!
 //! State stays JSON, on disk, decoded and encoded only through
 //! [`ipc::decode`]/[`ipc::encode`] — the same doorway-wearing-a-file pattern
@@ -13,12 +13,19 @@
 
 pub mod codec;
 pub mod dir;
+pub mod gate;
 pub mod outcome;
 pub mod queue;
 pub mod stamp;
 
 pub use codec::{ReadStateError, WriteStateError};
 pub use dir::{key, StateDir, StateDirError};
-pub use outcome::{merge_outcome, read_outcome, MergeOutcomeError, Outcome, OutcomePatch, Place};
+pub use gate::{
+    a_report, already_red_on_base, failing_lines, finding_counts, foundations_delta, not_installed,
+    FoundationsComparison,
+};
+pub use outcome::{
+    merge_outcome, read_outcome, MergeOutcomeError, Outcome, OutcomePatch, OutcomeState, Place,
+};
 pub use queue::{nonce, queued, read_queue_entry, write_queue_entry, QueueEntry, QueuedError};
 pub use stamp::{read_stamp, write_stamp, PreflightStamp};

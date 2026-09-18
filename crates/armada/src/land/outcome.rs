@@ -17,17 +17,48 @@ use super::dir::StateDir;
 /// practice does too, comfortably past this century.
 pub type Place = i64;
 
-/// What is known about one branch's most recent turn.
+/// What one stored outcome says about a branch's turn.
 ///
-/// **`state` is a bare `String` for now.** `scripts/land`'s exit-code table
-/// (0 landed, 1 refused, 3 waiting/gating/merging, 4 red, 5 conflict, 6
-/// ungated, 7 stopped, 8 unknown) is a later stage's enum, once the logic
-/// that produces each value exists here too — this struct is not that
-/// contract yet, and a reader should not mistake the bare string for one.
+/// **Not `refused` and not `unknown`.** `scripts/land`'s exit-code table
+/// (`docs/practices/running-locally.md`, "Landing a branch") names ten
+/// values; two of them never reach this file. `refused` is raised by
+/// `Refused` before a branch joins the line — no outcome exists yet to hold
+/// it — and `unknown` is what `--status` says when [`read_outcome`] returns
+/// `None`, not a value a stored [`Outcome`] carries. The eight left are
+/// exactly this enum.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OutcomeState {
+    Waiting,
+    Gating,
+    Merging,
+    Landed,
+    Red,
+    Conflict,
+    Ungated,
+    Stopped,
+}
+
+impl OutcomeState {
+    /// The exit code `scripts/land`'s `EXIT` table gives this state, whether
+    /// read from a fresh turn or from `--status` on an old one.
+    pub fn exit_code(self) -> i32 {
+        match self {
+            OutcomeState::Landed => 0,
+            OutcomeState::Waiting | OutcomeState::Gating | OutcomeState::Merging => 3,
+            OutcomeState::Red => 4,
+            OutcomeState::Conflict => 5,
+            OutcomeState::Ungated => 6,
+            OutcomeState::Stopped => 7,
+        }
+    }
+}
+
+/// What is known about one branch's most recent turn.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Outcome {
     pub branch: String,
-    pub state: String,
+    pub state: OutcomeState,
     pub detail: String,
     pub updated: String,
     pub runner: u32,
@@ -61,7 +92,9 @@ impl Outcome {
     fn blank(branch: &str) -> Outcome {
         Outcome {
             branch: branch.to_string(),
-            state: String::new(),
+            // Overwritten unconditionally below, in every caller: a blank
+            // outcome is never read before `merge_outcome` sets its own.
+            state: OutcomeState::Waiting,
             detail: String::new(),
             updated: String::new(),
             runner: 0,
@@ -115,7 +148,7 @@ pub fn read_outcome(dir: &StateDir, branch: &str) -> Result<Option<Outcome>, Rea
 pub fn merge_outcome(
     dir: &StateDir,
     branch: &str,
-    state: impl Into<String>,
+    state: OutcomeState,
     detail: impl Into<String>,
     updated: &str,
     patch: OutcomePatch,
@@ -138,7 +171,7 @@ pub fn merge_outcome(
     merged.cleanup = patch.cleanup.unwrap_or(merged.cleanup);
 
     merged.branch = branch.to_string();
-    merged.state = state.into();
+    merged.state = state;
     merged.detail = detail.into();
     merged.updated = updated.to_string();
     merged.runner = std::process::id();
