@@ -1581,7 +1581,7 @@ Sections of one object, drawn as a segmented control: one track, and the
 chosen tab filled inside it.
 
 ```
-track      --bg-sunken · --border-default · --radius-md · 2px inner padding
+track      --bg-raised · --border-default · --radius-md · 2px inner padding
 tab        32px · 12px horizontal padding · --text-sm · --fg-muted
 chosen     --accent-muted fill · --fg-default · weight 500 · --radius-sm
 hover      --fg-default
@@ -1594,6 +1594,14 @@ underline made one selection read as a different idea from the other, which is
 what the owner saw on Manifest on 17 Sep 2026. The fill is the contract's own
 for a selected row, with `--fg-default` on it because `--accent` measures
 4.06:1 there and would not clear as body text.
+
+**The track is `--bg-raised`, not `--bg-sunken`, and that is Button's own
+rule.** A filled control steps one surface from its ground, and the grounds a
+tab strip sits on are the canvas and a Sheet's overlay. `--bg-sunken` is 18
+values below `--bg-overlay` and cut a visible hole in the activity log's
+header; `--bg-raised` is 7 below it, and on the canvas the two differ by 7
+either side of `--bg-base` — so one value serves both rather than a rule
+scoped to a layer. Measured on the built app, 18 Sep 2026.
 
 **Still the `tabs` primitive.** A segmented control is how the strip is
 painted, not a new base component — hard rule 2 stands.
