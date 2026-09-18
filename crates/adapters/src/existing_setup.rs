@@ -22,15 +22,20 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::fs;
-use std::path::{Path, PathBuf};
 
 use adapter_traits::{
-    FileEntry, FileRead, HarnessSetup, Inventory, KindRead, SetupFiles, SetupItem, SetupKind,
-    Unreadable, WhatWasRead,
+    FileRead, HarnessSetup, Inventory, KindRead, SetupFiles, SetupItem, SetupKind, Unreadable,
+    WhatWasRead,
 };
 use serde::de::IgnoredAny;
 use serde::Deserialize;
+
+/// The filesystem half: a home directory on this machine, read and never
+/// written. Apart from this file because what it knows is macOS, where
+/// everything above knows one harness.
+mod home;
+
+pub use home::Home;
 
 /// The harness, in its own name. Crosses the wire as data, so a surface draws
 /// it rather than holding it.
@@ -393,12 +398,14 @@ struct UserConfig {
 struct Connected {
     command: Option<Program>,
     url: Option<Origin>,
-    /// **Never read.** `-e API_KEY=…` is an argument like any other.
-    #[serde(default)]
-    args: Option<IgnoredAny>,
-    /// **Never read**, and the likeliest place of the four.
-    #[serde(default)]
-    env: Option<IgnoredAny>,
+    /// **Named in order to be dropped.** Serde would skip an undeclared key
+    /// anyway; a field whose type keeps nothing is the refusal said out loud,
+    /// where the next person looks. `-e API_KEY=…` is an argument like any
+    /// other, which is why the two below are one decision.
+    #[serde(default, rename = "args")]
+    _args: Option<IgnoredAny>,
+    #[serde(default, rename = "env")]
+    _env: Option<IgnoredAny>,
 }
 
 impl Connected {
@@ -484,61 +491,5 @@ impl<T, K: Fn(&str) -> T> serde::de::Visitor<'_> for Kept<T, K> {
 
     fn visit_str<E: serde::de::Error>(self, whole: &str) -> Result<T, E> {
         Ok((self.0)(whole))
-    }
-}
-
-/// A home directory on this machine.
-///
-/// **Follows a symbolic link**, unlike the reader of a checkout: a home is
-/// where a dotfiles repository puts its links, and refusing them would report
-/// an empty setup to exactly the people most likely to have a full one.
-pub struct Home {
-    root: PathBuf,
-}
-
-impl Home {
-    pub fn at(root: impl Into<PathBuf>) -> Home {
-        Home { root: root.into() }
-    }
-
-    /// Under the root, and never above it: a `..` in a path this crate builds
-    /// would be a bug, and one that reached here would read another directory.
-    fn under(&self, path: &str) -> Option<PathBuf> {
-        let clean = path.trim_matches('/');
-        (!clean.split('/').any(|part| part == "..")).then(|| match clean.is_empty() {
-            true => self.root.clone(),
-            false => self.root.join(Path::new(clean)),
-        })
-    }
-}
-
-impl SetupFiles for Home {
-    fn read(&self, path: &str) -> FileRead {
-        let Some(full) = self.under(path) else {
-            return FileRead::Unreadable("above the home it is read from".to_string());
-        };
-        match fs::read(&full) {
-            Ok(bytes) => FileRead::Bytes(bytes),
-            Err(why) if why.kind() == std::io::ErrorKind::NotFound => FileRead::Absent,
-            Err(why) => FileRead::Unreadable(why.to_string()),
-        }
-    }
-
-    fn entries(&self, dir: &str) -> Result<Vec<FileEntry>, String> {
-        let full = self
-            .under(dir)
-            .ok_or_else(|| "above the home it is read from".to_string())?;
-        let mut entries = Vec::new();
-        for entry in fs::read_dir(&full).map_err(|why| why.to_string())? {
-            let entry = entry.map_err(|why| why.to_string())?;
-            let name = entry.file_name().to_string_lossy().to_string();
-            // `metadata` follows a link; `file_type` would report the link.
-            let is_dir = fs::metadata(entry.path())
-                .map(|it| it.is_dir())
-                .unwrap_or(false);
-            entries.push(FileEntry { name, is_dir });
-        }
-        entries.sort_by(|left, right| left.name.cmp(&right.name));
-        Ok(entries)
     }
 }
