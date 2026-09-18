@@ -36,8 +36,8 @@ fn a_recorded_plan_reads_as_its_approach_and_tasks_in_order() {
     let PlanChange::Recorded { approach, tasks } = change(called(
         "record_plan",
         r#"{"approach":"Bound the reader","tasks":[
-            {"title":"Stop at the end","detail":"read.rs:41"},
-            {"title":"Cover it","detail":""}]}"#,
+            {"title":"Stop at the end","note":"","scope":["read.rs"],"expects":"a test for the last row"},
+            {"title":"Cover it","note":"","scope":[],"expects":""}]}"#,
     )) else {
         panic!("a recording");
     };
@@ -46,14 +46,16 @@ fn a_recorded_plan_reads_as_its_approach_and_tasks_in_order() {
         tasks.iter().map(|task| task.title()).collect::<Vec<_>>(),
         ["Stop at the end", "Cover it"]
     );
-    assert_eq!(tasks[0].note(), "read.rs:41");
+    assert_eq!(tasks[0].scope()[0].as_str(), "read.rs");
+    assert_eq!(tasks[0].expects(), "a test for the last row");
+    assert!(tasks[0].note().is_empty());
 }
 
 #[test]
 fn an_update_names_a_task_and_a_state() {
     let PlanChange::Updated { task, to, .. } = change(called(
         "update_task",
-        r#"{"task":"T3","state":"done","reason":""}"#,
+        r#"{"task":"T3","state":"done","reason":"","shown":"the covering test"}"#,
     )) else {
         panic!("an update");
     };
@@ -61,7 +63,7 @@ fn an_update_names_a_task_and_a_state() {
 
     let PlanChange::Added { after, .. } = change(called(
         "add_task",
-        r#"{"title":"Also this","detail":"","after":""}"#,
+        r#"{"title":"Also this","note":"","scope":[],"expects":"","after":""}"#,
     )) else {
         panic!("an addition");
     };
@@ -73,7 +75,7 @@ fn an_update_names_a_task_and_a_state() {
 fn a_drop_with_no_reason_is_refused_by_name_as_a_tool_error() {
     let why = refusal(called(
         "update_task",
-        r#"{"task":"T2","state":"dropped","reason":"   "}"#,
+        r#"{"task":"T2","state":"dropped","reason":"   ","shown":""}"#,
     ));
     assert_eq!(
         why,
@@ -97,17 +99,17 @@ fn a_call_that_cannot_be_a_change_says_which_field_is_wrong() {
     for (tool, arguments, expected) in [
         (
             "update_task",
-            r#"{"task":"three","state":"done","reason":""}"#,
+            r#"{"task":"three","state":"done","reason":"","shown":""}"#,
             "not a task id",
         ),
         (
             "update_task",
-            r#"{"task":"T1","state":"finished","reason":""}"#,
+            r#"{"task":"T1","state":"finished","reason":"","shown":""}"#,
             "`state` is `finished`",
         ),
         (
             "update_task",
-            r#"{"task":"T1","state":"done","reason":"it was easy"}"#,
+            r#"{"task":"T1","state":"done","reason":"it was easy","shown":""}"#,
             "kept only for `dropped`",
         ),
         (
@@ -122,7 +124,7 @@ fn a_call_that_cannot_be_a_change_says_which_field_is_wrong() {
         ),
         (
             "add_task",
-            r#"{"title":"x","detail":"","after":"","step_id":"plan"}"#,
+            r#"{"title":"x","note":"","scope":[],"expects":"","after":"","step_id":"plan"}"#,
             "Fleet knows which Job",
         ),
     ] {
