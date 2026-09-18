@@ -145,12 +145,12 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                     // may not be the one that froze it. #1444.
                     "width": width.map(|workers| workers.get()),
                     // Absent where the Check names no runner, which is how
-                    // every row written before the key reads back. `pkg` is
+                    // every row written before the key reads back. `dir` is
                     // absent on a runner rooted at the repository, and absent
                     // and null read back the same way.
                     "runner": runner.as_ref().map(|runner| json!({
                         "name": runner.name(),
-                        "pkg": runner.pkg(),
+                        "dir": runner.dir(),
                     })),
                     // Null where the Check declares no `one_test`, which reads back as none. #999.
                     "one_test": one_test,
@@ -656,11 +656,11 @@ fn read_runner(entry: &Map<String, Value>) -> Result<Option<core_model::Runner>,
         Some(Value::Object(held)) => held,
         Some(_) => return Err("`runner` is not an object".to_string()),
     };
-    let pkg = match held.get("pkg") {
+    let dir = match held.get("dir") {
         None | Some(Value::Null) => None,
-        Some(_) => Some(text(held, "pkg")?),
+        Some(_) => Some(text(held, "dir")?),
     };
-    Ok(Some(core_model::Runner::declared(text(held, "name")?, pkg)))
+    Ok(Some(core_model::Runner::declared(text(held, "name")?, dir)))
 }
 
 fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {

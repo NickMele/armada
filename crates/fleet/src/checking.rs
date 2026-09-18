@@ -214,7 +214,7 @@ pub(crate) fn narrowed(
 pub(crate) fn by_its_runner(check: &ResolvedCheck, touched: &[String]) -> Option<String> {
     let runner = check.runner()?;
     let described = config::shipped(runner.name())?;
-    checks_runner::run_changed(described.run_changed()?, runner.pkg(), touched)
+    checks_runner::run_changed(described.run_changed()?, runner.dir(), touched)
 }
 
 /// What was observed of one declared Check, and what it printed.

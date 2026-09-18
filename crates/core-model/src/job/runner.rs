@@ -17,15 +17,15 @@ use alloc::string::String;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Runner {
     name: String,
-    pkg: Option<String>,
+    dir: Option<String>,
 }
 
 impl Runner {
     /// Build one from keys already read off a Manifest, or off a row written
     /// from one. **`config` and `store` are the only callers**, which is
     /// [`Narrowing::declared`](super::Narrowing)'s shape and its reason.
-    pub fn declared(name: String, pkg: Option<String>) -> Runner {
-        Runner { name, pkg }
+    pub fn declared(name: String, dir: Option<String>) -> Runner {
+        Runner { name, dir }
     }
 
     /// Which description answers for this Check.
@@ -33,12 +33,12 @@ impl Runner {
         &self.name
     }
 
-    /// What `{pkg}` resolves to in that description's templates. **`None`
-    /// where the Check declares none**, and then a template naming `{pkg}` has
+    /// What `{dir}` resolves to in that description's templates. **`None`
+    /// where the Check declares none**, and then a template naming `{dir}` has
     /// nothing to put there and the Check runs whole instead — a runner whose
     /// commands are rooted at the repository needs no package and says so by
     /// omitting it.
-    pub fn pkg(&self) -> Option<&str> {
-        self.pkg.as_deref()
+    pub fn dir(&self) -> Option<&str> {
+        self.dir.as_deref()
     }
 }
