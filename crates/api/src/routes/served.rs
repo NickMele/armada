@@ -84,6 +84,14 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/helm/ask",
     },
+    // The session as one record, `#1367`. Beside the conversation it reports
+    // on, not under `/debug`: there is no such surface, and the subject is the
+    // conversation.
+    Route {
+        operation: "get_helm_debug_info",
+        method: "GET",
+        path: "/helm/debug",
+    },
     Route {
         operation: "start_helm_fresh",
         method: "POST",

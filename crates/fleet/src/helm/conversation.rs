@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use ipc::EventsSince;
+
 use super::asking::{Asks, HelmAskHold};
 use super::hosting::Hosting;
 use super::thread::Thread;
@@ -93,6 +95,7 @@ impl Conversations {
                 turn: tokio::sync::Mutex::new(()),
                 waiting: AtomicUsize::new(0),
                 thread: Thread::opened(key.thread_in(records_root)),
+                polled: Mutex::new(None),
             })
         });
         Arc::clone(conversation)
@@ -107,6 +110,10 @@ pub(crate) struct Conversation {
     /// Messages taken and not yet answered.
     waiting: AtomicUsize,
     pub(crate) thread: Thread,
+    /// What this conversation's last `get_events_since` was answered. **In
+    /// memory for this run of Fleet** — the record says so rather than
+    /// claiming the session never polled. `#1367`.
+    polled: Mutex<Option<EventsSince>>,
 }
 
 impl Conversation {
@@ -120,5 +127,19 @@ impl Conversation {
 
     pub(crate) fn replying(&self) -> bool {
         self.waiting.load(Ordering::SeqCst) > 0
+    }
+
+    pub(crate) fn polled(&self, counted: EventsSince) {
+        *self.held_poll() = Some(counted);
+    }
+
+    pub(crate) fn last_poll(&self) -> Option<EventsSince> {
+        self.held_poll().clone()
+    }
+
+    fn held_poll(&self) -> std::sync::MutexGuard<'_, Option<EventsSince>> {
+        self.polled
+            .lock()
+            .expect("the last poll is not held across a panic")
     }
 }

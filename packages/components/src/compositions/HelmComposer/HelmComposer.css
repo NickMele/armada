@@ -13,15 +13,17 @@
 .armada-helm-composer__head {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
   min-width: 0;
 }
 
-/* Start fresh keeps the trailing edge with nothing naming the repository on
-   this line — pointed at nothing, the switch is the line's leading item and the
-   slack the name used to take is gone. Named, the name takes that slack itself
-   and this margin resolves to nothing. */
-.armada-helm-composer__head > .armada-button {
+/* The controls keep the trailing edge as one group, and the slack is taken
+   once — on the first of them. On every button it was taken three times, and
+   the name was squeezed out of its own line the day the record's two controls
+   joined Start fresh (#1367). Pointed at nothing there is no name and the
+   switch takes that slack instead, which is what this rule was written for. */
+.armada-helm-composer__head > button.armada-button:first-of-type {
   margin-inline-start: auto;
 }
 

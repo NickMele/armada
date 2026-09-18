@@ -69,6 +69,7 @@ import {
   addRepository,
   cloneRepository,
   askHelm,
+  helmDebugInfo,
   startHelmFresh,
   pointHelm,
   getRunOutput,
@@ -595,6 +596,9 @@ export function App() {
             }
             onStartFresh={() => void startHelmFresh()}
             onSwitch={(manifestId) => pointHelm(manifestId)}
+            onReadRecord={helmDebugInfo}
+            onCopied={setCopied}
+            onSaid={setTelling}
             onApprove={commands.approve}
           />
         }

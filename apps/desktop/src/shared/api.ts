@@ -41,7 +41,7 @@ import type { BridgeState, Summons } from "./bridge";
 import type { Pattern } from "./haptics";
 import type { PlanEditAnswer } from "@armada/screens/src/plan-edits";
 import type { EditManifest, SaveManifestFile } from "@armada/protocol";
-import type { HelmContext } from "@armada/protocol";
+import type { HelmContext, HelmDebugRead } from "@armada/protocol";
 import type {
   ManifestEditAnswer,
   ManifestFileRead,
@@ -947,6 +947,14 @@ export type BridgeApi = {
    * person is — omitted, an older Bridge's shape, Helm asks as it always has.
    */
   askHelm: (text: string, context?: HelmContext) => Promise<Outcome>;
+  /**
+   * The Helm session Bridge is pointed at, as one quotable record — #1367.
+   *
+   * **`readCall`'s shape, for `readCall`'s reasons.** It is one person's
+   * gesture on one conversation, answered once and never republished: a record
+   * in `BridgeState` would redraw every surface each time a reply arrived.
+   */
+  helmDebugInfo: () => Promise<HelmDebugRead>;
   /** Forget Helm's stored session and the thread. Refused while a reply is being written. */
   startHelmFresh: () => Promise<Outcome>;
   /**

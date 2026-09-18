@@ -32,6 +32,7 @@ export * from "./generated/protocol-version";
 export * from "./health";
 export * from "./helm";
 export * from "./helm-calls";
+export * from "./helm-debug";
 export * from "./helm-thread";
 export * from "./history";
 export * from "./holding";
