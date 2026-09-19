@@ -17,15 +17,17 @@
  * `allow_once` runs it and writes nothing. `allow_and_remember` runs it and
  * writes `rule` into the repository's own personal agent settings, so the agent
  * CLI allows it without asking again — in helm and in their terminal alike.
- * `allow_every_read` writes a rule for every read armada's own door offers, in
- * one press, and for none of its acts. `refuse` tells the session no.
+ * `refuse` tells the session no.
  *
  * **Offered, never assumed.** `offers` carries the subset fleet will take, and
- * an answer outside it is a 409. `allow_every_read` is on a door read and on
- * nothing else: over a shell line the same words would allow something the
- * person was never shown. Since protocol 17.3.
+ * an answer outside it is a 409.
+ *
+ * **`allow_every_read` was here in 17.3 and is gone in 18.0.** It was offered
+ * on a read of armada's own door; #1525 made a door read run without anybody
+ * being asked, so no card is drawn over one and the answer had nothing to
+ * appear on.
  */
-export type HelmCallAnswer = "allow_once" | "allow_and_remember" | "allow_every_read" | "refuse";
+export type HelmCallAnswer = "allow_once" | "allow_and_remember" | "refuse";
 
 /**
  * One call a helm session is waiting on a person to answer, right now. Since
@@ -86,16 +88,11 @@ export type HelmAskingToRun = {
  * what helm did unasked**, which is why it is published at all. Since protocol
  * 17.4.
  *
- * `every_read_allowed` is its own end rather than `allowed_and_remembered`,
- * because the two write different amounts into a person's own file and a
- * record that called them the same could not say which happened. Since
- * protocol 17.3.
  */
 export type HelmCallSettled =
   | "ran_unasked"
   | "allowed_once"
   | "allowed_and_remembered"
-  | "every_read_allowed"
   | "allowed_but_not_remembered"
   | "refused"
   | "unanswered"

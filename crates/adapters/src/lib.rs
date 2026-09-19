@@ -100,9 +100,7 @@ pub use reclaim::{
     delete_branch, reclaim, standing, BranchGone, BranchRefused, BranchStanding, Reclaimed,
     RepoUnreadable, Standing, UnmergedWork, WorktreeGone, WorktreeStanding,
 };
-pub use remembering::{
-    personal_settings, remember_the_rule, remember_the_rules, Remembered, PERSONAL_SETTINGS,
-};
+pub use remembering::{personal_settings, remember_the_rule, Remembered, PERSONAL_SETTINGS};
 pub use scouting::{
     checkout_as_it_stands, denied_to_a_scout, files_a_search_showed, no_servers, CheckoutRead,
     Looked, ScoutRefused, Scouting, Shown,
