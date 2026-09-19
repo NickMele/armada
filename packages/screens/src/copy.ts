@@ -400,12 +400,6 @@ export const HELM_CALL_ANSWER: Record<HelmCallAnswer, { label: string; means: st
       "Helm runs it now, and the rule goes into this repository's own personal agent settings " +
       "— so your terminal stops asking too.",
   },
-  allow_every_read: {
-    label: "Allow every read",
-    means:
-      "Helm runs it now, and every read Armada's own door offers goes into the same settings, " +
-      "so no reading asks again. Merging, dispatching and ending a job still ask.",
-  },
   refuse: {
     label: "Refuse",
     means: "Helm is told no, and says what it could not do.",

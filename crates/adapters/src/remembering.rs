@@ -47,22 +47,6 @@ pub fn personal_settings(root: &str) -> PathBuf {
 /// answer into a refusal. `fleet::helm` records that as
 /// `allowed_but_not_remembered`.
 pub fn remember_the_rule(at: &Path, rule: &str) -> Result<Remembered, io::Error> {
-    remember_the_rules(at, std::slice::from_ref(&rule))
-}
-
-/// Add every rule in `rules` to the allow list in `at`, keeping every other
-/// key, in one read and one write.
-///
-/// **One write and not one per rule.** A person allowing every read is
-/// answering once, and a loop over [`remember_the_rule`] would re-read and
-/// rewrite their settings forty times over one press — forty chances for
-/// another editor to land between two of them, and forty files on disk that
-/// each say something different.
-///
-/// [`Remembered::AlreadyThere`] is every rule already present. One rule missing
-/// out of forty is [`Remembered::Written`], the same as forty missing: what the
-/// caller acts on is whether the file changed.
-pub fn remember_the_rules(at: &Path, rules: &[&str]) -> Result<Remembered, io::Error> {
     let existing = match fs::read(at) {
         Ok(bytes) => Some(bytes),
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => None,
@@ -74,24 +58,9 @@ pub fn remember_the_rules(at: &Path, rules: &[&str]) -> Result<Remembered, io::E
             format!("{} was left alone: {why}", at.display()),
         )
     };
-    // Each rule is appended to what the one before it produced, so the whole
-    // set lands or none of it does — the file is not touched until the loop is
-    // through.
-    let mut carried = existing.clone();
-    let mut changed = false;
-    for rule in rules {
-        let appended = ipc::document::appended_to(carried.as_deref(), PERMISSIONS, ALLOW, rule)
-            .map_err(|why| complained(why.to_string()))?;
-        if let Some(appended) = appended {
-            carried = Some(appended.into_bytes());
-            changed = true;
-        }
-    }
-    let written = match changed {
-        true => carried,
-        false => None,
-    };
-    let Some(written) = written else {
+    let appended = ipc::document::appended_to(existing.as_deref(), PERMISSIONS, ALLOW, rule)
+        .map_err(|why| complained(why.to_string()))?;
+    let Some(written) = appended else {
         return Ok(Remembered::AlreadyThere);
     };
     if let Some(parent) = at.parent().filter(|parent| !parent.as_os_str().is_empty()) {

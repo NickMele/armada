@@ -24,7 +24,7 @@ import { useDockAnswering } from "./dock-answering";
 import { HelmDock, helmReplying } from "./HelmDock";
 import { chippedJobId, contextOf, cursorRowFor, dismissed, NO_CHIP, opened, screenOf } from "./helm-context";
 import type { ChipState } from "./helm-context";
-import { Button, Dialog, Textarea } from "@armada/components";
+import { Button } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
 import type { BridgeState } from "../../shared/bridge";
@@ -40,19 +40,19 @@ import { BridgeSettings } from "@armada/screens";
 import { Kit } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { Composing } from "./Composing";
+import { ConfirmAct } from "./ConfirmAct";
+import { PaletteMount } from "./PaletteMount";
 import { Overview } from "./Overview";
 import { CaptureLayer, type CaptureAim } from "./capture/Layer";
 import { StudiosSurface } from "./StudiosSurface";
 import { nodeNamed, studioName, type OpenStudio } from "@armada/screens";
 import { Worktrees } from "@armada/screens";
-import { Manifest, checkoutRunnablesOf, useManifestEditing, useManifestForm } from "@armada/screens";
+import { Manifest, useManifestEditing, useManifestForm } from "@armada/screens";
 import { Setup, useSetup } from "@armada/screens";
 import { Locate, LocatedNotice, useLocate } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
-import { ACT_LABEL, CONFIRM, RESTART_NOTE } from "@armada/screens";
 import { Jobs } from "@armada/screens";
-import { BOARD_TABS, type BoardReach, type BoardTab } from "@armada/screens";
-import { absentIn, carryOut, dormantIn } from "./palette";
+import { type BoardReach, type BoardTab } from "@armada/screens";
 import { failingIn } from "./failing";
 import {
   examine,
@@ -128,7 +128,7 @@ import {
 import { useWhereOpen } from "./where-open";
 import { usePanelOpen } from "./panel-open";
 import { statsOf, fleetPanelOf } from "./left-column";
-import { Palette, useCommandPalette } from "@armada/shell";
+import { useCommandPalette } from "@armada/shell";
 import { copyDebugInfoFor } from "@armada/shell";
 import { Shell } from "@armada/shell";
 import { SURFACE, SURFACES, useSurfaceKeys } from "@armada/shell";
@@ -1086,108 +1086,51 @@ export function App() {
           and every overlay the shell draws under it. */}
       <CaptureLayer aim={captureAim} onCapture={captureStudioNote} />
 
-      {/* Every destructive act confirms, and the confirmation states what
-          happens and what survives rather than asking "are you sure". Cancel
-          holds initial focus; the dialog owns that rule and this only supplies
-          the words. */}
-      {confirming === null ? null : (
-        <Dialog
-          open
-          tone={CONFIRM[confirming.act].tone ?? "destructive"}
-          title={CONFIRM[confirming.act].title}
-          confirmLabel={ACT_LABEL[confirming.act]}
-          onCancel={() => {
-            setConfirming(null);
-            setRestartNote("");
-          }}
-          onConfirm={() => confirmed(confirming.act, confirming.jobId)}
-        >
-          {CONFIRM[confirming.act].body}
-          {/* The one confirmation that collects anything, and what it collects
-              is optional — the button is never disabled on it, because leaving
-              the field alone is the restart this dialog has always been. No
-              `autoFocus`: the dialog puts initial focus on Cancel, and a
-              second claim on it here would only lose to it. */}
-          {confirming.act !== "restart_step" ? null : (
-            <>
-              <p>{RESTART_NOTE.says}</p>
-              <Textarea
-                label={RESTART_NOTE.label}
-                rows={4}
-                value={restartNote}
-                onChange={(event) => setRestartNote(event.target.value)}
-              />
-            </>
-          )}
-        </Dialog>
-      )}
+      <ConfirmAct
+        confirming={confirming}
+        restartNote={restartNote}
+        onRestartNote={setRestartNote}
+        onCancel={() => {
+          setConfirming(null);
+          setRestartNote("");
+        }}
+        onConfirm={confirmed}
+      />
 
       <Locate locating={locate} />
 
-      {/* The palette, over everything. It is the one surface present whatever
-          else is — which is why it is a sibling of the shell rather than a
-          child of a screen — and its context is the Job being read whole where
-          there is one, and the Board where there is not. */}
-      <Palette
+      <PaletteMount
         open={palette.open}
         onClose={palette.onClose}
-        // Three places, not two: a Studio open on its whiteboard is neither
-        // the Board nor a job read whole, and the acts scoped to it act on the
-        // board rather than on anything focused — #1364.
-        context={reading !== null ? "detail" : shownStudio === null ? "board" : "studio"}
-        // The block is titled with what its rows act on, which on a Studio is
-        // the Studio: the acts scoped there put a node on the board.
-        on={
-          shownStudio !== null && reading === null
-            ? `Studio — ${studioName(shownStudio)}`
-            : onWhat === undefined
-            ? null
-            : `${onWhat.id} — ${onWhat.title}`
-        }
+        reading={reading}
+        shownStudio={shownStudio}
+        on={onWhat}
         surfaces={SURFACES}
-        filters={reading === null ? BOARD_TABS : []}
-        // One row per Check and Command, off the same reading the Manifest
-        // surface draws from — Journey 9's own table. Empty until that read
-        // has answered, which is what the effect above holds open.
-        runnables={checkoutRunnablesOf(state.checkoutRunSheet)}
-        jobs={state.jobs.map((job) => ({ id: job.id, label: `${job.handle} — ${job.title}` }))}
-        // Fleet settings is the section's first row. It carries no value,
-        // because choosing it opens the sheet rather than stating a field.
-        settings={[{ id: "fleet_settings", label: "Fleet settings" }]}
-        dormant={dormantIn({
-          reading: reading !== null,
-          cursor,
-          failing: failing !== null,
-        })}
-        absent={absentIn({ reading: reading !== null, cursor })}
-        onChoose={(choice) =>
-          carryOut(choice, onWhat?.id ?? null, {
-            openJob: setOpenJob,
-            closeJob: close,
-            compose: () => setComposing(true),
-            surface: goTo,
-            run: (entryId) => {
-              goTo(SURFACE.manifest);
-              setPicked(entryId);
-            },
-            filter: (tabId) => reach.current?.tab(tabId as BoardTab),
-            search: () => reach.current?.search(),
-            copyDebugInfo: () => {
-              if (failing !== null) copyDebugInfoFor(failing, setCopied);
-            },
-            confirm: (what, jobId) => setConfirming({ act: what, jobId }),
-            openSetting: (id) => {
-              if (id === "fleet_settings") goTo(SURFACE.settings);
-            },
-          })
-        }
-        // Every destructive act confirms, even from the palette. It hands the
-        // act over and stays open behind the dialog, which is the way back.
-        onConfirmAct={(id) => {
-          const jobId = onWhat?.id;
-          if (id === "kill" && jobId !== undefined) {
-            setConfirming({ act: "kill_job", jobId });
-          }
+        jobs={state.jobs}
+        checkoutRunSheet={state.checkoutRunSheet}
+        cursor={cursor}
+        failing={failing}
+        acts={{
+          openJob: setOpenJob,
+          closeJob: close,
+          compose: () => setComposing(true),
+          surface: goTo,
+          run: (entryId) => {
+            goTo(SURFACE.manifest);
+            setPicked(entryId);
+          },
+          filter: (tabId) => reach.current?.tab(tabId as BoardTab),
+          search: () => reach.current?.search(),
+          copyDebugInfo: () => {
+            if (failing !== null) copyDebugInfoFor(failing, setCopied);
+          },
+          confirm: (what, jobId) => setConfirming({ act: what, jobId }),
+          openSetting: (id) => {
+            if (id === "fleet_settings") goTo(SURFACE.settings);
+          },
+        }}
+        onConfirmAct={(id, jobId) => {
+          if (id === "kill") setConfirming({ act: "kill_job", jobId });
         }}
       />
 
