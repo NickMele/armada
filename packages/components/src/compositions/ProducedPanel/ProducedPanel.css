@@ -113,3 +113,70 @@
   line-height: var(--leading-2xs);
   color: var(--fg-muted);
 }
+
+/* ── The groups a landed Job ran (#1542) ───────────────────────────────────
+   Seven tracks declared once on the list and borrowed by each row, so every
+   column lines up down the list rather than per row. Each is a floor: a commit
+   is eight characters and a group's name is not, and a fixed width would clip
+   whichever the drawing was not made against. */
+.armada-produced__groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-produced__group-rows {
+  display: grid;
+  grid-template-columns:
+    max-content
+    max-content
+    max-content
+    max-content
+    max-content
+    minmax(0, 1fr)
+    max-content;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-produced__group {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.armada-produced__group-name {
+  font-size: var(--text-xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  white-space: nowrap;
+}
+
+/* The verb's hue is the status token's, named by the caller — the same way
+   `Badge` sets its own, because the roster is the state machine's. */
+.armada-produced__group-verb {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.armada-produced__group-fact {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+.armada-produced__group-commit {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}

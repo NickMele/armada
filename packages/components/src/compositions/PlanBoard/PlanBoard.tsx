@@ -1,4 +1,5 @@
 import { ChevronRight } from "lucide-react";
+import { Button } from "../../primitives/Button/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../primitives/Card/Card";
 import { Clamped } from "../Clamped/Clamped";
 import { FactChip } from "../FactChip/FactChip";
@@ -85,6 +86,24 @@ export type PlanBoardGroup = {
   commit?: string;
   /** `both tasks run at the same time`. Absent where they run in order. */
   concurrentSays?: string;
+  /**
+   * What may be asked of the Drone about this group. **Empty draws nothing**,
+   * which is every plan already approved: the plan is a record then, and a
+   * record takes no requests.
+   */
+  asks?: readonly PlanBoardAsk[];
+};
+
+/**
+ * One change offered on a group. **The label is the caller's**, like every
+ * other word on this board — `id` is what comes back, never what is drawn.
+ */
+export type PlanBoardAsk = {
+  /** What comes back to `onAsk`, in the caller's own vocabulary. */
+  id: string;
+  label: string;
+  /** Off where the plan cannot take it — a first group has no group above it. */
+  disabled?: boolean;
 };
 
 /** A file two groups both claim, and which tasks claim it. */
@@ -101,6 +120,15 @@ export type PlanBoardProps = {
   /** The task the inspector is open on, so the row it came from says so. */
   openTaskId?: string;
   onOpenTask?: (taskId: string) => void;
+  /**
+   * The line over the group controls, drawn once above the cards rather than
+   * on each. **It is what the controls mean, not what they do**: the plan is
+   * the Drone's record, so every one of them is a request it may refuse.
+   */
+  asksSay?: string;
+  /** A group ask was pressed and nothing has answered — every ask is off. */
+  askPending?: boolean;
+  onAsk?: (groupId: string, askId: string) => void;
 };
 
 /** The directory half of a path, trailing separator kept — `PathChip`'s rule. */
@@ -208,14 +236,52 @@ function Boundary({ group }: { group: PlanBoardGroup }) {
   );
 }
 
+/**
+ * What may be asked of the Drone about one group.
+ *
+ * **Under the card's own content and above the boundary**, because an ask is
+ * about the group and the boundary is about what runs after it. The region is
+ * named by its group so a reader landing on it by keyboard knows which plan
+ * card they are about to change.
+ */
+function GroupAsks({
+  group,
+  pending,
+  onAsk,
+}: {
+  group: PlanBoardGroup;
+  pending: boolean;
+  onAsk: (groupId: string, askId: string) => void;
+}) {
+  return (
+    <div className="armada-plan-board__asks" aria-label={`Ask about group ${group.ordinal}`} role="group">
+      {group.asks?.map((ask) => (
+        <Button
+          key={ask.id}
+          size="sm"
+          ground="card"
+          disabled={pending || ask.disabled === true}
+          onClick={() => onAsk(group.id, ask.id)}
+        >
+          {ask.label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 function GroupCard({
   group,
   openTaskId,
   onOpenTask,
+  askPending,
+  onAsk,
 }: {
   group: PlanBoardGroup;
   openTaskId?: string;
   onOpenTask?: (taskId: string) => void;
+  askPending: boolean;
+  onAsk?: (groupId: string, askId: string) => void;
 }) {
   return (
     <li className="armada-plan-board__group">
@@ -251,6 +317,9 @@ function GroupCard({
               />
             ))}
           </ul>
+          {onAsk === undefined || (group.asks ?? []).length === 0 ? null : (
+            <GroupAsks group={group} pending={askPending} onAsk={onAsk} />
+          )}
           <Boundary group={group} />
         </CardContent>
       </Card>
@@ -265,6 +334,9 @@ export function PlanBoard({
   clashes = [],
   openTaskId,
   onOpenTask,
+  asksSay,
+  askPending = false,
+  onAsk,
 }: PlanBoardProps) {
   return (
     <div className="armada-plan-board">
@@ -273,6 +345,14 @@ export function PlanBoard({
         <p className="armada-plan-board__order" role="note">
           {orderSays}
         </p>
+        {/* Once, above the cards. A sentence repeated on four group cards is
+            the surface explaining itself four times over, and what it says is
+            true of the plan rather than of any one group. */}
+        {asksSay === undefined ? null : (
+          <p className="armada-plan-board__asks-say" role="note">
+            {asksSay}
+          </p>
+        )}
       </section>
       {clashes.length === 0 ? null : (
         <section className="armada-plan-board__clashes" aria-label="Two groups claim the same file">
@@ -291,8 +371,10 @@ export function PlanBoard({
           <GroupCard
             key={group.id}
             group={group}
+            askPending={askPending}
             {...(openTaskId === undefined ? {} : { openTaskId })}
             {...(onOpenTask === undefined ? {} : { onOpenTask })}
+            {...(onAsk === undefined ? {} : { onAsk })}
           />
         ))}
       </ol>

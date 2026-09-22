@@ -35,10 +35,10 @@ import { OverviewTab } from "./tab-overview";
 import { PlanTab } from "./tab-plan";
 import { PulseTab } from "./tab-pulse";
 import { RecordTab } from "./tab-record";
-import { ledgerOf } from "./draft/ledger";
 import { WorkflowTab } from "./tab-workflow";
 import { whyNoSteps } from "./run";
 import { FIRST_WORKFLOW_VIEW } from "./workflow-view";
+import { ledgerOf } from "./draft/ledger";
 
 export type { ConfirmableAct, HeldAct, JobAct } from "./Acts";
 export type { FoldedReads } from "./mine";
@@ -219,8 +219,6 @@ function OneJob(props: JobDetailProps) {
           onReadCheckOutput={props.onReadCheckOutput}
           onSaid={props.onSaid}
         />
-      ) : tab === "pulse" ? (
-        <PulseTab holds={pulseOf(props, whole, job.id)} />
       ) : (
         <PulseTab holds={pulseOf(props, whole, job.id)} />
       )}

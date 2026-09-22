@@ -247,3 +247,22 @@
   line-height: var(--leading-2xs);
   color: var(--fg-muted);
 }
+
+/* What the group controls mean, once, above the cards. Subtle rather than a
+   notice: nothing is wrong, and this is the standing fact that a plan is a
+   record the Drone wrote. */
+.armada-plan-board__asks-say {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* The asks on one group. Above the boundary rule, so they read as acts on the
+   card rather than as something that runs after it. */
+.armada-plan-board__asks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}

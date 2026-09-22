@@ -3,7 +3,7 @@ import { expect } from "storybook/test";
 
 import { Button } from "../../primitives/Button/Button";
 import { Kbd } from "../../primitives/Kbd/Kbd";
-import { ChangeSummary, ProducedPanel, type ProducedFolder } from "./ProducedPanel";
+import { ChangeSummary, ProducedGroups, ProducedPanel, type ProducedFolder } from "./ProducedPanel";
 
 /**
  * What the Job has changed, as its own panel beside the run — #1187, drawn from
@@ -103,5 +103,44 @@ export const Finished: Story = {
     await expect(canvas.getByText("and 6 more files, in the diff")).toBeVisible();
     // Nothing to open once the worktree is given back.
     await expect(canvas.queryByRole("button", { name: /Open the diff/ })).toBeNull();
+  },
+};
+
+/**
+ * The groups a landed Job ran (#1542), inside the same panel: what each came
+ * to, its tasks, what it wrote and the commit it left.
+ *
+ * **`not timed` is in the column and not a dash.** The record times a step, and
+ * a group sits between a step and a task, so there is no instant to subtract —
+ * which is a fact about what Fleet keeps rather than a group that took no time.
+ */
+export const Groups: Story = {
+  args: {
+    summary: "4 groups · 8 tasks · 9 files",
+    children: (
+      <ProducedGroups
+        emptyNote="This Job recorded no plan, so it ran as one piece."
+        note="Nothing times a group: the record times a step, so no group here carries a span of its own."
+        groups={[
+          { name: "Group one", verb: "passed", status: "completed-success", tasks: "2 of 2 done", files: "3 files", checks: "4 Checks", commit: "4c1b9d2" },
+          { name: "Group two", verb: "passed", status: "completed-success", tasks: "2 of 2 done", files: "3 files", checks: "7 Checks", commit: "7a2f0c5" },
+          { name: "Group three", verb: "passed", status: "completed-success", tasks: "2 of 2 done", files: "2 files", checks: "7 Checks, twice", commit: "b81c3e4" },
+          { name: "Group four", verb: "landed", status: "completed-success", tasks: "2 of 2 done", files: "3 files", checks: "7 Checks", commit: "e0d47a1" },
+        ]}
+      />
+    ),
+  },
+};
+
+/** A Job whose plan nothing recorded. The list says so rather than drawing nothing. */
+export const NoGroups: Story = {
+  args: {
+    summary: "no plan",
+    children: (
+      <ProducedGroups
+        groups={[]}
+        emptyNote="This Job recorded no plan, so it ran as one piece."
+      />
+    ),
   },
 };

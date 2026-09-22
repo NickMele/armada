@@ -36,6 +36,7 @@ export * from "./members";
 export * from "./peers";
 export * from "./proposal";
 export * from "./pulse";
+export * from "./revision";
 export * from "./sketch";
 export * from "./task";
 export * from "./words";

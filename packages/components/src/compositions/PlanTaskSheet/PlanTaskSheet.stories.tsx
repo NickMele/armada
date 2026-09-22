@@ -222,3 +222,49 @@ export const NotReadAgainstAnything: Story = {
     await expect(sheet.queryByText("not touched")).toBeNull();
   },
 };
+
+/**
+ * The plan is still a question, so the inspector can ask for this task to be
+ * written differently. **The field is the confirmation**: an empty one sends
+ * nothing, which is why the control is off until something is typed. Verified
+ * against a sheet whose `rewrite` is absent, where neither is drawn at all.
+ */
+export const AskingForARewrite: Story = {
+  args: {
+    ...LONG,
+    state: "open",
+    rewrite: {
+      label: "Rewrite this task",
+      lead: "Say what this task should be instead. The Drone that wrote the plan decides, and it may refuse.",
+      placeholder: "Take the panel's rows out of this one and give them a task of their own",
+      send: "Ask the Drone",
+      onAsk: fn(),
+    },
+  },
+  play: async ({ canvasElement, args }) => {
+    const sheet = within(canvasElement);
+    const send = sheet.getByRole("button", { name: "Ask the Drone" });
+    await expect(send).toBeDisabled();
+    await userEvent.type(
+      sheet.getByRole("textbox"),
+      "Split the rows out, so the tests have something smaller to hold",
+    );
+    await expect(send).toBeEnabled();
+    await userEvent.click(send);
+    await expect(args.rewrite?.onAsk).toHaveBeenCalledWith(
+      "Split the rows out, so the tests have something smaller to hold",
+    );
+  },
+};
+
+/** The ask is out. The field and the control both refuse a second one. */
+export const TheRewriteIsOut: Story = {
+  args: {
+    ...AskingForARewrite.args,
+    rewrite: { ...AskingForARewrite.args!.rewrite!, pending: true },
+  } as Story["args"],
+  play: async ({ canvasElement }) => {
+    const sheet = within(canvasElement);
+    await expect(sheet.getByRole("textbox")).toBeDisabled();
+  },
+};

@@ -2,8 +2,15 @@ import type { LucideIcon } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
 import { useCallback } from "react";
 
+import { FigureList, type Figure } from "../FigureList/FigureList";
+
 /**
  * Job outcome — what a finished Job produced, one row per part of it.
+ *
+ * **The Land board is this region grown** (#1542): a Job that has finished is
+ * read for how it was answered, what it left on the machine and what it cost,
+ * and those were three surfaces before. The parts list is unchanged and every
+ * addition is optional, so the region a step draws is the one it always was.
  *
  * **The region a finished Job is opened for.** A Job that stopped is read once,
  * to decide whether to take the work, and the parts of "produced" are the whole
@@ -48,15 +55,135 @@ export type JobOutcomePart = {
   action?: ReactNode;
 };
 
-export type JobOutcomeProps = {
-  /** Every part of what was produced, in the order a reader asks for them. */
+/**
+ * One thing the Job was held to, and what answered it.
+ *
+ * **A criterion nothing answered reads "not covered", never green** (#1542).
+ * The word is the caller's, out of the draft vocabulary — a verdict written at
+ * a call site is the second vocabulary `lib/job-states.js` was deleted for.
+ */
+export type JobOutcomeCriterion = {
+  /** The requester's own words, as the Job froze them. */
+  text: ReactNode;
+  /** The verb: `no objection`, `refused`, `not covered`. */
+  verdict: ReactNode;
+  /**
+   * The status token stem the verdict takes — `completed-success`,
+   * `completed-failed`, `not-started`. `Badge`'s own field, and typed the same
+   * way for the same reason: the roster is the state machine's.
+   */
+  status?: string;
+};
+
+/**
+ * The line a finished Job is read by: how many of the things it was held to
+ * were met, and what completing it means.
+ *
+ * **The count is the headline and the criteria are under it.** A landed Job
+ * that met three of four is not the same Job as one that met four, and a
+ * region that opens with a branch name says neither.
+ */
+export type JobOutcomeHeadline = {
+  /** `Landed`, `Delivered`. Where the work got to, in one word. */
+  verb: ReactNode;
+  /** `2 of 2 met`. Mono, because it is a count and not a claim. */
+  count?: ReactNode;
+  /** The sentence under the count. */
+  says?: ReactNode;
+  /** Every criterion, in the order the Job froze them. */
+  criteria?: JobOutcomeCriterion[];
+  /**
+   * What finishing this Job means — "completes when its pull request lands",
+   * or "when every member has landed" where a Job has members (#1530).
+   */
+  completes?: ReactNode;
+};
+
+/** Parts under a heading: what was produced, and what was left behind. */
+export type JobOutcomeSection = {
+  name: ReactNode;
+  /** A fact about the section, beside its name. Mono. */
+  meta?: ReactNode;
   parts: JobOutcomePart[];
+  /** A sentence under the parts. Never a count nothing measured. */
+  note?: ReactNode;
+};
+
+/**
+ * One run of one test case.
+ *
+ * **Never an Evidence row** (#1530, 21 Sep): it carries who ran it, what became
+ * of the run and how many frames it kept, and no verdict about the work.
+ */
+export type JobOutcomeRun = {
+  /** The spec, as a repository path. Mono. */
+  spec: string;
+  /** Who ran it: `Fleet`, `you`, a contributor's name, `CI`. */
+  who: ReactNode;
+  /** What became of the run — `ran`, `not covered`, `the run failed`. */
+  outcome: ReactNode;
+  /** The status stem that verb takes. `JobOutcomeCriterion.status`'s field. */
+  status?: string;
+  /** What is known beside it: `6 frames`, why it did not run. */
+  meta?: ReactNode;
+  /** When it ran. Mono and quiet. */
+  when?: ReactNode;
+};
+
+/**
+ * One step of the run, and what it came to.
+ *
+ * **On the board because the board is the destination a finished Job opens
+ * on** (#1542): the run tree is the Workflow tab's, and a reader who wants to
+ * know whether anything was refused should not have to go and find it.
+ */
+export type JobOutcomeStep = {
+  label: ReactNode;
+  /** The verb for the step's last verdict — `passed`, `failed`. */
+  verdict: ReactNode;
+  /** The status stem that verb takes. */
+  status?: string;
+  /** How long it took, where the record dates both ends. */
+  took?: ReactNode;
+  /** What is known beside it — a second attempt, the Checks it ran. */
+  meta?: ReactNode;
+};
+
+/** A set of runs under a heading — the handoff run, and what came after it. */
+export type JobOutcomeRuns = {
+  name: ReactNode;
+  meta?: ReactNode;
+  runs: JobOutcomeRun[];
+  /** What a set with no runs in it says. Never an empty table. */
+  absent?: ReactNode;
+  /** A sentence under the set: that there is no before-run, and who may post one. */
+  note?: ReactNode;
+};
+
+export type JobOutcomeProps = {
+  /**
+   * Every part of what was produced, in the order a reader asks for them.
+   * **`sections` is the same rows under headings**, for a region drawing more
+   * than one set of them; a caller passes one or the other.
+   */
+  parts?: JobOutcomePart[];
+  sections?: JobOutcomeSection[];
+  /** How the Job was answered, above everything else it left. */
+  headline?: JobOutcomeHeadline;
+  /** What it cost, as labelled readings. `FigureList`'s own rows. */
+  cost?: { name: ReactNode; figures: Figure[]; note?: ReactNode };
+  /** The run, step by step, with what each came to. */
+  steps?: { name: ReactNode; meta?: ReactNode; steps: JobOutcomeStep[]; absent?: ReactNode };
+  /** The test runs, one set per heading. */
+  runs?: JobOutcomeRuns[];
   /**
    * What the person still owes. **Armada pushes and opens a review, and does
    * not merge**, so this region says what is left rather than implying the work
    * landed — and rather than denying the two things it does.
    */
   note?: ReactNode;
+  /** What to do next about it — dispatching a follow-up, and nothing else. */
+  act?: ReactNode;
   /** A clipboard write is silent, so the surface confirms it with a toast. */
   onCopied?: (value: string) => void;
 };
@@ -65,7 +192,17 @@ export type JobOutcomeProps = {
 const ROW_ICON = 12;
 const ROW_STROKE = 2;
 
-export function JobOutcome({ parts, note, onCopied }: JobOutcomeProps) {
+export function JobOutcome({
+  parts,
+  sections,
+  headline,
+  cost,
+  steps,
+  runs,
+  note,
+  act,
+  onCopied,
+}: JobOutcomeProps) {
   const copy = useCallback(
     (event: MouseEvent<HTMLElement>, value: string) => {
       event.stopPropagation();
@@ -76,38 +213,203 @@ export function JobOutcome({ parts, note, onCopied }: JobOutcomeProps) {
 
   return (
     <div className="armada-outcome">
-      <ol className="armada-outcome__parts">
-        {parts.map((part, i) => (
-          <li className="armada-outcome__part" key={i}>
-            <span className="armada-outcome__mark">
-              {part.icon ? (
-                <part.icon size={ROW_ICON} strokeWidth={ROW_STROKE} aria-hidden />
-              ) : null}
-              {part.iconLabel ? (
-                <span className="armada-outcome__sr">{part.iconLabel}</span>
-              ) : null}
-            </span>
-            <span className="armada-outcome__name">{part.name}</span>
-            {part.value === undefined ? (
-              <span className="armada-outcome__absent">{part.absent}</span>
-            ) : (
-              /* The title carries the whole value however narrow the row gets,
-                 and so does the clipboard: a copy that truncated with the
-                 display would be worse than the overflow it was fixing. */
-              <span
-                className="armada-outcome__value"
-                title={part.value}
-                onClick={(event) => copy(event, part.value as string)}
-              >
-                {part.value}
-              </span>
+      {headline === undefined ? null : <Headline {...headline} />}
+      {parts === undefined ? null : <Parts parts={parts} onCopy={copy} />}
+      {sections?.map((section, at) => (
+        <section className="armada-outcome__section" key={at}>
+          <p className="armada-outcome__section-head">
+            <span className="armada-outcome__section-name">{section.name}</span>
+            {section.meta === undefined ? null : (
+              <span className="armada-outcome__section-meta">{section.meta}</span>
             )}
-            <span className="armada-outcome__meta">{part.meta}</span>
-            <span className="armada-outcome__action">{part.action}</span>
-          </li>
-        ))}
-      </ol>
+          </p>
+          <Parts parts={section.parts} onCopy={copy} />
+          {section.note === undefined ? null : (
+            <p className="armada-outcome__aside">{section.note}</p>
+          )}
+        </section>
+      ))}
+      {cost === undefined ? null : (
+        <section className="armada-outcome__section">
+          <p className="armada-outcome__section-head">
+            <span className="armada-outcome__section-name">{cost.name}</span>
+          </p>
+          <div className="armada-outcome__cost">
+            <FigureList figures={cost.figures} column="fit" />
+          </div>
+          {cost.note === undefined ? null : <p className="armada-outcome__aside">{cost.note}</p>}
+        </section>
+      )}
+      {steps === undefined ? null : (
+        <section className="armada-outcome__section">
+          <p className="armada-outcome__section-head">
+            <span className="armada-outcome__section-name">{steps.name}</span>
+            {steps.meta === undefined ? null : (
+              <span className="armada-outcome__section-meta">{steps.meta}</span>
+            )}
+          </p>
+          {steps.steps.length === 0 ? (
+            <p className="armada-outcome__absent" role="note">
+              {steps.absent}
+            </p>
+          ) : (
+            <ol className="armada-outcome__steps">
+              {steps.steps.map((step, at) => (
+                <li className="armada-outcome__step" key={at}>
+                  <span className="armada-outcome__step-label">{step.label}</span>
+                  <span
+                    className="armada-outcome__step-verdict"
+                    {...(step.status === undefined
+                      ? {}
+                      : { style: { color: `var(--status-${step.status})` } })}
+                  >
+                    {step.verdict}
+                  </span>
+                  <span className="armada-outcome__run-meta">{step.meta}</span>
+                  <span className="armada-outcome__run-when">{step.took}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )}
+      {runs?.map((set, at) => (
+        <Runs key={at} {...set} />
+      ))}
       {note === undefined ? null : <p className="armada-outcome__note">{note}</p>}
+      {act === undefined ? null : <div className="armada-outcome__act">{act}</div>}
     </div>
+  );
+}
+
+/**
+ * A spec's path, with the folder clipping and the file name whole.
+ *
+ * Four specs under one folder read as four identical rows when the path clips
+ * from the right, which is the narrow window the boards are drawn for.
+ */
+function Spec({ path }: { path: string }) {
+  const cut = path.lastIndexOf("/");
+  return (
+    <span className="armada-outcome__run-spec" title={path}>
+      {cut < 0 ? null : (
+        <span className="armada-outcome__run-folder">{path.slice(0, cut + 1)}</span>
+      )}
+      <span className="armada-outcome__run-file">{path.slice(cut + 1)}</span>
+    </span>
+  );
+}
+
+/** The parts list. One `subgrid` per list, so each section aligns on its own. */
+function Parts({
+  parts,
+  onCopy,
+}: {
+  parts: JobOutcomePart[];
+  onCopy: (event: MouseEvent<HTMLElement>, value: string) => void;
+}) {
+  return (
+    <ol className="armada-outcome__parts">
+      {parts.map((part, i) => (
+        <li className="armada-outcome__part" key={i}>
+          <span className="armada-outcome__mark">
+            {part.icon ? <part.icon size={ROW_ICON} strokeWidth={ROW_STROKE} aria-hidden /> : null}
+            {part.iconLabel ? <span className="armada-outcome__sr">{part.iconLabel}</span> : null}
+          </span>
+          <span className="armada-outcome__name">{part.name}</span>
+          {part.value === undefined ? (
+            <span className="armada-outcome__absent">{part.absent}</span>
+          ) : (
+            /* The title carries the whole value however narrow the row gets,
+               and so does the clipboard: a copy that truncated with the
+               display would be worse than the overflow it was fixing. */
+            <span
+              className="armada-outcome__value"
+              title={part.value}
+              onClick={(event) => onCopy(event, part.value as string)}
+            >
+              {part.value}
+            </span>
+          )}
+          <span className="armada-outcome__meta">{part.meta}</span>
+          <span className="armada-outcome__action">{part.action}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * The headline: the word for where the work got to, the count of what was met,
+ * and every criterion under it with what answered it.
+ *
+ * **The hue is the token's, named rather than picked** — `Badge` sets its own
+ * two custom properties the same way, and for the same reason: the roster is
+ * the state machine's and a stylesheet cannot enumerate it.
+ */
+function Headline({ verb, count, says, criteria, completes }: JobOutcomeHeadline) {
+  return (
+    <div className="armada-outcome__headline">
+      <p className="armada-outcome__verdict">
+        <span className="armada-outcome__verb">{verb}</span>
+        {count === undefined ? null : <span className="armada-outcome__count">{count}</span>}
+      </p>
+      {says === undefined ? null : <p className="armada-outcome__says">{says}</p>}
+      {criteria === undefined || criteria.length === 0 ? null : (
+        <ol className="armada-outcome__criteria">
+          {criteria.map((criterion, at) => (
+            <li className="armada-outcome__criterion" key={at}>
+              <span className="armada-outcome__criterion-text">{criterion.text}</span>
+              <span
+                className="armada-outcome__criterion-verdict"
+                {...(criterion.status === undefined
+                  ? {}
+                  : { style: { color: `var(--status-${criterion.status})` } })}
+              >
+                {criterion.verdict}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {completes === undefined ? null : <p className="armada-outcome__completes">{completes}</p>}
+    </div>
+  );
+}
+
+/** One set of case runs, or the sentence saying there are none. */
+function Runs({ name, meta, runs, absent, note }: JobOutcomeRuns) {
+  return (
+    <section className="armada-outcome__section">
+      <p className="armada-outcome__section-head">
+        <span className="armada-outcome__section-name">{name}</span>
+        {meta === undefined ? null : <span className="armada-outcome__section-meta">{meta}</span>}
+      </p>
+      {runs.length === 0 ? (
+        <p className="armada-outcome__absent" role="note">
+          {absent}
+        </p>
+      ) : (
+        <ol className="armada-outcome__runs">
+          {runs.map((run, at) => (
+            <li className="armada-outcome__run" key={at}>
+              <Spec path={run.spec} />
+              <span
+                className="armada-outcome__run-outcome"
+                {...(run.status === undefined
+                  ? {}
+                  : { style: { color: `var(--status-${run.status})` } })}
+              >
+                {run.outcome}
+              </span>
+              <span className="armada-outcome__run-who">{run.who}</span>
+              <span className="armada-outcome__run-meta">{run.meta}</span>
+              <span className="armada-outcome__run-when">{run.when}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {note === undefined ? null : <p className="armada-outcome__aside">{note}</p>}
+    </section>
   );
 }

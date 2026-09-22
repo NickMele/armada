@@ -5,9 +5,10 @@
 import { describe, expect, test } from "vitest";
 
 import { arcGroups, arcCases } from "./fixtures/build/arc-plan";
-import { doneTouched, groupFailed, plannedMoment } from "./fixtures/build/arc";
+import { doneTouched, groupFailed, plannedMoment, planRevisionRefused } from "./fixtures/build/arc";
 import type { CaseView } from "./draft/cases";
 import {
+  ASKS_SAY,
   besideSaid,
   boundarySaid,
   caseReads,
@@ -18,6 +19,7 @@ import {
   groupsOf,
   planBoardOf,
   retrySaid,
+  revisionsOf,
   runBySaid,
   spentSaid,
   taskSheetOf,
@@ -276,5 +278,34 @@ describe("one task's inspector", () => {
 
   test("a task the plan does not hold opens nothing", () => {
     expect(taskSheetOf("T99", GROUPS, CASES, touched)).toBeUndefined();
+  });
+});
+
+describe("a plan that may still be argued with", () => {
+  const whole = wholeOf(planRevisionRefused());
+
+  test("a plan at its gate puts the same three controls on every card, and says once what they mean", () => {
+    const board = planBoardOf(whole, planRevisionRefused().draft, () => {}, undefined, true)!;
+    expect(board.asksSay).toBe(ASKS_SAY);
+    expect(board.groups.map((group) => group.asks?.map((ask) => ask.id))).toEqual([
+      ["move_up", "move_down", "remove"],
+      ["move_up", "move_down", "remove"],
+      ["move_up", "move_down", "remove"],
+      ["move_up", "move_down", "remove"],
+    ]);
+  });
+
+  test("a plan past its gate offers nothing and says nothing about asking", () => {
+    const board = planBoardOf(whole, planRevisionRefused().draft, () => {})!;
+    expect(board.asksSay).toBeUndefined();
+    expect(board.groups.every((group) => group.asks === undefined)).toBe(true);
+  });
+
+  test("the refusal is read off the step that recorded the plan, and names the task it reached", () => {
+    const step = whole?.steps.find((one) => one.step_id === "plan");
+    const [one] = revisionsOf(whole, planRevisionRefused().draft, step);
+    expect(one?.answer).toBe("refused");
+    expect(one?.task).toBe("T5");
+    expect(one?.refusal?.produced).toContain("no other task claims it");
   });
 });

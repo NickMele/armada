@@ -495,8 +495,9 @@ text — see [Job Board](../concepts/job-board.md).
 
 **It is not the workflow glyph.** A Job's workflow label needs one of its
 own, and does not have one yet; `packages/icons/icons.toml` is where that
-is decided. The registry's entry for `layers` still reads
-`means = "convoy"`, which is a retired name for this same idea.
+is decided. The registry's entry for `layers` read `means = "convoy"`
+until 22 Sep 2026, which was a retired name for this same idea; it now
+says what the glyph depicts.
 
 ### Chrome
 

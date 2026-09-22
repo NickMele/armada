@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { Button } from "../../primitives/Button/Button";
 import { Sheet } from "../../primitives/Sheet/Sheet";
+import { Textarea } from "../../primitives/Textarea/Textarea";
 import { TaskMark, type TaskMarkState } from "../TaskMark/TaskMark";
 
 /**
@@ -53,9 +55,39 @@ export type PlanTaskSheetProps = {
   tests?: readonly PlanTaskTest[];
   /** Why its own agent stopped. Present on a failed task and on nothing else. */
   failedReason?: string;
+  /**
+   * Asking the Drone that wrote the plan to write this task differently.
+   *
+   * **Absent draws nothing**, which is every plan past its gate: once a plan
+   * is approved it is a record, and a record takes no requests.
+   */
+  rewrite?: PlanTaskRewrite;
   /** The window is at `--window-floor`. */
   floor?: boolean;
   onClose?: () => void;
+};
+
+/**
+ * The rewrite ask, in the caller's own words.
+ *
+ * **Prose and not a form.** What a person wants a task to be instead is a
+ * sentence the Drone reads, so the field is a `textarea` — a plan revision
+ * with a picker for each field would be editing the record, which is the one
+ * thing this is not.
+ */
+export type PlanTaskRewrite = {
+  /** What the ask is, and that it may come back refused. */
+  lead: string;
+  /** The field's own label. */
+  label: string;
+  placeholder: string;
+  /** The control's word — `Ask the Drone`. */
+  send: string;
+  /** The ask is out and nothing has answered. */
+  pending?: boolean;
+  /** Nothing is live to send it over. */
+  disabled?: boolean;
+  onAsk: (instruction: string) => void;
 };
 
 /** One case this task owes, and what it reads as. */
@@ -111,6 +143,7 @@ export function PlanTaskSheet({
   beside = [],
   tests = [],
   failedReason,
+  rewrite,
   floor = false,
   onClose,
 }: PlanTaskSheetProps) {
@@ -222,8 +255,47 @@ export function PlanTaskSheet({
             </ul>
           )}
         </Field>
+        {rewrite === undefined ? null : <Rewrite {...rewrite} />}
       </div>
     </Sheet>
+  );
+}
+
+/**
+ * Asking for this task to be written differently.
+ *
+ * **Inline rather than behind a dialog.** A dialog and a sheet share
+ * `--z-modal`, so one opened from inside the other is a stack the tokens do
+ * not order — and the ask needs a sentence anyway, which is what a dialog
+ * would have had to hold. The field is the confirmation: an empty one sends
+ * nothing.
+ */
+function Rewrite({ lead, label, placeholder, send, pending = false, disabled = false, onAsk }: PlanTaskRewrite) {
+  const [instruction, setInstruction] = useState("");
+  const empty = instruction.trim() === "";
+  return (
+    <section className="armada-task-sheet__field" aria-label={label}>
+      <h3 className="armada-task-sheet__label">{label}</h3>
+      <p className="armada-task-sheet__prose">{lead}</p>
+      <Textarea
+        rows={3}
+        value={instruction}
+        placeholder={placeholder}
+        disabled={disabled || pending}
+        onChange={(event) => setInstruction(event.target.value)}
+      />
+      <div className="armada-task-sheet__rewrite-act">
+        <Button
+          size="sm"
+          ground="sunken"
+          pending={pending}
+          disabled={disabled || empty}
+          onClick={() => onAsk(instruction.trim())}
+        >
+          {send}
+        </Button>
+      </div>
+    </section>
   );
 }
 
