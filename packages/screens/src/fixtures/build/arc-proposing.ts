@@ -29,6 +29,16 @@ import { ARC_LANDING, arcProposal, dispatchTyping } from "./arc-dispatch";
 import type { JobFixture } from "../fixture";
 
 /**
+ * How long the proposer has been out, and how long it may take.
+ *
+ * Past `PROPOSAL_IS_SLOW`, so the surface is at the register where it asks
+ * whether to keep waiting rather than the one where it only says it is
+ * reading. The budget is Fleet's own provisional ten minutes.
+ */
+const READING_FOR_MS = 150_000;
+const PROPOSER_BUDGET_MS = 600_000;
+
+/**
  * What each step is gated by, as the proposer proposed it.
  *
  * `handoff` is the fourth state: the repository decides (#1530, 22 Sep). The
@@ -133,8 +143,12 @@ export function proposingReading(): ArcMoment {
       proposal_id: "01M2D3ZF41001PROPOSAL001",
       client_ref: "bridge-1",
       model: "sonnet",
-      since: "2026-09-22T09:05:40Z",
-      budget_ms: 90_000,
+      // Against the real clock, not the arc's: the wait is drawn from the
+      // window's own `now`, so a fixed instant here would read as a call that
+      // went out months ago. `working-a-plan.ts` moves its instants for the
+      // same reason.
+      since: new Date(Date.now() - READING_FOR_MS).toISOString(),
+      budget_ms: PROPOSER_BUDGET_MS,
       reached: "thinking",
       thinking_tokens: 1_840,
     },

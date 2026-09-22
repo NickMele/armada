@@ -300,6 +300,13 @@ export function DispatchJob({
     setMode("write");
   }
 
+  // A call Fleet says is out, on a surface that did not press for it. **The
+  // window and the daemon have independent lifetimes** (`bridge.md`), so a
+  // composer reopened mid-read has no proposal of its own and a form drawn
+  // idle under a running proposer is the one reading that is never true.
+  const out: Proposal | null =
+    proposal.at === "unasked" && watching !== null ? { at: "reading", watch: watching } : null;
+
   // The rows, against the board's own reading of each Job where there is one.
   // Every other status on this surface is what came back with the proposal;
   // this one moves under it, because approving is now a press on the row.
@@ -408,7 +415,7 @@ export function DispatchJob({
         proposal={
           proposal.at === "reading" && watching !== null
             ? { at: "reading", watch: watching }
-            : shown
+            : (out ?? shown)
         }
         onStop={onStop}
         slowAfterMs={PROPOSAL_IS_SLOW}

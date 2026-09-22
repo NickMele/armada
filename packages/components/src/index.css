@@ -337,6 +337,9 @@
 /* The picture a person draws beside the prompt, on GraphCanvas. #1547. */
 @import "./compositions/SketchPad/SketchPad.css";
 
+/* A Job at its approval gate, and the same Job frozen one press later. #1541. */
+@import "./compositions/JobProposal/JobProposal.css";
+
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */
 .armada-helm-dock {
