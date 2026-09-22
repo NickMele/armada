@@ -20,6 +20,7 @@ import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
 import { DispatchJob } from "./DispatchJob";
+import type { DispatchJobProps } from "./DispatchJob";
 import type { Answered } from "./proposal";
 import { mount, unmount } from "./mounted";
 
@@ -68,6 +69,27 @@ const PROPOSED: Answered = {
  * `onPropose` answers with whatever the test hands it, so a call can be left
  * outstanding — which is the only state the guard exists for.
  */
+/**
+ * What this screen is handed beside the request: where the work starts, who
+ * else is writing there, and what the settings block may offer. **`peers` is
+ * `null` on purpose** — nobody has looked, which is every dispatch today.
+ */
+const HELD = {
+  landing: {
+    target: "main",
+    from_ref: "main",
+    prs: "job",
+    branching: "job",
+    pr_mode: "ready",
+    complete_when: "delivered",
+    land_together: [],
+  },
+  peers: null,
+  workflows: [],
+  models: [],
+  machineCap: null,
+} satisfies Partial<DispatchJobProps>;
+
 function opened(answering: () => Promise<Answered>): { sent: string[] } {
   const sent: string[] = [];
   mount(
@@ -87,6 +109,7 @@ function opened(answering: () => Promise<Answered>): { sent: string[] } {
       // how far the call has got.
       watching={null}
       onStop={() => {}}
+      {...HELD}
       disabled={false}
     />,
   );
@@ -211,6 +234,7 @@ test("the proposal is approved from here", async () => {
       byHand={<p>The form, by hand</p>}
       watching={null}
       onStop={() => {}}
+      {...HELD}
       disabled={false}
     />,
   );
@@ -244,6 +268,7 @@ test("the row follows the board, not the answer", async () => {
       byHand={<p>The form, by hand</p>}
       watching={null}
       onStop={() => {}}
+      {...HELD}
       disabled={false}
     />,
   );
