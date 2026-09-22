@@ -339,3 +339,6 @@ export * from "./compositions/StudioFrameSheet/StudioFrameSheet";
 // above the runner. #1383.
 export * from "./compositions/DriftSheet/DriftSheet";
 export * from "./compositions/VerifySheet/VerifySheet";
+
+// A Job whose members are Jobs — pull requests landing in order. #1543.
+export * from "./compositions/JobMembers/JobMembers";
