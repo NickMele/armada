@@ -266,6 +266,11 @@ back to the first scenario and says so in the browser console.
 | `manifest` | This repository's own Manifest, on a Fleet that saves the file, applies the forms' edits, and lists runs, drift and an always-allowed command |
 | `studios` | This repository's Studios, on a Fleet that keeps them and takes the writes Helm makes on one |
 | `helm-talking` | Helm pointed at a repository, with an answer given about the Job on the Board and a second ask that never came back — the dock's thread, its composer, *Start fresh* and the record's split button, all reachable without building the state in a test |
+| `arc/<moment>` | One moment of the Feature Job the new boards were drawn against, for each moment `ARC_MOMENTS` lists — from an empty prompt to a merge |
+| `members/<order>` | Several Jobs landing in order under one parent, the last of them stacked on the one before it or merged into it |
+| `epic/wave` | A wave of Jobs dispatched under one plan, some merged and some still out |
+| `kinds` | One Job per workflow kind on one Board, each on the steps its own file in `.armada/workflows/` declares |
+| `kind/<workflow>` | One of those Jobs, already open |
 | `job/<builder>` | One Job, already open, for each builder `packages/screens/src/fixtures/build/index.ts` exports |
 | `recorded/<slug>` | One recorded Job, already open, for each recording under `packages/screens/src/fixtures/recorded/` |
 
@@ -273,7 +278,17 @@ back to the first scenario and says so in the browser console.
 recording added to `packages/screens` is a scenario and an `every-state` row with
 no other edit. A builder needs its name added to `BUILDERS` in
 `apps/desktop/src/renderer/src/mock/scenario.ts`, and the test beside it fails
-until it is.
+until it is. A moment added to `ARC_MOMENTS` and a Job added to `KIND_FIXTURES`
+are scenarios with no edit at all — both rosters are walked.
+
+**A moment can hold no Job, or four.** The two dispatch moments are before any
+Job exists and draw the Board the work would have joined; the landing orders and
+the wave are a parent and its members. `Scenario.draft` is what those moments
+carry that Fleet cannot serve yet — the groups, the tasks, the Record's rows and
+the rest, in the draft types under `packages/screens/src/draft/`. **It is held on
+the scenario rather than on a read**, because no operation answers it; a board
+built in this milestone takes it as props, and a shape promoted to the wire
+(`#1545`) moves onto the fixture's own reads instead.
 
 ### What the fake answers
 
