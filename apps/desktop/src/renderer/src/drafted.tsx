@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 import type { LandingRule } from "@armada/screens/src/draft/landing";
 import type { PeerOverlapAnswer } from "@armada/screens/src/draft/peers";
 import type { ProposalView } from "@armada/screens/src/draft/proposal";
+import type { SketchAttachment } from "@armada/screens/src/draft/sketch";
 
 /** What a moment holds for the surface that dispatches. Every field optional. */
 export type Drafted = {
@@ -29,6 +30,11 @@ export type Drafted = {
    * moment apart, which is why this is not a settings type of its own.
    */
   proposal?: ProposalView;
+  /**
+   * The picture beside the prompt. **Absent opens Sketch on a blank pad**,
+   * which is every dispatch somebody starts in the app.
+   */
+  sketch?: SketchAttachment;
 };
 
 /** Nothing drafted, which is the app on a real Fleet. */
