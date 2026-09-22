@@ -725,6 +725,9 @@ export function App({ draft }: AppProps = {}) {
             <Boundary key={reading.id} region="the job detail" {...guarded}>
               <JobDetail
                 job={reading}
+                // Every Job, not the picked repository's: a member dispatched
+                // by this one is still its member while the rail is filtered.
+                board={state.jobs}
                 {...(draft === undefined ? {} : { draft })}
                 onReadDiff={readDiff}
                 onOpenArtifact={openArtifact}

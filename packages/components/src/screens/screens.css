@@ -1594,3 +1594,26 @@
   gap: var(--space-2);
   align-items: center;
 }
+
+/* Several pull requests landing in order, above the two columns rather than
+   inside the run's. The order between three Jobs is what the parent *is*, and
+   the run column tops out at 380px — a card carrying a pull request, a branch,
+   a scope and an inline question does not read there. #1543.
+
+   **It scrolls itself, and it is capped at half the screen.** Three members
+   with a question open measure 1122px against a 940px screen, and an
+   unbounded band took the whole of it: the run tree and the inspector both
+   measured zero and the Job's own run was off the window. Bounded, the
+   complete-when line and the first member are always on screen and the two
+   columns keep the other half — the same two-scroller rule the columns
+   already keep between them. */
+.armada-inside__landing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 0;
+  max-height: 50%;
+  overflow-y: auto;
+}

@@ -218,6 +218,15 @@
   min-width: 0;
 }
 
+/* Each path is its own token. Two paths separated by a space alone read as
+   one value with a break in it, which is what a scope of two directories
+   drew before this. */
+.armada-members__scope code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+}
+
 .armada-members__address {
   color: var(--accent);
   text-decoration: none;

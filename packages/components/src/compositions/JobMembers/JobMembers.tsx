@@ -102,8 +102,12 @@ export type JobMemberRow = {
    * that already landed or was already dropped has nothing to drop.
    */
   onDrop?: (reason: string) => void;
-  /** Open the pull request where it lives. Nothing in Bridge navigates. */
-  onOpenPullRequest?: (address: string) => void;
+  /**
+   * Open the pull request where it lives. **Bound by the caller and taking no
+   * address**: what is sent is the member's Job id, so the string this card
+   * drew never decides what opens. Nothing in Bridge navigates.
+   */
+  onOpenPullRequest?: () => void;
 };
 
 export type JobMembersProps = {
@@ -202,7 +206,9 @@ function Member({
             </button>
           )}
           {member.state.as === "badge" ? (
-            <Badge status={member.state.status} icon={member.state.icon}>
+            // The running mark pulses on every running row of a list (#1276),
+            // and `Badge` is what decides which status that is.
+            <Badge status={member.state.status} icon={member.state.icon} pulsing>
               {member.state.label}
             </Badge>
           ) : (
@@ -237,7 +243,7 @@ function Member({
                   className="armada-members__address"
                   onClick={(event) => {
                     event.preventDefault();
-                    member.onOpenPullRequest?.(address);
+                    member.onOpenPullRequest?.();
                   }}
                 >
                   {member.pullRequestLabel ?? address}
