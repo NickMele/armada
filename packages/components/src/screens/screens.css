@@ -1585,6 +1585,8 @@
   .armada-dispatch-pane__columns {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
 /* Plan — what the Job is held to, and the two acts at a plan gate. The board
    itself owns its own stylesheet; these two regions are the destination's.
    #1535. */
