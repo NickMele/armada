@@ -22,6 +22,24 @@ Every workflow is a `WorkflowDef`: an ordered (or loop-capable) set of steps.
 
 **The full field-by-field schema is `crates/core-model/domain/workflowdef-fields.toml`.** It carries every top-level field and every field nested under `steps[]`, with its type, whether it is required and the reasoning behind it. One row per field, nested the way the schema nests: the top-level rows are the `WorkflowDef`'s own fields, and everything under `steps[]` is a field of a step.
 
+### A step's gate is three settings, not one
+
+**Not yet built.** `advance_gate` is one value per step — `auto`, `auto_if_judge_passes`, `human_always`, or a rule the repository decides (`crates/core-model/src/job/declared.rs`). It cannot say "let a [Judge](judge.md) read this and run no Checks", or "stop here and ask me", without an edit to the definition.
+
+**Checks, Judge and you become three independent settings on a step.** Any combination is expressible, including none of them. A fourth state, **the repository decides**, is what `manifest_rule:auto_merge` and `manifest_rule:review_gate` are today, and it is overridable for one Job.
+
+| Ticked | What advances the step |
+| --- | --- |
+| Nothing | The submission itself. Fleet's own look still runs |
+| Checks | The Checks the step's diff selects |
+| Judge | The step's `judge_checks`, with no mechanical tier in front of them |
+| You | A person at the gate, on the `awaiting_human` step state |
+| The repository decides | Whatever the Manifest's rule resolves to, unless this Job overrode it |
+
+**Fleet's own look is not one of the boxes and cannot be turned off.** The drift check against the step's declared paths, and the gaming look over its evidence, run whatever is set — `crates/fleet/src/gate.rs`. A step with nothing ticked is still refused for work that went outside what the plan declared.
+
+**The settings freeze at approval, with the workflow.** Which is the change: the resolved `WorkflowDef` freezes at creation today, so a per-Job gate has nowhere to live — see [Job](job.md), Reading the request is a status, and approval is what locks. Which wins when the repository's own rule changes after a Job froze an override is not settled.
+
 **Not all workflows are linear.** Coding workflows (Feature, Bug, Refactor) are a fixed sequence. Planning/exploratory workflows (Design Plan, Investigation) are draft↔feedback loops that repeat until converged or capped.
 
 **A workflow's one outbound edge creates a Job and never dispatches one.** `on_fail` and `verdict_routing` jump between steps inside a definition; `on_complete` names a `workflow_id` to follow this one.
