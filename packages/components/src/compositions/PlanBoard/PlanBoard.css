@@ -163,7 +163,7 @@
   align-self: center;
 }
 
-.armada-plan-board__task-head[aria-current] .armada-plan-board__task-title {
+.armada-plan-board__task-head[aria-current="true"] .armada-plan-board__task-title {
   color: var(--fg-default);
   font-weight: var(--weight-medium);
 }
