@@ -265,6 +265,22 @@
      layer's, so a menu that widens does not resize a Studio. 240px holds a
      title of about thirty characters to the line at --text-sm. #1286. */
   --w-studio-node: 240px;
+  /* A step on a Job's workflow canvas, and a group inside one. Wider than a
+     Studio's node because a step carries its state, its Checks and its gate
+     on one card where a Note carries a title; 260px holds "the checks decide,
+     unless the Judge objects" on two lines at --text-2xs. A group is one
+     --space-8 narrower, which is what makes it read as inside its step at any
+     zoom rather than beside it. #1539. */
+  --w-workflow-node: 260px;
+  --w-workflow-group-node: 228px;
+  /* The workflow canvas's floor. React Flow measures its own frame, so the
+     surface needs a height and not a flex basis of nothing. 420px holds a step
+     card and one group under it at zoom 1 inside Bridge's shortest window. */
+  --h-workflow-canvas: 420px;
+  /* The narrowest a workflow canvas is worth drawing beside its inspector.
+     Under two of these the inspector folds under the run instead — the canvas
+     is the one region on that tab that cannot be read at half a column. */
+  --w-workflow-canvas-min: 560px;
   --palette-width: 560px;
   --palette-max-height: 400px;
 

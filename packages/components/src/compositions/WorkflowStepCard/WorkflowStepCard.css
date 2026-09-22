@@ -1,0 +1,82 @@
+/* One node of a Job's workflow — the same card on the canvas and in the
+   stacked run. A card on the canvas rather than a `Card`: the canvas is not a
+   surface `glass.css` can read an ancestry through, and a step node has to
+   stay one fixed width so an edge lands where the placement says it will. */
+.armada-wf-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: var(--w-workflow-node);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  color: var(--fg-default);
+  text-align: start;
+}
+
+/* A group sits inside a step and says so by being narrower. */
+.armada-wf-card[data-kind="group"] {
+  width: var(--w-workflow-group-node);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-sunken);
+}
+
+/* The step the Job is on. An edge rather than a fill: the fill is what a
+   verdict uses, and a position is not an outcome. */
+.armada-wf-card[data-current] {
+  border-color: var(--border-strong);
+}
+
+/* Open in the inspector. The accent says which one is being read. */
+.armada-wf-card[aria-current] {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+button.armada-wf-card {
+  cursor: pointer;
+}
+
+button.armada-wf-card:hover {
+  background: var(--bg-hover);
+}
+
+.armada-wf-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-wf-card__name {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A step whose workflow file gave it no label renders its own id, in mono. */
+.armada-wf-card__name[data-identifier] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.armada-wf-card__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/* What the step waits on, where it waits on anybody. A sentence fragment, so
+   it wraps rather than clipping — the gate is the one thing on this card that
+   is not a value. */
+.armada-wf-card__gate {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
