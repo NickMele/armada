@@ -35,7 +35,9 @@ export function mountApp(scenario: string | Scenario, host: HTMLElement, shared?
       <Boundary region="the window" usable={false} bridge={chosen.state.bridge}>
         {/* As `main.tsx` mounts it, so a test can read what a press asked the trackpad to play. */}
         <HapticsProvider perform={(pattern) => api.tap(pattern)}>
-          <App />
+          {/* The one thing the mock hands the window that a preload never
+              could: what this moment's boards draw and Fleet cannot serve. */}
+          <App {...(chosen.draft === undefined ? {} : { draft: chosen.draft })} />
         </HapticsProvider>
       </Boundary>
     </StrictMode>,
