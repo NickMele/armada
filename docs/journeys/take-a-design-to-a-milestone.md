@@ -68,9 +68,9 @@ Named here so the flow above is not read as a description of something that runs
 
 | Missing | Consequence for this flow |
 |---|---|
-| A Studio that can hold a design made elsewhere | Step 1 is a paste into a prompt |
-| A Job whose plan fans out readers over one document | Step 2 is dispatched by hand, and the findings are joined by hand |
-| Questions from several Drones, asked in one round | Step 3 arrives one Job at a time |
-| A home for decisions, and what they supersede | Step 4 is prose somebody maintains |
-| A Job that files issues rather than dispatching them | Step 7 is written by hand |
-| Anything that notices a design changed after issues were written from it | Step 6 has to be remembered |
+| A Studio that can hold a design made elsewhere (#1558) | Step 1 is a paste into a prompt |
+| A Job whose plan fans out readers over one document (#1559) | Step 2 is dispatched by hand, and the findings are joined by hand |
+| Questions from several Drones, asked in one round (#1560) | Step 3 arrives one Job at a time |
+| A home for decisions, and what they supersede (#1561) | Step 4 is prose somebody maintains |
+| A Job that files issues rather than dispatching them (#1562) | Step 7 is written by hand |
+| Anything that notices a design changed after issues were written from it (#1563) | Step 6 has to be remembered |
