@@ -28,6 +28,7 @@ import { NO_SHEET, sheetMoved } from "./Sheets";
 import type { JobDetail as JobWhole } from "@armada/protocol";
 import { AwaitedTab } from "./tab-awaited";
 import { OverviewTab } from "./tab-overview";
+import { PlanTab } from "./tab-plan";
 import { PulseTab } from "./tab-pulse";
 import { RecordTab } from "./tab-record";
 
@@ -165,6 +166,18 @@ function OneJob(props: JobDetailProps) {
           onReporting={setReporting}
           onRaising={setRaising}
           onRaisingTurns={setRaisingTurns}
+        />
+      ) : tab === "plan" ? (
+        <PlanTab
+          job={job}
+          whole={whole}
+          floor={floor}
+          stale={props.stale}
+          acting={props.acting}
+          deciding={props.deciding}
+          onApproveReview={props.onApproveReview}
+          onRedirect={props.onRedirect}
+          {...(props.draft === undefined ? {} : { draft: props.draft })}
         />
       ) : tab === "record" ? (
         <RecordTab {...recordOf(props, whole)} onCopied={props.onCopied} />

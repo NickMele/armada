@@ -41,6 +41,7 @@ import type {
 } from "@armada/protocol";
 
 import type { ConfirmableAct, HeldAct } from "./Acts";
+import type { JobDraft } from "./draft/held";
 import type { ShowAgainCall } from "./again";
 import type { ExplainCommand, ReadCall } from "./calls";
 import type { FrameSrc, ReadFrame } from "./frames";
@@ -355,4 +356,14 @@ export type JobDetailProps = {
    * composer through the same handler rather than each opening its own.
    */
   onCompose: () => void;
+  /**
+   * What this Job's boards draw that Fleet cannot serve yet — `#1532`'s draft
+   * schema, carried by the mock and absent against a real Fleet.
+   *
+   * **Absent is not empty.** A destination handed nothing derives what today's
+   * wire can answer instead, which is what keeps a board built on the drafts
+   * rendering thinner rather than blank. It goes away in `#1545`, when a shape
+   * is promoted and arrives on the Job's own reads.
+   */
+  draft?: JobDraft;
 };

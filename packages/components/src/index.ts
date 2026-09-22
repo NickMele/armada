@@ -272,6 +272,9 @@ export * from "./compositions/JobHoldsSummary/JobHoldsSummary";
 export * from "./compositions/JobHoldsSheet/JobHoldsSheet";
 export * from "./compositions/PlanTaskSheet/PlanTaskSheet";
 
+// The plan read as the groups it will run in, and the boundary each ends at.
+export * from "./compositions/PlanBoard/PlanBoard";
+
 // Every setting a person can change on a running Job, on the same layer, and
 // the header's way into it.
 export * from "./compositions/JobSettings/JobSettings";
