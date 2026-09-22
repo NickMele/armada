@@ -154,14 +154,17 @@ export function JobMembers({ members, completeWhen, absent, onSaid, onCopied }: 
     );
   }
   return (
-    <section className="armada-members" aria-label="Pull requests, in the order they land">
+    <div className="armada-members">
       <p className="armada-members__complete">{completeWhen}</p>
-      <ol className="armada-members__list">
+      {/* The label is the list's, not a wrapper's: what a reader is being
+          handed is an ordered set of pull requests, and the order is the
+          fact the name has to carry. */}
+      <ol className="armada-members__list" aria-label="Pull requests, in the order they land">
         {members.map((member) => (
           <Member key={member.id} member={member} onSaid={onSaid} onCopied={onCopied} />
         ))}
       </ol>
-    </section>
+    </div>
   );
 }
 
