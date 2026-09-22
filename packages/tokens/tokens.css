@@ -784,6 +784,10 @@
      zoom rather than beside it. #1539. */
   --w-workflow-node: 260px;
   --w-workflow-group-node: 228px;
+  /* The workflow canvas's floor. React Flow measures its own frame, so the
+     surface needs a height and not a flex basis of nothing. 420px holds a step
+     card and one group under it at zoom 1 inside Bridge's shortest window. */
+  --h-workflow-canvas: 420px;
   --palette-width: 560px;
   --palette-max-height: 400px;
 

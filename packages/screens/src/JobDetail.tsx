@@ -30,6 +30,9 @@ import { AwaitedTab } from "./tab-awaited";
 import { OverviewTab } from "./tab-overview";
 import { PulseTab } from "./tab-pulse";
 import { RecordTab } from "./tab-record";
+import { WorkflowTab } from "./tab-workflow";
+import { whyNoSteps } from "./run";
+import { FIRST_WORKFLOW_VIEW } from "./workflow-view";
 
 export type { ConfirmableAct, HeldAct, JobAct } from "./Acts";
 export type { FoldedReads } from "./mine";
@@ -101,6 +104,11 @@ function OneJob(props: JobDetailProps) {
   const narrow = useNarrow();
   const floor = useAtFloor();
 
+  // Why the Workflow tab has no run to draw, where it has none. The same
+  // reading Overview's run column takes, so the two never give a Job's empty
+  // workflow two different reasons.
+  const absent = whyNoSteps(props.watched, props.job.id);
+
   // The Job header, and everything that goes in it. `heading.tsx` holds what
   // it is made of — the badge, the facts, the acts that end or replace the Job,
   // and the way out to the pull request — which is where the next thing added
@@ -165,6 +173,20 @@ function OneJob(props: JobDetailProps) {
           onReporting={setReporting}
           onRaising={setRaising}
           onRaisingTurns={setRaisingTurns}
+        />
+      ) : tab === "workflow" ? (
+        <WorkflowTab
+          job={job}
+          whole={whole}
+          {...(absent === undefined ? {} : { absent })}
+          narrow={narrow}
+          view={props.workflowView ?? FIRST_WORKFLOW_VIEW}
+          onView={(view) => props.onWorkflowView?.(view)}
+          acting={props.acting}
+          {...(props.actingAct === undefined ? {} : { actingAct: props.actingAct })}
+          onRedirect={props.onRedirect}
+          onAct={props.onAct}
+          onActHeld={props.onActHeld}
         />
       ) : tab === "record" ? (
         <RecordTab {...recordOf(props, whole)} onCopied={props.onCopied} />

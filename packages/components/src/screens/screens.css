@@ -1547,3 +1547,41 @@
 .armada-screen__layered {
   position: relative;
 }
+
+/* Workflow — the canvas or the stacked run, with the inspector beside it.
+   Appended, per the rule at the head of `index.css`. #1539.
+
+   The inspector takes the step panel's own floor, so a reading that moved here
+   from the run column lays out the way it did there. */
+.armada-workflow-tab {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(var(--w-step-panel-min), var(--w-run-column));
+  gap: var(--space-4);
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Narrow gives the inspector the column under the run rather than beside it —
+   the same fold `.armada-inside` makes, for the same reason. */
+.armada-workflow-tab[data-narrow] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.armada-workflow-tab__surface,
+.armada-workflow-tab__inspector {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* React Flow measures its own frame, so the canvas needs a height rather than
+   a flex basis of nothing. The floor is what keeps a four-step run legible
+   inside the shortest window Bridge lays out for. */
+.armada-workflow-tab__canvas {
+  flex: 1;
+  min-height: var(--h-workflow-canvas);
+}
