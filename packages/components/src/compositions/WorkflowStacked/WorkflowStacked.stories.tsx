@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
-import { Button } from "../../primitives/Button/Button";
 import { WorkflowStacked, type WorkflowStackedRow } from "./WorkflowStacked";
 
 const meta: Meta<typeof WorkflowStacked> = {
@@ -47,15 +46,14 @@ export const WithALoop: Story = {
 };
 
 /**
- * The toggle back to the canvas, above the column.
+ * The claim the toggle rests on: the two arrangements say the same thing.
  *
- * **A `play`, because the claim is that the two arrangements say the same
- * thing.** The group cards are still here, still under their step, and still
- * carry what they carry on the canvas — a stacked mode that dropped them would
- * make the toggle a change of subject.
+ * **A `play`, because a still cannot say it.** The group cards are still here,
+ * still under their step, and still carry what they carry on the canvas — a
+ * stacked mode that dropped them would make the toggle a change of subject.
  */
-export const WithTheToggle: Story = {
-  args: { label: "The run", rows, aside: <Button size="sm">Canvas</Button> },
+export const SaysWhatTheCanvasSays: Story = {
+  args: { label: "The run", rows },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("list", { name: "The run" })).toBeVisible();
     for (const name of ["Group 1, passed", "Group 2, passed", "Group 3, checking", "Group 4, pending"]) {

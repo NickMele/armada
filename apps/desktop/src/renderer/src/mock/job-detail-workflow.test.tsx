@@ -65,9 +65,19 @@ test("Stacked draws the same steps as a list, and the choice survives a relaunch
   await expect.element(page.getByRole("tab", { name: "Stacked", selected: true }).first()).toBeVisible();
 });
 
-test("pressing a step opens it, with its Checks and the tests at its boundary drawn apart", async () => {
+test("the inspector lands on the step the Job is on, and a press moves it", async () => {
+  // Wide enough that the whole run is fitted inside the canvas rather than
+  // half of it sitting under the rail, where a press would never land.
+  await page.viewport(2000, 900);
   await workflow();
-  await expect.element(page.getByText("Press a step or a group to read what it is doing.").last()).toBeVisible();
+  // The panel is never a blank column beside a full canvas.
+  await expect.element(page.getByRole("region", { name: "Implement, step" }).last()).toBeVisible();
+  await card("Plan the change").click();
+  await expect.element(page.getByRole("region", { name: "Plan the change, step" }).last()).toBeVisible();
+});
+
+test("a step opens with its Checks and the tests at its boundary drawn apart", async () => {
+  await workflow();
   await card("Implement").click();
   await expect.element(page.getByRole("region", { name: "Checks at this boundary" }).last()).toBeVisible();
   await expect.element(page.getByRole("region", { name: "Tests at this boundary" }).last()).toBeVisible();

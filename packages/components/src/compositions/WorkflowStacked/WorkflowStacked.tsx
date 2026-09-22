@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 import { WorkflowStepCard, type WorkflowStepCardProps } from "../WorkflowStepCard/WorkflowStepCard";
 
 /**
@@ -28,14 +26,11 @@ export type WorkflowStackedProps = {
   /** What the run is, read to somebody who cannot see it. */
   label: string;
   rows: readonly WorkflowStackedRow[];
-  /** Drawn above the column — the canvas/stacked toggle. */
-  aside?: ReactNode;
 };
 
-export function WorkflowStacked({ label, rows, aside }: WorkflowStackedProps) {
+export function WorkflowStacked({ label, rows }: WorkflowStackedProps) {
   return (
     <div className="armada-workflow-stacked">
-      {aside === undefined ? null : <div className="armada-workflow-stacked__aside">{aside}</div>}
       <ol className="armada-workflow-stacked__run" aria-label={label}>
         {rows.map((row) => (
           <li className="armada-workflow-stacked__row" data-under={row.under === undefined ? undefined : ""} key={row.id}>

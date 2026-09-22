@@ -90,7 +90,7 @@ describe("a step that loops draws a returning edge", () => {
     const looping = {
       ...whole,
       steps: whole.steps.map((step, at) =>
-        at === 1 ? { ...step, verdict_routing_target: whole.steps[0]!.step_id, pass: { of: 5, taken: 1 } } : step,
+        at === 1 ? { ...step, verdict_routing_target: whole.steps[0]!.step_id, pass: { number: 1, of: 5 } } : step,
       ),
     };
     const run = workflowRunOf({ whole: looping, groups: [] });

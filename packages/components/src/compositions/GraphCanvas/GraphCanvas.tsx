@@ -60,6 +60,12 @@ export type GraphCanvasProps<N extends Node, E extends Edge> = {
   onSelectionChange?: (ids: readonly string[]) => void;
   fitView?: boolean;
   fitViewOptions?: FitViewOptions;
+  /**
+   * How far out a person — or a fit — may zoom. **React Flow's own floor is
+   * 0.5**, which silently clamps `fitView`: a run wider than twice its frame
+   * is fitted to a scale it cannot reach and drawn clipped at both ends.
+   */
+  minZoom?: number;
   controls?: GraphCanvasControls;
   /**
    * Drawn beside the zoom pair and Fit — the one thing a surface adds to its
@@ -152,6 +158,7 @@ function Surface<N extends Node, E extends Edge>({
   onSelectionChange,
   fitView = true,
   fitViewOptions,
+  minZoom,
   controls = "words",
   besideControls,
   aside,
@@ -181,6 +188,7 @@ function Surface<N extends Node, E extends Edge>({
       ariaLabelConfig={ARIA}
       fitView={fitView}
       fitViewOptions={fitViewOptions}
+      {...(minZoom === undefined ? {} : { minZoom })}
       // The attribution is a link out of the app, and no surface may navigate.
       proOptions={{ hideAttribution: true }}
     >

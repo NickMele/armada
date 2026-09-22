@@ -57,6 +57,10 @@ export function WorkflowTab({
   // moves under them as the Job advances, and a panel that changed subject
   // while somebody was reading it is the surface this screen exists to escape.
   const [open, setOpen] = useState<string | null>(null);
+  // Whether the canvas re-centres on the running step as the Job advances.
+  // **Off until it is asked for**: it wins over the fit, and a run opened
+  // centred on one card is a run with its other steps off screen.
+  const [following, setFollowing] = useState(false);
   const [instruction, setInstruction] = useState("");
 
   const toggle = (
@@ -80,13 +84,19 @@ export function WorkflowTab({
   const groups = taskGroupsOf(whole);
   const groupsUnder = stepTheGroupsHangUnder(whole);
   const run = workflowRunOf({ whole, groups, onOpen: setOpen });
-  const reading = workflowReadingOf({ whole, groups, selected: open, groupsUnder });
+  // **The inspector lands on the step the Job is on**, so the panel is never a
+  // blank column beside a full canvas. A person's own press then wins, and the
+  // Job advancing does not take the panel off what they are reading.
+  const reading = workflowReadingOf({ whole, groups, selected: open ?? run.running, groupsUnder });
   const steering = steeringOf(job, whole);
 
   return (
     <div className="armada-detail-tab" role="tabpanel" aria-label={TAB_LABEL.workflow}>
-      <div className="armada-workflow-tab" data-narrow={narrow || undefined}>
+      <div className="armada-workflow-tab" data-view={view} data-narrow={narrow || undefined}>
         <div className="armada-workflow-tab__surface">
+          {/* Above the run rather than over it: drawn inside the canvas the
+              toggle sat on top of the last step's card at every width. */}
+          <div className="armada-workflow-tab__modes">{toggle}</div>
           {view === "canvas" ? (
             <div className="armada-workflow-tab__canvas">
               <WorkflowCanvas
@@ -94,12 +104,13 @@ export function WorkflowTab({
                 edges={run.edges}
                 label={`${job.title}, as its workflow's steps`}
                 running={run.running}
-                {...(narrow ? { opensOn: run.opensOn } : {})}
-                aside={toggle}
+                following={following}
+                onFollowing={setFollowing}
+                opensOn={run.opensOn}
               />
             </div>
           ) : (
-            <WorkflowStacked label={`${job.title}, as its workflow's steps`} rows={run.rows} aside={toggle} />
+            <WorkflowStacked label={`${job.title}, as its workflow's steps`} rows={run.rows} />
           )}
         </div>
 

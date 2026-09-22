@@ -6,11 +6,6 @@
   min-width: 0;
 }
 
-.armada-workflow-stacked__aside {
-  display: flex;
-  justify-content: flex-end;
-}
-
 .armada-workflow-stacked__run {
   display: flex;
   flex-direction: column;

@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, waitFor } from "storybook/test";
 
-import { Button } from "../../primitives/Button/Button";
 import { WorkflowCanvas, type WorkflowCanvasEdge, type WorkflowCanvasNode } from "./WorkflowCanvas";
 
 const meta: Meta<typeof WorkflowCanvas> = {
@@ -120,18 +119,10 @@ export const OpensOnWhereYouAre: Story = {
     opensOn: ["step:plan", "step:implement", "step:tests"],
   },
   play: async ({ canvas }) => {
-    const step = canvas.getByRole("button", { name: "Implement, running" });
-    await waitFor(() => expect(step.getBoundingClientRect().width).toBeGreaterThan(200));
+    await waitFor(() => {
+      const step = canvas.getByRole("button", { name: "Implement, running" });
+      expect(step.getBoundingClientRect().width).toBeGreaterThan(200);
+    });
   },
 };
 
-/** The toggle back to the stacked run, drawn over the canvas by its surface. */
-export const WithTheToggle: Story = {
-  args: {
-    nodes,
-    edges,
-    label: "The run",
-    running: "step:implement",
-    aside: <Button size="sm">Stacked</Button>,
-  },
-};

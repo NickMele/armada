@@ -5,13 +5,16 @@ import {
   MarkerType,
   Position,
   getBezierPath,
+  getNodesBounds,
   useReactFlow,
+  useStore,
   type Edge,
   type EdgeProps,
+  type FitViewOptions,
   type Node,
   type NodeProps,
 } from "@xyflow/react";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo } from "react";
 
 import { Button } from "../../primitives/Button/Button";
 import { GRAPH_CANVAS_SIDES, GraphCanvas, facingSides } from "../GraphCanvas/GraphCanvas";
@@ -62,17 +65,21 @@ export type WorkflowCanvasProps = {
    * stay on.
    */
   running?: string | null;
-  /** Whether the canvas follows the running step. Held by the caller, and remembered. */
+  /**
+   * Whether the canvas follows the running step.
+   *
+   * **Off until a person asks for it.** On by default it wins over the fit and
+   * the run opens centred on one card with the rest off screen, which is what
+   * `#1539`'s first screenshots showed.
+   */
   following?: boolean;
   onFollowing?: (following: boolean) => void;
   /**
-   * Open on these nodes rather than on the whole run. Narrow hands the step a
-   * person is on and its neighbours: a nine-step run fitted whole is nine
-   * cards too small to read.
+   * Where to open when the whole run cannot be drawn and still be read — the
+   * step a person is on and its neighbours. A twelve-step spine is twelve
+   * cards of noise at any width, so this is not a narrow-window rule.
    */
   opensOn?: readonly string[];
-  /** Drawn over the top-right corner — the canvas/stacked toggle. */
-  aside?: ReactNode;
 };
 
 type CanvasNode = Node<{ card: WorkflowStepCardProps }, "workflow">;
@@ -123,6 +130,53 @@ const EDGE_TYPES = { workflow: EdgeView };
 /** A returning edge leaves and arrives on the top edge, which is what puts its arc above the spine. */
 const OVER_THE_SPINE = { sourceHandle: `s-${Position.Top}`, targetHandle: `t-${Position.Top}` };
 
+/** How far out a person may take the run by hand, to see its shape. */
+const FURTHEST_OUT = 0.2;
+
+/**
+ * How far out a *fit* may go. **Legibility wins over completeness**: a run
+ * with eight groups fitted whole draws cards nobody can read, which is the v1
+ * complaint `bridge.md` names. Below this the run opens on the step a person
+ * is on with its neighbours, and the rest is panned to.
+ */
+const SMALLEST_READABLE = 0.7;
+
+/** What `fitView` leaves around the run by default, as a factor on the scale. */
+const ROOM_TO_BREATHE = 0.9;
+
+/**
+ * Fit the run again whenever the frame changes size.
+ *
+ * **React Flow fits once, at the size it was first measured at.** Inside a Job
+ * the inspector takes its column after that first measure, and the run was
+ * left clipped at both ends at every width — `#1539`'s second screenshots.
+ * The pane's own measured size is what this reads, so nothing observes the DOM.
+ */
+function FitsTheFrame({
+  options,
+  opensOn,
+  following,
+}: {
+  options: FitViewOptions;
+  opensOn: readonly string[] | undefined;
+  following: boolean;
+}) {
+  const flow = useReactFlow();
+  const width = useStore((state) => state.width);
+  const height = useStore((state) => state.height);
+  useEffect(() => {
+    if (following || width === 0 || height === 0) return;
+    // Whether the whole run would still be legible in this frame. `fitView`
+    // clamps at `minZoom` and says nothing, so a run that does not fit is
+    // drawn clipped at both ends unless the fallback below is chosen first.
+    const whole = getNodesBounds(flow.getNodes());
+    const scale = Math.min(width / whole.width, height / whole.height) * ROOM_TO_BREATHE;
+    const readable = scale >= SMALLEST_READABLE || opensOn === undefined;
+    void flow.fitView(readable ? options : { ...options, nodes: opensOn.map((id) => ({ id })) });
+  }, [flow, following, options, opensOn, width, height]);
+  return null;
+}
+
 /**
  * Keep the running step in view as the run moves.
  *
@@ -145,10 +199,9 @@ export function WorkflowCanvas({
   edges: givenEdges,
   label,
   running = null,
-  following = true,
+  following = false,
   onFollowing,
   opensOn,
-  aside,
 }: WorkflowCanvasProps) {
   const nodes = useMemo<CanvasNode[]>(
     () =>
@@ -190,8 +243,8 @@ export function WorkflowCanvas({
   }, [given, givenEdges, nodes]);
 
   const fitViewOptions = useMemo(
-    () => (opensOn === undefined ? { maxZoom: 1 } : { nodes: opensOn.map((id) => ({ id })), maxZoom: 1 }),
-    [opensOn],
+    () => ({ maxZoom: 1, minZoom: SMALLEST_READABLE }),
+    [],
   );
 
   const stay =
@@ -210,10 +263,11 @@ export function WorkflowCanvas({
       nodeTypes={NODE_TYPES}
       edgeTypes={EDGE_TYPES}
       controls="signs"
+      minZoom={FURTHEST_OUT}
       besideControls={stay}
       fitViewOptions={fitViewOptions}
-      aside={aside}
     >
+      <FitsTheFrame options={fitViewOptions} opensOn={opensOn} following={following} />
       <Follows running={running} following={following} />
     </GraphCanvas>
   );

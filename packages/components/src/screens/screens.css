@@ -1555,7 +1555,14 @@
    from the run column lays out the way it did there. */
 .armada-workflow-tab {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(var(--w-step-panel-min), var(--w-run-column));
+  /* **Two columns only where both can be read, and the grid decides.** The
+     Helm dock takes 380px out of the content at any window width, so a rule
+     written against the window gave the canvas 360px at 1440 with the dock
+     open — a four-step run drawn as four cards of noise, which is the v1
+     complaint `bridge.md` names. `auto-fit` folds the inspector under the run
+     instead, and it is the content's own width that decides rather than a
+     collapse point nothing else shares. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--w-workflow-canvas-min)), 1fr));
   gap: var(--space-4);
   align-items: stretch;
   flex: 1;
@@ -1584,4 +1591,28 @@
 .armada-workflow-tab__canvas {
   flex: 1;
   min-height: var(--h-workflow-canvas);
+}
+
+/* The canvas/stacked toggle. Above the run rather than over it: drawn inside
+   the canvas as a React Flow panel it sat on top of the last step's card at
+   every width. #1539. */
+.armada-workflow-tab__modes {
+  display: flex;
+  justify-content: flex-start;
+  flex: none;
+  padding-block-end: var(--space-2);
+}
+
+/* Stacked is a page, not two panes. The canvas is a fixed frame a person pans
+   inside, so its column scrolls on its own; a column of step cards is read top
+   to bottom, and scrolling it inside a pane cut the last card in half at the
+   narrowest width. The destination scrolls instead. #1539. */
+.armada-workflow-tab[data-view="stacked"] {
+  flex: none;
+  align-items: start;
+}
+
+.armada-workflow-tab[data-view="stacked"] .armada-workflow-tab__surface,
+.armada-workflow-tab[data-view="stacked"] .armada-workflow-tab__inspector {
+  overflow: visible;
 }
