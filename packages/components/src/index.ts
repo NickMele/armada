@@ -316,6 +316,9 @@ export * from "./compositions/HeldFlag/HeldFlag";
 export * from "./compositions/DroneMessageBox/DroneMessageBox";
 // A step's work as the Drone told it, under the plan task it served. #1185.
 export * from "./compositions/WorkNarration/WorkNarration";
+// The graph surface React Flow draws — a Studio's board and a Job's workflow
+// share it, and neither holds placement. #1539.
+export * from "./compositions/GraphCanvas/GraphCanvas";
 // A Studio's nodes, and the whiteboard React Flow draws them on. #1286.
 export * from "./compositions/StudioCapture/StudioCapture";
 export * from "./compositions/CaptureBar/CaptureBar";
