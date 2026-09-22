@@ -51,3 +51,11 @@
   outline: var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
 }
+
+/* What kind of thing it is, set back beside the name. Not a second chip and
+   not a badge: a kind is a property of what was attached, and a badge's fill
+   is reserved to a status. */
+.armada-attachment-chip__kind {
+  flex: none;
+  color: var(--fg-subtle);
+}

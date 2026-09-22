@@ -1,25 +1,26 @@
-import { Check, CircleDashed, CircleDot, Minus, type LucideIcon } from "lucide-react";
+import { Check, CircleDashed, CircleDot, Minus, X, type LucideIcon } from "lucide-react";
 
 /**
  * Task mark — the glyph a Plan region's row leads with. The mark alone
  * carries a task's state (`docs/journeys/monitor-active-work.md`, Plan); no
  * row prints a state word.
  *
- * `open`/`working`/`done`/`dropped` are `docs/concepts/plan.md`'s own
- * vocabulary, not `job_steps.state`, so there is no `enum-verbs.toml` row to
- * read the accessible names from — `SAID` below is written, not generated.
+ * The five words are `docs/concepts/plan.md`'s own vocabulary, not
+ * `job_steps.state`, so there is no `enum-verbs.toml` row to read the
+ * accessible names from — `SAID` below is written, not generated.
  *
- * `circle-dashed` and `minus` are each reserved to two uses now —
- * `packages/icons/icons.toml`'s `[[icons.circle-dashed.usage]]` and
- * `[[icons.minus.usage]]` name this component's `open` and `dropped` marks
- * beside the one each glyph already carried.
+ * `circle-dashed`, `minus` and `x` each carry a second usage row in
+ * `packages/icons/icons.toml` for the mark they take here. **`failed` is not
+ * `dropped`**: an agent that stopped without finishing is a system failure,
+ * bare `x`'s own reservation, where a drop is a person's decision. `#1535`.
  */
-export type TaskMarkState = "open" | "working" | "done" | "dropped";
+export type TaskMarkState = "open" | "working" | "done" | "failed" | "dropped";
 
 const GLYPH: Record<TaskMarkState, LucideIcon> = {
   open: CircleDashed,
   working: CircleDot,
   done: Check,
+  failed: X,
   dropped: Minus,
 };
 
@@ -28,6 +29,7 @@ const SAID: Record<TaskMarkState, string> = {
   open: "Open",
   working: "Working",
   done: "Done",
+  failed: "Failed",
   dropped: "Dropped",
 };
 

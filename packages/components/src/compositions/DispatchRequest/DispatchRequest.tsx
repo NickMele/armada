@@ -6,6 +6,7 @@ import { AttachmentChip } from "../../primitives/AttachmentChip/AttachmentChip";
 import { Badge } from "../../primitives/Badge/Badge";
 import { Button } from "../../primitives/Button/Button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../primitives/Card/Card";
+import { Input } from "../../primitives/Input/Input";
 import { MentionPopover, useMention } from "../../primitives/MentionPopover/MentionPopover";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 import { ErrorNotice } from "../../errors/ErrorNotice/ErrorNotice";
@@ -100,6 +101,43 @@ export type DispatchRequestProps = {
   request: string;
   onRequest: (request: string) => void;
   /**
+   * The repository this would be dispatched into. A fact rather than a field —
+   * Bridge dispatches into the workspace it is pointed at, and the ask upstream
+   * of this surface is where one is chosen. Absent draws no row.
+   */
+  repository?: string;
+  /**
+   * Where the work starts, and where it lands.
+   *
+   * **Two refs and not one** (#1530, 22 Sep). They differ when you start from
+   * an unmerged branch or land in a long-lived one, and neither is drawn as
+   * the other's default — a form saying "lands in main (from main)" would make
+   * the second field look like a copy of the first rather than a choice.
+   */
+  refs: Refs;
+  onRefs: (refs: Refs) => void;
+  /**
+   * Addresses attached beside the request — a ticket, a pull request, a page.
+   *
+   * **They go out with the request**, one per line under what was typed,
+   * because the proposer's own field is prose and a link in it is what it
+   * already reads. The chips are so that a person can see and take back what
+   * they pasted, which a line buried in a paragraph does not allow.
+   */
+  links?: readonly string[];
+  onAddLink?: (address: string) => void;
+  onRemoveLink?: (address: string) => void;
+  /**
+   * The Studio node this request came off, where it came off one. Read-only:
+   * it is provenance, and it is taken back by leaving the surface.
+   */
+  node?: { name: string };
+  /**
+   * The optional Settings block, built by the caller. **Absent draws none** —
+   * a surface with nothing to set is not a surface with an empty block on it.
+   */
+  settings?: ReactNode;
+  /**
    * Narrow the checkout against typed text, for the `@` mention popup —
    * `crate::files::search` on the other side of the wire. Never rejects: a
    * call that could not be made answers empty, the way `JobCommands.searchFiles`
@@ -178,6 +216,13 @@ export type DispatchRequestProps = {
   /** What the surface is told after a clipboard write, so it can raise a toast. */
   onCopied?: (what: string) => void;
 };
+
+/**
+ * Where the work starts, and where it lands. Empty is a ref nobody has named —
+ * a Manifest declaring no base, which is drawn as an empty field rather than
+ * as a branch name this surface made up.
+ */
+export type Refs = { from: string; target: string };
 
 /**
  * Where the one call has got to.
@@ -286,12 +331,33 @@ const AT_THE_GATE = "awaiting_approval";
 /** What the field asks for, and the two things it takes. */
 const PLACEHOLDER = "Describe the work, or paste a link to a ticket.";
 
+/**
+ * What pressing Dispatch sets off, in the order it happens.
+ *
+ * **Three lines, because three things happen and nobody is told any of them.**
+ * The surface asked for a request and then went quiet about what it would do
+ * with it — which is the whole of #1540.
+ */
+const NEXT: string[] = [
+  "Armada reads the request, picks the workflow and names the Job.",
+  "You adjust what it decided and approve it. Nothing runs until you do.",
+  "A planning Drone splits the work into tasks, and a Judge reads what comes back.",
+];
+
 /** Said on both refusals, because it is the fact a person most needs. */
 const NOTHING_CREATED = "Nothing was created and the request is unchanged.";
 
 export function DispatchRequest({
   request,
   onRequest,
+  repository,
+  refs,
+  onRefs,
+  links = [],
+  onAddLink,
+  onRemoveLink,
+  node,
+  settings,
   onSearchFiles,
   attachments,
   onStage,
@@ -359,11 +425,14 @@ export function DispatchRequest({
       </CardHeader>
       <CardContent>
         <div className="armada-dispatch__body">
-          {/* The whole reason this surface exists, said once. Three things the
-              old form asked for are three things the proposer answers. */}
-          <p className="armada-dispatch__lede">
-            Armada reads the request, picks the workflow and names the job.
-          </p>
+          {answered ? null : (
+            <Where
+              {...(repository === undefined ? {} : { repository })}
+              refs={refs}
+              onRefs={onRefs}
+              disabled={reading || disabled}
+            />
+          )}
 
           {answered ? (
             <Answered
@@ -413,26 +482,30 @@ export function DispatchRequest({
                 className="armada-file-input"
                 onChange={onFilesPicked}
               />
-              <div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={reading || disabled}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  Attach
-                </Button>
-                {attachments.length > 0 && (
-                  <div>
-                    {attachments.map((attachment) => (
-                      <AttachmentChip
-                        key={attachment.path}
-                        filename={attachment.filename}
-                        onRemove={() => onRemoveAttachment(attachment.path)}
-                      />
-                    ))}
-                  </div>
-                )}
+              <Attached
+                attachments={attachments}
+                onRemoveAttachment={onRemoveAttachment}
+                links={links}
+                {...(onAddLink === undefined ? {} : { onAddLink })}
+                {...(onRemoveLink === undefined ? {} : { onRemoveLink })}
+                {...(node === undefined ? {} : { node })}
+                disabled={reading || disabled}
+                onPickFile={() => fileInputRef.current?.click()}
+              />
+              {settings}
+              {/* What the press sets off, under the controls that set it off.
+                  Read once, and never after the answer has come back — by then
+                  the first of the three has happened and the list beside it
+                  says what is left. */}
+              <div className="armada-dispatch__next">
+                <span className="armada-dispatch__next-head">What happens next</span>
+                <ol className="armada-dispatch__next-list">
+                  {NEXT.map((line) => (
+                    <li className="armada-dispatch__next-line" key={line}>
+                      {line}
+                    </li>
+                  ))}
+                </ol>
               </div>
             </>
           )}
@@ -527,6 +600,155 @@ export function DispatchRequest({
         )}
       </CardFooter>
     </Card>
+  );
+}
+
+/**
+ * The repository, and the two refs.
+ *
+ * **The repository is a value and the refs are fields.** Which repository is
+ * answered before this surface opens; where the work starts and where it lands
+ * are this form's, and both are drawn as fields even when they read the same
+ * branch — a value only one of them could change would be the pair collapsed
+ * back into one.
+ */
+function Where({
+  repository,
+  refs,
+  onRefs,
+  disabled,
+}: {
+  repository?: string;
+  refs: Refs;
+  onRefs: (refs: Refs) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="armada-dispatch__where">
+      {repository === undefined ? null : (
+        <div className="armada-dispatch__repository">
+          <span className="armada-dispatch__where-label">Repository</span>
+          <span className="mono armada-dispatch__where-value">{repository}</span>
+        </div>
+      )}
+      <Input
+        label="From"
+        mono
+        value={refs.from}
+        disabled={disabled}
+        onChange={(event) => onRefs({ ...refs, from: event.target.value })}
+      />
+      <Input
+        label="Lands in"
+        mono
+        value={refs.target}
+        disabled={disabled}
+        onChange={(event) => onRefs({ ...refs, target: event.target.value })}
+      />
+    </div>
+  );
+}
+
+/**
+ * What is attached to the request: files, addresses, and the Studio node it
+ * came off.
+ *
+ * **One row of chips and not three lists.** A person reads what they attached,
+ * not which mechanism staged it — the kind is a word on the chip.
+ */
+function Attached({
+  attachments,
+  onRemoveAttachment,
+  links,
+  onAddLink,
+  onRemoveLink,
+  node,
+  disabled,
+  onPickFile,
+}: {
+  attachments: readonly StagedAttachment[];
+  onRemoveAttachment: (path: string) => void;
+  links: readonly string[];
+  onAddLink?: (address: string) => void;
+  onRemoveLink?: (address: string) => void;
+  node?: { name: string };
+  disabled: boolean;
+  onPickFile: () => void;
+}) {
+  // The link field is open or it is not. Local, because nothing outside this
+  // card reads whether somebody is part-way through pasting an address.
+  const [adding, setAdding] = useState(false);
+  const [address, setAddress] = useState("");
+  const empty = address.trim() === "";
+
+  function add(): void {
+    if (empty || onAddLink === undefined) return;
+    onAddLink(address.trim());
+    setAddress("");
+    setAdding(false);
+  }
+
+  return (
+    <div className="armada-dispatch__attached">
+      <div className="armada-dispatch__attach-acts">
+        <Button variant="secondary" size="sm" disabled={disabled} onClick={onPickFile}>
+          Attach
+        </Button>
+        {onAddLink === undefined ? null : (
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={disabled}
+            onClick={() => setAdding((open) => !open)}
+          >
+            Add a link
+          </Button>
+        )}
+      </div>
+      {!adding ? null : (
+        <div className="armada-dispatch__link-field">
+          <Input
+            label="Link"
+            mono
+            value={address}
+            placeholder="An issue, a pull request, a page"
+            disabled={disabled}
+            onChange={(event) => setAddress(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              add();
+            }}
+          />
+          <Button variant="secondary" size="sm" disabled={disabled || empty} onClick={add}>
+            Add
+          </Button>
+        </div>
+      )}
+      {attachments.length + links.length === 0 && node === undefined ? null : (
+        <div className="armada-dispatch__chips">
+          {node === undefined ? null : <AttachmentChip filename={node.name} kind="node" />}
+          {attachments.map((attachment) => (
+            <AttachmentChip
+              key={attachment.path}
+              filename={attachment.filename}
+              onRemove={() => onRemoveAttachment(attachment.path)}
+            />
+          ))}
+          {links.map((link) => (
+            <AttachmentChip
+              key={link}
+              filename={link}
+              kind="link"
+              {...(onRemoveLink === undefined ? {} : { onRemove: () => onRemoveLink(link) })}
+            />
+          ))}
+        </div>
+      )}
+      {links.length === 0 ? null : (
+        <p className="armada-dispatch__said">Links go out with the request, one to a line.</p>
+      )}
+    </div>
   );
 }
 

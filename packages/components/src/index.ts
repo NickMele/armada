@@ -272,6 +272,9 @@ export * from "./compositions/JobHoldsSummary/JobHoldsSummary";
 export * from "./compositions/JobHoldsSheet/JobHoldsSheet";
 export * from "./compositions/PlanTaskSheet/PlanTaskSheet";
 
+// The plan read as the groups it will run in, and the boundary each ends at.
+export * from "./compositions/PlanBoard/PlanBoard";
+
 // Every setting a person can change on a running Job, on the same layer, and
 // the header's way into it.
 export * from "./compositions/JobSettings/JobSettings";
@@ -336,3 +339,7 @@ export * from "./compositions/StudioFrameSheet/StudioFrameSheet";
 // above the runner. #1383.
 export * from "./compositions/DriftSheet/DriftSheet";
 export * from "./compositions/VerifySheet/VerifySheet";
+// The dispatch form's optional settings, and what else is writing where a
+// request would. #1540.
+export * from "./compositions/DispatchSettings/DispatchSettings";
+export * from "./compositions/WhatElseIsRunning/WhatElseIsRunning";
