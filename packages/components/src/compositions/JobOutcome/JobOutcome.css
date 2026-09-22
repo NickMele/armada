@@ -314,14 +314,27 @@
 }
 
 .armada-outcome__run-spec {
+  display: flex;
+  align-items: baseline;
   min-width: 0;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   line-height: var(--leading-sm);
   color: var(--fg-default);
+  white-space: nowrap;
+}
+
+/* The folder clips and the file name does not: four specs in one directory
+   read as four identical rows when a path clips from the right. */
+.armada-outcome__run-folder {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--fg-subtle);
+}
+
+.armada-outcome__run-file {
+  flex: none;
 }
 
 .armada-outcome__run-outcome {

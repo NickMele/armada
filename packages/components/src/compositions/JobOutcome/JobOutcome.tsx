@@ -282,6 +282,24 @@ export function JobOutcome({
   );
 }
 
+/**
+ * A spec's path, with the folder clipping and the file name whole.
+ *
+ * Four specs under one folder read as four identical rows when the path clips
+ * from the right, which is the narrow window the boards are drawn for.
+ */
+function Spec({ path }: { path: string }) {
+  const cut = path.lastIndexOf("/");
+  return (
+    <span className="armada-outcome__run-spec" title={path}>
+      {cut < 0 ? null : (
+        <span className="armada-outcome__run-folder">{path.slice(0, cut + 1)}</span>
+      )}
+      <span className="armada-outcome__run-file">{path.slice(cut + 1)}</span>
+    </span>
+  );
+}
+
 /** The parts list. One `subgrid` per list, so each section aligns on its own. */
 function Parts({
   parts,
@@ -375,9 +393,7 @@ function Runs({ name, meta, runs, absent, note }: JobOutcomeRuns) {
         <ol className="armada-outcome__runs">
           {runs.map((run, at) => (
             <li className="armada-outcome__run" key={at}>
-              <span className="armada-outcome__run-spec" title={run.spec}>
-                {run.spec}
-              </span>
+              <Spec path={run.spec} />
               <span
                 className="armada-outcome__run-outcome"
                 {...(run.status === undefined
