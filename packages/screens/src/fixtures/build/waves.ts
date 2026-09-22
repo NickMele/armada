@@ -89,7 +89,7 @@ function members(): JobFixture[] {
         delivery: {
           commit: "a19c4b7",
           pushed: "origin/armada/22-give-the-store-one-shape",
-          pull_request: "https://github.com/NickMele/armada/pull/1591",
+          pull_request: "https://git.example/armada/pull/1591",
           landed: "merged",
         },
       },
@@ -107,7 +107,7 @@ function members(): JobFixture[] {
         delivery: {
           commit: "c72d0e9",
           pushed: "origin/armada/23-read-the-store-through-selectors",
-          pull_request: "https://github.com/NickMele/armada/pull/1598",
+          pull_request: "https://git.example/armada/pull/1598",
         },
       },
     }),

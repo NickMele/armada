@@ -59,7 +59,7 @@ function planAdvanced(): StepDetail {
 function droneProcess(pid: number, ran: string): JobProcess {
   return {
     pid,
-    command: "claude",
+    command: "node",
     cpu_percent: 12.4,
     memory_bytes: 486_539_264,
     running_for: ran,

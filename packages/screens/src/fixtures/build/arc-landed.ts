@@ -38,7 +38,7 @@ import { doneTouched } from "./arc-executing";
 
 const HANDED_AT = "2026-09-22T11:12:00Z";
 const ENDED_AT = "2026-09-22T11:16:00Z";
-const PULL_REQUEST = "https://github.com/NickMele/armada/pull/1604";
+const PULL_REQUEST = "https://git.example/armada/pull/1604";
 
 /** Every group passed, the last two with the commits they left. */
 function landedGroups(): GroupView[] {

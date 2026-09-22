@@ -66,7 +66,7 @@ export function refactorKind(): JobFixture {
         delivery: {
           commit: "d38b0c1",
           pushed: "origin/armada/42-split-the-manifest-reader-out",
-          pull_request: "https://github.com/NickMele/armada/pull/1600",
+          pull_request: "https://git.example/armada/pull/1600",
         },
       },
     },
