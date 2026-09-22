@@ -15,6 +15,7 @@ import type { CriterionView } from "./criterion";
 import type { GroupView } from "./group";
 import type { LandingRule } from "./landing";
 import type { LedgerRow } from "./ledger";
+import type { JobMembersView } from "./members";
 
 /**
  * A Job's draft reading. **Every field is absent by default**, and absent
@@ -30,7 +31,10 @@ export type JobDraft = {
   criteria?: readonly CriterionView[];
   /** Every run of every case, with who ran it and what became of the run. */
   runs?: readonly CaseRunView[];
-  /** How this Job's work reaches the repository, and what completes it. */
+  /**
+   * How this Job's work reaches the repository, and what completes it. Read by
+   * Land, and by the landing-order region for its complete-when line.
+   */
   landing?: LandingRule;
   /** The Record's rows. The Land board times a group by the ones inside it. */
   record?: readonly LedgerRow[];
@@ -42,4 +46,11 @@ export type JobDraft = {
    * recorded it — `draft/revision.ts` pairs the two.
    */
   scope_revisions?: readonly ScopeRevisionView[];
+  /**
+   * The Jobs landing under this one, in the order they land. **Absent is a Job
+   * that says nothing about members** — a board handed none derives what the
+   * Board's own rows can answer (`jobMembersOf`), and an ordinary Job has no
+   * members at all.
+   */
+  members?: JobMembersView;
 };

@@ -611,19 +611,62 @@ describe("landing", () => {
       .element(page.getByText(".armada/worktrees/3-show-what-s-running-in-the-drones-stat"))
       .toBeVisible();
   });
-  it.todo(
-    "members/stacked: three pull requests are drawn in the order they land — one merged, one " +
-      "waiting on you, one stacked on it — and nothing on screen names a shape",
-  );
-  it.todo(
-    "members/merged: the third member reads as merged into the one before it and parked as a " +
-      "draft, so nothing is asked of a reviewer yet",
-  );
-  it.todo(
-    "members/stacked: the parent says it is done when every member has landed, which is not " +
-      "the same as its own pull request merging",
-  );
+  test("members/stacked: three pull requests are drawn in the order they land — one merged, one waiting on you, one stacked on it — and nothing on screen names a shape", async () => {
+    mount("members/stacked");
+    const order = page.getByRole("list", { name: "Pull requests, in the order they land" });
+    await expect.element(order).toBeVisible();
+
+    const cards = order.getByRole("listitem").elements();
+    expect(cards.map((card) => card.getAttribute("aria-label"))).toEqual([
+      "1. Give the store one shape",
+      "2. Read the store through selectors",
+      "3. Drop the store singleton",
+    ]);
+
+    // The first is in, the second is a person's to answer, and the third is
+    // branched off the second and still working.
+    await expect.element(member(1).getByText("Its pull request merged.")).toBeVisible();
+    await expect.element(member(2).getByText("awaiting review")).toBeVisible();
+    await expect.element(member(3).getByText(/^Stacked on the one before it\./)).toBeVisible();
+    // Stacked means its pull request targets the branch before it, and not main.
+    await expect
+      .element(member(3).getByText("armada/23-read-the-store-through-selectors"))
+      .toBeVisible();
+
+    expect(document.body.textContent).not.toMatch(/convoy|train|atomic/i);
+  });
+
+  test("members/merged: the third member reads as merged into the one before it and parked as a draft, so nothing is asked of a reviewer yet", async () => {
+    mount("members/merged");
+    await expect
+      .element(page.getByRole("list", { name: "Pull requests, in the order they land" }))
+      .toBeVisible();
+
+    await expect.element(member(3).getByText("Parked until the one before it lands.")).toBeVisible();
+    // Parked rather than stacked: it targets where the Job lands, and it has
+    // opened nothing for anybody to review.
+    await expect.element(member(3).getByText("main")).toBeVisible();
+    await expect.element(member(3).getByText("None opened yet.")).toBeVisible();
+  });
+
+  test("members/stacked: the parent says it is done when every member has landed, which is not the same as its own pull request merging", async () => {
+    mount("members/stacked");
+
+    // The second member reached `awaiting_review` and the third is running;
+    // one pull request is in, which is what the count says and what a count
+    // of finished Jobs would not.
+    await expect
+      .element(page.getByText("Done when every member has landed. 1 of 3 pull requests merged."))
+      .toBeVisible();
+  });
 });
+
+/** One member's card, by where it sits in the order. */
+const member = (ordinal: number) =>
+  page
+    .getByRole("list", { name: "Pull requests, in the order they land" })
+    .getByRole("listitem")
+    .nth(ordinal - 1);
 
 describe("the wave", () => {
   it.todo(

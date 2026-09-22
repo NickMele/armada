@@ -352,3 +352,5 @@ export * from "./compositions/VerifySheet/VerifySheet";
 // request would. #1540.
 export * from "./compositions/DispatchSettings/DispatchSettings";
 export * from "./compositions/WhatElseIsRunning/WhatElseIsRunning";
+// A Job whose members are Jobs — pull requests landing in order. #1543.
+export * from "./compositions/JobMembers/JobMembers";

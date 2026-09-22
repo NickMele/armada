@@ -8,7 +8,7 @@
 // **The Job header and the tab strip belong to `JobDetail.tsx`.** An addition
 // to a region goes in that region's file; an addition to the screen goes there.
 
-import { JobHoldsSummary } from "@armada/components";
+import { JobHoldsSummary, JobMembers } from "@armada/components";
 import { ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { InsideAJob } from "./InsideAJob";
@@ -70,6 +70,8 @@ import {
   whyNoReading,
 } from "./resources";
 import { pulseViewOf } from "./draft/pulse";
+import { jobMembersOf } from "./draft/members";
+import { membersOf, useDroppedMembers } from "./members";
 import { briefOf, whyNoBrief, workOf, workRehearsalOf } from "./work";
 
 
@@ -195,6 +197,9 @@ export function OverviewTab(props: OverviewTabProps) {
   // Whether the folded inspector is up. Read only while `narrow`: above the
   // bound the inspector is a column and this decides nothing.
   const [inspecting, setInspecting] = useState(false);
+  // Which members somebody dropped in this window. Nothing serves a drop, so
+  // what a press changes is what is drawn — `useDroppedMembers` says why.
+  const dropping = useDroppedMembers();
   const sheet = onSheet.which;
   const logAttempt = onSheet.which === "log" ? (onSheet.attempt ?? null) : null;
   const held = onSheet.which === "log" ? onSheet.held : null;
@@ -596,6 +601,29 @@ export function OverviewTab(props: OverviewTabProps) {
   // Read once: `plan` gates both the region and its own eyebrow act, and a
   // second call would be a second, possibly different, reading of `whole`.
   const plan = planOf(whole);
+  // The Jobs landing under this one. The mock hands the whole reading; against
+  // a real Fleet it is derived from the Board's own rows, which carry each
+  // member's status, its branch and whether its pull request merged.
+  const memberDraft = props.draft?.members;
+  const membersRead =
+    memberDraft ?? (whole === null ? undefined : jobMembersOf(whole, props.board ?? []));
+  const members = membersOf(dropping.over(membersRead), props.draft?.landing, {
+    ...(props.onOpenJob === undefined ? {} : { onOpenJob: props.onOpenJob }),
+    // The member's own Job id, never the address the card drew — the header's
+    // own rule, in `opening.ts`.
+    onOpenPullRequest: (member) => {
+      void openPullRequest(onOpenPullRequest, member).then((because) => {
+        if (because !== null) onSaid(because);
+      });
+    },
+    onAnswerJudge,
+    // **Offered only on a reading the mock handed in.** No operation closes a
+    // pull request or rebases what was stacked on a branch, so against a real
+    // Fleet this would be a press that does nothing. `#1543`.
+    ...(memberDraft === undefined ? {} : { onDropMember: dropping.drop }),
+    stale,
+    acting,
+  });
   // `#1432`. What the open task said it would touch against what it did, from
   // the Job's own turns rather than the step's — a task's files include what
   // it wrote on an earlier run, `grouped.tsx`'s rule for the same reading.
@@ -676,6 +704,9 @@ export function OverviewTab(props: OverviewTabProps) {
   const inside = (
     <InsideAJob
       run={run.map(named)}
+      // Several pull requests landing in order, above the two columns. Absent
+      // on every Job that lands one of its own, which is every Job today.
+      {...(members === undefined ? {} : { members: <JobMembers {...members} onSaid={onSaid} onCopied={onCopied} /> })}
       // The name Fleet holds, the id where it does not — a Job older than the
       // check that refuses a workflow-less proposal at creation.
       runWorkflowLabel={workflow?.name ?? job.workflow_id}

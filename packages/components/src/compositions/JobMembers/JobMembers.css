@@ -1,0 +1,291 @@
+/* A Job whose members are Jobs — several pull requests, landing in a set
+   order. One card per member, and the rail between them is the order. */
+.armada-members {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* What finishes the Job, above the cards: it is the claim the list is
+   evidence for, so it reads first rather than as a footnote under three
+   cards a reader has already counted for themselves. */
+.armada-members__complete {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+}
+
+.armada-members__absent {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+}
+
+.armada-members__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+/* Two tracks: the rail carrying the order, and everything about the member.
+   A floor on the rail and `minmax(0, 1fr)` on the body, so growth lands in
+   the body and a long branch name never pushes the number off. */
+.armada-members__member {
+  display: grid;
+  grid-template-columns: var(--space-6) minmax(0, 1fr);
+  column-gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+}
+
+/* A dropped member stays in the list and reads as past rather than gone:
+   the order it was part of is what is being read, and a card removed would
+   renumber the ones after it under a reader's eye. The weight drops; the
+   card does not, which is what says "not here" without saying "wrong". */
+.armada-members__member[data-dropped] .armada-members__title,
+.armada-members__member[data-dropped] .armada-members__open,
+.armada-members__member[data-dropped] .armada-members__fact-value {
+  color: var(--fg-subtle);
+}
+
+/* The rail: the ordinal, and the line that joins this card to the next.
+   The line is the rail's own, drawn below the number and stopping at the
+   card's edge, so the last card ends the run without a stub hanging off it. */
+.armada-members__rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+.armada-members__ordinal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-6);
+  height: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: 1;
+  color: var(--fg-muted);
+}
+
+.armada-members__rail::after {
+  content: "";
+  flex: 1;
+  width: var(--border-width);
+  margin-top: var(--space-1);
+  background: var(--border-subtle);
+}
+
+/* The last card ends the run. Nothing points at a card that is not there. */
+.armada-members__member:last-child .armada-members__rail::after {
+  display: none;
+}
+
+.armada-members__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-members__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-members__title,
+.armada-members__open {
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+/* The title is the control and the card is not: a pressable card would nest
+   the drop button inside it and read as one control where there are two. */
+.armada-members__open {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.armada-members__open:hover {
+  color: var(--accent);
+}
+
+/* A status the registry has no verb or glyph for: the wire spelling, mono and
+   never primary — recoverable, where a blank cell would hide it. */
+.armada-members__state-text {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+.armada-members__waits,
+.armada-members__landed,
+.armada-members__dropped,
+.armada-members__moves,
+.armada-members__drop-said {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+}
+
+/* The one sentence that says the work is in. It takes the same hue the
+   badge does for a Job that finished, and never one chosen here. */
+.armada-members__landed {
+  color: var(--status-completed-success);
+}
+
+/* Two tracks declared on the list and borrowed by each row through `subgrid`,
+   so the names line up down the card rather than per row. The value track is
+   the `minmax(0, 1fr)` that absorbs the slack. */
+.armada-members__facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+}
+
+.armada-members__fact {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.armada-members__fact-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.armada-members__fact-value {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+}
+
+/* A part nothing serves keeps its row and says so in words. Sans and subtle,
+   because it is a sentence about a missing value rather than a value. */
+.armada-members__fact-value[data-absent="true"] {
+  font-family: var(--font-sans);
+  color: var(--fg-subtle);
+}
+
+.armada-members__scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+/* Each path is its own token. Two paths separated by a space alone read as
+   one value with a break in it, which is what a scope of two directories
+   drew before this. */
+.armada-members__scope code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+}
+
+.armada-members__address {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.armada-members__address:hover {
+  text-decoration: underline;
+}
+
+/* A branch is pasted into a shell, so it copies on click. */
+.armada-members__copy {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.armada-members__copy:hover {
+  color: var(--accent);
+}
+
+/* The question, and what answering it moves. The card it sits in is already
+   sunken, so this steps back up rather than cutting a second hole in it. */
+.armada-members__question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+.armada-members__drop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+.armada-members__hint {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+}
+
+.armada-members__hint[data-tone="error"] {
+  color: var(--status-completed-failed);
+}
+
+.armada-members__acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
