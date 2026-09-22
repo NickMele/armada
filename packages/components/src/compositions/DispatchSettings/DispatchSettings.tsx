@@ -1,8 +1,10 @@
 import { ChevronRight, ChevronUp } from "lucide-react";
 import type { WorkflowSummary } from "@armada/protocol";
 
-import { Input } from "../../primitives/Input/Input";
 import { Select } from "../../primitives/Select/Select";
+import { DroneCap } from "./DroneCap";
+import { TierModels } from "./TierModels";
+import type { TierChoice } from "./TierModels";
 
 /**
  * What a person may set while they are still typing the request, and does not
@@ -36,13 +38,6 @@ export type DispatchSettingsProps = {
   disabled?: boolean;
 };
 
-/** Which model each tier runs on. `null` is Auto — the harness chooses. */
-export type TierChoice = {
-  difficult: string | null;
-  medium: string | null;
-  easy: string | null;
-};
-
 /** The four, each absent until somebody sets it. */
 export type DispatchSettingsValue = {
   workflowId?: string;
@@ -51,16 +46,6 @@ export type DispatchSettingsValue = {
   droneCap?: number;
   lands?: "auto" | "you_at_review";
 };
-
-/** The tiers in the order the planner hands work out, hardest first. */
-const TIERS: [keyof TierChoice, string][] = [
-  ["difficult", "Difficult"],
-  ["medium", "Medium"],
-  ["easy", "Easy"],
-];
-
-/** What a tier reads while nobody has named a model for it. */
-const AUTO = "Auto";
 
 export function DispatchSettings({
   open,
@@ -123,60 +108,20 @@ export function DispatchSettings({
             ))}
           </Select>
 
-          <div className="armada-dispatch-settings__tiers">
-            <span className="armada-dispatch-settings__label">Models by tier</span>
-            <p className="armada-dispatch-settings__said">
-              A planning Drone gives each task a tier, and the tier picks the model it runs on.
-            </p>
-            <div className="armada-dispatch-settings__tier-row">
-              {TIERS.map(([tier, label]) => (
-                <Select
-                  key={tier}
-                  label={label}
-                  value={tiers[tier] ?? ""}
-                  disabled={disabled}
-                  onChange={(event) =>
-                    moved({
-                      tiers: { ...tiers, [tier]: event.target.value === "" ? null : event.target.value },
-                    })
-                  }
-                >
-                  <option value="">{AUTO}</option>
-                  {models.map((model) => (
-                    <option key={model} value={model}>
-                      {model}
-                    </option>
-                  ))}
-                </Select>
-              ))}
-            </div>
-          </div>
+          <TierModels
+            tiers={tiers}
+            onTiers={(chosen) => moved({ tiers: chosen })}
+            models={models}
+            said="A planning Drone gives each task a tier, and the tier picks the model it runs on."
+            disabled={disabled}
+          />
 
-          <div className="armada-dispatch-settings__cap">
-            <Input
-              label="Drones at once"
-              type="number"
-              min={1}
-              value={settings.droneCap === undefined ? "" : String(settings.droneCap)}
-              placeholder={AUTO}
-              disabled={disabled}
-              onChange={(event) =>
-                moved(
-                  event.target.value === ""
-                    ? { droneCap: undefined }
-                    : { droneCap: Number(event.target.value) },
-                )
-              }
-            />
-            {/* The machine's own cap, beside the Job's and never merged into
-                it: one is how many Drones this Job may run, the other is how
-                many run here at all. */}
-            <p className="armada-dispatch-settings__said">
-              {machineCap === null
-                ? "Fleet has not said how many this machine runs at once."
-                : `This machine runs ${machineCap} at once, across every Job.`}
-            </p>
-          </div>
+          <DroneCap
+            {...(settings.droneCap === undefined ? {} : { cap: settings.droneCap })}
+            onCap={(cap) => moved({ droneCap: cap })}
+            machineCap={machineCap}
+            disabled={disabled}
+          />
 
           <Select
             label="How it lands"

@@ -16,6 +16,7 @@ import type { GroupView } from "./group";
 import type { LandingRule } from "./landing";
 import type { LedgerRow } from "./ledger";
 import type { JobMembersView } from "./members";
+import type { ProposalView } from "./proposal";
 
 /**
  * A Job's draft reading. **Every field is absent by default**, and absent
@@ -29,6 +30,14 @@ export type JobDraft = {
   cases?: readonly CaseView[];
   /** What the Job is held to, with where each criterion's words came from. */
   criteria?: readonly CriterionView[];
+  /**
+   * The proposal this Job is at, where it is still at one.
+   *
+   * **The same shape the dispatch form holds one moment earlier** — a title,
+   * a gate per step, the tier map and the two caps — and its `approved_at` is
+   * the whole difference between "yours to change" and "frozen at the press".
+   */
+  proposal?: ProposalView;
   /** Every run of every case, with who ran it and what became of the run. */
   runs?: readonly CaseRunView[];
   /**
