@@ -339,6 +339,8 @@
    group's end. #1536. */
 @import "./compositions/GroupBoundary/GroupBoundary.css";
 @import "./compositions/ImplementBoard/ImplementBoard.css";
+/* A Job at its approval gate, and the same Job frozen one press later. #1541. */
+@import "./compositions/JobProposal/JobProposal.css";
 
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */

@@ -14,6 +14,7 @@
 import type {
   Criterion,
   DeclaredCheck,
+  DeclaredJudge,
   Held,
   JobDetail,
   JobResources,
@@ -245,6 +246,7 @@ export function arcStep(
   label: string,
   ordinal: number,
   checks: DeclaredCheck[] = [],
+  judgeChecks: DeclaredJudge[] = [],
 ): StepDetail {
   return {
     step_id: id,
@@ -253,7 +255,7 @@ export function arcStep(
     state: "not_started",
     checks,
     check_runs: [],
-    judge_checks: [],
+    judge_checks: judgeChecks,
     judged: [],
     flagged: [],
     overridden: false,
@@ -264,14 +266,19 @@ export function arcStep(
   };
 }
 
-/** The four steps, none of them entered. */
+/**
+ * The four steps, none of them entered.
+ *
+ * **Frozen from the workflow rather than written out beside it.** A step's
+ * Checks and what its Judge reads are the workflow's declarations, copied onto
+ * the Job at creation — so a fixture that typed them again would be the one
+ * place the two could disagree, and a screen reading the frozen step would
+ * draw a step declaring nothing.
+ */
 export function arcSteps(): StepDetail[] {
-  return [
-    arcStep("plan", "Plan the change", 1),
-    arcStep("implement", "Implement", 2, [...RUST_CHECKS, ...BRIDGE_CHECKS]),
-    arcStep("tests", "Write tests", 3, BRIDGE_CHECKS),
-    arcStep("handoff", "Review the change", 4),
-  ];
+  return featureWorkflow().steps.map((step, at) =>
+    arcStep(step.step_id, step.label ?? step.step_id, at + 1, step.checks, step.judge_checks),
+  );
 }
 
 /** A step that ran once and advanced. */

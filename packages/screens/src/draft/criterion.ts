@@ -74,3 +74,22 @@ function verifiedByOf(source: string): VerifiedBy {
       return "judge";
   }
 }
+
+/**
+ * Where a criterion's words came from, as a person reads it.
+ *
+ * **One sentence, written once.** Three surfaces say it — the classifying
+ * screen while it is yours to change, the same screen frozen, and Plan — and a
+ * second spelling of "from the issue" is how two of them end up saying
+ * different things about the same line.
+ */
+export function originSaidOf(criterion: CriterionView): string {
+  switch (criterion.origin.origin) {
+    case "issue":
+      return `from ${criterion.origin.ref}`;
+    case "person":
+      return "written by you";
+    default:
+      return "from the prompt";
+  }
+}
