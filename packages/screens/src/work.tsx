@@ -41,6 +41,7 @@ import type { JobBriefProps, JobLogReferenceRow, NotOpened } from "@armada/compo
 import type { ServerState, Watched } from "@armada/protocol";
 import { artifactPath, recordsOf, repoOf } from "@armada/protocol";
 import type { Artifact } from "@armada/protocol";
+import { landBoardDraws } from "./landed";
 import { openArtifact, type OpenArtifact } from "./opening";
 import type { JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
@@ -152,8 +153,16 @@ export function workOf(
   const branch = whole === null ? job.branch : whole.branch;
   const dispatched = branch !== undefined;
   const rows: JobLogReferenceRow[] = [];
+  // **A finished Job draws neither here**: the Land board carries the branch
+  // and the worktree, off this same derivation, and one value drawn twice on
+  // one screen is two values that can disagree (owner, 22 Sep 2026).
+  //
+  // `whole` is the board's own second condition — a finished Job whose read
+  // has not arrived draws the arrangement, and dropping the rows there would
+  // take them off a screen nothing else carries them on.
+  const onTheBoard = whole !== null && landBoardDraws(job);
 
-  if (repo !== null) {
+  if (repo !== null && !onTheBoard) {
     const where = artifactPath("worktree", repo, records, job.id, job.assigned_drone);
     rows.push({
       // `folder` means "workspace" in the registry and this is not one; there
@@ -172,7 +181,7 @@ export function workOf(
     });
   }
 
-  if (branch !== undefined) {
+  if (branch !== undefined && !onTheBoard) {
     // No `open`, and none is coming. A branch is served rather than derived,
     // it is not a path, and copying it is the whole of what it is for.
     rows.push({

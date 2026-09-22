@@ -354,3 +354,5 @@ export * from "./compositions/DispatchSettings/DispatchSettings";
 export * from "./compositions/WhatElseIsRunning/WhatElseIsRunning";
 // The picture a person draws beside a prompt, on the one graph surface. #1547.
 export * from "./compositions/SketchPad/SketchPad";
+// A Job whose members are Jobs — pull requests landing in order. #1543.
+export * from "./compositions/JobMembers/JobMembers";
