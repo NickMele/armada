@@ -484,14 +484,19 @@ glyph.
 
 ### Blast radius
 
+**`layers` means how many places a Job writes**, and nothing else. One
+layer for a Job writing in one place, stacked layers for several — the
+glyph reads as the count it stands for.
+
 `layers` at 12px, at the approval gate and in the detail header only —
-never in a Job Board row. How many places a Job writes is information
-that matters while deciding, and the row already names the first write
-target and counts the rest in text — see
-[Job Board](../concepts/job-board.md). The registry's own entry still
-reads `means = "convoy"`, which is a retired name, and three stories
-draw the same glyph for a Job's workflow instead. See
-`packages/icons/icons.toml`.
+never in a Job Board row. Blast radius is what matters while deciding,
+and the row already names the first write target and counts the rest in
+text — see [Job Board](../concepts/job-board.md).
+
+**It is not the workflow glyph.** A Job's workflow label needs one of its
+own, and does not have one yet; `packages/icons/icons.toml` is where that
+is decided. The registry's entry for `layers` still reads
+`means = "convoy"`, which is a retired name for this same idea.
 
 ### Chrome
 
