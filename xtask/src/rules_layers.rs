@@ -22,11 +22,20 @@
 //! **No TS parser, and the gate keeps no dependencies.** This reads the two
 //! shapes an import has: `from "…"` and `import("…")`.
 
+// The second rule here is the same idea one directory down, and its argument
+// is on [`nothing_in_the_main_process_reads_the_draft_schema`].
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
 use crate::{files_with_ext, Report};
+
+/// Where the drafts live, as a specifier names them and as a path spells them.
+const DRAFT_DIR: &str = "packages/screens/src/draft";
+const DRAFT_SPECIFIER: &str = "@armada/screens/src/draft";
+/// The one file that could put the drafts behind the package name.
+const SCREENS_INDEX: &str = "packages/screens/src/index.ts";
 
 /// The layers, ground up. A package may import a package strictly below it.
 ///
@@ -117,6 +126,73 @@ pub fn every_package_imports_downward(root: &Path) -> Report {
     }
 
     report
+}
+
+/// Nothing under `apps/desktop/src/main/` reads the draft schema.
+///
+/// **The drafts are shapes Fleet does not serve**, kept in
+/// `packages/screens/src/draft/` rather than `@armada/protocol` because a type
+/// invented there is indistinguishable from one Fleet sends. `#1532`, decided
+/// in `#1530`. The main process is the half that holds the connection, so a
+/// draft type reaching it asks a daemon for a field nobody told it about.
+///
+/// **Two checks, and the second is what makes the first worth having.** A
+/// re-export from `packages/screens/src/index.ts` would put every draft behind
+/// `@armada/screens`, which the main process already imports by name, and the
+/// first check would then see nothing at all.
+pub fn nothing_in_the_main_process_reads_the_draft_schema(root: &Path) -> Report {
+    let mut report = Report::new("nothing in the main process reads the draft schema");
+
+    if !root.join(DRAFT_DIR).is_dir() {
+        report.warn(format!(
+            "{DRAFT_DIR} is not on disk. Nothing to keep out of the main process"
+        ));
+        return report;
+    }
+
+    let main = root.join("apps/desktop/src/main");
+    for path in files_with_ext(root, &main, &["ts", "tsx", "mjs"]) {
+        if path.contains("/node_modules/") {
+            continue;
+        }
+        let Ok(text) = fs::read_to_string(root.join(&path)) else {
+            continue;
+        };
+        for spec in specifiers(&text) {
+            if reaches_the_drafts(&spec) {
+                report.fail(format!(
+                    "{path} imports `{spec}`. `{DRAFT_DIR}` holds shapes Fleet does not \
+                     serve, and the main process is what talks to Fleet — a draft type \
+                     there is a field being asked of a daemon that was never told about \
+                     it. Draw it in the renderer, or put it on the wire with its Rust DTO"
+                ));
+            }
+        }
+    }
+
+    match fs::read_to_string(root.join(SCREENS_INDEX)) {
+        Ok(text) => {
+            for spec in specifiers(&text) {
+                if spec.starts_with("./draft") {
+                    report.fail(format!(
+                        "{SCREENS_INDEX} exports `{spec}`. That puts every draft behind \
+                         `@armada/screens`, which the main process imports by name, and \
+                         the check above would then see nothing to refuse. A draft is \
+                         imported by its own path or not at all"
+                    ));
+                }
+            }
+        }
+        Err(_) => report.fail(format!("{SCREENS_INDEX} would not read")),
+    }
+
+    report
+}
+
+/// Whether a specifier resolves into the draft directory, by the package name
+/// or by a relative path that spells it out.
+fn reaches_the_drafts(spec: &str) -> bool {
+    spec.starts_with(DRAFT_SPECIFIER) || spec.contains(DRAFT_DIR)
 }
 
 /// The package a specifier names, which is the first two segments of a scope.

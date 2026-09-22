@@ -12,7 +12,7 @@
 // `ManifestDeclared.base` off the manifest editor's own read (`amending.ts`).
 // That is what this derivation takes, and the gap is worth closing before a
 // landing control ships.
-//
+
 // **`from_ref` and `target` are both here and they are not the same field**
 // (#1530, 22 Sep). They differ when you start from an unmerged branch or land
 // in a long-lived one; today's Fleet cuts from the base and lands in the base,
