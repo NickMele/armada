@@ -436,6 +436,17 @@ commands:
   warm_tests:
     run: cargo nextest run --workspace --no-run --locked
 
+  # Bridge's renderer on a mock Fleet, in a browser, held open so a person can
+  # look around while Jobs land. `evidence:` runs the same command for its own
+  # frames; this is the one a person starts, and `start_server` is what starts
+  # it, so Fleet holds it and knows which checkout it serves.
+  mock:
+    serve: pnpm -C apps/desktop exec vite --config vite.mock.config.ts --port ${port.mock} --strictPort
+    ready: curl -sf http://localhost:${port.mock}
+    links:
+      - url: http://localhost:${port.mock}
+        name: Bridge on a mock Fleet
+
   # The `storybook` Check builds and exits; this holds the port open. `--ci` or
   # a taken port opens a prompt nobody can answer.
   storybook_dev:
