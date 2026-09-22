@@ -5,14 +5,15 @@
 // prose, for `StepBar`'s reason: a count in words is copy, and copy has one
 // owner. So does the rule that decides it.
 
-import type { PlanBoardGroup, PlanBoardProps, PlanBoardTask, PlanBoardTest } from "@armada/components";
+import type { PlanBoardAsk, PlanBoardGroup, PlanBoardProps, PlanBoardTask, PlanBoardTest } from "@armada/components";
 import type { PlanTaskSheetProps, PlanTaskTest, TaskMarkState } from "@armada/components";
-import type { JobDetail } from "@armada/protocol";
+import type { JobDetail, StepDetail } from "@armada/protocol";
 
-import { caseViewsOf, type CaseView } from "./draft/cases";
+import { caseViewsOf, scopeRevisionsOf, type CaseView, type ScopeRevisionView } from "./draft/cases";
 import { criterionViewsOf, type CriterionView } from "./draft/criterion";
 import { taskGroupsOf, type GroupState, type GroupView } from "./draft/group";
 import type { JobDraft } from "./draft/held";
+import { planRevisionsOf, type PlanAskKind, type PlanRevisionView } from "./draft/revision";
 import type { TaskView } from "./draft/task";
 import { money } from "./facts";
 
@@ -39,6 +40,31 @@ export function casesOf(whole: JobDetail | null, draft?: JobDraft): CaseView[] {
 export function criteriaOf(whole: JobDetail | null, draft?: JobDraft): CriterionView[] {
   if (draft?.criteria !== undefined) return [...draft.criteria];
   return whole === null ? [] : criterionViewsOf(whole);
+}
+
+/** The changes asked of the plan's Drone, on the same terms. */
+export function scopeRevisionsCarriedBy(
+  whole: JobDetail | null,
+  draft?: JobDraft,
+): ScopeRevisionView[] {
+  if (draft?.scope_revisions !== undefined) return [...draft.scope_revisions];
+  return whole === null ? [] : scopeRevisionsOf(whole);
+}
+
+/** Each change asked for, paired with the Judge's answer to it. */
+export function revisionsOf(
+  whole: JobDetail | null,
+  draft: JobDraft | undefined,
+  step: StepDetail | undefined,
+): PlanRevisionView[] {
+  const groups = groupsOf(whole, draft);
+  return planRevisionsOf(
+    step,
+    scopeRevisionsCarriedBy(whole, draft),
+    casesOf(whole, draft),
+    groups,
+    criteriaOf(whole, draft),
+  );
 }
 
 /** Every task of every group, in the order the groups run. */
@@ -203,6 +229,77 @@ export function clashesOf(groups: readonly GroupView[]): { path: string; says: s
   return clashes;
 }
 
+/**
+ * What may be asked of the Drone about a group, and what each control is
+ * called. **A plan is a record, so these are requests** — the verb is what a
+ * person wants, and `#1552` is why none of them edits anything.
+ */
+export const ASK_LABEL: Record<PlanAskKind, string> = {
+  move_up: "Move up",
+  move_down: "Move down",
+  remove: "Remove",
+  rewrite: "Rewrite this task",
+};
+
+/** The standing line over the group controls. Once, above the cards. */
+export const ASKS_SAY =
+  "The plan is the Drone's record. Each of these asks it for a different split, and it may refuse.";
+
+/**
+ * The rewrite ask's own words. **Prose, because a rewrite is not a field** —
+ * what a task should be instead is a sentence the Drone reads, and a picker
+ * for each of a task's parts would be editing the record.
+ */
+export const REWRITE_ASK = {
+  label: ASK_LABEL.rewrite,
+  lead: "Say what this task should be instead. The Drone that wrote the plan decides, and it may refuse.",
+  placeholder: "Take the panel's rows out of this one and give them a task of their own",
+  send: "Ask the Drone",
+} as const;
+
+/**
+ * The asks one group offers. **The first group cannot move up and the last
+ * cannot move down**, and both are drawn off rather than left out: a card
+ * whose controls change place as it moves is a card a person has to re-read.
+ */
+export function asksOf(groups: readonly GroupView[], at: number): PlanBoardAsk[] {
+  return [
+    { id: "move_up", label: ASK_LABEL.move_up, disabled: at === 0 },
+    { id: "move_down", label: ASK_LABEL.move_down, disabled: at === groups.length - 1 },
+    { id: "remove", label: ASK_LABEL.remove },
+  ];
+}
+
+/**
+ * Where a reorder would contradict the tasks' declared files.
+ *
+ * **The one mechanical catch there is** (`#1552`). Two groups claiming one
+ * path have an order between them that their own scopes decide, so swapping
+ * that pair is the ask whose consequence can be computed rather than guessed.
+ * Everything else about a split — why these tasks, why this size — is the
+ * Drone's to answer, which is what the ask is for.
+ *
+ * **A warning and not a refusal**, on `clashesOf`'s terms: the reorder is
+ * legal and what it costs is a file written in the other order.
+ */
+export function reorderWarning(
+  groups: readonly GroupView[],
+  groupId: string,
+  ask: PlanAskKind,
+): string | undefined {
+  if (ask !== "move_up" && ask !== "move_down") return undefined;
+  const at = groups.findIndex((one) => one.id === groupId);
+  const other = ask === "move_up" ? at - 1 : at + 1;
+  if (at < 0 || other < 0 || other >= groups.length) return undefined;
+  const moving = groups[at]!;
+  const passed = groups[other]!;
+  const claimed = new Set(passed.scope);
+  const shared = moving.scope.filter((path) => claimed.has(path));
+  if (shared.length === 0) return undefined;
+  const first = at < other ? moving : passed;
+  return `Group ${moving.ordinal} and group ${passed.ordinal} both claim ${shared.join(", ")}. Group ${first.ordinal} writes it first as the plan stands, and this ask reverses that.`;
+}
+
 /** The mark a task's row leads with. `TaskMark` prints no word beside it. */
 export function markOf(state: TaskView["state"]): TaskMarkState {
   return state;
@@ -261,6 +358,7 @@ export function groupCardOf(
   cases: readonly CaseView[],
   touchedBy: Map<string, string>,
   whole: JobDetail | null,
+  asks: readonly PlanBoardAsk[] = [],
 ): PlanBoardGroup {
   const atBoundary = cases.filter((one) => one.groups.includes(group.id));
   const tests = atBoundary.map(testOf);
@@ -284,15 +382,24 @@ export function groupCardOf(
     ...(group.concurrent
       ? { concurrentSays: `${group.tasks.length} tasks run at the same time` }
       : {}),
+    ...(asks.length === 0 ? {} : { asks }),
   };
 }
 
-/** The whole board, from a Job and whatever draft the moment carries. */
+/**
+ * The whole board, from a Job and whatever draft the moment carries.
+ *
+ * `revisable` is whether the plan may still be asked about — the step that
+ * recorded it is waiting on a person, and nothing else is out. **A plan past
+ * its gate draws no controls at all**: it is a record then, and a control
+ * that sends an ask nobody will answer is worse than none.
+ */
 export function planBoardOf(
   whole: JobDetail | null,
   draft: JobDraft | undefined,
   onOpenTask: (taskId: string) => void,
   openTaskId?: string,
+  revisable = false,
 ): PlanBoardProps | undefined {
   const groups = groupsOf(whole, draft);
   if (groups.length === 0) return undefined;
@@ -302,8 +409,11 @@ export function planBoardOf(
   return {
     approach: whole?.work_plan?.approach ?? "",
     orderSays: ORDER_SAID,
-    groups: groups.map((group) => groupCardOf(group, cases, touchedBy, whole)),
+    groups: groups.map((group, at) =>
+      groupCardOf(group, cases, touchedBy, whole, revisable ? asksOf(groups, at) : []),
+    ),
     ...(clashes.length === 0 ? {} : { clashes }),
+    ...(revisable ? { asksSay: ASKS_SAY } : {}),
     ...(openTaskId === undefined ? {} : { openTaskId }),
     onOpenTask,
   };

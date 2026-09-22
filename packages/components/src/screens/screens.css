@@ -1594,3 +1594,69 @@
   gap: var(--space-2);
   align-items: center;
 }
+
+/* What was asked of the plan's Drone, and the answer under each. #1552. */
+.armada-plan-tab__revisions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.armada-plan-tab__revisions > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-plan-tab__asked {
+  margin: 0;
+  color: var(--fg-default);
+  text-wrap: pretty;
+}
+
+/* The answer, in the one hue its outcome earns. Neither is a Job status: a
+   revision refused leaves the Job exactly where it was, so the tokens are the
+   below-Job-level run pair that status.css already declares. */
+.armada-plan-tab__answered {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-plan-tab__answered[data-answer="refused"] {
+  color: var(--run-failed);
+}
+
+.armada-plan-tab__answered[data-answer="taken"] {
+  color: var(--run-passed);
+}
+
+/* What the ask reached. Beneath the refusal, because it is read after it. */
+.armada-plan-tab__reach {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+/* The one mechanical catch, inside the ask's own dialog. --notice-caution is
+   the declared token for a condition to know about and act on, which is a
+   reorder the scopes disagree with. */
+.armada-plan-tab__ask-warning {
+  margin: 0;
+  color: var(--notice-caution);
+  text-wrap: pretty;
+}
+
+/* What a revision takes with it. Caution rather than failure: the ask has not
+   been answered yet, and this is its cost if it stands. */
+.armada-plan-tab__dropped {
+  color: var(--notice-caution);
+}
