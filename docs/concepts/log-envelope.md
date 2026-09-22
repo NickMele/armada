@@ -26,7 +26,7 @@ Identical key names across all three emitters. A key is either present with a va
 | `job_id` | ULID | Once a Job exists | The correlation spine |
 | `drone_id` | ULID | While a Drone executes | A retry is a second `drone_id` under one `job_id` |
 | `step_id` | String | Inside a Workflow step | From the WorkflowDef, not generated |
-| `workspace` | String | When the line concerns exactly one workspace | Single-valued. See the Convoy rule below |
+| `workspace` | String | When the line concerns exactly one workspace | Single-valued. See the rule below |
 | `target`, `span` | String | `fleet` only | Supplied by `tracing` |
 | `fields` | Object | Optional | All structured data. Nothing structured belongs at the top level |
 
@@ -56,13 +56,13 @@ A Drone outlives a Fleet restart under `setsid`, and Bridge runs before it has r
 
 **IDs are fields only.** Any query or `jq` filter targets a field; nothing greps `msg` text. This is the same discipline as `store` being the only crate that deserializes: the structured path is the only path.
 
-## Convoy and `workspace`
+## A line spanning workspaces omits `workspace`
 
-**`workspace` is single-valued and omitted when the line is not scoped to one workspace.** A Convoy-spanning line carries `job_id` and no `workspace`. Why: an array would tax every query on a hot-path field forever, and most lines genuinely concern one workspace or none.
+**`workspace` is single-valued and omitted when the line is not scoped to one workspace.** A line from a Job writing in several of them carries `job_id` and no `workspace`. Why: an array would tax every query on a hot-path field forever, and most lines genuinely concern one workspace or none.
 
 The full set a Job spans is recorded once, as a domain event at Job creation, and is already persisted in `job_manifests`. The absence of `workspace` on a line is itself the signal that the line is Job-scoped rather than workspace-scoped.
 
-This leans on `job_manifests` being the record. If that table is ever dropped, the Convoy workspace set loses its home and this decision reopens.
+This leans on `job_manifests` being the record. If that table is ever dropped, the Job's workspace set loses its home and this decision reopens.
 
 ## Relationship to the existing sinks
 

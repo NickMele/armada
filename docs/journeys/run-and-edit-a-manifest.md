@@ -225,7 +225,7 @@ Verdicts render as words in the status colour, matching Doctor: `gone` and `curr
 
 ## Open questions
 
-- **[runedit-destructive-command-warning]** Across a Convoy, where one Manifest flags a Command destructive and another does not, which flag holds?
+- **[runedit-destructive-command-warning]** Where a Job's gating Manifests disagree — one flags a Command destructive and another does not — which flag holds?
   Most-restrictive-wins is the obvious answer and no page says it. The flag itself is settled as the one field that is a judgement rather than an observation — Scan can only propose it by matching against Kit's destructive defaults, propose-and-confirm, and Verify cannot check it at all, so a person sets it and this surface's edit screen is the only place it can be set.
 
 - **[runedit-no-manifest-state]** What does this surface show when no Manifest exists for the selected project?

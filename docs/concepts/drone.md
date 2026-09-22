@@ -84,7 +84,7 @@ The injected toolset:
 - A brokered secrets scope
 - A dedicated **Armada MCP server**. Every tool is in every toolbelt — submit evidence, declare scope, ask for a path the task's scope does not cover, run this step's Checks, ask a person a question — except dispatch a Job, which is granted rather than given
 
-All of that assumes one owning Manifest. For a Drone working a [Convoy](convoy.md), see the resolution rule below.
+All of that assumes one owning Manifest. For a Drone under several gating Manifests, see the resolution rule below.
 
 Discovery needs nothing from Armada for the MCP half: tools are self-describing, and what the prompt supplies is the obligation a schema cannot state.
 
@@ -94,7 +94,7 @@ Discovery needs nothing from Armada for the MCP half: tools are self-describing,
 
 **The brokered scope never includes a Git credential.** A Drone commits locally, inside its own worktree, and the Drone-facing `VCS` type has no push method at all. Push, pull request and merge are [Fleet](fleet.md)'s, using credentials Fleet holds directly.
 
-**A [Convoy](convoy.md) Drone's single worktree spans every declared Workspace's directory** — still one Drone, one worktree, one branch. Why: every declared Workspace descends from a single root `armada.yml`, so a Convoy is root-Manifest-scoped and cannot span repos, which is what makes one worktree spanning Workspaces ordinary git.
+**A Drone's single worktree spans every declared Workspace's directory** — still one Drone, one worktree, one branch. Why: every declared Workspace descends from a single root `armada.yml`, so a Job cannot span repositories, which is what makes one worktree spanning Workspaces ordinary git. See [Manifest](manifest.md), Cross-Workspace Jobs.
 
 Where a worktree and its log live on disk is in `../contracts/system-architecture.md` section 7. It is not configurable, and is derived rather than stored.
 
@@ -120,9 +120,9 @@ The two fail differently: a harness that cannot inject fails loudly and immediat
 
 **Built-in tools are a separate problem and still open** (see Open questions). `--strict-mcp-config` bounds MCP servers, not the thirty tools the CLI ships with, so the resolution table below governs what Armada grants rather than what the Drone can reach — the part the intersection rule exists to bound.
 
-### Convoy resolution — permissions intersect, knowledge unions
+### Several gating Manifests — permissions intersect, knowledge unions
 
-A Convoy is one Drone under several Manifests, so every injected item needs a rule for what happens when they disagree.
+One Drone under several Manifests needs a rule for every injected item, for what happens when they disagree.
 
 | Injected item | Resolves | Why |
 | --- | --- | --- |
@@ -138,11 +138,11 @@ A Convoy is one Drone under several Manifests, so every injected item needs a ru
 
 **Secrets.** A Drone unable to reach a secret because another Manifest withholds it is a visible, debuggable failure, not a silent scope violation.
 
-**Commands.** `api:migrate` and `billing:migrate` are two commands, not one name with two meanings, so there is nothing to intersect. A Convoy Drone is legitimately working in every gating Workspace and needs their Commands to do the work; intersection is monotone, so it gave the widest Convoy the smallest toolbox. The namespace protects better than the intersection did — a prefixed name cannot be invoked in the belief that it belongs to another Workspace.
+**Commands.** `api:migrate` and `billing:migrate` are two commands, not one name with two meanings, so there is nothing to intersect. The Drone is legitimately working in every gating Workspace and needs their Commands to do the work; intersection is monotone, so it gave the widest Job the smallest toolbox. The namespace protects better than the intersection did — a prefixed name cannot be invoked in the belief that it belongs to another Workspace.
 
 **Ports.** Injecting a port number grants no ability the Drone lacked — it could already bind any port, and the allowlist is blast-radius reduction rather than a sandbox. Colliding `env` names across the Job's Manifest set are rejected at claim time.
 
-**Skills.** A Skill grants the Drone no ability it did not have, so there is no authority to widen and intersection has nothing to protect. Intersecting them would also be near-vacuous — Skills are repo-specific and rarely overlap — leaving a Convoy Drone **less** capable than one working either Workspace alone, which is the opposite of the intent. Contradictions between two Workspaces' Skills are a prompt-quality problem, not a security boundary.
+**Skills.** A Skill grants the Drone no ability it did not have, so there is no authority to widen and intersection has nothing to protect. Intersecting them would also be near-vacuous — Skills are repo-specific and rarely overlap — leaving such a Drone **less** capable than one working either Workspace alone, which is the opposite of the intent. Contradictions between two Workspaces' Skills are a prompt-quality problem, not a security boundary.
 
 **The rule in one line: a permission intersects, knowledge unions.** What intersection protects is *authority* — whether a Drone working under several Manifests ends up holding power no single gating Manifest granted. Instructions grant none, so unioning them widens nothing.
 
@@ -150,7 +150,7 @@ This is the peer axis, Manifest against Manifest. The Kit → Manifest direction
 
 **Commands are the one item on the union side that is still a permission.** Namespacing removed the conflict the intersection existed to resolve, not the authority. The rule still holds for everything sharing a flat namespace; MCP servers are the closest case and were not namespaced.
 
-**The resolution rule is what makes a Convoy Drone spawnable.** Without it, Skills, Sub agents, MCP and Commands are undefined for a Convoy, so there is no boot configuration to spawn against.
+**The resolution rule is what makes such a Drone spawnable.** Without it, Skills, Sub agents, MCP and Commands are undefined wherever a Job's gate list holds more than one Manifest, so there is no boot configuration to spawn against.
 
 ### What's frozen for the Job vs. live
 

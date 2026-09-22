@@ -8,7 +8,7 @@ Design fidelity: drawn. Analysis: Complete. UI/UX design: Complete.
 
 **Trigger:** A dispatched Job needs a Workspace nobody listed, or needs less than was approved. Without this the only lever is killing it and dispatching again.
 
-**Concepts touched:** Job, Convoy, Drone, Workspace, Judge.
+**Concepts touched:** Job, Manifest, Drone, Workspace, Judge.
 
 **Milestone:** Recovery.
 
@@ -123,11 +123,11 @@ The dispatch card in a second mode, on the route a *person* takes. What is appro
 
 **An overlap with another Job is a fact, not a verdict.** Where the added Workspace is one another Job is writing into, approving with a wait re-queues behind it.
 
-## Widening a Convoy makes the Drone weaker
+## Widening makes the Drone weaker
 
-The one case where more scope means less capability, and the only thing on a Convoy's gate a person could not work out alone. **Permissions intersect, and intersection is monotone**, so every Workspace added can only remove capability.
+The one case where more scope means less capability, and the only thing on the gate a person could not work out alone. **Permissions intersect, and intersection is monotone**, so every Workspace added can only remove capability.
 
-| Resolved across the Convoy | Rule |
+| Resolved across the gating Manifests | Rule |
 | --- | --- |
 | Allowlist | Intersection — a tool no added Workspace grants is dropped |
 | Secrets | Intersection |
@@ -135,9 +135,9 @@ The one case where more scope means less capability, and the only thing on a Con
 | Commands | Union, namespaced, so two commands never collapse into one name |
 | Skills, agent file | Union — they are instructions, not permissions |
 
-**A revision can end the shape.** Narrowing to one target, or clearing atomic, stops the Job being a Convoy, so the card states both atomic lines whether or not they differ.
+**Narrowing to one target takes the gating Manifests with it**, so the card states what resolves across them whether or not the set changed.
 
-**A Drone-asked widening changes neither.** It adds paths and touches `atomic` not at all, and the Drone that asked keeps the configuration it was spawned with — so the table above bites on the next Drone rather than on the one holding the session.
+**A Drone-asked widening resolves nothing again.** It adds paths, and the Drone that asked keeps the configuration it was spawned with — so the table above bites on the next Drone rather than on the one holding the session.
 
 ## The record
 
@@ -171,13 +171,13 @@ Everything below is drawn without a source, and each is a decision somebody has 
 
 - **[drone-cannot-request-a-widening]** How does a Drone that needs a path outside the Job's scope ask for one? Filed as #299. **Three of the four things this had to settle are settled**: the Drone does not end on the call, it may ask once per step rather than twice for the same path, and it may not ask to narrow. What is left is the first half — how it asks. The tool takes free paths and free prose, which is what a Drone can produce and what a person can read, and nothing has measured whether a structured reason would be answered better.
 - **[declined-widening-has-no-edge]** What does a Judge refusal leave a person to do? The Job escalates and the Drone is alive and idle, so redirect, restart the step and Pilot all reach it — but **none of them widens the scope**, which is the thing the Drone asked for. A person who agrees with the Drone and disagrees with the Judge has no act that says so: the override lifts `gate_failure` and `evidence_suspect` and this is neither, and the person's own widening route goes through the dispatch gate, which an escalated Job has no edge to. A candidate is making a person's widening legal from `escalated`; the pair it would form with the override is the argument for it.
-- **[widening-and-the-judge-context]** Should a person's widening at the gate warn that a wider diff may exceed the Judge's context? A Convoy is where `max_context_size` bites first.
+- **[widening-and-the-judge-context]** Should a person's widening at the gate warn that a wider diff may exceed the Judge's context? A Job gated by several Manifests is where `max_context_size` bites first.
 - **[scope-revision-on-a-stopped-job]** Is a scope revision legal on an escalated or piloted Job? No edge exists, so it is not offered, and whether that is deliberate is unknown. A Drone's own request cannot arise there — it is refused unless the Job is `running` — so what is open is the person's route, which is also the second half of the question above.
 
 ## Related
 
 - [`../concepts/judge.md`](../concepts/judge.md) — the tier that answers a widening, and what a Judge call is and is not.
 - [`../concepts/job.md`](../concepts/job.md) — the scope history field, the transitions, and the recovery acts this is measured against.
-- [`../concepts/convoy.md`](../concepts/convoy.md) — the permission rules a widening resolves again.
+- [`../concepts/manifest.md`](../concepts/manifest.md) — the permission rules a widening resolves again.
 - [`respond-to-a-push-alert.md`](respond-to-a-push-alert.md) — Redirect, the act that puts a person back on a Job and costs no respawn.
 - [`take-over-a-job.md`](take-over-a-job.md) — the level test this reuses to place the act.
