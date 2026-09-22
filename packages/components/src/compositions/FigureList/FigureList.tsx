@@ -44,26 +44,23 @@ export type Figure = {
 };
 
 /**
- * How wide the label column is.
+ * How wide the label column is — where a value *starts* and so how much room
+ * it has before it clips, not where it sits.
  *
- * Since the values went to the right edge this sets where a value *starts* —
- * how much room it has before it clips — not where it sits.
- *
- * `wide` is two `--space-12`, the column *Where things are* draws, so its
- * labels and Pulse's start on one line. `fit` sizes the column to the longest
- * label, leaving the value every pixel left over: the left column's Fleet
- * panel is 160px at its narrowest, and `171h 55m` needs them.
- *
- * **`strip` is not a column at all** — the label sits over its figure and the
- * figures run across, wrapping as the width allows. A panel column is 160 to
- * 380px wide and a destination is the width of the window: the same rows
- * pushed to a 1000px right edge put a label and its figure two feet apart,
- * which is a pair nobody reads as a pair. #1538.
+ * `wide` is two `--space-12`, the column *Where things are* draws. `fit` sizes
+ * it to the longest label, leaving the value every pixel left over: the Fleet
+ * panel is 160px at its narrowest and `171h 55m` needs them.
  */
 export type FigureColumn = "wide" | "fit" | "strip";
 
 export type FigureListProps = {
   figures: Figure[];
+  /**
+   * **`strip` is not a column at all** — the label sits over its figure and
+   * they run across, wrapping as the width allows. A panel is 160 to 380px
+   * wide and a destination is the width of the window, where the right edge
+   * puts a label and its figure a hand's width apart. #1538.
+   */
   column?: FigureColumn;
 };
 
