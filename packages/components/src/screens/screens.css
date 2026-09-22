@@ -1548,6 +1548,52 @@
   position: relative;
 }
 
+/* Plan — what the Job is held to, and the two acts at a plan gate. The board
+   itself owns its own stylesheet; these two regions are the destination's.
+   #1535. */
+.armada-plan-tab__criteria {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-plan-tab__criteria li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-plan-tab__criterion-text {
+  color: var(--fg-default);
+  text-wrap: pretty;
+}
+
+.armada-plan-tab__criterion-origin {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* The source has moved since the Job froze these words. --notice-caution is
+   the declared token for a condition a person should know about and act on at
+   their own pace, which is exactly an issue edited after approval. */
+.armada-plan-tab__criterion-moved {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--notice-caution);
+}
+
+.armada-plan-tab__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+
 /* Workflow — the canvas or the stacked run, with the inspector beside it.
    Appended, per the rule at the head of `index.css`. #1539.
 

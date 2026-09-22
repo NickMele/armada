@@ -15,7 +15,7 @@ import type { JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import type { ConfirmableAct, HeldAct } from "./Acts";
 import type { ActingAct } from "./pending";
 import { TAB_LABEL } from "./detail-tabs";
-import { taskGroupsOf } from "./draft/group";
+import { taskGroupsOf, type GroupView } from "./draft/group";
 import { ACT_LABEL, HOLD_LABEL, HOLD_SAID } from "./copy";
 import { steeringOf } from "./steering";
 import { stepTheGroupsHangUnder, workflowRunOf } from "./workflow-canvas";
@@ -32,6 +32,13 @@ export type WorkflowTabProps = {
   narrow: boolean;
   view: WorkflowView;
   onView: (view: WorkflowView) => void;
+  /**
+   * The groups the implement step opens into, where this Job's boards were
+   * handed them (`#1532`'s draft, on `JobDetailProps.draft`). **Absent derives
+   * one group per task from what Fleet serves**, which is thinner and never
+   * broken — `draft/group.ts` carries the reasoning.
+   */
+  groups?: readonly GroupView[];
   /** A press is out and Fleet has not answered. */
   acting: boolean;
   actingAct?: ActingAct;
@@ -47,6 +54,7 @@ export function WorkflowTab({
   narrow,
   view,
   onView,
+  groups: given,
   acting,
   actingAct,
   onRedirect,
@@ -81,7 +89,7 @@ export function WorkflowTab({
     );
   }
 
-  const groups = taskGroupsOf(whole);
+  const groups = given ?? taskGroupsOf(whole);
   const groupsUnder = stepTheGroupsHangUnder(whole);
   const run = workflowRunOf({ whole, groups, onOpen: setOpen });
   // **The inspector lands on the step the Job is on**, so the panel is never a

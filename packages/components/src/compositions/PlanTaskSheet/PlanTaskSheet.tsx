@@ -38,9 +38,34 @@ export type PlanTaskSheetProps = {
   expects?: string;
   /** What the work said proved it, written by whoever did it. */
   shown?: string;
+  /**
+   * How hard the planner thought it was, and the model that tier resolved to.
+   * **The planner picks the tier and the model follows** (`#1530`, 22 Sep), so
+   * the pair is drawn in that order and never the model alone.
+   */
+  tier?: string;
+  model?: string;
+  /** How it is run — `its own agent`, `the step's Drone`, `a Job of its own`. */
+  runBy?: string;
+  /** The tasks it runs beside, by id. Empty where it runs alone. */
+  beside?: readonly string[];
+  /** The cases it owes. A case with no spec reads `not covered`, never green. */
+  tests?: readonly PlanTaskTest[];
+  /** Why its own agent stopped. Present on a failed task and on nothing else. */
+  failedReason?: string;
   /** The window is at `--window-floor`. */
   floor?: boolean;
   onClose?: () => void;
+};
+
+/** One case this task owes, and what it reads as. */
+export type PlanTaskTest = {
+  id: string;
+  /** The spec's repository path. */
+  spec: string;
+  reads: "owed" | "not covered" | "dropped";
+  /** What dropped it. Present on `dropped` and on nothing else. */
+  droppedSays?: string;
 };
 
 /**
@@ -65,6 +90,7 @@ const STATE_SAID: Record<TaskMarkState, string> = {
   open: "Open",
   working: "Working",
   done: "Done",
+  failed: "Failed",
   dropped: "Dropped",
 };
 
@@ -79,11 +105,15 @@ export function PlanTaskSheet({
   touched,
   expects,
   shown,
+  tier,
+  model,
+  runBy,
+  beside = [],
+  tests = [],
+  failedReason,
   floor = false,
   onClose,
 }: PlanTaskSheetProps) {
-  const nothing =
-    (note ?? "") === "" && scope.length === 0 && (expects ?? "") === "" && (shown ?? "") === "";
   return (
     <Sheet
       open={open}
@@ -107,11 +137,32 @@ export function PlanTaskSheet({
             <p className="armada-task-sheet__prose">{reason}</p>
           </Field>
         )}
-        {(note ?? "") === "" ? null : (
-          <Field label="Note">
-            <p className="armada-task-sheet__prose">{note}</p>
+        {failedReason === undefined ? null : (
+          <Field label="Its agent stopped">
+            <p className="armada-task-sheet__prose">{failedReason}</p>
           </Field>
         )}
+        {/* The brief, as far as the plan decides it. Fleet composes the rest
+            from the Job, which is why this field says what the plan holds
+            rather than claiming to be the whole prompt. */}
+        <Field label="What its Drone will be told">
+          <p className="armada-task-sheet__prose">
+            {(note ?? "") === "" ? "Its title and the files below, and nothing else." : note}
+          </p>
+        </Field>
+        {tier === undefined || model === undefined ? null : (
+          <Field label="Model">
+            <p className="armada-task-sheet__prose">
+              {tier} · {model}
+              {runBy === undefined ? null : ` · ${runBy}`}
+            </p>
+          </Field>
+        )}
+        <Field label="Runs beside">
+          <p className="armada-task-sheet__prose">
+            {beside.length === 0 ? "Nothing. It runs on its own." : beside.join(", ")}
+          </p>
+        </Field>
         {scope.length === 0 && (touched?.unplanned.length ?? 0) === 0 ? null : (
           <Field label={filesSaid(scope.length, touched)}>
             <ul className="armada-task-sheet__files">
@@ -136,7 +187,10 @@ export function PlanTaskSheet({
           </Field>
         )}
         {(expects ?? "") === "" && (shown ?? "") === "" ? null : (
-          <Field label="Evidence">
+          /* **The planner's expectation, and labelled as one.** The Job's
+             acceptance criteria are a different thing, and `#1274` is why: a
+             Drone never chooses what it is held to. */
+          <Field label="What the planner holds it to">
             {/* **Two rows and never one.** The plan names an artifact before the
                 work starts and the work finds out what actually proved it; the
                 pair disagreeing is what a reader is here for. */}
@@ -150,11 +204,24 @@ export function PlanTaskSheet({
             </dl>
           </Field>
         )}
-        {nothing ? (
-          <p className="armada-task-sheet__absent" role="note">
-            This task says nothing beyond its title.
-          </p>
-        ) : null}
+        <Field label="Tests it owes">
+          {tests.length === 0 ? (
+            <p className="armada-task-sheet__prose">Nothing covers this task.</p>
+          ) : (
+            <ul className="armada-task-sheet__files">
+              {tests.map((test) => (
+                <li key={test.id}>
+                  <span>{test.spec}</span>
+                  {test.reads === "owed" ? null : (
+                    <span className="armada-task-sheet__unreached">
+                      {test.droppedSays ?? test.reads}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Field>
       </div>
     </Sheet>
   );
