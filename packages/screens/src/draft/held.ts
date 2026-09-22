@@ -10,7 +10,7 @@
 // it by this path, never through `@armada/screens`, so the rule that keeps the
 // drafts out of the main process can still see every reach for one.
 
-import type { CaseView } from "./cases";
+import type { CaseView, ScopeRevisionView } from "./cases";
 import type { CriterionView } from "./criterion";
 import type { GroupView } from "./group";
 
@@ -26,4 +26,12 @@ export type JobDraft = {
   cases?: readonly CaseView[];
   /** What the Job is held to, with where each criterion's words came from. */
   criteria?: readonly CriterionView[];
+  /**
+   * The changes asked of the plan's Drone, in the order they were asked.
+   *
+   * **The ask, not the edit** (`#1552`). A plan is the Drone's record, so a
+   * revision is a request whose answer is the Judge's on the step that
+   * recorded it — `draft/revision.ts` pairs the two.
+   */
+  scope_revisions?: readonly ScopeRevisionView[];
 };
