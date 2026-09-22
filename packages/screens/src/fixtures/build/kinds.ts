@@ -18,7 +18,6 @@ import {
   bugWorkflow,
   codeReviewWorkflow,
   designPlanWorkflow,
-  epicWorkflow,
   prototypeWorkflow,
   refactorWorkflow,
   revertWorkflow,
@@ -186,15 +185,4 @@ export const KIND_NAMES: readonly string[] = [
   "design-plan",
   "code-review",
   "epic",
-];
-
-/** Every workflow the kinds name, for a Board that has to serve all of them. */
-export const KIND_WORKFLOWS = [
-  bugWorkflow(BRIDGE_CHECKS),
-  refactorWorkflow(BRIDGE_CHECKS),
-  revertWorkflow(RUST_CHECKS),
-  prototypeWorkflow(),
-  designPlanWorkflow(),
-  codeReviewWorkflow(),
-  epicWorkflow(),
 ];

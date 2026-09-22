@@ -14,6 +14,7 @@ import type {
   WorkflowSummary,
 } from "@armada/protocol";
 import type { JobFixture } from "@armada/screens/src/fixtures/fixture";
+import type { ArcDraft } from "@armada/screens/src/fixtures/build/arc";
 import { repository, workflow } from "@armada/screens/src/fixtures/build/base";
 
 import type { BridgeApi } from "../../../shared/api";
@@ -30,6 +31,15 @@ export type Scenario = {
   reads: Record<string, JobFixture>;
   /** A Job to open on start, the way a pressed notification opens one. */
   opens?: string;
+  /**
+   * What this moment's boards draw that Fleet cannot serve yet.
+   *
+   * **Draft types, held on the scenario rather than on a read** — no operation
+   * answers them, so there is no read to hold them on. A board built in this
+   * milestone takes them as props; when a shape is promoted (#1545) it moves
+   * onto the fixture's own reads and this field loses a key.
+   */
+  draft?: ArcDraft;
   /**
    * The Studios this scenario's Fleet keeps. **Every scenario answers the Studio reads and
    * writes** (#1341), so one that names none keeps an empty list and the surface draws its empty

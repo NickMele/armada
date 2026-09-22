@@ -107,5 +107,5 @@ export const FIXTURES = [
 
 export { ARC_MOMENTS, arcMoment } from "./arc";
 export type { ArcDraft, ArcMoment } from "./arc";
-export { KIND_FIXTURES, KIND_NAMES, KIND_WORKFLOWS } from "./kinds";
+export { KIND_FIXTURES, KIND_NAMES } from "./kinds";
 export { epicWave, membersMerged, membersStacked } from "./waves";
