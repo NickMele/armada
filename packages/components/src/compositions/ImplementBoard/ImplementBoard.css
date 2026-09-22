@@ -1,0 +1,223 @@
+/* The implement step, opened — groups, each opening into its tasks.
+
+   Every track carries a floor rather than a width: this is read at 768 and at
+   2000, with Helm's dock taking 380px out of either. #1536. */
+.armada-implement {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-implement__order {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+.armada-implement__groups {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-implement__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  min-width: 0;
+}
+
+/* The group that is moving takes the edge, the way the running step's card
+   does on the canvas. Hue below Job level only where status.css declares it. */
+.armada-implement__group[data-state="running"],
+.armada-implement__group[data-state="joining"],
+.armada-implement__group[data-state="checking"] {
+  border-color: var(--step-running);
+}
+
+.armada-implement__group[data-state="failed"],
+.armada-implement__group[data-state="retrying"] {
+  border-color: var(--run-failed);
+}
+
+.armada-implement__group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.armada-implement__fold {
+  flex: none;
+  align-self: center;
+  color: var(--fg-subtle);
+}
+
+.armada-implement__group-name {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}
+
+.armada-implement__state {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+.armada-implement__state[data-state="running"],
+.armada-implement__state[data-state="joining"],
+.armada-implement__state[data-state="checking"] {
+  color: var(--step-running);
+}
+
+.armada-implement__state[data-state="passed"],
+.armada-implement__state[data-state="landed"] {
+  color: var(--step-advanced);
+}
+
+.armada-implement__state[data-state="failed"],
+.armada-implement__state[data-state="retrying"] {
+  color: var(--run-failed);
+}
+
+/* The shape absorbs the slack so the bar lands in one deliberate place
+   rather than the row spreading its values apart. */
+.armada-implement__shape {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-implement__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-implement__tasks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-implement__task {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  min-width: 0;
+}
+
+.armada-implement__task-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.armada-implement__task-head > .armada-task-mark {
+  align-self: center;
+}
+
+.armada-implement__task-head[aria-current="true"] .armada-implement__task-title {
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}
+
+.armada-implement__task-id {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-implement__task-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  text-wrap: pretty;
+}
+
+.armada-implement__task-says {
+  flex: none;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+.armada-implement__task-notes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  padding-inline-start: var(--space-4);
+  min-width: 0;
+}
+
+.armada-implement__task-beside {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* The flag. --instrument-outside-plan is the declared token for work that
+   reached past where it was meant to, which is exactly this claim. */
+.armada-implement__task-touched {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--instrument-outside-plan);
+}
+
+.armada-implement__task-failed {
+  margin: 0;
+  padding-inline-start: var(--space-4);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}

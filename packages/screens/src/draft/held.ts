@@ -62,4 +62,14 @@ export type JobDraft = {
    * members at all.
    */
   members?: JobMembersView;
+  /**
+   * What was settled at the approval gate, and frozen there — the tier map,
+   * the gates and how many Drones this Job may run at once (`#1550`).
+   *
+   * **Read after approval as well as at it.** A group running two tasks at the
+   * same time is bounded by this number, so the board that draws the group
+   * draws the bound beside it rather than leaving a person to find it on a
+   * screen they have already left.
+   */
+  proposal?: ProposalView;
 };

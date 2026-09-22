@@ -335,6 +335,10 @@
 @import "./compositions/DispatchSettings/DispatchSettings.css";
 @import "./compositions/WhatElseIsRunning/WhatElseIsRunning.css";
 
+/* The implement step opened — its groups, their tasks, and what ran at each
+   group's end. #1536. */
+@import "./compositions/GroupBoundary/GroupBoundary.css";
+@import "./compositions/ImplementBoard/ImplementBoard.css";
 /* A Job at its approval gate, and the same Job frozen one press later. #1541. */
 @import "./compositions/JobProposal/JobProposal.css";
 

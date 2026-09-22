@@ -479,39 +479,174 @@ describe("the plan", () => {
 });
 
 describe("implement", () => {
-  it.todo(
+  test(
     "arc/executing-sequential: groups one and two read passed with the commit each left, " +
       "group three is working, and group four has not started",
+    async () => {
+      await at("arc/executing-sequential", "Workflow");
+
+      await expect.element(runGroup(1)).toHaveTextContent("passed");
+      await expect.element(runGroup(1)).toHaveTextContent("4c1b9d2");
+      await expect.element(runGroup(2)).toHaveTextContent("passed");
+      await expect.element(runGroup(2)).toHaveTextContent("7a2f0c5");
+      await expect.element(runGroup(3)).toHaveTextContent("working");
+      await expect.element(runGroup(4)).toHaveTextContent("not started");
+      // One group at a time is the rule, and this line is its only evidence.
+      await expect.element(page.getByText(/No task of the next group starts/)).toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/executing-sequential: the working task shows its turns and no cost, because its " +
       "agent has not stopped",
+    async () => {
+      await at("arc/executing-sequential", "Workflow");
+
+      // Group three is the one moving, so it opens itself.
+      await expect.element(runTask("T5")).toHaveTextContent("14 turns");
+      await expect.element(runTask("T5")).not.toHaveTextContent("$");
+    },
   );
-  it.todo(
+
+  test(
     "arc/executing-sequential: every finished task shows what it cost, including the ones in " +
       "a group that has already passed",
+    async () => {
+      await at("arc/executing-sequential", "Workflow");
+      await openGroup(1);
+      await openGroup(2);
+
+      await expect.element(runTask("T1")).toHaveTextContent("34 turns · ~$2.40");
+      await expect.element(runTask("T2")).toHaveTextContent("12 turns · ~$0.64");
+      await expect.element(runTask("T3")).toHaveTextContent("8 turns · ~$0.26");
+      await expect.element(runTask("T4")).toHaveTextContent("9 turns · ~$0.31");
+    },
   );
-  it.todo(
+
+  test(
     "arc/executing-concurrent: T5 and T6 are drawn as having run at the same time, each with " +
       "its own agent, and group three reads joining",
+    async () => {
+      await at("arc/executing-concurrent", "Workflow");
+
+      await expect.element(runGroup(3)).toHaveTextContent("joining its work");
+      await expect.element(runGroup(3)).toHaveTextContent("2 tasks, at the same time");
+      // What bounds the fan out, settled at the gate — `#1550`.
+      await expect.element(runGroup(3)).toHaveTextContent("this Job runs 2 Drones at once");
+      await expect.element(runTask("T5")).toHaveTextContent("its own agent");
+      await expect.element(runTask("T5")).toHaveTextContent("runs beside T6");
+      await expect.element(runTask("T6")).toHaveTextContent("its own agent");
+      await expect.element(runTask("T6")).toHaveTextContent("runs beside T5");
+    },
   );
-  it.todo(
+
+  test(
     "arc/executing-concurrent: both tasks show a cost the moment their own agent stopped, " +
       "before their group has been checked",
+    async () => {
+      await at("arc/executing-concurrent", "Workflow");
+
+      await expect.element(runTask("T5")).toHaveTextContent("27 turns · ~$1.90");
+      await expect.element(runTask("T6")).toHaveTextContent("15 turns · ~$0.72");
+      // The boundary has not run, and the two costs are on screen anyway.
+      const boundary = runGroup(3).getByRole("region", { name: "Checks at this boundary" });
+      await expect.element(boundary).toHaveTextContent("7 checks will run at this boundary");
+      await expect.element(boundary).toHaveTextContent("not run");
+    },
   );
-  it.todo(
+
+  test(
     "arc/group-failed: group three reads failed with the one Check that failed named, and " +
       "says this is its second run",
+    async () => {
+      await at("arc/group-failed", "Workflow");
+
+      await expect.element(runGroup(3)).toHaveTextContent("failed at its checks");
+      const boundary = runGroup(3).getByRole("region", { name: "Checks at this boundary" });
+      await expect.element(boundary).toHaveTextContent("screens_test failed");
+      await expect.element(boundary).toHaveTextContent("second run");
+      // What the next Drone is given is the Check's own output, not a summary.
+      await expect.element(boundary).toHaveTextContent("1 of 1384 failed");
+      // One group at a time, named with the group this one is holding back.
+      await expect.element(boundary).toHaveTextContent("No task of group 4 starts");
+    },
   );
-  it.todo(
+
+  test(
     "arc/group-failed: the six Checks that passed are drawn beside the one that did not, " +
       "rather than the group reading red with nothing said",
+    async () => {
+      await at("arc/group-failed", "Workflow");
+
+      const checks = runGroup(3)
+        .getByRole("region", { name: "Checks at this boundary" })
+        .getByRole("listitem");
+      // Every Check the boundary declares has a row, and exactly one is red.
+      await expect.poll(() => checks.all().length).toBe(7);
+      const reads = () => checks.all().map((one) => one.element().getAttribute("data-reads"));
+      expect(reads().filter((one) => one === "failed")).toHaveLength(1);
+      expect(reads().filter((one) => one === "passed")).toHaveLength(6);
+      await expect.element(checks.filter({ hasText: "typecheck" }).first()).toHaveTextContent("passed");
+    },
   );
-  it.todo(
+
+  test(
     "arc/done-touched: T6 still reads done and carries a flag saying a later task edited the " +
       "file it had finished, and T7 is named as the task that did",
+    async () => {
+      await at("arc/done-touched", "Workflow");
+      // Group three passed, so it is folded — a done task is read by opening it.
+      await openGroup(3);
+
+      await expect.element(runTask("T6")).toHaveTextContent("touched later · T7");
+      await expect.element(runTask("T6").getByText("Done")).toBeInTheDocument();
+      await expect.element(runGroup(3)).toHaveTextContent("passed");
+      // And the task that did it is still working, with turns and no cost.
+      await expect.element(runTask("T7")).toHaveTextContent("6 turns");
+      await expect.element(runTask("T7")).not.toHaveTextContent("$");
+    },
+  );
+
+  test(
+    "arc/executing-sequential: a task opens into what its Drone was told, what it may touch, " +
+      "what it runs beside, and a redirect addressed to that task's own Drone",
+    async () => {
+      await at("arc/executing-sequential", "Workflow");
+      await runTask("T5").getByRole("button").first().click();
+
+      const panel = page.getByRole("region", { name: /^T5 · .*, task$/ });
+      await expect.element(panel).toBeVisible();
+      await expect.element(panel).toHaveTextContent("Its agent is working");
+      await expect.element(panel).toHaveTextContent("14 turns");
+      await expect.element(panel).toHaveTextContent("Running.tsx");
+      await expect
+        .element(panel.getByRole("region", { name: "What its Drone was told" }))
+        .toHaveTextContent("The panel lists Drones");
+      await expect
+        .element(panel.getByRole("region", { name: "Redirect" }))
+        .toHaveTextContent("Drone on T5");
+      // Hold to stop this task, in the same panel as the reading. #1536.
+      await expect.element(panel.getByRole("button", { name: /^Hold to/ })).toBeVisible();
+    },
   );
 });
+
+/** One group of the implement step, on the run, by the heading it carries. */
+const runGroup = (ordinal: number) =>
+  page
+    .getByRole("list", { name: "The groups of this step, in the order they run" })
+    .getByRole("listitem")
+    .filter({ hasText: new RegExp(`^Group ${ordinal}`) })
+    .first();
+
+/** One task's row on the run, by the name the board gives it. */
+const runTask = (id: string) => page.getByRole("listitem", { name: new RegExp(`^${id} `) });
+
+/** Open a group that is not the one moving, the way a person opens it. */
+async function openGroup(ordinal: number): Promise<void> {
+  const head = runGroup(ordinal).getByRole("button", { name: new RegExp(`^Group ${ordinal}`) }).first();
+  if (head.element().getAttribute("aria-expanded") === "false") await head.click();
+}
 
 describe("the Record", () => {
   test(
