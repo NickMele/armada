@@ -91,16 +91,48 @@ export const Dropped: Story = {
 };
 
 /**
- * A task that names no files and no evidence. **It says so rather than drawing
- * four empty labels** — the fields are optional by design, and a planner who
- * does not know a task's paths yet is not making a mistake.
+ * A task that names no files and no evidence. **The three fields a Drone is
+ * dispatched on are still drawn**, because absent is an answer there: what it
+ * will be told, what it runs beside and what covers it are the reading a
+ * person approves a plan by, and a blank where one should be is the finding.
  */
 export const NothingBeyondTheTitle: Story = {
   args: { id: "T7", title: "Cover the four states the definition of done names", state: "open" },
   play: async ({ canvasElement }) => {
     const sheet = within(canvasElement);
-    await expect(sheet.getByRole("note")).toHaveTextContent("says nothing beyond its title");
-    await expect(sheet.queryByText("Evidence")).toBeNull();
+    await expect(sheet.getByText("Its title and the files below, and nothing else.")).toBeVisible();
+    await expect(sheet.getByText("Nothing. It runs on its own.")).toBeVisible();
+    await expect(sheet.getByText("Nothing covers this task.")).toBeVisible();
+    await expect(sheet.queryByText("What the planner holds it to")).toBeNull();
+  },
+};
+
+/**
+ * Everything the split added: the tier the planner gave it, the agent it gets,
+ * what it runs beside, and a case with no spec that reads **not covered**
+ * rather than green. `#1535`.
+ */
+export const ItsOwnAgent: Story = {
+  args: {
+    id: "T6",
+    title: "Open a Drone's Job from its row",
+    state: "failed",
+    scope: ["packages/screens/src/running-rows.tsx"],
+    tier: "medium",
+    model: "sonnet",
+    runBy: "its own agent",
+    beside: ["T5"],
+    failedReason: "The row's press opened the Board rather than the Job",
+    tests: [
+      { id: "c-panel", spec: "packages/screens/src/Running.test.tsx", reads: "owed" },
+      { id: "c-board", spec: "packages/screens/src/Board.test.tsx", reads: "not covered" },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const sheet = within(canvasElement);
+    await expect(sheet.getByText("medium · sonnet · its own agent")).toBeVisible();
+    await expect(sheet.getByText("T5")).toBeVisible();
+    await expect(sheet.getByText("not covered")).toBeVisible();
   },
 };
 

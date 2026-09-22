@@ -51,6 +51,7 @@ import { Manifest, useManifestEditing, useManifestForm } from "@armada/screens";
 import { Setup, useSetup } from "@armada/screens";
 import { Locate, LocatedNotice, useLocate } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
+import type { JobDraft } from "@armada/screens/src/draft/held";
 import { Jobs } from "@armada/screens";
 import { type BoardReach, type BoardTab } from "@armada/screens";
 import { failingIn } from "./failing";
@@ -142,7 +143,16 @@ const TICK_MS = 1000;
 /** Re-exported so nothing importing it has to learn a new path. */
 export const WAITING: BridgeState = NOTHING_YET;
 
-export function App() {
+/**
+ * What the window is handed that Fleet does not serve yet — `#1532`'s draft
+ * schema, imported by its own path so the rule keeping it out of the main
+ * process can still see the reach. **Only the mock ever fills it**: a real
+ * Bridge mounts `<App />` with nothing, and every destination that takes a
+ * draft derives what today's wire can answer instead. It goes at `#1545`.
+ */
+export type AppProps = { draft?: JobDraft };
+
+export function App({ draft }: AppProps = {}) {
   const [state, setState] = useState<BridgeState>(WAITING);
   // What has been read and acknowledged. The count itself belongs to the
   // connection and is never reset from here — a drop that happened, happened.
@@ -715,6 +725,7 @@ export function App() {
             <Boundary key={reading.id} region="the job detail" {...guarded}>
               <JobDetail
                 job={reading}
+                {...(draft === undefined ? {} : { draft })}
                 onReadDiff={readDiff}
                 onOpenArtifact={openArtifact}
                 onOpenPullRequest={openPullRequest}
