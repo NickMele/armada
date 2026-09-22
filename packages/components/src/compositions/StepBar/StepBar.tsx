@@ -34,12 +34,9 @@ import type { StepActivity } from "../StepActivityMark/StepActivityMark";
  * (`remaining`/`current`/`past`) because the drawing wants one segment
  * grammar, not because a task's state is a position.
  *
- * **`failed` is the fourth, and it is a claim rather than a weight.** A group's
- * boundary draws one segment per Check, and the Check that failed is the whole
- * reading of that boundary — given a `past` segment it would be
- * indistinguishable from the six beside it that passed. It takes
- * `--step-failed`, which this bar already declares for a step's own activity.
- * `#1536`.
+ * **`failed` is a claim rather than a weight**, and it is what a boundary's
+ * Check takes: given `past` it would read as one of the six beside it that
+ * passed. `#1536`.
  */
 export type TaskBarSegment = "open" | "working" | "done" | "failed";
 
