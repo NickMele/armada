@@ -336,3 +336,7 @@ export * from "./compositions/StudioFrameSheet/StudioFrameSheet";
 // above the runner. #1383.
 export * from "./compositions/DriftSheet/DriftSheet";
 export * from "./compositions/VerifySheet/VerifySheet";
+// The dispatch form's optional settings, and what else is writing where a
+// request would. #1540.
+export * from "./compositions/DispatchSettings/DispatchSettings";
+export * from "./compositions/WhatElseIsRunning/WhatElseIsRunning";

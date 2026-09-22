@@ -1,0 +1,120 @@
+/* Dispatch settings — four overrides, none of which has to be touched.
+ *
+ * It is a section of the request card rather than a card of its own: a second
+ * surface would say these are a second decision, and they are the same one. So
+ * no glass, no shadow, and the only edge is the rule that separates the head
+ * from what is above it. */
+.armada-dispatch-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  /* The tier row reads its own width rather than the window's: this block is
+     drawn in a card that is one of two columns at one width and the whole pane
+     at another. */
+  container-type: inline-size;
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+/* The disclosure. A full-width row rather than a control beside a label: the
+   whole line is the target, the way a tree row is. */
+.armada-dispatch-settings__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-align: start;
+  cursor: pointer;
+}
+
+.armada-dispatch-settings__head:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+.armada-dispatch-settings__mark {
+  flex: none;
+  color: var(--fg-muted);
+}
+
+.armada-dispatch-settings__name {
+  min-width: 0;
+  font-weight: var(--weight-medium);
+}
+
+/* How many are set, at the trailing edge — what makes a closed block worth
+   leaving closed. */
+.armada-dispatch-settings__count {
+  flex: none;
+  margin-inline-start: auto;
+  color: var(--fg-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+.armada-dispatch-settings__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.armada-dispatch-settings__lede,
+.armada-dispatch-settings__said {
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  text-wrap: pretty;
+}
+
+.armada-dispatch-settings__said {
+  color: var(--fg-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+.armada-dispatch-settings__tiers,
+.armada-dispatch-settings__cap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The label a field group takes, matching a single field's own. */
+.armada-dispatch-settings__label {
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+}
+
+/* Three tiers across, in equal tracks that give up width together — a tier is
+   read against the other two, so one of them growing to fit a longer model
+   name would put the three at three sizes for no difference in kind. */
+.armada-dispatch-settings__tier-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Where three fields stop being fields — below this the row is three carets
+   and no names, which is what the narrow window is for. */
+@container (max-width: 480px) {
+  .armada-dispatch-settings__tier-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
