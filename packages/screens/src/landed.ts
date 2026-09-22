@@ -269,7 +269,9 @@ function leftBehindOf(
   const branch = whole.branch ?? job.branch;
   const worktree = holding?.worktree;
   const repo = repoOf(manifest);
-  const records = recordsOf(manifest) ?? "";
+  // The record is under the Manifest's own records root, so an unread Manifest
+  // is a row with nothing to name rather than a path rooted at `/`.
+  const records = recordsOf(manifest);
   // `folder` means workspace in the registry and a worktree has no row of its
   // own — `work.tsx` names the same gap on the same row rather than inventing
   // a glyph. `file` is the log row's, which is what a Job's record is.
@@ -292,7 +294,7 @@ function leftBehindOf(
     {
       name: "Record",
       mark: "log",
-      ...(repo === null
+      ...(records === null || repo === null
         ? { absent: "No Manifest was read for this Job, so its record has no home to name." }
         : { value: artifactPath("log", repo, records, job.id, job.assigned_drone) }),
     },
