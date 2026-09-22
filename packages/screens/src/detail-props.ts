@@ -19,6 +19,7 @@
 // and `Render` from their own modules.
 
 import type { ActAnswer, ActingAct, DecidingAct } from "./pending";
+import type { WorkflowView } from "./workflow-view";
 
 import type {
   CommandAnswer,
@@ -54,6 +55,13 @@ import type { OpenStudioFrom } from "./work";
 
 export type JobDetailProps = {
   job: JobSummary;
+  /**
+   * Every Job Bridge is holding, which is where the members of this one come
+   * from: a row whose `dispatched_by` names it. **Absent is a caller with no
+   * Board** — a story or a harness — and draws no members rather than none.
+   * `#1543`.
+   */
+  board?: readonly JobSummary[];
   /** `GET /jobs/:job_id` for this Job, as main published it. */
   watched: Watched;
   workflows: readonly WorkflowSummary[];
@@ -349,6 +357,14 @@ export type JobDetailProps = {
    */
   whereOpen: boolean;
   onOpenWhere: (open: boolean) => void;
+  /**
+   * Which arrangement the Workflow tab is in — canvas or stacked, canvas by
+   * default (#1530, 21 Sep). **Remembered per viewer and not per Job**, so it
+   * is the caller's to keep, the way `whereOpen` is; this package stays free
+   * of Electron and of storage.
+   */
+  workflowView?: WorkflowView;
+  onWorkflowView?: (view: WorkflowView) => void;
   /**
    * Open the composer — `n` in `actions.toml`, scope `anywhere`. **The Board's
    * own key, answered here too**: `new_job` is the one contextual act that

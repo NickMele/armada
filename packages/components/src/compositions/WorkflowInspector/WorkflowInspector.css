@@ -1,0 +1,124 @@
+/* One step or group of a Job's workflow, read whole. A column of regions, the
+   grammar the run column already uses — see `tab-record.tsx` on why two
+   segmented controls stacked read as one broken one. */
+.armada-wf-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.armada-wf-inspector__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-wf-inspector__name {
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}
+
+/* What it is doing now. A sentence, so it wraps. */
+.armada-wf-inspector__doing {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+}
+
+.armada-wf-inspector__region {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The label above a region, in `screens.css`'s own caps — this component draws
+   its regions itself rather than reaching for a screen's class. */
+.armada-wf-inspector__eyebrow {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--fg-subtle);
+}
+
+.armada-wf-inspector__absent {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-subtle);
+}
+
+.armada-wf-inspector__tasks,
+.armada-wf-inspector__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.armada-wf-inspector__task {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+}
+
+.armada-wf-inspector__task-name {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+.armada-wf-inspector__values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/* A task a later task edited after it finished. It stays done — the flag is
+   the whole of what changed. */
+.armada-wf-inspector__flag {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+/* A Check or a case: its name, and what it came to, on one line. */
+.armada-wf-inspector__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-wf-inspector__row-name {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Which Drone the box reaches, where there is only one and so no picker. */
+.armada-wf-inspector__reaches {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-subtle);
+}
+
+.armada-wf-inspector__acts {
+  display: flex;
+  justify-content: flex-start;
+}

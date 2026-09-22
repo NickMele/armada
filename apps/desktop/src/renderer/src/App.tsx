@@ -128,6 +128,7 @@ import {
 } from "./commands";
 import { useDrafted } from "./drafted";
 import { useWhereOpen } from "./where-open";
+import { useWorkflowView } from "./workflow-view";
 import { usePanelOpen } from "./panel-open";
 import { statsOf, fleetPanelOf } from "./left-column";
 import { useCommandPalette } from "@armada/shell";
@@ -265,6 +266,8 @@ export function App({ draft }: AppProps = {}) {
   // Where things are' own open choice — held locally so a press moves it at
   // once, `#927`'s round trip off the critical path of a toggle.
   const [whereOpen, pressWhereOpen] = useWhereOpen(state.preferences.where_things_are_open);
+  // Canvas or stacked on the Workflow tab. This window's own, and remembered.
+  const [workflowView, pressWorkflowView] = useWorkflowView();
   // The left column's own fold, remembered across a restart — Bridge/1088.
   const [statsOpen, setStatsOpen] = usePanelOpen("stats");
   const [fleetOpen, setFleetOpen] = usePanelOpen("fleet");
@@ -728,6 +731,9 @@ export function App({ draft }: AppProps = {}) {
             <Boundary key={reading.id} region="the job detail" {...guarded}>
               <JobDetail
                 job={reading}
+                // Every Job, not the picked repository's: a member dispatched
+                // by this one is still its member while the rail is filtered.
+                board={state.jobs}
                 {...(draft === undefined ? {} : { draft })}
                 onReadDiff={readDiff}
                 onOpenArtifact={openArtifact}
@@ -831,6 +837,8 @@ export function App({ draft }: AppProps = {}) {
                 onSaid={setTelling}
                 whereOpen={whereOpen}
                 onOpenWhere={pressWhereOpen}
+                workflowView={workflowView}
+                onWorkflowView={pressWorkflowView}
                 // `n` — the same composer every contextual surface opens.
                 onCompose={() => setComposing(true)}
                 // The run sheet — Journey 9 — and the servers it starts.

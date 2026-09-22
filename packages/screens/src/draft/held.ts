@@ -10,10 +10,12 @@
 // it by this path, never through `@armada/screens`, so the rule that keeps the
 // drafts out of the main process can still see every reach for one.
 
-import type { CaseView } from "./cases";
+import type { CaseRunView, CaseView, ScopeRevisionView } from "./cases";
 import type { CriterionView } from "./criterion";
 import type { GroupView } from "./group";
 import type { LandingRule } from "./landing";
+import type { LedgerRow } from "./ledger";
+import type { JobMembersView } from "./members";
 import type { ProposalView } from "./proposal";
 
 /**
@@ -36,6 +38,28 @@ export type JobDraft = {
    * the whole difference between "yours to change" and "frozen at the press".
    */
   proposal?: ProposalView;
-  /** How the work reaches the repository. Set here, frozen with everything else. */
+  /** Every run of every case, with who ran it and what became of the run. */
+  runs?: readonly CaseRunView[];
+  /**
+   * How this Job's work reaches the repository, and what completes it. Read by
+   * Land, and by the landing-order region for its complete-when line.
+   */
   landing?: LandingRule;
+  /** The Record's rows. The Land board times a group by the ones inside it. */
+  record?: readonly LedgerRow[];
+  /**
+   * The changes asked of the plan's Drone, in the order they were asked.
+   *
+   * **The ask, not the edit** (`#1552`). A plan is the Drone's record, so a
+   * revision is a request whose answer is the Judge's on the step that
+   * recorded it — `draft/revision.ts` pairs the two.
+   */
+  scope_revisions?: readonly ScopeRevisionView[];
+  /**
+   * The Jobs landing under this one, in the order they land. **Absent is a Job
+   * that says nothing about members** — a board handed none derives what the
+   * Board's own rows can answer (`jobMembersOf`), and an ordinary Job has no
+   * members at all.
+   */
+  members?: JobMembersView;
 };

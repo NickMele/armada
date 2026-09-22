@@ -502,7 +502,7 @@ function didNotPass(run: CheckRun): boolean {
  * The word is `enum-verbs.toml`'s, through `STEP_STATE`; a state this build's
  * registry has no row for falls back to its own wire spelling.
  */
-function stateOf(step: StepDetail): string {
+export function stateOf(step: StepDetail): string {
   return STEP_STATE[step.state]?.verb ?? step.state;
 }
 
@@ -528,7 +528,7 @@ const ACTIVITIES: readonly StepActivity[] = [
   "stopped",
 ];
 
-function activityOf(state: string): StepActivity {
+export function activityOf(state: string): StepActivity {
   return ACTIVITIES.find((known) => known === state) ?? "not_started";
 }
 

@@ -7,7 +7,7 @@
 // **This file is the screen, not a tab.** It reads the Job whole, draws the
 // header, the standing callout and the strip, and hands each tab what it needs.
 // What a tab holds is that tab's own module: `tab-overview.tsx`,
-// `tab-record.tsx`, `tab-pulse.tsx`, `tab-awaited.tsx`.
+// `tab-workflow.tsx`, `tab-plan.tsx`, `tab-record.tsx`, `tab-pulse.tsx`.
 
 import { JobDetailHeaderActions, type JobResourcesProps } from "@armada/components";
 import { useReducer, useState } from "react";
@@ -31,13 +31,15 @@ import {
 import { pulseViewOf } from "./draft/pulse";
 import { NO_SHEET, sheetMoved } from "./Sheets";
 import type { JobDetail as JobWhole } from "@armada/protocol";
-import { AwaitedTab } from "./tab-awaited";
 import { OverviewTab } from "./tab-overview";
 import { ProposalTab } from "./tab-proposal";
 import { proposalEditsOf } from "./tab-proposal-read";
 import { PlanTab } from "./tab-plan";
 import { PulseTab } from "./tab-pulse";
 import { RecordTab } from "./tab-record";
+import { WorkflowTab } from "./tab-workflow";
+import { whyNoSteps } from "./run";
+import { FIRST_WORKFLOW_VIEW } from "./workflow-view";
 import { ledgerOf } from "./draft/ledger";
 
 export type { ConfirmableAct, HeldAct, JobAct } from "./Acts";
@@ -116,6 +118,11 @@ function OneJob(props: JobDetailProps) {
   const narrow = useNarrow();
   const floor = useAtFloor();
 
+  // Why the Workflow tab has no run to draw, where it has none. The same
+  // reading Overview's run column takes, so the two never give a Job's empty
+  // workflow two different reasons.
+  const absent = whyNoSteps(props.watched, props.job.id);
+
   // The Job header, and everything that goes in it. `heading.tsx` holds what
   // it is made of — the badge, the facts, the acts that end or replace the Job,
   // and the way out to the pull request — which is where the next thing added
@@ -192,6 +199,21 @@ function OneJob(props: JobDetailProps) {
           onRaising={setRaising}
           onRaisingTurns={setRaisingTurns}
         />
+      ) : tab === "workflow" ? (
+        <WorkflowTab
+          job={job}
+          whole={whole}
+          {...(absent === undefined ? {} : { absent })}
+          narrow={narrow}
+          view={props.workflowView ?? FIRST_WORKFLOW_VIEW}
+          onView={(view) => props.onWorkflowView?.(view)}
+          acting={props.acting}
+          {...(props.actingAct === undefined ? {} : { actingAct: props.actingAct })}
+          {...(props.draft?.groups === undefined ? {} : { groups: props.draft.groups })}
+          onRedirect={props.onRedirect}
+          onAct={props.onAct}
+          onActHeld={props.onActHeld}
+        />
       ) : tab === "plan" ? (
         <PlanTab
           job={job}
@@ -213,10 +235,8 @@ function OneJob(props: JobDetailProps) {
           onReadCheckOutput={props.onReadCheckOutput}
           onSaid={props.onSaid}
         />
-      ) : tab === "pulse" ? (
-        <PulseTab holds={pulseOf(props, whole, job.id)} />
       ) : (
-        <AwaitedTab tab={tab} />
+        <PulseTab holds={pulseOf(props, whole, job.id)} />
       )}
     </div>
   );

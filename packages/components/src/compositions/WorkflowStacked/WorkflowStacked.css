@@ -1,0 +1,37 @@
+/* The run as a column — the stacked half of the workflow canvas's toggle. */
+.armada-workflow-stacked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-workflow-stacked__run {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.armada-workflow-stacked__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* A group is inside its step, and the indent is what says so in a column. */
+.armada-workflow-stacked__row[data-under] {
+  padding-inline-start: var(--space-6);
+}
+
+/* Where the step loops back to. A sentence, at the size of a gate's own word. */
+.armada-workflow-stacked__returns {
+  padding-inline-start: var(--space-4);
+  color: var(--fg-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
