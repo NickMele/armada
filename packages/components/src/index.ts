@@ -319,6 +319,9 @@ export * from "./compositions/HeldFlag/HeldFlag";
 export * from "./compositions/DroneMessageBox/DroneMessageBox";
 // A step's work as the Drone told it, under the plan task it served. #1185.
 export * from "./compositions/WorkNarration/WorkNarration";
+// The graph surface React Flow draws — a Studio's board and a Job's workflow
+// share it, and neither holds placement. #1539.
+export * from "./compositions/GraphCanvas/GraphCanvas";
 // A Studio's nodes, and the whiteboard React Flow draws them on. #1286.
 export * from "./compositions/StudioCapture/StudioCapture";
 export * from "./compositions/CaptureBar/CaptureBar";
@@ -327,6 +330,12 @@ export * from "./compositions/StudioName/StudioName";
 export * from "./compositions/StudioPicked/StudioPicked";
 export * from "./compositions/StudioNode/StudioNode";
 export * from "./compositions/StudioWhiteboard/StudioWhiteboard";
+// A Job's run as the workflow it froze — the canvas, the stacked alternative,
+// the card both draw, and the panel a step or group opens into. #1539.
+export * from "./compositions/WorkflowStepCard/WorkflowStepCard";
+export * from "./compositions/WorkflowCanvas/WorkflowCanvas";
+export * from "./compositions/WorkflowStacked/WorkflowStacked";
+export * from "./compositions/WorkflowInspector/WorkflowInspector";
 // A label and its figure in one aligned column — Pulse and the Fleet panel.
 export * from "./compositions/FigureList/FigureList";
 // What the Job has changed, as its own panel beside the run. #1187.

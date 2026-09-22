@@ -279,11 +279,22 @@
 
 /* A step's work as the Drone told it, under the plan task it served. #1185. */
 @import "./compositions/WorkNarration/WorkNarration.css";
+/* The graph surface both a Studio's board and a Job's workflow are drawn on,
+   above each surface's own sheet so either may paint over it. #1539. */
+@import "./compositions/GraphCanvas/GraphCanvas.css";
+
 /* A Studio's nodes, and the whiteboard that places them. Above the rule below,
    per HeldFlag's note. #1286. */
 @import "./compositions/StudioCapture/StudioCapture.css";
 @import "./compositions/StudioNode/StudioNode.css";
 @import "./compositions/StudioWhiteboard/StudioWhiteboard.css";
+
+/* A Job's run, drawn as the workflow it froze: the canvas, its stacked
+   alternative, the card both draw and the panel a step opens into. #1539. */
+@import "./compositions/WorkflowStepCard/WorkflowStepCard.css";
+@import "./compositions/WorkflowCanvas/WorkflowCanvas.css";
+@import "./compositions/WorkflowStacked/WorkflowStacked.css";
+@import "./compositions/WorkflowInspector/WorkflowInspector.css";
 
 /* Activity and Footprint, the two instruments on a Job page. #1268. */
 @import "./compositions/ActivityInstrument/ActivityInstrument.css";
