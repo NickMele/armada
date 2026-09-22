@@ -10,7 +10,7 @@
 // `tab-workflow.tsx`, `tab-plan.tsx`, `tab-record.tsx`, `tab-pulse.tsx`.
 
 import { JobDetailHeaderActions, type JobResourcesProps } from "@armada/components";
-import { useReducer, useState } from "react";
+import { useCallback, useReducer, useState } from "react";
 import { useAtFloor, useNarrow } from "@armada/shell";
 
 import { countsOf, FIRST_TAB, JobTabs, type DetailTab } from "./detail-tabs";
@@ -120,6 +120,10 @@ function OneJob(props: JobDetailProps) {
   // a tab**: Overview and Plan draw the same wave, and a toggle that reset on
   // the way between them would be two readings of one thing.
   const [waveView, setWaveView] = useState<WorkflowView>(FIRST_WORKFLOW_VIEW);
+  // Stable across a tick of `now`, which is what keeps the wave's canvas from
+  // rebuilding its nodes every second.
+  const opens = props.onOpenJob;
+  const openJob = useCallback((jobId: string) => opens?.(jobId), [opens]);
 
   const wave: WaveRegionProps = {
     job,
@@ -136,7 +140,7 @@ function OneJob(props: JobDetailProps) {
     // A wave whose caller offers no way to open a Job draws its cards inert
     // rather than pressing into nothing — `onOpenJob` is the shell's, and
     // optional for that reason.
-    onOpenJob: props.onOpenJob ?? (() => undefined),
+    onOpenJob: openJob,
     onAnswerJudge: props.onAnswerJudge,
     onAnswerCommand: props.onAnswerCommand,
   };

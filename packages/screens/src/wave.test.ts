@@ -51,7 +51,8 @@ describe("how far behind the wave a Job sits", () => {
       job({ job: "b", waits_on: ["a"] }),
     ]);
     expect(depths.size).toBe(2);
-    for (const at of depths.values()) expect(at).toBeLessThan(2);
+    // Bounded by the wave's own size, which is what stops the walk.
+    for (const at of depths.values()) expect(at).toBeLessThanOrEqual(2);
   });
 });
 

@@ -18,7 +18,7 @@ import {
   WaveCanvas,
 } from "@armada/components";
 import { JOB_STATUS } from "@armada/components/src/generated/vocabulary";
-import type { ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 
 import type {
   CommandAnswer,
@@ -183,21 +183,31 @@ function JudgeAsk({
   );
 }
 
-/** One half of Needs you, with its own count. Nothing is drawn where it is empty. */
+/**
+ * One half of Needs you, with its own count. Nothing is drawn where it is
+ * empty.
+ *
+ * **`name` says what the half means and `label` is the word above it.** The
+ * cards inside carry regions of their own — a Judge question's is *Waiting on
+ * you* — so a half named `Waiting` would be one of three regions a reader
+ * hears that word from.
+ */
 function NeedsHalf({
   label,
+  name,
   says,
   count,
   children,
 }: {
   label: string;
+  name: string;
   says: string;
   count: number;
   children: ReactNode;
 }) {
   if (count === 0) return null;
   return (
-    <section className="armada-wave__needs-half" aria-label={label}>
+    <section className="armada-wave__needs-half" aria-label={name}>
       <Eyebrow>
         {label} · {count}
       </Eyebrow>
@@ -224,13 +234,21 @@ export function WaveRegion({
   onAnswerCommand,
 }: WaveRegionProps) {
   const wave = waveReadingOf(whole, draft, board);
-  if (wave === undefined) return null;
+  // **Memoised, and the canvas is why.** `JobDetail` re-renders on every tick
+  // of `now`; React Flow measures a node once and hides it until it has, so a
+  // fresh node array each second left every card `visibility: hidden` and the
+  // graph blank. The run is the same run until the wave itself changes.
+  const opened = useCallback((jobId: string) => onOpenJob(jobId), [onOpenJob]);
+  const run = useMemo(
+    () => (wave === undefined ? undefined : waveRunOf(wave, { onOpen: opened })),
+    [wave, opened],
+  );
+  if (wave === undefined || run === undefined) return null;
 
   const byId = new Map(wave.jobs.map((one) => [one.job, one]));
   const mine = questions.filter((one) => one.kind !== "helm" && byId.has(one.job_id));
   const asking = new Set(mine.map((one) => (one.kind === "helm" ? "" : one.job_id)));
   const standing = waveStandingOf(wave, asking);
-  const run = waveRunOf(wave, { onOpen: onOpenJob });
   const waitsOf = (one: WaveJobView) =>
     one.waits_on.flatMap((id) => {
       const held = byId.get(id);
@@ -278,8 +296,8 @@ export function WaveRegion({
     </ActiveJobsList>
   );
 
-  const half = (label: string, says: string, jobs: readonly WaveJobView[]) => (
-    <NeedsHalf label={label} says={says} count={jobs.length}>
+  const half = (label: string, name: string, says: string, jobs: readonly WaveJobView[]) => (
+    <NeedsHalf label={label} name={name} says={says} count={jobs.length}>
       {rows(jobs, label)}
       {judgesFor(jobs).map((ask) => (
         <JudgeAsk
@@ -329,14 +347,16 @@ export function WaveRegion({
       )}
 
       {needs === 0 ? null : (
-        <section className="armada-wave__needs" aria-label={`The wave ${ASKING_YOU}`}>
+        <section className="armada-wave__needs" aria-label={`What the wave ${ASKING_YOU} for`}>
           {half(
             "Blocked",
+            "Blocked, holding a Drone",
             "Each holds a Drone and the worktree it is in, and nothing moves until you answer.",
             standing.blocked,
           )}
           {half(
             "Waiting",
+            "Waiting at a gate",
             "Each is resting at a gate. No Drone is held, and its slot has gone back.",
             standing.waiting,
           )}

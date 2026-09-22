@@ -111,7 +111,10 @@ export function lightRow(one: LightJob): JobSummary {
 /** The whole fixture: the row, its detail, and empty reads for the rest. */
 export function lightFixture(one: LightJob, now: number): JobFixture {
   const job = lightRow(one);
-  const held: Held = one.status === "running" ? "running" : "none";
+  // `escalated` holds its Drone too — "alive and idle where the step stopped …
+  // the worktree and port span are held as-is", `job-statuses.toml`.
+  const held: Held =
+    one.status === "running" || one.status === "escalated" ? "running" : "none";
   const whole: JobDetail = {
     job,
     created_at: one.created_at,

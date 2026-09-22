@@ -565,11 +565,141 @@ describe("landing", () => {
 });
 
 describe("the wave", () => {
-  it.todo(
+  /**
+   * The wave's own region. **Scoped, because the dock draws the same questions
+   * from every repository** — a card in both places is the dock's own design,
+   * and an unscoped locator reads the dock's copy first.
+   */
+  const wave = () => page.getByRole("region", { name: "The wave" }).first();
+
+  /** One Job of the wave on the canvas, by the name its card carries. */
+  const waveCard = (title: string) =>
+    wave().getByRole("button", { name: new RegExp(`^${title}, `) });
+
+  test(
     "epic/wave: five Jobs are drawn under one plan with what each has reached, and the two " +
       "that merged are told apart from the three still out",
+    async () => {
+      mount("epic/wave");
+      await expect
+        .element(page.getByText("5 Jobs under one plan — 2 merged, 3 still out."))
+        .toBeVisible();
+
+      // Each card names the Job and the verb the registry gives its status, so
+      // "what it has reached" is read off the card and not counted from a list.
+      for (const [title, said] of [
+        ["Refuse an unknown code at the seam", "done"],
+        ["Name the fault in the toast", "done"],
+        ["Carry the code into the journal", "awaiting review"],
+        ["Say which half refused", "needs you"],
+        ["Drop the second error shape", "running"],
+      ] as const) {
+        await expect.element(waveCard(title)).toHaveAccessibleName(`${title}, ${said}`);
+      }
+    },
   );
-  it.todo("epic/wave: pressing one of the wave's Jobs opens that Job");
+
+  test("epic/wave: the graph draws a Job that waits on another behind it", async () => {
+    mount("epic/wave");
+    // The wave's own direction, as the edge reads it aloud. Dropping the second
+    // error shape can only happen once every surface carries the first, so it
+    // waits on them — the board had this pair the other way round.
+    await expect
+      .element(
+        page.getByLabelText("Drop the second error shape waits on Say which half refused"),
+      )
+      .toBeInTheDocument();
+  });
+
+  test("epic/wave: the same five Jobs are a list, with what each waits on", async () => {
+    mount("epic/wave");
+    await page.getByRole("tab", { name: "Stacked" }).last().click();
+    const list = page.getByRole("listbox", { name: "The wave, as a list" });
+    await expect.element(list).toBeVisible();
+    await expect.poll(() => list.element().querySelectorAll('[role="option"]').length).toBe(5);
+    // The order the graph draws is the order the list says in words.
+    await expect
+      .element(list.getByText("Carry the code into the journal, Say which half refused"))
+      .toBeVisible();
+  });
+
+  test(
+    "epic/wave: what needs you is split into the Jobs holding a Drone and the ones resting " +
+      "at a gate, and each is answered where it is read",
+    async () => {
+      mount("epic/wave");
+      // Two hold a Drone and a worktree; one is at a gate with its slot given back.
+      const blocked = page.getByRole("region", { name: "Blocked, holding a Drone" });
+      const waiting = page.getByRole("region", { name: "Waiting at a gate" });
+      await expect.element(blocked.getByText("Blocked · 2")).toBeVisible();
+      await expect.element(waiting.getByText("Waiting · 1")).toBeVisible();
+
+      // The Judge's refusal, answered inline rather than by opening the Job.
+      await expect
+        .element(blocked.getByText("Does the message say which half refused — Bridge or Fleet?"))
+        .toBeVisible();
+      await expect
+        .element(blocked.getByRole("button", { name: "Disagree, just this step" }))
+        .toBeVisible();
+      // The one at the gate carries its own, and it is a different refusal.
+      await expect
+        .element(
+          waiting.getByText("Does every refusal the seam produces reach the journal with its code?"),
+        )
+        .toBeVisible();
+
+      // The permission ask: a command the Manifest has not cleared, with the
+      // three answers Fleet offered.
+      const ask = blocked.getByRole("article", {
+        name: /^The drone wants to run a command it was not given/,
+      });
+      await expect.element(ask).toBeVisible();
+      for (const answer of ["Allow for this job", "Always allow in this repository", "Reject"]) {
+        await expect.element(ask.getByRole("button", { name: answer })).toBeVisible();
+      }
+    },
+  );
+
+  test("epic/wave: the loop says which pass it is on, and of how many", async () => {
+    mount("epic/wave");
+    await expect
+      .element(
+        wave().getByText(
+          "Pass 2 of 5 — Plan the wave, then Dispatch the wave, then Roll up the wave, and " +
+            "back to plan the wave.",
+        ),
+      )
+      .toBeVisible();
+  });
+
+  test("epic/wave: pressing one of the wave's Jobs opens that Job", async () => {
+    mount("epic/wave");
+    await waveCard("Carry the code into the journal").click();
+    await expect
+      .element(page.getByText("34-carry-the-code-into-the-log", { exact: true }).first())
+      .toBeVisible();
+  });
+
+  test("epic/wave: Plan draws every pass of the split, and the Judge that read it", async () => {
+    await at("epic/wave", "Plan");
+    const passes = page.getByRole("region", { name: "Every pass of the split" }).last();
+    await expect
+      .element(passes.getByText("The seam, then every surface that reads a refusal"))
+      .toBeVisible();
+    // An earlier pass is history: a loop return replaces `plan.md` whole.
+    await expect.element(passes.getByText("Replaced by the pass after it")).toBeVisible();
+    await expect
+      .element(page.getByText("The Judge read the split and refused nothing — 2 criteria."))
+      .toBeVisible();
+  });
+
+  test("epic/wave: a Job's inspector on Plan offers dropping it from the wave", async () => {
+    await at("epic/wave", "Plan");
+    await waveCard("Drop the second error shape").click();
+    await expect
+      .element(page.getByRole("button", { name: /drop from the wave$/i }).first())
+      .toBeVisible();
+  });
 });
 
 describe("one Job per workflow kind", () => {
