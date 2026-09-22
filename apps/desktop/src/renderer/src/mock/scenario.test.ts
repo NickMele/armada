@@ -60,8 +60,24 @@ test("the moments that are several Jobs hold every one of them", () => {
     const ids = scenario.state.jobs.map((job) => job.id);
     expect(ids.length).toBeGreaterThan(1);
     expect(Object.keys(scenario.reads).sort()).toEqual([...ids].sort());
-    expect(scenario.draft?.members?.members.length).toBeGreaterThan(1);
   }
+});
+
+// **A moment carries one or the other, never both**, because the two answer
+// different questions: members are a landing order, and a wave is a
+// dependency graph whose Jobs land whenever each is done. Drawn together, the
+// landing band says "parked until the one before it lands" about a Job that
+// has already merged. #1544.
+test("a moment is a landing order or a wave, and no moment is both", () => {
+  for (const name of ["members/stacked", "members/merged"]) {
+    const scenario = scenarioNamed(name)!;
+    expect(scenario.draft?.members?.members.length).toBeGreaterThan(1);
+    expect(scenario.draft?.wave, `${name} draws a landing order, not a wave`).toBeUndefined();
+  }
+  const wave = scenarioNamed("epic/wave")!;
+  expect(wave.draft?.wave?.jobs.length).toBeGreaterThan(1);
+  expect(wave.draft?.members, "a wave is not a landing order").toBeUndefined();
+  expect(wave.draft?.landing, "a wave is not a landing order").toBeUndefined();
 });
 
 test("one Job per workflow kind, on one Board and one at a time", () => {

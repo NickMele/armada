@@ -348,17 +348,20 @@ const UNCLEARED: CommandInFlight = {
  * that carry the code follow it; naming which half refused follows the toast
  * that would say so; and the second error shape can only be dropped once every
  * surface carries the first — so it waits on both, and never the reverse.
+ *
+ * **No landing link, because a wave is not a landing order.** One of these
+ * waits on another because its work depends on that work, and each lands when
+ * it is done — nothing says the fourth merges after the third.
  */
-function waveChildren(): { fixture: JobFixture; link: MemberView["link"]; waits: string[] }[] {
-  const rows: [string, string, string, string, MemberView["link"], string[]][] = [
-    [WAVE_IDS.a, "32-refuse-an-unknown-code", "Refuse an unknown code at the seam", "completed_success", "merged", []],
-    [WAVE_IDS.b, "33-name-the-fault-in-the-toast", "Name the fault in the toast", "completed_success", "merged", [WAVE_IDS.a]],
-    [WAVE_IDS.c, "34-carry-the-code-into-the-log", "Carry the code into the journal", "awaiting_review", "published", [WAVE_IDS.a]],
-    [WAVE_IDS.d, "35-say-which-half-refused", "Say which half refused", "escalated", "stacked", [WAVE_IDS.b]],
-    [WAVE_IDS.e, "36-drop-the-second-error-shape", "Drop the second error shape", "running", "stacked", [WAVE_IDS.c, WAVE_IDS.d]],
+function waveChildren(): { fixture: JobFixture; waits: string[] }[] {
+  const rows: [string, string, string, string, string[]][] = [
+    [WAVE_IDS.a, "32-refuse-an-unknown-code", "Refuse an unknown code at the seam", "completed_success", []],
+    [WAVE_IDS.b, "33-name-the-fault-in-the-toast", "Name the fault in the toast", "completed_success", [WAVE_IDS.a]],
+    [WAVE_IDS.c, "34-carry-the-code-into-the-log", "Carry the code into the journal", "awaiting_review", [WAVE_IDS.a]],
+    [WAVE_IDS.d, "35-say-which-half-refused", "Say which half refused", "escalated", [WAVE_IDS.b]],
+    [WAVE_IDS.e, "36-drop-the-second-error-shape", "Drop the second error shape", "running", [WAVE_IDS.c, WAVE_IDS.d]],
   ];
-  return rows.map(([id, handle, title, status, link, waits], at) => ({
-    link,
+  return rows.map(([id, handle, title, status, waits], at) => ({
     waits,
     fixture: lightFixture(
       {
@@ -436,20 +439,6 @@ export function epicWave(): ArcMoment {
           ...(one.fixture.job.landed === undefined ? {} : { landed: one.fixture.job.landed }),
         })),
       },
-      members: {
-        job: WAVE_ID,
-        title: "Carry the error contract through every surface",
-        members: children.map((one, at) => ({
-          job: one.fixture.job.id,
-          title: one.fixture.job.title,
-          status: one.fixture.job.status,
-          // Nothing is before the first, so it carries no link.
-          ...(at === 0 ? {} : { link: one.link }),
-          landed: one.fixture.job.landed === "merged",
-          ...(one.fixture.job.branch === undefined ? {} : { branch: one.fixture.job.branch }),
-        })),
-      },
-      landing: landingInOrder("ready"),
     },
   };
 }
