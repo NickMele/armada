@@ -129,6 +129,7 @@ fn verify_foundations() -> ExitCode {
         rules_actions::every_action_carries_three_columns(&root),
         rules_stories::every_story_names_its_own_path(&root),
         rules_layers::every_package_imports_downward(&root),
+        rules_layers::nothing_in_the_main_process_reads_the_draft_schema(&root),
         rules_bundled::no_workspace_package_is_left_for_node(&root),
         rules_node::the_pinned_node_satisfies_the_declared_floor(&root),
         rules_stylesheets::every_stylesheet_reaches_the_sheet_the_app_loads(&root),

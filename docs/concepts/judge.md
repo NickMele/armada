@@ -95,6 +95,12 @@ Per row:
 - **Gate-definition change** covers an edit to a Check definition in `armada.yml`. The spawn-time freeze already protects this Job's gate; the look exists to make the attempt visible and to let a legitimate edit flag rather than block.
 - **Scope request** is the one look about a plan rather than about work, and the one a Drone asks for. It is shown the step, the request the Job answers, the Job's `write_targets`, the paths asked for and the Drone's reason — **and not the diff**, which would be the thrashing question. It is the one look that reads the Job's list rather than the step's declaration, and a Job whose list is null cannot reach it at all. It answers consistency with the step and never desirability. A Judge call ends nothing, so the Drone keeps its session while it is out; a refusal escalates and a person is met by the exception rather than by every request. [Change a Job's scope](../journeys/change-a-jobs-scope.md).
 
+### Whether a step is judged at all is a setting
+
+**Not yet built.** A step's gate is one value today — `auto`, `auto_if_judge_passes`, `human_always`, or a rule the repository decides — so asking for a Judge without Checks, or for a person alone, means editing the workflow file. It becomes three settings a step carries independently: Checks, Judge, and you. [Workflow](workflow.md) holds the schema and what each combination means.
+
+**The step evidence gate is the row that setting governs**, and nothing else in the table above. The gaming check, the drift look and the thrashing ceiling are Fleet's own and run whatever is set — `crates/fleet/src/gate.rs`. A step with nothing ticked is still read for work that went outside the plan.
+
 Every trigger is mechanical, and a scope request is no exception — the trigger is a tool call rather than a schedule. The Judge never fires on a timer, on a healthy Drone with nothing asked of it, or on its own initiative.
 
 ## Multi-criterion judging

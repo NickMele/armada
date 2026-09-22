@@ -246,7 +246,7 @@ pub struct Envelope {
     /// From the WorkflowDef, never generated.
     step_id: Option<String>,
     /// **Single-valued, and omitted when the line is not scoped to one
-    /// workspace.** A Convoy-spanning line carries `job_id` and no `workspace`;
+    /// workspace.** A line spanning workspaces carries `job_id` and no `workspace`;
     /// the full set a Job spans is recorded once at Job creation and persisted
     /// in `job_manifests`.
     ///
