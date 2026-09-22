@@ -130,6 +130,25 @@ export type JobOutcomeRun = {
   when?: ReactNode;
 };
 
+/**
+ * One step of the run, and what it came to.
+ *
+ * **On the board because the board is the destination a finished Job opens
+ * on** (#1542): the run tree is the Workflow tab's, and a reader who wants to
+ * know whether anything was refused should not have to go and find it.
+ */
+export type JobOutcomeStep = {
+  label: ReactNode;
+  /** The verb for the step's last verdict — `passed`, `failed`. */
+  verdict: ReactNode;
+  /** The status stem that verb takes. */
+  status?: string;
+  /** How long it took, where the record dates both ends. */
+  took?: ReactNode;
+  /** What is known beside it — a second attempt, the Checks it ran. */
+  meta?: ReactNode;
+};
+
 /** A set of runs under a heading — the handoff run, and what came after it. */
 export type JobOutcomeRuns = {
   name: ReactNode;
@@ -153,6 +172,8 @@ export type JobOutcomeProps = {
   headline?: JobOutcomeHeadline;
   /** What it cost, as labelled readings. `FigureList`'s own rows. */
   cost?: { name: ReactNode; figures: Figure[]; note?: ReactNode };
+  /** The run, step by step, with what each came to. */
+  steps?: { name: ReactNode; meta?: ReactNode; steps: JobOutcomeStep[]; absent?: ReactNode };
   /** The test runs, one set per heading. */
   runs?: JobOutcomeRuns[];
   /**
@@ -176,6 +197,7 @@ export function JobOutcome({
   sections,
   headline,
   cost,
+  steps,
   runs,
   note,
   act,
@@ -212,8 +234,43 @@ export function JobOutcome({
           <p className="armada-outcome__section-head">
             <span className="armada-outcome__section-name">{cost.name}</span>
           </p>
-          <FigureList figures={cost.figures} column="fit" />
+          <div className="armada-outcome__cost">
+            <FigureList figures={cost.figures} column="fit" />
+          </div>
           {cost.note === undefined ? null : <p className="armada-outcome__aside">{cost.note}</p>}
+        </section>
+      )}
+      {steps === undefined ? null : (
+        <section className="armada-outcome__section">
+          <p className="armada-outcome__section-head">
+            <span className="armada-outcome__section-name">{steps.name}</span>
+            {steps.meta === undefined ? null : (
+              <span className="armada-outcome__section-meta">{steps.meta}</span>
+            )}
+          </p>
+          {steps.steps.length === 0 ? (
+            <p className="armada-outcome__absent" role="note">
+              {steps.absent}
+            </p>
+          ) : (
+            <ol className="armada-outcome__steps">
+              {steps.steps.map((step, at) => (
+                <li className="armada-outcome__step" key={at}>
+                  <span className="armada-outcome__step-label">{step.label}</span>
+                  <span
+                    className="armada-outcome__step-verdict"
+                    {...(step.status === undefined
+                      ? {}
+                      : { style: { color: `var(--status-${step.status})` } })}
+                  >
+                    {step.verdict}
+                  </span>
+                  <span className="armada-outcome__run-meta">{step.meta}</span>
+                  <span className="armada-outcome__run-when">{step.took}</span>
+                </li>
+              ))}
+            </ol>
+          )}
         </section>
       )}
       {runs?.map((set, at) => (

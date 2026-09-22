@@ -48,6 +48,7 @@ export function LandBoard({ read, onOpenPullRequest, onCompose, onCopied }: Land
           parts: section.parts.map((part) => partOf(part, onOpenPullRequest)),
           ...(section.note === undefined ? {} : { note: section.note }),
         }))}
+        steps={read.steps}
         cost={read.cost}
         runs={read.runs}
         act={

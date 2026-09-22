@@ -22,8 +22,8 @@
   grid-template-columns:
     min-content
     max-content
-    minmax(0, 1fr)
-    max-content
+    minmax(calc(var(--space-12) * 4), 1fr)
+    minmax(0, max-content)
     max-content;
   gap: var(--space-2) var(--space-3);
   margin: 0;
@@ -90,12 +90,17 @@
 }
 
 /* What is known beside the value. Mono and neutral — nothing below Job level
-   declares a hue for a file count, so it stays neutral. */
+   declares a hue for a file count, so it stays neutral. It clips rather than
+   holding its full width: a pushed ref is longer than the value it annotates,
+   and a `max-content` meta squeezed the pull request's address to an ellipsis. */
 .armada-outcome__meta {
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-sm);
   color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -228,6 +233,14 @@
   white-space: nowrap;
 }
 
+/* The cost readings. `FigureList` justifies its values to its own right edge,
+   which reads as two columns a screen apart when the region is wide — so the
+   list is held to the column width it was drawn for (384px). */
+.armada-outcome__cost {
+  max-width: calc(var(--space-12) * 8);
+  min-width: 0;
+}
+
 /* A block of parts, figures or runs under a name. */
 .armada-outcome__section {
   display: flex;
@@ -277,10 +290,15 @@
 }
 
 /* One run of one case. Five tracks on the list, borrowed by each row, so the
-   verbs and the frames line up down the set. */
+   verbs and the frames line up down the set.
+
+   `justify-content: start` puts the slack after the last column rather than
+   between the spec and what became of it: a row read as a sentence — this
+   spec, this verdict, by this hand — pulls apart at a wide window otherwise. */
 .armada-outcome__runs {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content max-content max-content max-content;
+  grid-template-columns: minmax(0, max-content) repeat(4, max-content);
+  justify-content: start;
   gap: var(--space-1) var(--space-3);
   margin: 0;
   padding: 0;
@@ -338,4 +356,43 @@
   display: flex;
   justify-content: flex-start;
   gap: var(--space-2);
+}
+
+/* The run, step by step. Four tracks on the list and the slack after the last,
+   on the runs list's own rule: the row is read as a sentence. */
+.armada-outcome__steps {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) repeat(3, max-content);
+  justify-content: start;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-outcome__step {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.armada-outcome__step-label {
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-outcome__step-verdict {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  white-space: nowrap;
 }

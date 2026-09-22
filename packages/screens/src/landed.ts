@@ -9,13 +9,14 @@
 // the landing rule. Absent, each falls back to its own `…Of(detail)`, so this
 // board draws against a real Fleet as well as the mock.
 
-import { CRITERION_VERDICT_JUDGE, sized } from "@armada/components";
+import { CRITERION_VERDICT_JUDGE, STEP_STATE, sized } from "@armada/components";
 import type { Figure } from "@armada/components";
 import type {
   JobDetail as JobWhole,
   JobResources,
   JobSummary,
   ManifestSummary,
+  StepDetail,
 } from "@armada/protocol";
 import { artifactPath, recordsOf, repoOf } from "@armada/protocol";
 
@@ -79,6 +80,15 @@ export type LandedRuns = {
   note?: string;
 };
 
+/** One step of the run, with what it came to. */
+export type LandedStep = {
+  label: string;
+  verdict: string;
+  status?: string;
+  took?: string;
+  meta?: string;
+};
+
 /** One group, as the Produced panel draws it. */
 export type LandedGroup = {
   name: string;
@@ -99,6 +109,7 @@ export type LandedRead = {
   criteria: { text: string; verdict: string; status: string }[];
   completes: string;
   sections: LandedSection[];
+  steps: { name: string; meta: string; steps: LandedStep[]; absent: string };
   cost: { name: string; figures: Figure[]; note: string };
   runs: LandedRuns[];
   groups: LandedGroup[];
@@ -139,6 +150,12 @@ export function landedOf({ job, whole, draft, manifest, holding }: LandedInput):
     criteria,
     completes: COMPLETES[rule.complete_when],
     sections: [producedOf(whole, rule), leftBehindOf(job, whole, manifest, holding)],
+    steps: {
+      name: "The run",
+      meta: whole.job.workflow_id,
+      steps: whole.steps.map(stepOf),
+      absent: "Fleet answered with no steps for this Job.",
+    },
     cost: costOf(whole, groups),
     runs: runSetsOf(cases, runs),
     groups: groups.map(groupOf),
@@ -237,7 +254,9 @@ function producedOf(whole: JobWhole, rule: LandingRule): LandedSection {
       ...(delivery?.pushed === undefined ? {} : { meta: delivery.pushed }),
     },
   ];
-  return { name: "Produced", parts };
+  // "Delivered" and not "Produced": the Produced panel under this region draws
+  // the groups, and one screen cannot have two regions of the same name.
+  return { name: "Delivered", parts };
 }
 
 /** What is still on the machine once it is over. */
@@ -283,6 +302,31 @@ function leftBehindOf(
     parts,
     note: "Reclaiming the worktree takes the checkout back and leaves the branch and the record.",
   };
+}
+
+/** The hue a step's last verdict takes. Anything else stays neutral. */
+const VERDICT_STATUS: Record<string, string> = {
+  passed: "completed-success",
+  failed: "completed-failed",
+};
+
+/**
+ * One step: what it came to and how long it took. The verdict is the last
+ * attempt's, which is what stands — `run.ts` reads the same field.
+ */
+function stepOf(step: StepDetail): LandedStep {
+  const ruled = step.last_verdict ?? step.verdicts[step.verdicts.length - 1];
+  const took = span(step.entered_at, step.updated_at);
+  const attempts = step.attempts.length;
+  const row: LandedStep = {
+    label: step.label,
+    verdict: ruled?.named ?? STEP_STATE[step.state]?.verb ?? step.state,
+  };
+  const status = ruled === undefined ? undefined : VERDICT_STATUS[ruled.named];
+  if (status !== undefined) row.status = status;
+  if (took !== null) row.took = took;
+  if (attempts > 1) row.meta = `${attempts} runs`;
+  return row;
 }
 
 /** What it cost: the run, the spend and the turns, the agents and the Checks. */

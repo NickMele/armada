@@ -610,6 +610,62 @@ export function OverviewTab(props: OverviewTabProps) {
           ).get(onSheet.taskId) ?? [],
         );
 
+  // The sheet layer, which the header opens on a Job at any state — so it is
+  // built beside the arrangement rather than inside it.
+  const sheetSlot =
+        open === undefined ? null : (
+          <DetailSheet
+            which={sheet}
+            job={job}
+            whole={whole}
+            step={open}
+            rows={rows}
+            {...(logAttempt === null ? {} : { ofAttempt: logAttempt })}
+            // The turns those rows were folded from, which carry the tool and
+            // the timing a row no longer does. The sheet folds runs of one tool
+            // the way the chapter does, and this is what it folds them by.
+            turns={read}
+            observed={observed}
+            diff={recorded.diff}
+            calls={calls}
+            // Its own name, so a row opened in the sheet is not a row opened in
+            // the chapter's preview. Two logs over one stream hold equal ids.
+            log={keys.inLog("sheet")}
+            held={held}
+            now={now}
+            checkId={openCheckId}
+            {...(onSheet.which === "task" ? { taskId: onSheet.taskId } : {})}
+            {...(taskTouched === undefined ? {} : { taskTouched })}
+            planTasks={plan?.recorded === true ? plan.tasks : undefined}
+            outputs={outputs}
+            following={following}
+            onHold={(to) => move({ move: "hold", held: to })}
+            onRedirect={onRedirect}
+            // The full reading, unchanged from what the run column used to
+            // draw — `Look now` came with it, because it acts on this reading
+            // and not on the five lines that open it.
+            holds={{
+              jobId: job.handle,
+              reading: holding,
+              note: whyNoReading(resources),
+              age: holding === null ? undefined : (span(holding.read_at, now) ?? undefined),
+              examined: examinedNow,
+              looking: looked?.state === "looking",
+              lookFailed: looked?.state === "failed" ? LOOK_FAILED : undefined,
+              nothingToAsk: nothingToAsk(resources),
+              onExamine: () => onExamine(job.id),
+            }}
+            // Every setting a person can change on this Job, and what each sends.
+            settings={{
+              models, stale, acting, actingAct, onSetWhenBlocked, onSetWhenRefused, onSetModel, onSetReviewModel,
+              onRemoveAllowedCommand, onRaiseCap, onRaiseTurnCap,
+            }}
+            run={runHook.slot}
+            floor={floor}
+            onClose={closeSheet}
+          />
+        );
+
   const inside = (
     <InsideAJob
       run={run.map(named)}
@@ -760,66 +816,15 @@ export function OverviewTab(props: OverviewTabProps) {
       }
       stepAbsent={whyNoSteps(watched, job.id)}
       stepReading={reading?.step}
-      sheet={
-        open === undefined ? null : (
-          <DetailSheet
-            which={sheet}
-            job={job}
-            whole={whole}
-            step={open}
-            rows={rows}
-            {...(logAttempt === null ? {} : { ofAttempt: logAttempt })}
-            // The turns those rows were folded from, which carry the tool and
-            // the timing a row no longer does. The sheet folds runs of one tool
-            // the way the chapter does, and this is what it folds them by.
-            turns={read}
-            observed={observed}
-            diff={recorded.diff}
-            calls={calls}
-            // Its own name, so a row opened in the sheet is not a row opened in
-            // the chapter's preview. Two logs over one stream hold equal ids.
-            log={keys.inLog("sheet")}
-            held={held}
-            now={now}
-            checkId={openCheckId}
-            {...(onSheet.which === "task" ? { taskId: onSheet.taskId } : {})}
-            {...(taskTouched === undefined ? {} : { taskTouched })}
-            planTasks={plan?.recorded === true ? plan.tasks : undefined}
-            outputs={outputs}
-            following={following}
-            onHold={(to) => move({ move: "hold", held: to })}
-            onRedirect={onRedirect}
-            // The full reading, unchanged from what the run column used to
-            // draw — `Look now` came with it, because it acts on this reading
-            // and not on the five lines that open it.
-            holds={{
-              jobId: job.handle,
-              reading: holding,
-              note: whyNoReading(resources),
-              age: holding === null ? undefined : (span(holding.read_at, now) ?? undefined),
-              examined: examinedNow,
-              looking: looked?.state === "looking",
-              lookFailed: looked?.state === "failed" ? LOOK_FAILED : undefined,
-              nothingToAsk: nothingToAsk(resources),
-              onExamine: () => onExamine(job.id),
-            }}
-            // Every setting a person can change on this Job, and what each sends.
-            settings={{
-              models, stale, acting, actingAct, onSetWhenBlocked, onSetWhenRefused, onSetModel, onSetReviewModel,
-              onRemoveAllowedCommand, onRaiseCap, onRaiseTurnCap,
-            }}
-            run={runHook.slot}
-            floor={floor}
-            onClose={closeSheet}
-          />
-        )
-      }
+      sheet={sheetSlot}
       onCopied={onCopied}
     />
   );
 
-  // A Job that finished is read for its outcome first and its run second, so
-  // the board goes above the arrangement rather than in place of it.
+
+  // A Job that has finished is read for what it came to, not for the run that
+  // is over: the board takes this destination and the run is the Workflow
+  // tab's, the plan the Plan tab's, the ledger the Record tab's. #1542.
   if (landed === undefined) return inside;
   return (
     <>
@@ -833,7 +838,7 @@ export function OverviewTab(props: OverviewTabProps) {
         onCompose={onCompose}
         onCopied={onCopied}
       />
-      {inside}
+      {sheetSlot}
     </>
   );
 }
