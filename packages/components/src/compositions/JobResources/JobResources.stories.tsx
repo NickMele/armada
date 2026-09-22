@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
-import type { JobExamined, JobResources as Held, Look } from "@armada/protocol";
+import type { JobExamined, Look } from "@armada/protocol";
 
-import { JobResources } from "./JobResources";
+import { JobResources, type PulseReading } from "./JobResources";
 
 const meta: Meta<typeof JobResources> = {
   title: "Compositions/Job resources",
@@ -12,36 +12,43 @@ export default meta;
 
 type Story = StoryObj<typeof JobResources>;
 
-/** The shape fleet answers with. One place, so a story cannot drift from it. */
-function reading(over: Partial<Held> = {}): Held {
+/** The branch one Job's Drone is working on. Every row here belongs to it. */
+const BRANCH = "armada/01JOBHOLDS001";
+
+/** The board, as the caller derives it. One place, so a story cannot drift. */
+function reading(over: Partial<PulseReading> = {}): PulseReading {
   return {
-    job_id: "01JOBHOLDS001",
-    read_at: "2026-09-04T04:07:00.366Z",
     held: "running",
+    readAt: "2026-09-04T04:07:00.366Z",
     processes: [
       {
         pid: 41233,
         command: "node",
-        cpu_percent: 12.4,
-        memory_bytes: 402_653_184,
-        running_for: "06:12",
+        owner: BRANCH,
+        cpuPercent: 12.4,
+        memoryBytes: 402_653_184,
+        runningFor: "06:12",
         recorded: true,
       },
       {
         pid: 41287,
         command: "cargo",
-        cpu_percent: 98.7,
-        memory_bytes: 838_860_800,
-        running_for: "00:41",
+        owner: BRANCH,
+        cpuPercent: 98.7,
+        memoryBytes: 838_860_800,
+        runningFor: "00:41",
         recorded: false,
       },
     ],
-    worktree: {
-      path: "/Users/user/armada/.armada/worktrees/01JOBHOLDS001",
-      branch: "armada/01JOBHOLDS001",
-      bytes: 1_073_741_824,
-    },
-    wrote_last_at: "2026-09-04T04:06:12.001Z",
+    worktrees: [
+      {
+        path: "/Users/user/armada/.armada/worktrees/01JOBHOLDS001",
+        branch: BRANCH,
+        state: "on disk",
+        bytes: 1_073_741_824,
+      },
+    ],
+    logs: [{ kind: "job", owner: null, writing: true }],
     ...over,
   };
 }
@@ -56,7 +63,14 @@ function examined(found: JobExamined["found"], looks: Look[]): JobExamined {
     looked_at: "2026-09-04T04:07:00.366Z",
     found,
     looks,
-    resources: reading(),
+    // The wire's own reading, which the look carries back with it — not the
+    // board above, which is what this component draws.
+    resources: {
+      job_id: "01JOBHOLDS001",
+      read_at: "2026-09-04T04:07:00.366Z",
+      held: "running",
+      processes: [],
+    },
   };
 }
 
@@ -171,10 +185,13 @@ export const SomeChecksCouldNotTell: Story = {
 export const TheWorktreeWasNotMeasuredInTime: Story = {
   args: {
     reading: reading({
-      worktree: {
-        path: "/Users/user/armada/.armada/worktrees/01JOBHOLDS001",
-        branch: "armada/01JOBHOLDS001",
-      },
+      worktrees: [
+        {
+          path: "/Users/user/armada/.armada/worktrees/01JOBHOLDS001",
+          branch: BRANCH,
+          state: "on disk",
+        },
+      ],
     }),
     age: "2s",
     examined: null,

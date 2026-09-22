@@ -26,7 +26,14 @@
 // and a restart brings back the build that caused it. #344 classifies that
 // same condition as a fault on the command seam, for the same reason.
 
-import type { HoldsFigures, HoldsLine, NothingToAsk } from "@armada/components";
+import type {
+  Figure,
+  HoldsFigures,
+  HoldsLine,
+  NothingToAsk,
+  PulseReading,
+  PulseWorktreeRow,
+} from "@armada/components";
 import { JOB_STATUS, nothingRunningIsAFault, sized } from "@armada/components";
 import type {
   History,
@@ -36,9 +43,12 @@ import type {
   JobResources as Held,
   Noted,
   Recorded,
+  StepDetail,
   Turn,
 } from "@armada/protocol";
-import { spent } from "./facts";
+import type { PulseView } from "./draft/pulse";
+import { money, ordered, spent } from "./facts";
+import { checksOf, isRunning } from "./gates";
 import type { LogRow } from "./story";
 import { entriesOf, hideUnread } from "./story";
 import { clock } from "./duration";
@@ -145,7 +155,7 @@ export function summarised(
   const worktree = standingOf(reading, examined);
   return {
     processes: reading.processes.length,
-    nothingRunningIsWrong: nothingRunningIsAFault(reading, examined),
+    nothingRunningIsWrong: nothingRunningIsAFault(reading.held, examined),
     worktree: worktree.said,
     worktreeIsWrong: worktree.wrong,
   };
@@ -309,3 +319,141 @@ const SAYS: Record<LogRow["actor"], string> = {
   drone: "Drone",
   fleet: "Fleet",
 };
+
+// # The board Pulse draws
+//
+// `PulseView` is the draft shape (`draft/pulse.ts`) and this turns it into the
+// rows the panel takes. **The seam is deliberate**: the draft is derived from
+// today's wire, and the panel knows nothing about either.
+
+/**
+ * The reading, as the board draws it.
+ *
+ * **The look is applied to one worktree and never to several.** Fleet's
+ * `worktree` look asks about the Job's own checkout; drawn against a list it
+ * would be a finding about members nothing looked at.
+ */
+export function pulseReadingOf(view: PulseView, examined: JobExamined | null): PulseReading {
+  return {
+    held: view.held,
+    readAt: view.read_at,
+    processes: view.processes.map((one) => ({
+      pid: one.pid,
+      command: one.command,
+      owner: one.owner,
+      cpuPercent: one.cpu_percent,
+      memoryBytes: one.memory_bytes,
+      runningFor: one.running_for,
+      recorded: one.recorded,
+    })),
+    worktrees: view.worktrees.map((one) => ({
+      branch: one.branch,
+      path: one.path,
+      ...(one.bytes === undefined ? {} : { bytes: one.bytes }),
+      ...(view.worktrees.length === 1 ? standing(examined) : { state: ON_DISK }),
+    })),
+    logs: view.logs.map((one) => ({
+      kind: one.kind,
+      owner: one.owner,
+      ...(one.bytes === undefined ? {} : { bytes: one.bytes }),
+      writing: one.writing,
+    })),
+  };
+}
+
+/** A checkout nobody found anything wrong with. The ordinary answer. */
+const ON_DISK = "on disk";
+
+/** What the one look that asks about a checkout found, as the row's state. */
+function standing(examined: JobExamined | null): Pick<PulseWorktreeRow, "state" | "wrong"> {
+  const look = examined?.looks.find((one) => one.asked === "worktree");
+  if (look?.found === "not_working") return { state: "gone", wrong: true };
+  if (look?.found === "cannot_tell") return { state: "could not be read" };
+  return { state: ON_DISK };
+}
+
+/**
+ * What this Job is running and what it is spending, over the board.
+ *
+ * **Drones come off the reading and the other four do not.** A Drone running
+ * is a process on this machine, which only a look at the machine answers; the
+ * Checks, the Judge calls and the two caps are on `GET /jobs/:job_id` and are
+ * there whether or not anybody has read the machine.
+ */
+export function pulseFiguresOf(view: PulseView | null, whole: JobWhole | null): Figure[] {
+  const figures: Figure[] = [];
+  if (view !== null) figures.push(dronesFigure(view.held));
+  const steps = ordered(whole);
+  figures.push({ label: "Checks", value: running(checksRunning(steps)) });
+  figures.push({ label: "Judges", value: out(judgesRunning(steps)) });
+  const spend = spendFigure(whole);
+  if (spend !== undefined) figures.push(spend);
+  const turns = turnsTaken(whole);
+  if (turns !== undefined) figures.push({ label: "Turns", value: turns });
+  return figures;
+}
+
+/**
+ * How many Drones are up, and whether that is a fault.
+ *
+ * **One Drone per Job today.** `held` is Fleet's reading of the one process it
+ * recorded, so the count is nought or one; `gone` and `replaced` are Fleet
+ * believing something is running that is not, which is loud at any status.
+ */
+function dronesFigure(held: string): Figure {
+  if (held === "gone") return { label: "Drones", value: "none running", detail: NOTHING_AT_THAT_PID, wrong: true };
+  if (held === "replaced") return { label: "Drones", value: "none running", detail: SOMEBODY_ELSE, wrong: true };
+  if (held === "unreadable") return { label: "Drones", value: "could not be read" };
+  return { label: "Drones", value: running(held === "running" ? 1 : 0) };
+}
+
+/** Fleet recorded a pid and nothing holds it. */
+const NOTHING_AT_THAT_PID = "fleet recorded one";
+
+/** The pid came round and something else has it. */
+const SOMEBODY_ELSE = "that pid is another process";
+
+/** Checks the gate has started and not finished, across every step. */
+export function checksRunning(steps: readonly StepDetail[]): number {
+  return steps.reduce((count, step) => count + checksOf(step).filter(isRunning).length, 0);
+}
+
+/** Judge calls out right now, across every step. `StepDetail.judging`. */
+export function judgesRunning(steps: readonly StepDetail[]): number {
+  return steps.filter((step) => step.judging !== undefined).length;
+}
+
+/** A count of things working, in words. **Never a bare `0`**, which reads as a gap. */
+function running(count: number): string {
+  return count === 0 ? "none running" : `${count} running`;
+}
+
+/** A count of calls that are out. `running`'s rule, in the Judge's verb. */
+function out(count: number): string {
+  return count === 0 ? "none out" : `${count} out`;
+}
+
+/**
+ * What the Job has spent against what it may spend.
+ *
+ * **The cap is beside the figure and not on a line of its own.** It is one of
+ * the two ceilings `over_budget` folds, and the number a person decides a
+ * raise against has to be beside the number they are deciding about.
+ */
+function spendFigure(whole: JobWhole | null): Figure | undefined {
+  const spend = whole?.spend;
+  if (spend === undefined) return undefined;
+  return {
+    label: "Spend",
+    value: `${spent(spend.cost_micros, spend.unpriced)} of ${money(spend.cost_cap_micros)}`,
+  };
+}
+
+/**
+ * What keeps the reading current, said beside its age.
+ *
+ * **What Bridge actually does, not a schedule.** `screen.ts` re-takes
+ * `/jobs/:job_id/resources` on every event naming the open Job; nothing polls
+ * it on a timer, and a line claiming one would be a reading nobody takes.
+ */
+export const PULSE_REFRESHES = "Taken again whenever this job moves.";
