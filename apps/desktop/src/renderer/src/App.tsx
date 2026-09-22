@@ -126,6 +126,7 @@ import {
   watchManifestDrift,
   watchOverview,
 } from "./commands";
+import { useDrafted } from "./drafted";
 import { useWhereOpen } from "./where-open";
 import { usePanelOpen } from "./panel-open";
 import { statsOf, fleetPanelOf } from "./left-column";
@@ -177,8 +178,10 @@ export function App({ draft }: AppProps = {}) {
   const [landing, setLanding] = useState<BoardTab | null>(null);
   // Whether the composer is open. It used to sit permanently above the list;
   // `New job` is what opens it now, so the surface is the list until somebody
-  // asks for the form.
-  const [composing, setComposing] = useState(false);
+  // asks for the form — **or until a moment being replayed hands the window a
+  // request already half typed**, which is the one thing that can be true
+  // before anybody has pressed anything. `drafted.tsx`.
+  const [composing, setComposing] = useState(useDrafted().prompt !== undefined);
   // What has been reported against the Judge. Its own view: a report is filed
   // about one Job and the rate is read across all of them.
   const [auditing, setAuditing] = useState(false);
