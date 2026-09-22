@@ -109,3 +109,19 @@ describe("the whole reading", () => {
     ).toBeUndefined();
   });
 });
+
+// One Drone per Job today, so a fallback labelled "Drone on T5" would be a
+// claim the wire does not make.
+test("a task with no Drone of its own says the box reaches the Job's Drone", () => {
+  const read = reading(executingSequential());
+  const groups = read.groups.map((group) => ({
+    ...group,
+    tasks: group.tasks.map((task) => {
+      const bare = { ...task };
+      delete bare.drone_id;
+      return bare;
+    }),
+  }));
+  const said = taskReadingOf({ ...read, groups, taskId: "T5", turns: [], watching: false })!;
+  expect(said.drones).toEqual([{ id: read.whole!.job.assigned_drone, label: "This Job's Drone" }]);
+});

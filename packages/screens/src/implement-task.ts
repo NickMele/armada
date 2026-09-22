@@ -130,7 +130,16 @@ export function taskReadingOf({
   const brief = briefOfTask(task);
   const edit = lastEditOf(whole, turns, taskId);
   const lines = linesOfTask(whole, turns, stepId, taskId);
-  const drone = task.drone_id ?? whole?.job.assigned_drone;
+  // **Labelled for what it actually reaches.** A task with a Drone of its own
+  // is addressed by task; the Job's one Drone is the fallback and says so,
+  // because Fleet runs one per Job and calling it "the Drone on T5" would be a
+  // claim the wire does not make.
+  const drone =
+    task.drone_id !== undefined
+      ? { id: task.drone_id, label: `Drone on ${task.id}` }
+      : whole?.job.assigned_drone === undefined
+        ? undefined
+        : { id: whole.job.assigned_drone, label: "This Job's Drone" };
   return {
     name: `${task.id} · ${task.title}`,
     kind: "task",
@@ -141,6 +150,6 @@ export function taskReadingOf({
     ...(edit === undefined ? { lastEditAbsent: NO_EDIT_READ } : { lastEdit: edit }),
     log: lines,
     ...(lines.length === 0 && !watching ? { logAbsent: NO_TURNS_WATCHED } : {}),
-    drones: drone === undefined ? [] : [{ id: drone, label: `Drone on ${task.id}` }],
+    drones: drone === undefined ? [] : [drone],
   };
 }

@@ -1679,6 +1679,47 @@
   min-height: var(--h-workflow-canvas);
 }
 
+/* The same canvas, opened small. With a step opened under it the run is the
+   map and the board beneath is the reading, so the canvas stops taking the
+   column and the groups get the rest of it. Without this the board was under
+   the fold of a scroll nobody had a reason to make. #1536. */
+.armada-workflow-tab[data-opened] .armada-workflow-tab__canvas {
+  flex: none;
+  height: var(--h-workflow-canvas-opened);
+  min-height: var(--h-workflow-canvas-opened);
+}
+
+/* The step's own board, under the run it is inside. */
+.armada-workflow-tab__opened {
+  flex: none;
+  padding-block-start: var(--space-4);
+}
+
+/* With a step opened the destination scrolls, not the pane — Stacked's own
+   rule, for its own reason. A pane that scrolled put the groups under a fold
+   nobody had a reason to reach for, with the inspector drawn above them. */
+.armada-workflow-tab[data-opened] {
+  flex: none;
+  align-items: start;
+}
+
+.armada-workflow-tab[data-opened] .armada-workflow-tab__surface,
+.armada-workflow-tab[data-opened] .armada-workflow-tab__inspector {
+  overflow: visible;
+}
+
+/* Beside a board of four groups the panel would otherwise be scrolled past,
+   and review and reply are one loop — the reply box has to stay with what a
+   press selected. Sticky only where it has a column of its own; folded, the
+   press scrolls it into view instead. */
+.armada-workflow-tab[data-opened]:not([data-narrow]) .armada-workflow-tab__inspector {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100vh;
+  overflow-y: auto;
+}
+
 /* The canvas/stacked toggle. Above the run rather than over it: drawn inside
    the canvas as a React Flow panel it sat on top of the last step's card at
    every width. #1539. */

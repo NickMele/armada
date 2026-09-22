@@ -9,7 +9,7 @@
 // its neighbours instead.
 
 import { ImplementBoard, Tabs, WorkflowCanvas, WorkflowInspector, WorkflowStacked } from "@armada/components";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { JobDetail as JobWhole, JobSummary, Turn } from "@armada/protocol";
 
 import type { ConfirmableAct, HeldAct } from "./Acts";
@@ -91,6 +91,18 @@ export function WorkflowTab({
   const [openTask, setOpenTask] = useState<string | null>(null);
   const [opened, setOpened] = useState<string[] | null>(null);
 
+  // The panel, so a press on a task can bring it into view. **Review and reply
+  // are one loop**: folded to one column the panel sits under the whole board,
+  // and a press that moved a reply box nobody can see is two surfaces. An
+  // effect because what it writes is scroll position, which is outside React.
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (openTask === null) return;
+    const box = panel.current?.getBoundingClientRect();
+    if (box === undefined || (box.top >= 0 && box.top < window.innerHeight)) return;
+    panel.current?.scrollIntoView({ block: "nearest" });
+  }, [openTask]);
+
   const toggle = (
     <Tabs
       items={WORKFLOW_VIEWS.map((one) => ({ id: one, label: WORKFLOW_VIEW_LABEL[one] }))}
@@ -111,16 +123,6 @@ export function WorkflowTab({
 
   const groups = given ?? taskGroupsOf(whole);
   const groupsUnder = stepTheGroupsHangUnder(whole);
-  // A press on a card is a press on a step or a group, so it takes the panel
-  // off whichever task was open rather than leaving two selections live.
-  const run = workflowRunOf({
-    whole,
-    groups,
-    onOpen: (id) => {
-      setOpen(id);
-      setOpenTask(null);
-    },
-  });
   const step = whole.steps.find((one) => one.step_id === groupsUnder);
   const openGroups = opened ?? groupsThatOpen(groups);
   // The implement step, opened under the run — `#1536`. The canvas above is
@@ -138,6 +140,21 @@ export function WorkflowTab({
     },
     ...(openTask === null ? {} : { openTaskId: openTask }),
     onOpenTask: (id) => setOpenTask(id === openTask ? null : id),
+  });
+  // The run above the board. **Its groups hang on it only where nothing has
+  // opened them below** — the same groups drawn twice is what made the canvas
+  // too tall to fit once it was drawn small.
+  //
+  // A press on a card is a press on a step or a group, so it takes the panel
+  // off whichever task was open rather than leaving two selections live.
+  const run = workflowRunOf({
+    whole,
+    groups,
+    opened: board !== undefined,
+    onOpen: (id) => {
+      setOpen(id);
+      setOpenTask(null);
+    },
   });
   // **The inspector lands on the step the Job is on**, so the panel is never a
   // blank column beside a full canvas. A person's own press then wins, and the
@@ -158,7 +175,12 @@ export function WorkflowTab({
 
   return (
     <div className="armada-detail-tab" role="tabpanel" aria-label={TAB_LABEL.workflow}>
-      <div className="armada-workflow-tab" data-view={view} data-narrow={narrow || undefined}>
+      <div
+        className="armada-workflow-tab"
+        data-view={view}
+        data-narrow={narrow || undefined}
+        data-opened={board === undefined ? undefined : true}
+      >
         <div className="armada-workflow-tab__surface">
           {/* Above the run rather than over it: drawn inside the canvas the
               toggle sat on top of the last step's card at every width. */}
@@ -181,10 +203,14 @@ export function WorkflowTab({
           {/* The step the canvas draws as one card, opened. The run above is
               the same canvas the destination has always used, drawn small so
               what is inside the step has the room. `#1536`. */}
-          {board === undefined ? null : <ImplementBoard {...board} />}
+          {board === undefined ? null : (
+            <div className="armada-workflow-tab__opened">
+              <ImplementBoard {...board} />
+            </div>
+          )}
         </div>
 
-        <div className="armada-workflow-tab__inspector">
+        <div className="armada-workflow-tab__inspector" ref={panel}>
           {reading === undefined ? (
             <p className="armada-inside__absent" role="note">
               Press a step or a group to read what it is doing.
