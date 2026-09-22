@@ -1577,7 +1577,10 @@
 /* --layout-breakpoint, where a two-column split stops fitting. Under it the
    overlap reads below the request rather than in a column too narrow to hold
    a path — and it is still on the surface, because it is a fact about what a
-   person is about to do. */
+   person is about to do.
+
+   armada-allow-off-contract: a container condition cannot read a custom property — measured, not assumed, same as @media
+   1100px is --layout-breakpoint, which a query cannot resolve — docs/contracts/design-system.md */
 @container (max-width: 1100px) {
   .armada-dispatch-pane__columns {
     grid-template-columns: minmax(0, 1fr);

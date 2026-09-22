@@ -112,7 +112,10 @@
 }
 
 /* Where three fields stop being fields — below this the row is three carets
-   and no names, which is what the narrow window is for. */
+   and no names, which is what the narrow window is for.
+
+   armada-allow-off-contract: a container condition cannot read a custom property — measured, not assumed, same as @media
+   480px is the figure the header's own actions already collapse at — docs/contracts/design-system.md */
 @container (max-width: 480px) {
   .armada-dispatch-settings__tier-row {
     grid-template-columns: minmax(0, 1fr);
