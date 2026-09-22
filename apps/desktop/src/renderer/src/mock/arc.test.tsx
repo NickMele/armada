@@ -411,6 +411,8 @@ describe("implement", () => {
 
       await expect.element(runGroup(3)).toHaveTextContent("joining its work");
       await expect.element(runGroup(3)).toHaveTextContent("2 tasks, at the same time");
+      // What bounds the fan out, settled at the gate — `#1550`.
+      await expect.element(runGroup(3)).toHaveTextContent("this Job runs 2 Drones at once");
       await expect.element(runTask("T5")).toHaveTextContent("its own agent");
       await expect.element(runTask("T5")).toHaveTextContent("runs beside T6");
       await expect.element(runTask("T6")).toHaveTextContent("its own agent");

@@ -24,6 +24,7 @@ import {
   besideSaid,
   boundarySaid,
   caseReads,
+  dronesAtOnceSaid,
   failedChecksOf,
   groupSaid,
   markOf,
@@ -104,11 +105,19 @@ export function toldNextOf(step: StepDetail | undefined, failed: readonly string
   return lines.length === 0 ? undefined : lines.join("\n");
 }
 
-/** `2 tasks, at the same time` — fan out — or `2 tasks, one after another`. */
-export function shapeSaid(group: GroupView): string {
+/**
+ * `2 tasks, at the same time` — fan out — or `2 tasks, one after another`.
+ *
+ * **A group running at once carries the Job's Drone cap** (`#1550`), because
+ * that number is what bounds the fan out and this is the only place on the
+ * screen where it decides anything a person can see.
+ */
+export function shapeSaid(group: GroupView, droneCap?: number): string {
   const many = `${group.tasks.length} ${group.tasks.length === 1 ? "task" : "tasks"}`;
   if (group.tasks.length === 1) return `${many}, on its own`;
-  return group.concurrent ? `${many}, at the same time` : `${many}, one after another`;
+  if (!group.concurrent) return `${many}, one after another`;
+  const cap = dronesAtOnceSaid(droneCap);
+  return cap === undefined ? `${many}, at the same time` : `${many}, at the same time \u00b7 ${cap}`;
 }
 
 /** `difficult · opus · its own agent`. The planner's tier, and what it resolved to. */
@@ -191,6 +200,8 @@ export type ImplementBoardReading = {
   onOpenGroup: (groupId: string) => void;
   openTaskId?: string;
   onOpenTask: (taskId: string) => void;
+  /** How many Drones this Job may run at once, where the gate settled one. */
+  droneCap?: number;
 };
 
 /**
@@ -206,6 +217,7 @@ export function implementBoardOf({
   onOpenGroup,
   openTaskId,
   onOpenTask,
+  droneCap,
 }: ImplementBoardReading): ImplementBoardProps | undefined {
   if (groups.length === 0 || step === undefined) return undefined;
   const touchedBy = touchedByOf(groups);
@@ -214,7 +226,7 @@ export function implementBoardOf({
     ordinal: group.ordinal,
     state: group.state,
     says: groupSaid(group.state),
-    shapeSays: shapeSaid(group),
+    shapeSays: shapeSaid(group, droneCap),
     ...(group.commit === undefined ? {} : { commit: group.commit }),
     tasks: group.tasks.map((task) => taskRowOf(task, touchedBy)),
     boundary: boundaryOf(group, groups[at + 1], cases, whole, step),

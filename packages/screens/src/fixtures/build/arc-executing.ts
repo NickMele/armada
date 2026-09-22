@@ -38,7 +38,7 @@ import {
   RUST_CHECKS,
   tasksOf,
 } from "./arc-base";
-import { ARC_LANDING } from "./arc-dispatch";
+import { ARC_LANDING, arcProposal } from "./arc-dispatch";
 import { ARC_DRONES, arcCases, arcGroups, finished, withGroup, withTask } from "./arc-plan";
 
 const IMPLEMENT_ENTERED = "2026-09-22T09:22:00Z";
@@ -227,6 +227,9 @@ export function executingSequential(): ArcMoment {
       groups,
       cases: arcCases(),
       criteria: arcCriterionViews(),
+      // What the gate settled and froze — the Drone cap a concurrent group is
+      // bounded by, among the rest. `#1550`.
+      proposal: arcProposal({ status: "approved" }),
       landing: ARC_LANDING,
       record: recordThroughGroupTwo(),
       pulse: pulse("2026-09-22T10:20:00.000Z", [droneProcess(52_118, "06:12")]),
@@ -264,6 +267,9 @@ export function executingConcurrent(): ArcMoment {
       groups,
       cases: arcCases(),
       criteria: arcCriterionViews(),
+      // What the gate settled and froze — the Drone cap a concurrent group is
+      // bounded by, among the rest. `#1550`.
+      proposal: arcProposal({ status: "approved" }),
       landing: ARC_LANDING,
       record: recordThroughGroupTwo(),
       pulse: pulse("2026-09-22T10:38:00.000Z", []),
@@ -309,6 +315,9 @@ export function groupFailed(): ArcMoment {
       groups,
       cases: arcCases(),
       criteria: arcCriterionViews(),
+      // What the gate settled and froze — the Drone cap a concurrent group is
+      // bounded by, among the rest. `#1550`.
+      proposal: arcProposal({ status: "approved" }),
       landing: ARC_LANDING,
       record: [
         ...recordThroughGroupTwo(),
@@ -357,6 +366,9 @@ export function doneTouched(): ArcMoment {
       groups,
       cases: arcCases(),
       criteria: arcCriterionViews(),
+      // What the gate settled and froze — the Drone cap a concurrent group is
+      // bounded by, among the rest. `#1550`.
+      proposal: arcProposal({ status: "approved" }),
       landing: ARC_LANDING,
       record: [
         ...recordThroughGroupTwo(),

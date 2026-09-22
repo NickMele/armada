@@ -192,6 +192,9 @@ function OneJob(props: JobDetailProps) {
           {...(props.actingAct === undefined ? {} : { actingAct: props.actingAct })}
           {...(props.draft?.groups === undefined ? {} : { groups: props.draft.groups })}
           {...(props.draft?.cases === undefined ? {} : { cases: props.draft.cases })}
+          {...(props.draft?.proposal?.drone_cap === undefined
+            ? {}
+            : { droneCap: props.draft.proposal.drone_cap })}
           turns={turnsOf(props.observed, job.id)?.rows ?? []}
           watching={props.observed.state === "watching"}
           onRedirect={props.onRedirect}

@@ -44,6 +44,8 @@ export type WorkflowTabProps = {
   groups?: readonly GroupView[];
   /** The cases the plan owes, for the tests drawn apart at each boundary. */
   cases?: readonly CaseView[];
+  /** How many Drones this Job may run at once, as the gate settled it. `#1550`. */
+  droneCap?: number;
   /**
    * The Job's turns, where the second socket is carrying them. A task's own
    * lines and its last edit are read off these — `implement-task.ts`.
@@ -68,6 +70,7 @@ export function WorkflowTab({
   onView,
   groups: given,
   cases = [],
+  droneCap,
   turns = [],
   watching = false,
   acting,
@@ -132,6 +135,7 @@ export function WorkflowTab({
     groups,
     cases,
     step,
+    ...(droneCap === undefined ? {} : { droneCap }),
     openGroups,
     onOpenGroup: (id) => {
       setOpened(openGroups.includes(id) ? openGroups.filter((one) => one !== id) : [...openGroups, id]);

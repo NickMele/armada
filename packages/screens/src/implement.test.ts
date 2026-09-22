@@ -23,6 +23,7 @@ import {
   verdictSaid,
 } from "./implement";
 import { tasksField } from "./step";
+import { dronesAtOnceSaid } from "./tab-plan-read";
 
 /** The Job whole behind a moment, and the step its groups hang under. */
 function reading(moment: ArcMoment) {
@@ -30,7 +31,15 @@ function reading(moment: ArcMoment) {
   const held = fixture.watched.state === "read" ? fixture.watched.detail : null;
   const groups = [...moment.draft.groups!];
   const step = held?.steps.find((one) => one.step_id === "implement");
-  return { whole: held, groups, step, cases: [...(moment.draft.cases ?? [])] };
+  return {
+    whole: held,
+    groups,
+    step,
+    cases: [...(moment.draft.cases ?? [])],
+    ...(moment.draft.proposal?.drone_cap === undefined
+      ? {}
+      : { droneCap: moment.draft.proposal.drone_cap }),
+  };
 }
 
 /** The board a moment draws, with nothing opened by hand. */
@@ -109,7 +118,7 @@ describe("a task carries only its own agent", () => {
 
 describe("fan out, then join", () => {
   test("a concurrent group says its tasks run at the same time, and names what each is beside", () => {
-    expect(groupAt(executingConcurrent(), 3).shapeSays).toBe("2 tasks, at the same time");
+    expect(groupAt(executingConcurrent(), 3).shapeSays).toContain("2 tasks, at the same time");
     expect(taskIn(executingConcurrent(), 3, "T5").besideSays).toBe("runs beside T6");
     expect(taskIn(executingConcurrent(), 3, "T6").besideSays).toBe("runs beside T5");
   });
@@ -246,5 +255,26 @@ describe("the open step's own line on Overview", () => {
 
   test("a step with no group draws no line at all", () => {
     expect(tasksField([])).toBeUndefined();
+  });
+});
+
+// `#1550`: the cap is settled at the gate and bounds the fan out, so a group
+// running at once is the one place on this screen where it decides anything.
+describe("how many Drones this Job may run at once", () => {
+  test("a concurrent group carries the cap beside its shape", () => {
+    expect(groupAt(executingConcurrent(), 3).shapeSays).toBe(
+      "2 tasks, at the same time · this Job runs 2 Drones at once",
+    );
+  });
+
+  test("a group whose tasks run in order carries none, because nothing fans out", () => {
+    expect(groupAt(executingConcurrent(), 1).shapeSays).toBe("2 tasks, one after another");
+  });
+
+  test("no cap is as many as the machine allows, which is not this Job's claim", () => {
+    const group = reading(executingConcurrent()).groups[2]!;
+    expect(shapeSaid(group)).toBe("2 tasks, at the same time");
+    expect(dronesAtOnceSaid(undefined)).toBeUndefined();
+    expect(dronesAtOnceSaid(1)).toBe("this Job runs 1 Drone at once");
   });
 });
