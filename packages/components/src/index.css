@@ -289,6 +289,13 @@
 @import "./compositions/StudioNode/StudioNode.css";
 @import "./compositions/StudioWhiteboard/StudioWhiteboard.css";
 
+/* A Job's run, drawn as the workflow it froze: the canvas, its stacked
+   alternative, the card both draw and the panel a step opens into. #1539. */
+@import "./compositions/WorkflowStepCard/WorkflowStepCard.css";
+@import "./compositions/WorkflowCanvas/WorkflowCanvas.css";
+@import "./compositions/WorkflowStacked/WorkflowStacked.css";
+@import "./compositions/WorkflowInspector/WorkflowInspector.css";
+
 /* Activity and Footprint, the two instruments on a Job page. #1268. */
 @import "./compositions/ActivityInstrument/ActivityInstrument.css";
 @import "./compositions/FootprintInstrument/FootprintInstrument.css";

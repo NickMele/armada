@@ -71,6 +71,12 @@ export type GraphCanvasProps<N extends Node, E extends Edge> = {
    * selected, the relations waiting on a person. The canvas decides nothing.
    */
   aside?: ReactNode;
+  /**
+   * Mounted inside the graph, where React Flow's own hooks resolve. For a
+   * surface that has to read or write the viewport — the workflow canvas stays
+   * on the running step this way.
+   */
+  children?: ReactNode;
 };
 
 /** Enough of a placed node to find its centre. Both surfaces hang edges this way. */
@@ -149,6 +155,7 @@ function Surface<N extends Node, E extends Edge>({
   controls = "words",
   besideControls,
   aside,
+  children,
 }: GraphCanvasProps<N, E>) {
   const onPicked = useCallback(
     ({ nodes: picked }: { nodes: N[] }) => onSelectionChange?.(picked.map((node) => node.id)),
@@ -183,6 +190,7 @@ function Surface<N extends Node, E extends Edge>({
         </Panel>
       )}
       <Controls wording={controls} beside={besideControls} />
+      {children}
     </ReactFlow>
   );
 }
