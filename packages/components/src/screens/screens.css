@@ -1548,6 +1548,45 @@
   position: relative;
 }
 
+/* Dispatch: the request beside what else is writing where it would. #1540.
+
+   **Two columns, and the one that grows is the one holding prose.** The
+   request is what a person is writing; the peers column is a rail, and a rail
+   that widens with the window gives a list of two titles half the screen —
+   `--w-run-column`'s own argument, one surface over. --w-dock is that width:
+   it is the column beside the content everywhere else in the app, and a token
+   of its own here would be the same number under a second name. Reported.
+
+   The pane reads its own width rather than the window's, because the rail and
+   Helm's dock are both outside it. */
+.armada-dispatch-pane {
+  min-width: 0;
+  container-type: inline-size;
+}
+
+/* The grid is the child, because a container query never matches the element
+   that declares the container. */
+.armada-dispatch-pane__columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--w-dock));
+  gap: var(--gap-section);
+  align-items: start;
+  min-width: 0;
+}
+
+/* --layout-breakpoint, where a two-column split stops fitting. Under it the
+   overlap reads below the request rather than in a column too narrow to hold
+   a path — and it is still on the surface, because it is a fact about what a
+   person is about to do.
+
+   armada-allow-off-contract: a container condition cannot read a custom property — measured, not assumed, same as @media
+   1100px is --layout-breakpoint, which a query cannot resolve — docs/contracts/design-system.md */
+@container (max-width: 1100px) {
+  .armada-dispatch-pane__columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Plan — what the Job is held to, and the two acts at a plan gate. The board
    itself owns its own stylesheet; these two regions are the destination's.
    #1535. */
@@ -1595,18 +1634,153 @@
   align-items: center;
 }
 
+/* What was asked of the plan's Drone, and the answer under each. #1552. */
+.armada-plan-tab__revisions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.armada-plan-tab__revisions > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-plan-tab__asked {
+  margin: 0;
+  color: var(--fg-default);
+  text-wrap: pretty;
+}
+
+/* The answer, in the one hue its outcome earns. Neither is a Job status: a
+   revision refused leaves the Job exactly where it was, so the tokens are the
+   below-Job-level run pair that status.css already declares. */
+.armada-plan-tab__answered {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-plan-tab__answered[data-answer="refused"] {
+  color: var(--run-failed);
+}
+
+.armada-plan-tab__answered[data-answer="taken"] {
+  color: var(--run-passed);
+}
+
+/* What the ask reached. Beneath the refusal, because it is read after it. */
+.armada-plan-tab__reach {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+/* The one mechanical catch, inside the ask's own dialog. --notice-caution is
+   the declared token for a condition to know about and act on, which is a
+   reorder the scopes disagree with. */
+.armada-plan-tab__ask-warning {
+  margin: 0;
+  color: var(--notice-caution);
+  text-wrap: pretty;
+}
+
+/* What a revision takes with it. Caution rather than failure: the ask has not
+   been answered yet, and this is its cost if it stands. */
+.armada-plan-tab__dropped {
+  color: var(--notice-caution);
+}
+
+/* Workflow — the canvas or the stacked run, with the inspector beside it.
+   Appended, per the rule at the head of `index.css`. #1539.
+
+   The inspector takes the step panel's own floor, so a reading that moved here
+   from the run column lays out the way it did there. */
+.armada-workflow-tab {
+  display: grid;
+  /* **Two columns only where both can be read, and the grid decides.** The
+     Helm dock takes 380px out of the content at any window width, so a rule
+     written against the window gave the canvas 360px at 1440 with the dock
+     open — a four-step run drawn as four cards of noise, which is the v1
+     complaint `bridge.md` names. `auto-fit` folds the inspector under the run
+     instead, and it is the content's own width that decides rather than a
+     collapse point nothing else shares. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--w-workflow-canvas-min)), 1fr));
+  gap: var(--space-4);
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Narrow gives the inspector the column under the run rather than beside it —
+   the same fold `.armada-inside` makes, for the same reason. */
+.armada-workflow-tab[data-narrow] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.armada-workflow-tab__surface,
+.armada-workflow-tab__inspector {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* React Flow measures its own frame, so the canvas needs a height rather than
+   a flex basis of nothing. The floor is what keeps a four-step run legible
+   inside the shortest window Bridge lays out for. */
+.armada-workflow-tab__canvas {
+  flex: 1;
+  min-height: var(--h-workflow-canvas);
+}
+
+/* The canvas/stacked toggle. Above the run rather than over it: drawn inside
+   the canvas as a React Flow panel it sat on top of the last step's card at
+   every width. #1539. */
+.armada-workflow-tab__modes {
+  display: flex;
+  justify-content: flex-start;
+  flex: none;
+  padding-block-end: var(--space-2);
+}
+
+/* Stacked is a page, not two panes. The canvas is a fixed frame a person pans
+   inside, so its column scrolls on its own; a column of step cards is read top
+   to bottom, and scrolling it inside a pane cut the last card in half at the
+   narrowest width. The destination scrolls instead. #1539. */
+.armada-workflow-tab[data-view="stacked"] {
+  flex: none;
+  align-items: start;
+}
+
+.armada-workflow-tab[data-view="stacked"] .armada-workflow-tab__surface,
+.armada-workflow-tab[data-view="stacked"] .armada-workflow-tab__inspector {
+  overflow: visible;}
+
 /* Several pull requests landing in order, above the two columns rather than
    inside the run's. The order between three Jobs is what the parent *is*, and
    the run column tops out at 380px — a card carrying a pull request, a branch,
    a scope and an inline question does not read there. #1543.
 
-   **It scrolls itself, and it is capped at half the screen.** Three members
-   with a question open measure 1122px against a 940px screen, and an
+   **It scrolls itself, and it is capped at two thirds of the screen.** Three
+   members with a question open measure 1122px against a 940px screen, and an
    unbounded band took the whole of it: the run tree and the inspector both
-   measured zero and the Job's own run was off the window. Bounded, the
-   complete-when line and the first member are always on screen and the two
-   columns keep the other half — the same two-scroller rule the columns
-   already keep between them. */
+   measured zero and the Job's own run was off the window. The members get the
+   larger share because they are why this Job is open (the owner, 22 Sep), and
+   the run keeps the rest rather than folding away — a member's question is
+   sometimes really about the parent's plan, and a run nobody can reach is a
+   run nobody can check. */
 .armada-inside__landing {
   display: flex;
   flex-direction: column;
@@ -1614,6 +1788,6 @@
   flex: 0 1 auto;
   min-width: 0;
   min-height: 0;
-  max-height: 50%;
+  max-height: 66%;
   overflow-y: auto;
 }

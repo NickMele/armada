@@ -15,6 +15,9 @@
   /* The surface is laid out by whatever holds it, and a flex or grid child
      with no floor refuses to narrow past its content. */
   min-width: 0;
+  /* The rows inside read the card's own width: it is one of two columns at a
+     wide window and the whole pane at a narrow one. */
+  container-type: inline-size;
 }
 
 .armada-dispatch__body {
@@ -24,13 +27,137 @@
   min-width: 0;
 }
 
-/* What this surface does, in one line above the field. Set back, because it is
-   read once and the field is what the eye goes to. */
-.armada-dispatch__lede {
+/* Where the work happens: the repository it is for, and the two refs. One row
+   where there is room and a column where there is not — three controls at a
+   third of a narrow card each are three fields nobody can read.
+
+   armada-allow-off-contract: a container condition cannot read a custom property — measured, not assumed, same as @media
+   480px is where three fields stop being fields, the same figure the header's own actions collapse at — docs/contracts/design-system.md */
+.armada-dispatch__where {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-items: end;
+  min-width: 0;
+}
+
+@container (max-width: 480px) {
+  .armada-dispatch__where {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The repository is a value and not a field, so it takes the label treatment
+   of one and no border — a disabled input is a control that looks choosable. */
+.armada-dispatch__repository {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  /* Level with the two fields beside it: their own label sits on the line
+     above, and this value sits where their box does. */
+  padding-bottom: var(--space-2);
+}
+
+.armada-dispatch__where-label {
   min-width: 0;
   color: var(--fg-muted);
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+}
+
+.armada-dispatch__where-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-default);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+/* What is attached: the two controls, the link field they open, and the chips.
+   One column, because a chip run wraps and a row would put the controls on a
+   line that moves as the run grows. */
+.armada-dispatch__attached {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-dispatch__attach-acts {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The field and its Add, the button holding its width while the field takes
+   the slack — an address is long and the control never needs to be. */
+.armada-dispatch__link-field {
+  display: flex;
+  gap: var(--space-2);
+  align-items: end;
+  min-width: 0;
+}
+
+.armada-dispatch__link-field > *:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.armada-dispatch__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* A fact about what is on the surface, under what it is about. */
+.armada-dispatch__said {
+  min-width: 0;
+  color: var(--fg-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  text-wrap: pretty;
+}
+
+/* What the press sets off. A numbered list because the three are in order and
+   the order is the substance — an unordered run of three would read as three
+   things that might happen. */
+.armada-dispatch__next {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-dispatch__next-head {
+  min-width: 0;
+  color: var(--fg-default);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+}
+
+.armada-dispatch__next-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding-inline-start: var(--space-4);
+}
+
+.armada-dispatch__next-line {
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  text-wrap: pretty;
 }
 
 /* The wait, where Fleet has said nothing about the call — an older Fleet, or

@@ -128,3 +128,11 @@
 .armada-task-sheet__unplanned {
   color: var(--fg-subtle);
 }
+
+/* The rewrite ask's own control, on its own line under the field it sends.
+   End-aligned, so the sheet's one act sits where a sheet's acts always do. */
+.armada-task-sheet__rewrite-act {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}

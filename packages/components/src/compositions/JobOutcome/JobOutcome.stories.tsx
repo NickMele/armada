@@ -128,3 +128,128 @@ export const NoBranch: Story = {
     ],
   },
 };
+
+/**
+ * The Land board (#1542): what a Job that finished was answered by, what it
+ * produced, what it left on the machine, what it cost and what was run against
+ * it. The figures are `arc/landed`'s, retries included — eight tasks and a
+ * retried group of two make ten agents, and its seven Checks make fourteen runs.
+ */
+export const TheLandBoard: Story = {
+  args: {
+    headline: {
+      verb: "Landed",
+      count: "2 of 2 met",
+      says: "Everything this Job was held to was met.",
+      criteria: [
+        {
+          text: "The rail's Drones stat reads one running beside the machine's most",
+          verdict: "no objection",
+          status: "completed-success",
+        },
+        {
+          text: "Pressing the stat lists the Drone's Job and step, and any Check or Judge call out",
+          verdict: "no objection",
+          status: "completed-success",
+        },
+      ],
+      completes: "Completes when its pull request lands.",
+    },
+    sections: [
+      {
+        name: "Delivered",
+        parts: [
+          {
+            name: "Pull request",
+            icon: GitPullRequest,
+            iconLabel: "Pull request",
+            value: "https://git.example/armada/pull/1604",
+            meta: "merged into main",
+          },
+          {
+            name: "Commit",
+            icon: GitCommitHorizontal,
+            iconLabel: "Commit",
+            value: "e0d47a1",
+            meta: "origin/armada/3-show-what-s-running-in-the-drones-stat",
+          },
+        ],
+      },
+      {
+        name: "Left behind",
+        parts: [
+          {
+            name: "Branch",
+            icon: GitBranch,
+            iconLabel: "Branch",
+            value: "armada/3-show-what-s-running-in-the-drones-stat",
+          },
+          {
+            name: "Worktree",
+            value: ".armada/worktrees/3-show-what-s-running-in-the-drones-stat",
+            meta: "972.8 MiB on disk",
+          },
+        ],
+        note: "Reclaiming the worktree takes the checkout back and leaves the branch and the record.",
+      },
+    ],
+    steps: {
+      name: "The run",
+      meta: "feature",
+      steps: [
+        { label: "Plan the change", verdict: "passed", status: "completed-success", took: "6m 00s" },
+        { label: "Implement", verdict: "passed", status: "completed-success", took: "1h 44m" },
+        { label: "Write tests", verdict: "passed", status: "completed-success", took: "3m 00s" },
+        { label: "Review the change", verdict: "passed", status: "completed-success", took: "4m 00s" },
+      ],
+    },
+    cost: {
+      name: "What it cost",
+      figures: [
+        { label: "Run time", value: "2h 02m" },
+        { label: "Spend", value: "$7.53", detail: "no cap on this Job's record" },
+        { label: "Turns", value: "135", detail: "no cap on this Job's record" },
+        { label: "Drones", value: "10", detail: "group three ran again" },
+        { label: "Checks", value: "32", detail: "group three ran twice" },
+      ],
+      note: "Spend and turns are added up from each task's own agent, which is where cost arrives.",
+    },
+    runs: [
+      {
+        name: "The test set, run again at handoff",
+        meta: "4 cases · before the pull request was offered",
+        runs: [
+          { spec: "crates/api/src/tests/running.rs", who: "Fleet", outcome: "ran", status: "running", meta: "0 frames", when: "11:09:20" },
+          { spec: "packages/screens/src/overview.test.ts", who: "Fleet", outcome: "ran", status: "running", meta: "2 frames", when: "11:09:44" },
+          {
+            spec: "packages/screens/src/Board.test.tsx",
+            who: "Fleet",
+            outcome: "not covered",
+            status: "not-started",
+            meta: "no spec covers Board.tsx",
+            when: "11:10:40",
+          },
+        ],
+        note: "There is no before-run: the baseline capture is off, so each of these stands alone.",
+      },
+      {
+        name: "Run by hand",
+        runs: [],
+        absent: "Nobody has run one of these themselves, before or since it landed.",
+        note: "A run from another contributor's machine needs a store between Armada instances.",
+      },
+    ],
+  },
+  /**
+   * **The claim is that the two absences are said in words.** A case with no
+   * spec is the one row this board could get wrong in the direction that
+   * matters, and a set nobody has run is the other; both are sentences here
+   * rather than a blank cell or an empty table.
+   */
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("not covered")).toBeVisible();
+    await expect(canvas.getByText("no spec covers Board.tsx")).toBeVisible();
+    await expect(canvas.getByText(/There is no before-run/)).toBeVisible();
+    await expect(canvas.getByText(/Nobody has run one of these/)).toBeVisible();
+  },
+};

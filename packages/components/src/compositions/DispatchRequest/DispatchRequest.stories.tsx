@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fireEvent, fn, waitFor } from "storybook/test";
 import type { StagedAttachment } from "@armada/protocol";
 
+import { DispatchSettings } from "../DispatchSettings/DispatchSettings";
 import { DispatchRequest } from "./DispatchRequest";
 import type { Proposal } from "./DispatchRequest";
 
@@ -26,6 +27,12 @@ const meta: Meta<typeof DispatchRequest> = {
   args: {
     request: "",
     onRequest: fn(),
+    repository: "/Users/user/armada",
+    refs: { from: "main", target: "main" },
+    onRefs: fn(),
+    links: [],
+    onAddLink: fn(),
+    onRemoveLink: fn(),
     onSearchFiles: fn(async () => []),
     attachments: [],
     onStage: fn(async () => ({ path: "/tmp/staged" })),
@@ -617,5 +624,60 @@ export const CallRefused: Story = {
       },
     },
     onCopied: fn(),
+  },
+};
+
+/**
+ * Where the work starts and where it lands, differing — a Job cut from a
+ * branch that is not merged yet, landing back in the long-lived one.
+ *
+ * **This is the case the pair exists for.** Read at a glance the two fields
+ * look like one value repeated; here they are two answers.
+ */
+export const FromABranchThatIsNotWhereItLands: Story = {
+  args: {
+    request: REQUEST,
+    refs: { from: "armada/18-fold-the-capacity-read", target: "main" },
+  },
+};
+
+/**
+ * A file, an address and the Studio node the request came off, with the
+ * settings block beside them. The chips say which is which; the filename alone
+ * could not.
+ */
+export const EverythingAttached: Story = {
+  args: {
+    request: REQUEST,
+    attachments: [{ path: "/tmp/staged/flicker.png", filename: "flicker.png", mimeType: "image/png" }],
+    links: ["armada/1162"],
+    node: { name: "The Drones stat says nothing" },
+    settings: (
+      <DispatchSettings
+        open
+        onOpenChange={() => {}}
+        settings={{ droneCap: 2 }}
+        onSettings={() => {}}
+        workflows={[]}
+        models={["haiku", "sonnet", "opus"]}
+        machineCap={4}
+      />
+    ),
+  },
+};
+
+/**
+ * Adding a link is two presses and a typed address, and the surface reports
+ * the address rather than putting it in the request field itself — which is
+ * what makes it a chip a person can take back.
+ */
+export const AddingALink: Story = {
+  args: { request: REQUEST, onAddLink: fn() },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Add a link" }));
+    await userEvent.type(canvas.getByRole("textbox", { name: "Link" }), "armada/1162");
+    await userEvent.click(canvas.getByRole("button", { name: "Add" }));
+    await expect(args.onAddLink).toHaveBeenCalledWith("armada/1162");
+    await expect(args.onRequest).not.toHaveBeenCalled();
   },
 };

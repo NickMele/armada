@@ -292,15 +292,22 @@ function moment(prefix: string, one: ArcMoment): Scenario {
   const built = holding(`${prefix}/${kebab(one.name)}`, one.says, one.fixtures, {
     opens: one.opens,
   });
+  // A moment that has already typed a request is a moment inside the composer,
+  // and the composer asks which repository first on All — so the rail opens on
+  // the one this work is for, the way a person who got that far already has.
+  // Every other moment opens a Job, where the pick changes nothing.
+  const picked =
+    one.draft.prompt === undefined ? null : (built.state.holds.repositories?.[0]?.root ?? null);
   return {
     ...built,
     draft: one.draft,
     // A proposer call still out is `BridgeState.proposing`, which is on the
     // wire — so it is published as state rather than carried as a draft.
-    state:
-      one.proposing === undefined
-        ? built.state
-        : { ...built.state, proposing: one.proposing },
+    state: {
+      ...built.state,
+      repository: picked,
+      ...(one.proposing === undefined ? {} : { proposing: one.proposing }),
+    },
   };
 }
 

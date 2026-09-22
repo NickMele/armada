@@ -126,7 +126,9 @@ import {
   watchManifestDrift,
   watchOverview,
 } from "./commands";
+import { useDrafted } from "./drafted";
 import { useWhereOpen } from "./where-open";
+import { useWorkflowView } from "./workflow-view";
 import { usePanelOpen } from "./panel-open";
 import { statsOf, fleetPanelOf } from "./left-column";
 import { useCommandPalette } from "@armada/shell";
@@ -177,8 +179,10 @@ export function App({ draft }: AppProps = {}) {
   const [landing, setLanding] = useState<BoardTab | null>(null);
   // Whether the composer is open. It used to sit permanently above the list;
   // `New job` is what opens it now, so the surface is the list until somebody
-  // asks for the form.
-  const [composing, setComposing] = useState(false);
+  // asks for the form — **or until a moment being replayed hands the window a
+  // request already half typed**, which is the one thing that can be true
+  // before anybody has pressed anything. `drafted.tsx`.
+  const [composing, setComposing] = useState(useDrafted().prompt !== undefined);
   // What has been reported against the Judge. Its own view: a report is filed
   // about one Job and the rate is read across all of them.
   const [auditing, setAuditing] = useState(false);
@@ -262,6 +266,8 @@ export function App({ draft }: AppProps = {}) {
   // Where things are' own open choice — held locally so a press moves it at
   // once, `#927`'s round trip off the critical path of a toggle.
   const [whereOpen, pressWhereOpen] = useWhereOpen(state.preferences.where_things_are_open);
+  // Canvas or stacked on the Workflow tab. This window's own, and remembered.
+  const [workflowView, pressWorkflowView] = useWorkflowView();
   // The left column's own fold, remembered across a restart — Bridge/1088.
   const [statsOpen, setStatsOpen] = usePanelOpen("stats");
   const [fleetOpen, setFleetOpen] = usePanelOpen("fleet");
@@ -831,6 +837,8 @@ export function App({ draft }: AppProps = {}) {
                 onSaid={setTelling}
                 whereOpen={whereOpen}
                 onOpenWhere={pressWhereOpen}
+                workflowView={workflowView}
+                onWorkflowView={pressWorkflowView}
                 // `n` — the same composer every contextual surface opens.
                 onCompose={() => setComposing(true)}
                 // The run sheet — Journey 9 — and the servers it starts.

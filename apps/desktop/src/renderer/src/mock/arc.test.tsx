@@ -87,18 +87,61 @@ describe("every arc moment loads", () => {
 });
 
 describe("dispatch", () => {
-  it.todo(
+  test(
     "arc/dispatch-typing: the prompt a person is typing stands beside the two Jobs already " +
       "writing where this work would, each named with the path they share — and nothing is " +
       "greyed out, because an overlap is a fact and not a refusal",
+    async () => {
+      mount("arc/dispatch-typing");
+
+      const field = page.getByRole("textbox", { name: "Request" });
+      await expect.element(field).toHaveValue(expect.stringContaining("Drones 1 of 2"));
+
+      const beside = page.getByText("What else is running").first();
+      await expect.element(beside).toBeVisible();
+      await expect
+        .element(page.getByText("Fold the capacity read into one query"))
+        .toBeVisible();
+      // The chip's title is the whole path, which is what a person reads on
+      // hover and what survives the directory's own clip.
+      await expect.element(page.getByTitle("crates/api/src/")).toBeVisible();
+      await expect.element(page.getByText("Give the rail its own scroll")).toBeVisible();
+      await expect.element(page.getByTitle("packages/screens/src/overview.ts")).toBeVisible();
+
+      // The claim the panel exists for: it says what is running and stops
+      // nothing. A greyed Dispatch would make the reading a refusal.
+      await expect
+        .element(page.getByRole("button", { name: "Dispatch", disabled: true }))
+        .not.toBeInTheDocument();
+    },
   );
-  it.todo(
+
+  test(
     "arc/dispatch-typing: the form says how many Drones this Job may run at once, and what " +
       "the machine allows across every Job, as two different numbers",
+    async () => {
+      mount("arc/dispatch-typing");
+      // The block's own head, which says how many are set — the rail carries a
+      // Settings of its own.
+      await page.getByRole("button", { name: /Settings \d set/ }).click();
+
+      await expect.element(page.getByRole("spinbutton", { name: "Drones at once" })).toHaveValue(2);
+      await expect.element(page.getByText("This machine runs 4 at once")).toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/dispatch-typing: where the work starts and where it lands are two fields, and both " +
       "read main without either one being called the other's default",
+    async () => {
+      mount("arc/dispatch-typing");
+
+      await expect.element(page.getByRole("textbox", { name: "From" })).toHaveValue("main");
+      await expect.element(page.getByRole("textbox", { name: "Lands in" })).toHaveValue("main");
+      // Neither field says what the other does. A parenthetical default is how
+      // the pair collapses back into the one field it used to be.
+      await expect.element(page.getByText("default", { exact: false })).not.toBeInTheDocument();
+    },
   );
   it.todo(
     "arc/dispatch-sketch: the picture a person drew is on screen beside the prompt, with what " +
@@ -220,14 +263,99 @@ describe("the plan", () => {
     await expect.element(taskRow("T7")).not.toHaveTextContent("$");
   });
 
-  it.todo(
-    "arc/plan-revision-refused: the Judge's refusal names the one task that was revised, and " +
-      "the other seven are untouched beside it",
-  );
-  it.todo(
-    "arc/plan-revision-refused: the case that fell out of the revised scope reads dropped, " +
-      "with the revision that dropped it",
-  );
+  test("arc/plan-revision-refused: the Judge's refusal names the one task that was revised, and the other seven are untouched beside it", async () => {
+    await at("arc/plan-revision-refused", "Plan");
+    const asked = page.getByRole("region", {
+      name: "What you asked the plan's Drone to change",
+    });
+    await expect.element(asked).toHaveTextContent("out of T5");
+    await expect.element(asked).toHaveTextContent("Refused");
+    await expect
+      .element(asked)
+      .toHaveTextContent("the plan names every file the panel's rows are drawn from");
+    await expect.element(asked).toHaveTextContent("no other task claims it");
+    await expect
+      .element(asked)
+      .toHaveTextContent("T5 is the one task the ask touched. The other 7 stand");
+    // The plan itself is the one the Drone recorded: eight tasks, four groups.
+    const ids = [
+      ...page
+        .getByRole("list", { name: "Groups, in the order they run" })
+        .element()
+        .querySelectorAll("[aria-label$='tasks'] > li"),
+    ].map((one) => one.getAttribute("aria-label")?.split(" ")[0]);
+    expect(ids).toEqual(["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"]);
+  });
+
+  test("arc/plan-revision-refused: the case that fell out of the revised scope reads dropped, with the revision that dropped it", async () => {
+    await at("arc/plan-revision-refused", "Plan");
+    await expect.element(groupCard(4)).toHaveTextContent("Running.test.tsx");
+    await expect.element(groupCard(4)).toHaveTextContent("dropped by a scope revision");
+    await expect
+      .element(page.getByRole("region", { name: "What you asked the plan's Drone to change" }))
+      .toHaveTextContent("It drops packages/screens/src/Running.test.tsx.");
+  });
+
+  test("arc/plan-revision-refused: a group offers move up, move down and remove while the plan waits, and the first group cannot move up", async () => {
+    await at("arc/plan-revision-refused", "Plan");
+    const asks = page.getByRole("group", { name: "Ask about group 1" });
+    await expect.element(asks.getByRole("button", { name: "Move up" })).toBeDisabled();
+    await expect.element(asks.getByRole("button", { name: "Move down" })).toBeEnabled();
+    await expect.element(asks.getByRole("button", { name: "Remove" })).toBeEnabled();
+    await expect
+      .element(page.getByRole("tabpanel", { name: "Plan" }))
+      .toHaveTextContent("The plan is the Drone's record");
+  });
+
+  test("arc/plan-revision-refused: moving a group past one that claims the same file warns before the ask goes out", async () => {
+    await at("arc/plan-revision-refused", "Plan");
+    await page
+      .getByRole("group", { name: "Ask about group 3" })
+      .getByRole("button", { name: "Move down" })
+      .click();
+    const dialog = page.getByRole("dialog").first();
+    await expect
+      .element(dialog)
+      .toHaveTextContent("Ask the Drone to run group 3 after group 4?");
+    await expect
+      .element(dialog)
+      .toHaveTextContent("Group 3 and group 4 both claim packages/screens/src/running-rows.tsx");
+    await expect.element(dialog).toHaveTextContent("Group 3 writes it first as the plan stands");
+    await expect.element(dialog).toHaveTextContent("it may refuse");
+  });
+
+  test("arc/plan-revision-refused: a reorder the scopes do not disagree with carries no warning", async () => {
+    await at("arc/plan-revision-refused", "Plan");
+    await page
+      .getByRole("group", { name: "Ask about group 2" })
+      .getByRole("button", { name: "Move up" })
+      .click();
+    const dialog = page.getByRole("dialog").first();
+    await expect
+      .element(dialog)
+      .toHaveTextContent("Ask the Drone to run group 2 before group 1?");
+    await expect.element(dialog).not.toHaveTextContent("both claim");
+  });
+
+  test("arc/plan-revision-refused: a task's inspector asks for a rewrite, and the control is off until something is typed", async () => {
+    await at("arc/plan-revision-refused", "Plan");
+    await taskRow("T6").getByRole("button").first().click();
+    const sheet = page.getByRole("dialog").first();
+    await expect.element(sheet).toHaveTextContent("Rewrite this task");
+    const send = sheet.getByRole("button", { name: "Ask the Drone" });
+    await expect.element(send).toBeDisabled();
+    await sheet.getByRole("textbox").first().fill("Split the rows out of this one");
+    await expect.element(send).toBeEnabled();
+  });
+
+  test("arc/planned: a plan already past its gate offers no changes at all", async () => {
+    await at("arc/planned", "Plan");
+    await expect.element(page.getByRole("tabpanel", { name: "Plan" })).toBeVisible();
+    expect(page.getByRole("group", { name: "Ask about group 1" }).elements()).toHaveLength(0);
+    await expect
+      .element(page.getByRole("tabpanel", { name: "Plan" }))
+      .not.toHaveTextContent("The plan is the Drone's record");
+  });
 });
 
 describe("implement", () => {
@@ -266,23 +394,100 @@ describe("implement", () => {
 });
 
 describe("the Record", () => {
-  it.todo(
+  test(
     "arc/planned: the Record's who column says Judge on the row where the plan was judged, " +
       "and Fleet on the row where the plan was recorded",
+    async () => {
+      await record("arc/planned");
+      const rows = ledger();
+
+      expect(whoSaid(rows, /Pressing the stat lists the Drone's Job and step/)).toBe("Judge");
+      expect(whoSaid(rows, /^the plan was recorded$/)).toBe("Fleet");
+    },
   );
-  it.todo(
+
+  test(
     "arc/executing-sequential: a Check's run is its own row, with Check in the who column — " +
       "not Fleet, and not the Drone that produced the work",
+    async () => {
+      await record("arc/executing-sequential");
+      const rows = ledger();
+
+      expect(whoSaid(rows, /^typecheck$/)).toBe("Check");
+      expect(whoSaid(rows, /^screens_test$/)).toBe("Check");
+      // The same Job's Drone and Fleet are both on screen, so Check is a
+      // distinction the table is drawing rather than the only word it has.
+      expect(rows.map((row) => row["Who ran it"])).toContain("Drone");
+      expect(rows.map((row) => row["Who ran it"])).toContain("Fleet");
+    },
   );
-  it.todo(
-    "arc/executing-sequential: each row says where in the Job it happened, down to the group " +
-      "and the task where it has one",
+
+  // **The group is named where it holds more than one task.** Today's wire has
+  // no groups, so `taskGroupsOf` derives one per task — and `Implement · group
+  // 1 · T1` would then put the same fact on the row twice. The coordinate
+  // still carries the group; `draft/ledger.test.ts` is where that is pinned.
+  test(
+    "arc/executing-sequential: each row says where in the Job it happened, down to the task " +
+      "where it has one",
+    async () => {
+      await record("arc/executing-sequential");
+      const rows = ledger();
+
+      expect(rows.every((row) => row["Where"] !== "")).toBe(true);
+      expect(rows.map((row) => row["Where"])).toContain("Implement · T1");
+      expect(rows.map((row) => row["Where"])).toContain("Plan the change");
+    },
   );
-  it.todo(
-    "arc/approved-frozen: the approval row names no step at all, because the Job's own " +
-      "machine moving is a fact about the Job",
+
+  // **Reworded from "the approval row".** The instant a Job was approved is a
+  // status move, and status moves live in `GET /jobs/:job_id/events`, which no
+  // arc fixture answers — so the row carrying this claim is the Job's creation.
+  // The claim itself is unchanged: a fact about the Job names no step.
+  test(
+    "arc/approved-frozen: the row for the Job's own machine moving names no step at all, " +
+      "because that is a fact about the Job",
+    async () => {
+      await record("arc/approved-frozen");
+      const rows = ledger();
+
+      expect(rows.map((row) => row["Where"])).toContain("The Job itself");
+      expect(whoSaid(rows, /^this Job was created$/)).toBe("You");
+    },
   );
 });
+
+/** App on an arc moment, with the Record open. */
+async function record(name: string): Promise<void> {
+  mount(name);
+  await page.getByRole("tab", { name: /^Record/ }).click();
+  await expect.poll(() => ledger().length).toBeGreaterThan(0);
+}
+
+/**
+ * The Record's rows, each keyed by the column its cells sit under.
+ *
+ * Read through the table's own header rather than by position, so a column
+ * added or reordered moves the keys with it instead of silently shifting every
+ * assertion one cell along.
+ */
+function ledger(): Record<string, string>[] {
+  const table = document.querySelector("table");
+  if (table === null) return [];
+  const columns = [...table.querySelectorAll("thead th")].map((one) => one.textContent?.trim() ?? "");
+  return [...table.querySelectorAll("tbody tr")].map((row) =>
+    Object.fromEntries(
+      [...row.querySelectorAll("td")].map((cell, at) => [
+        columns[at] ?? String(at),
+        cell.textContent?.trim() ?? "",
+      ]),
+    ),
+  );
+}
+
+/** Who ran the one row whose What matches. */
+function whoSaid(rows: Record<string, string>[], what: RegExp): string | undefined {
+  return rows.find((row) => what.test(row["What"] ?? ""))?.["Who ran it"];
+}
 
 describe("Pulse", () => {
   test("arc/executing-sequential: Pulse names the one process the running Drone holds, the worktree it belongs to, and the instant every figure was read at", async () => {
@@ -336,15 +541,76 @@ async function onPulse(): Promise<void> {
 }
 
 describe("landing", () => {
-  it.todo(
+  test(
     "arc/landed: Land shows the whole test set run again before the pull request was " +
       "offered, with the one case that has no spec named as not covered",
+    async () => {
+      mount("arc/landed");
+      await expect
+        .element(page.getByText(/run again at handoff/i).first())
+        .toBeVisible();
+      for (const spec of [
+        "crates/api/src/tests/running.rs",
+        "packages/screens/src/overview.test.ts",
+        "packages/screens/src/Running.test.tsx",
+        "packages/screens/src/Board.test.tsx",
+      ]) {
+        await expect.element(page.getByText(spec, { exact: true }).first()).toBeVisible();
+      }
+      // The case with no spec says so in words, and nothing beside it reads as a pass.
+      await expect.element(page.getByText("not covered").first()).toBeVisible();
+      await expect.element(page.getByText("no spec covers Board.tsx")).toBeVisible();
+      // There is no before-run, and the board says so rather than leaving a gap.
+      await expect.element(page.getByText(/no before-run/i)).toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/landed: the run a person made themselves is drawn beside Fleet's, and says which of " +
       "them ran it",
+    async () => {
+      mount("arc/landed");
+      const byHand = page.getByText(/^Run by hand$/i);
+      await expect.element(byHand).toBeVisible();
+      // Fleet ran the set; the press this person made is its own set, named for them.
+      await expect.element(page.getByText("Fleet").first()).toBeVisible();
+      await expect.element(page.getByText("you", { exact: true }).first()).toBeVisible();
+    },
   );
-  it.todo("arc/landed: the pull request is on screen as an address a press opens");
+
+  test("arc/landed: the pull request is on screen as an address a press opens", async () => {
+    const { api } = mount("arc/landed");
+    const opened: string[] = [];
+    const was = api.openPullRequest;
+    api.openPullRequest = async (jobId: string) => {
+      opened.push(jobId);
+      return was(jobId);
+    };
+    // The header carries the same address on its `#1604` link, so the board's
+    // row is named by the text it draws rather than by the title both share.
+    const address = page.getByText("https://git.example/armada/pull/1604", { exact: true });
+    await expect.element(address).toBeVisible();
+    await page.getByRole("button", { name: "Open" }).first().click();
+    await expect.poll(() => opened).toHaveLength(1);
+  });
+
+  test("arc/landed: what it cost counts the agents and the Checks the retry ran again", async () => {
+    mount("arc/landed");
+    await expect.element(page.getByText("Drones", { exact: true }).first()).toBeVisible();
+    // Eight tasks and a retried group of two: ten agents, and its seven Checks twice.
+    await expect.element(page.getByText("10", { exact: true }).first()).toBeVisible();
+    await expect.element(page.getByText("32", { exact: true }).first()).toBeVisible();
+    await expect.element(page.getByText(/group three ran again/)).toBeVisible();
+  });
+
+  test("arc/landed: the board says what completes this Job, and what it left behind", async () => {
+    mount("arc/landed");
+    await expect.element(page.getByText("Completes when its pull request lands.")).toBeVisible();
+    await expect.element(page.getByText("Left behind", { exact: true })).toBeVisible();
+    await expect
+      .element(page.getByText(".armada/worktrees/3-show-what-s-running-in-the-drones-stat"))
+      .toBeVisible();
+  });
   test("members/stacked: three pull requests are drawn in the order they land — one merged, one waiting on you, one stacked on it — and nothing on screen names a shape", async () => {
     mount("members/stacked");
     const order = page.getByRole("list", { name: "Pull requests, in the order they land" });
@@ -411,13 +677,54 @@ describe("the wave", () => {
 });
 
 describe("one Job per workflow kind", () => {
-  it.todo(
-    "kinds: each of the eight Jobs draws the steps its own workflow file declares — three " +
-      "for the bug Job, two for the revert Job, four for the feature Job",
-  );
-  it.todo("kinds: no Job on the Board runs a workflow called verify-and-ship");
-  it.todo(
-    "kind/code-review: the run ends at a step that delivers a review, and no step of it " +
-      "offers a diff to land",
-  );
+  // The Workflow tab draws `JobDetail.steps`, which is the workflow the Job
+  // froze. So what these claims read is the workflow file, through the screen.
+  async function stepsOf(name: string) {
+    const scenario = scenarioNamed(name)!;
+    mount(scenario);
+    await page.getByRole("tab", { name: /^Workflow/ }).click();
+    const job = scenario.state.jobs[0]!;
+    return scenario.state.holds.workflows.find((one) => one.id === job.workflow_id)!.steps;
+  }
+
+  /** The card for one step of the run, by the name and state it carries. */
+  const stepCard = (label: string) => page.getByRole("button", { name: new RegExp(`^${label}, `) });
+
+  test.for([
+    ["kind/feature", 4],
+    ["kind/bug", 3],
+    ["kind/revert", 2],
+    ["kind/prototype", 3],
+    ["kind/refactor", 3],
+    ["kind/design-plan", 2],
+    ["kind/code-review", 3],
+    ["kind/epic", 3],
+  ] as const)("%s draws the steps its own workflow file declares", async ([name, count]) => {
+    const steps = await stepsOf(name);
+    expect(steps, `${name} declares ${String(count)} steps`).toHaveLength(count);
+    for (const step of steps) await expect.element(stepCard(step.label).first()).toBeVisible();
+    // And no step the boards invented: `design-plan` is draft and present with
+    // no `decide`, and only a feature Job has a step called Write tests.
+    if (!steps.some((step) => step.label === "Write tests")) {
+      expect(stepCard("Write tests").query(), `${name} draws a step it never declared`).toBeNull();
+    }
+    expect(stepCard("Decide").query(), `${name} draws a step it never declared`).toBeNull();
+  });
+
+  test("no Job on the Board runs a workflow called verify-and-ship", async () => {
+    const { scenario } = mount("kinds");
+    await openBoard();
+    expect(scenario.state.holds.workflows.map((one) => one.id)).not.toContain("verify-and-ship");
+    expect(document.body.textContent).not.toContain("verify-and-ship");
+  });
+
+  test("kind/code-review: the run ends at a step that delivers a review, and offers no diff to land", async () => {
+    const steps = await stepsOf("kind/code-review");
+    const last = steps[steps.length - 1]!;
+    expect(last.label).toBe("Deliver the review");
+    await expect.element(stepCard(last.label).first()).toBeVisible();
+    // Nothing on this run lands anything: a code review delivers a review.
+    expect(page.getByRole("button", { name: /^Merge/ }).query()).toBeNull();
+    expect(page.getByRole("button", { name: /^Land/ }).query()).toBeNull();
+  });
 });

@@ -30,10 +30,20 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { Button, DispatchRequest } from "@armada/components";
-import type { Proposal, ProposalWatch } from "@armada/components";
-import type { StagedAttachment } from "@armada/protocol";
+import { Button, DispatchRequest, DispatchSettings, WhatElseIsRunning } from "@armada/components";
+import type {
+  DispatchSettingsValue,
+  PeerJob,
+  Proposal,
+  ProposalWatch,
+  Refs,
+} from "@armada/components";
+import type { StagedAttachment, WorkflowSummary } from "@armada/protocol";
 
+import { howManySet } from "./draft/dispatch";
+import type { DispatchSettingsView } from "./draft/dispatch";
+import type { LandingRule } from "./draft/landing";
+import type { PeerOverlapAnswer, PeerView } from "./draft/peers";
 import type { Answered } from "./proposal";
 import { PROPOSAL_IS_SLOW } from "./proposal";
 
@@ -103,6 +113,34 @@ export type DispatchJobProps = {
    * state it opens; absent draws none.
    */
   close?: ReactNode;
+  /** The repository this dispatch is for. A fact, answered before this opens. */
+  repository?: string;
+  /**
+   * What the request field opens on. **Absent opens it empty**, which is every
+   * dispatch a person starts themselves; a moment being replayed hands one in.
+   */
+  opensOn?: string;
+  /**
+   * Where the work starts and where it lands, as the Manifest declares them.
+   * Both `null` is a Manifest naming no base, which draws empty fields rather
+   * than a branch name nobody chose.
+   */
+  landing: LandingRule;
+  /**
+   * What else is writing where this work would. **`null` is nobody having
+   * looked**, which is every request at dispatch today — the read hangs off a
+   * Job and there is no Job yet. Drawing it as "nobody is there" would say
+   * something nothing has checked.
+   */
+  peers: PeerOverlapAnswer;
+  /** The workflows Fleet holds, for the settings block's override. */
+  workflows: readonly WorkflowSummary[];
+  /** The models a tier may name. Empty until the connection answers. */
+  models: readonly string[];
+  /** How many Drones this machine runs across every Job. `null` before Fleet said. */
+  machineCap: number | null;
+  /** What the settings block opens on. Absent is nothing set, which is the ordinary case. */
+  settings?: DispatchSettingsView;
   /**
    * Whether the request field or its attachments hold anything closing would
    * throw away. Reported as it changes, and `false` on the way out, so the
@@ -127,6 +165,14 @@ export function DispatchJob({
   statusOf,
   byHand,
   close,
+  repository,
+  opensOn,
+  landing,
+  peers,
+  workflows,
+  models,
+  machineCap,
+  settings: settingsOpenOn,
   onTyped,
   watching,
   onStop,
@@ -134,8 +180,18 @@ export function DispatchJob({
   disabledNote,
   onCopied,
 }: DispatchJobProps) {
-  const [request, setRequest] = useState("");
+  const [request, setRequest] = useState(opensOn ?? "");
   const [attachments, setAttachments] = useState<StagedAttachment[]>([]);
+  // The two refs, seeded from the Manifest and a person's to change. Held as
+  // strings rather than as the rule's `string | null`: a field's empty value is
+  // "", and `null` here would be a second spelling of the same emptiness.
+  const [refs, setRefs] = useState<Refs>({
+    from: landing.from_ref ?? "",
+    target: landing.target ?? "",
+  });
+  const [links, setLinks] = useState<string[]>([]);
+  const [settings, setSettings] = useState<DispatchSettingsValue>(asChosen(settingsOpenOn));
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [proposal, setProposal] = useState<Proposal>({ at: "unasked" });
   // Which of the two ways through this surface is open. Describing is the
   // path, so it is what the surface opens on.
@@ -145,18 +201,26 @@ export function DispatchJob({
   // the press and the answer would be a second chance to fire.
   const outstanding = useRef(false);
 
-  // What a close would lose here: the words in the field, and anything staged
-  // against them. A proposal that came back is not in it — those jobs exist on
-  // the board already and closing this surface does not touch them.
-  const typed = request.trim() !== "" || attachments.length > 0;
+  // What a close would lose here: the words in the field, anything staged or
+  // linked against them, and any setting moved off what it opened on. A
+  // proposal that came back is not in it — those jobs exist on the board
+  // already and closing this surface does not touch them.
+  const typed =
+    request.trim() !== "" ||
+    attachments.length > 0 ||
+    links.length > 0 ||
+    howManySet(asDrafted(settings)) > 0;
   useEffect(() => {
     onTyped?.(typed);
     return () => onTyped?.(false);
   }, [typed, onTyped]);
 
   async function dispatch(): Promise<void> {
-    const asked = request.trim();
-    if (outstanding.current || disabled || asked === "") return;
+    // Links go out with the request, one to a line. The proposer's field is
+    // prose and a ticket address in it is what it already reads; a chip is so
+    // the person can see and take back what they pasted.
+    const asked = [request.trim(), ...links].join("\n");
+    if (outstanding.current || disabled || request.trim() === "") return;
     outstanding.current = true;
     setProposal({ at: "reading" });
     try {
@@ -179,6 +243,7 @@ export function DispatchJob({
   function reset(): void {
     setRequest("");
     setAttachments([]);
+    setLinks([]);
     setProposal({ at: "unasked" });
   }
 
@@ -212,37 +277,106 @@ export function DispatchJob({
   }
 
   return (
-    <DispatchRequest
-      request={request}
-      onRequest={setRequest}
-      attachments={attachments}
-      onStage={onStage}
-      onSearchFiles={onSearchFiles}
-      onAttach={(attachment) => setAttachments((current) => [...current, attachment])}
-      onRemoveAttachment={(path) =>
-        setAttachments((current) => current.filter((attachment) => attachment.path !== path))
-      }
-      onDispatch={() => void dispatch()}
-      onEnterByHand={() => setHand(true)}
-      close={close}
-      onReset={reset}
-      onOpen={onOpen}
-      onApprove={onApprove}
-      approving={approving}
-      // The two facts are joined here and nowhere else: the proposal is this
-      // screen's and the watch is the app's, and the component takes one value.
-      // A screen still `reading` with nothing published yet draws the wait
-      // without a reading, which is the sentence that was always there.
-      proposal={
-        proposal.at === "reading" && watching !== null
-          ? { at: "reading", watch: watching }
-          : shown
-      }
-      onStop={onStop}
-      slowAfterMs={PROPOSAL_IS_SLOW}
-      disabled={disabled}
-      disabledNote={disabledNote}
-      onCopied={onCopied}
-    />
+    <div className="armada-dispatch-pane">
+      <div className="armada-dispatch-pane__columns">
+      <DispatchRequest
+        request={request}
+        onRequest={setRequest}
+        {...(repository === undefined ? {} : { repository })}
+        refs={refs}
+        onRefs={setRefs}
+        links={links}
+        onAddLink={(address) =>
+          setLinks((current) => (current.includes(address) ? current : [...current, address]))
+        }
+        onRemoveLink={(address) => setLinks((current) => current.filter((one) => one !== address))}
+        settings={
+          <DispatchSettings
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            settings={settings}
+            onSettings={setSettings}
+            workflows={workflows}
+            models={models}
+            machineCap={machineCap}
+            disabled={disabled}
+          />
+        }
+        attachments={attachments}
+        onStage={onStage}
+        onSearchFiles={onSearchFiles}
+        onAttach={(attachment) => setAttachments((current) => [...current, attachment])}
+        onRemoveAttachment={(path) =>
+          setAttachments((current) => current.filter((attachment) => attachment.path !== path))
+        }
+        onDispatch={() => void dispatch()}
+        onEnterByHand={() => setHand(true)}
+        close={close}
+        onReset={reset}
+        onOpen={onOpen}
+        onApprove={onApprove}
+        approving={approving}
+        // The two facts are joined here and nowhere else: the proposal is this
+        // screen's and the watch is the app's, and the component takes one value.
+        // A screen still `reading` with nothing published yet draws the wait
+        // without a reading, which is the sentence that was always there.
+        proposal={
+          proposal.at === "reading" && watching !== null
+            ? { at: "reading", watch: watching }
+            : shown
+        }
+        onStop={onStop}
+        slowAfterMs={PROPOSAL_IS_SLOW}
+        disabled={disabled}
+        disabledNote={disabledNote}
+        onCopied={onCopied}
+      />
+        {/* Beside the request, never over it. An overlap is a fact about
+            what is running and it decides nothing here, so it takes a column
+            of its own rather than a warning on the control that dispatches. */}
+        <WhatElseIsRunning
+          peers={peers === null ? null : peers.peers.map(rowOf)}
+          {...(peers === null ? {} : { pathsAsked: peers.paths_asked })}
+          onOpen={onOpen}
+        />
+      </div>
+    </div>
   );
+}
+
+/**
+ * The draft's settings as the control holds them, and back again.
+ *
+ * **Two spellings of four values, and the seam is here on purpose.** The draft
+ * is wire-shaped because that is where it is going (`draft/dispatch.ts` names
+ * the module); a component's props are the app's own. Mapping in one function
+ * each is what keeps a rename on either side a compile error rather than a
+ * field that silently stops arriving.
+ */
+function asChosen(view: DispatchSettingsView = {}): DispatchSettingsValue {
+  const chosen: DispatchSettingsValue = {};
+  if (view.workflow_id !== undefined) chosen.workflowId = view.workflow_id;
+  if (view.tiers !== undefined) chosen.tiers = { ...view.tiers };
+  if (view.drone_cap !== undefined) chosen.droneCap = view.drone_cap;
+  if (view.lands !== undefined) chosen.lands = view.lands;
+  return chosen;
+}
+
+function asDrafted(chosen: DispatchSettingsValue): DispatchSettingsView {
+  const view: DispatchSettingsView = {};
+  if (chosen.workflowId !== undefined) view.workflow_id = chosen.workflowId;
+  if (chosen.tiers !== undefined) view.tiers = { ...chosen.tiers };
+  if (chosen.droneCap !== undefined) view.drone_cap = chosen.droneCap;
+  if (chosen.lands !== undefined) view.lands = chosen.lands;
+  return view;
+}
+
+/** One peer, as the panel draws it. */
+function rowOf(peer: PeerView): PeerJob {
+  return {
+    id: peer.job,
+    title: peer.title,
+    status: peer.status,
+    sharedPaths: peer.shared_paths,
+  };
 }

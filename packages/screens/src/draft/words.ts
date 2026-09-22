@@ -121,6 +121,21 @@ export const CASE_RUN_OUTCOME_WORDS: Readonly<Record<CaseRunOutcome, DraftWord>>
   },
 };
 
+/**
+ * A criterion nothing recorded a verdict for.
+ *
+ * **Not "not covered", which is a case with no spec.** They are two different
+ * facts: a case with no spec has nothing to run, and this is a criterion whose
+ * answer was never written down — a Check-verified one, since nothing on the
+ * wire links a Check to the criterion it answers. One sentence for two facts
+ * teaches a reader to distrust both (owner, 22 Sep 2026).
+ */
+export const CRITERION_NO_VERDICT_WORD: DraftWord = {
+  verb: "no verdict recorded",
+  badgeStatus: "not-started",
+  statusToken: "--status-not-started",
+};
+
 /** What a task owes. `dropped` is a case that fell out, never one that passed. */
 export const CASE_STATE_WORDS: Readonly<Record<CaseState, DraftWord>> = {
   owed: { verb: "owed", badgeStatus: "awaiting-review", statusToken: "--status-awaiting-review" },
@@ -141,4 +156,5 @@ export const DRAFT_VOCABULARIES: readonly {
   { vocabulary: "case_run_outcome", words: CASE_RUN_OUTCOME_WORDS },
   { vocabulary: "case_state", words: CASE_STATE_WORDS },
   { vocabulary: "job_status", words: { classifying: CLASSIFYING_WORD } },
+  { vocabulary: "criterion_reading", words: { no_verdict: CRITERION_NO_VERDICT_WORD } },
 ];
