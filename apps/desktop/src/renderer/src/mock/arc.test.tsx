@@ -17,7 +17,7 @@ import { expect, test, describe, it } from "vitest";
 import { page } from "vitest/browser";
 
 import { SCENARIOS, scenarioNamed } from "./scenario";
-import { mount, unmountAfterEach } from "./testing";
+import { mount, openBoard, rows, unmountAfterEach } from "./testing";
 
 unmountAfterEach();
 
@@ -38,10 +38,23 @@ describe("every arc moment loads", () => {
     expect(ARC[ARC.length - 1]).toBe("arc/landed");
   });
 
-  test("the moments that are several Jobs are there too", () => {
-    for (const name of ["members/stacked", "members/merged", "epic/wave", "kinds"]) {
+  test.for(["members/stacked", "members/merged", "epic/wave", "kinds"])(
+    "%s draws a window",
+    async (name) => {
       expect(scenarioNamed(name), `no scenario named ${name}`).toBeDefined();
-    }
+      mount(name);
+      await expect.element(page.getByRole("navigation").first()).toBeVisible();
+    },
+  );
+
+  test("the kinds Board opens every Job it holds", async () => {
+    const { scenario } = mount("kinds");
+    await openBoard();
+    const done = page.getByRole("button", { name: /^Done/ });
+    if (done.query()?.getAttribute("aria-expanded") === "false") await done.click();
+    await expect
+      .poll(() => rows().map((row) => row.dataset.jobId).sort())
+      .toEqual(scenario.state.jobs.map((job) => job.id).sort());
   });
 });
 
