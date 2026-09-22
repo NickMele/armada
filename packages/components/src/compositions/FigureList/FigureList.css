@@ -95,3 +95,47 @@
 .armada-figures__row[data-wrong] .armada-figures__reading {
   color: var(--error);
 }
+
+/* Across rather than down: the label over its figure, the figures wrapping as
+   the width allows. The floor is the label column `wide` draws, so a cell is
+   never narrower than a label needs and the wrap happens at whole cells.
+
+   **Not the right edge, for the reason the right edge exists.** Values sit
+   where the Stats panel's counts sit so that a reader runs down one edge — in
+   a 160 to 380px panel. A destination is the width of the window, and the same
+   rows there put a label and its figure a hand's width apart. #1538. */
+.armada-figures[data-column="strip"] {
+  grid-template-columns: repeat(auto-fit, minmax(calc(var(--space-12) * 3), 1fr));
+  column-gap: var(--space-6);
+  row-gap: var(--space-3);
+}
+
+.armada-figures[data-column="strip"] .armada-figures__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  grid-column: auto;
+  align-items: stretch;
+}
+
+/* Left, because a figure under its own label is already paired with it and an
+   edge to run down is what a column of pairs needed. */
+.armada-figures[data-column="strip"] .armada-figures__value {
+  text-align: left;
+}
+
+/* A destination's figure is the thing on the band, not a row in a panel. One
+   step up, which is the step the worktree size already takes for the same
+   reason: it is the number a person acts on.
+
+   **It wraps rather than clipping.** A pair — `~$1.80 of $3.00` — is longer
+   than a cell's floor at five figures across, and clipped it read `~$1.80 of
+   ~…`: a spend with its cap cut off, which is the one figure on this board a
+   person acts on directly. It breaks at the space, so neither number is split. */
+.armada-figures[data-column="strip"] .armada-figures__reading {
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}

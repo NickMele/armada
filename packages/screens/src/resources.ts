@@ -47,7 +47,8 @@ import type {
   Turn,
 } from "@armada/protocol";
 import type { PulseView } from "./draft/pulse";
-import { money, ordered, spent } from "./facts";
+import { ordered, spent } from "./facts";
+import { cap } from "./RaiseCap";
 import { checksOf, isRunning } from "./gates";
 import type { LogRow } from "./story";
 import { entriesOf, hideUnread } from "./story";
@@ -439,13 +440,17 @@ function out(count: number): string {
  * **The cap is beside the figure and not on a line of its own.** It is one of
  * the two ceilings `over_budget` folds, and the number a person decides a
  * raise against has to be beside the number they are deciding about.
+ *
+ * **The spend is hedged and the cap is not.** A cost is derived from list
+ * prices and wears the tilde `spent` gives it; a ceiling is a setting somebody
+ * chose, and `~$3.00` would make the limit read as an estimate too.
  */
 function spendFigure(whole: JobWhole | null): Figure | undefined {
   const spend = whole?.spend;
   if (spend === undefined) return undefined;
   return {
     label: "Spend",
-    value: `${spent(spend.cost_micros, spend.unpriced)} of ${money(spend.cost_cap_micros)}`,
+    value: `${spent(spend.cost_micros, spend.unpriced)} of ${cap(spend.cost_cap_micros)}`,
   };
 }
 

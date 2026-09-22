@@ -188,7 +188,7 @@ export function JobResources({
         )}
       </div>
 
-      {figures.length === 0 ? null : <FigureList figures={figures} column="fit" />}
+      {figures.length === 0 ? null : <FigureList figures={figures} column="strip" />}
 
       {examined === null ? null : <Looks looks={examined.looks} />}
 
@@ -452,7 +452,7 @@ function Row({ process }: { process: PulseProcessRow }) {
       </td>
       {/* A process nothing could place says so. **Never the first worktree**,
           which with several checkouts would name the wrong member. */}
-      <td className="armada-holds__mono">{process.owner ?? NOT_PLACED}</td>
+      <td className="armada-holds__owner">{process.owner ?? NOT_PLACED}</td>
       <td className="armada-holds__mono">{process.cpuPercent.toFixed(1)}%</td>
       <td className="armada-holds__mono">{sized(process.memoryBytes)}</td>
       <td className="armada-holds__mono">{process.runningFor}</td>

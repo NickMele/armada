@@ -335,3 +335,29 @@
   line-height: var(--leading-xs);
   color: var(--status-running);
 }
+
+/* Which checkout a process is in. **It wraps where the other cells clip**, and
+   that is what keeps the table inside the card: a branch is one unbreakable
+   mono run, and at 768px `armada/3-show-what-s-running-in-the-drones-stat`
+   pushed Memory and Running for off the right edge of the window. Wrapping
+   spends a line the row has — `.armada-holds__disk`'s own argument. */
+.armada-holds__owner {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+/* A middot between a row's fields. Without one a checkout reads
+   `972.8 MiB armada/24-drop-the-store-singleton on disk /Users/…` as one run
+   of mono, and the app already separates facts on a line this way. In the
+   stylesheet rather than the markup, so a row's fields stay fields — and
+   trailing, so a row that wraps does not begin its second line on a dot. */
+.armada-holds__disk span:not(:last-child)::after,
+.armada-holds__log span:not(:last-child)::after {
+  content: "·";
+  margin-inline-start: var(--space-2);
+  color: var(--fg-subtle);
+}
