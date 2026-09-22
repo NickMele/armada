@@ -1,0 +1,64 @@
+/* Sketch pad — the canvas a person draws boxes on beside a prompt, the line
+   about the whole picture, and where it came from. */
+.armada-sketch-pad {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* React Flow measures its own frame, so the surface takes a height rather than
+   a flex basis of nothing — the workflow canvas's own finding. `relative` is
+   what the empty note below is placed against. */
+.armada-sketch-pad__canvas {
+  position: relative;
+  height: var(--h-sketch-pad);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-canvas);
+  overflow: hidden;
+}
+
+/* The acts on what is selected. Laid out here rather than in GraphCanvas: the
+   aside is the surface's, and a Studio's stacks where these sit in a row. */
+.armada-sketch-pad__acts {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Centred on the pad rather than in a corner, because on an empty pad it is
+   the only thing to read. It takes no pointer: the canvas under it pans. */
+.armada-sketch-pad__empty {
+  position: absolute;
+  inset-inline: var(--space-6);
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+  text-align: center;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-subtle);
+  pointer-events: none;
+}
+
+/* Where the picture came from. A fact about the sketch, set back under it. */
+.armada-sketch-pad__from {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* One box. A well and its frame, at one width so a pad of them reads as a
+   picture rather than as a column of fields. */
+.armada-sketch-box {
+  width: var(--w-sketch-box);
+  padding: var(--space-2);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+.armada-sketch-box[aria-current] {
+  border-color: var(--edge-focus);
+}

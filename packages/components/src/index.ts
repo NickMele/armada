@@ -352,3 +352,5 @@ export * from "./compositions/VerifySheet/VerifySheet";
 // request would. #1540.
 export * from "./compositions/DispatchSettings/DispatchSettings";
 export * from "./compositions/WhatElseIsRunning/WhatElseIsRunning";
+// The picture a person draws beside a prompt, on the one graph surface. #1547.
+export * from "./compositions/SketchPad/SketchPad";
