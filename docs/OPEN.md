@@ -61,7 +61,6 @@ on purpose and makes the gate name what was waiting.
 
 ## docs/concepts/landing.md
 
-- **[landing-when-a-member-counts-as-landed]** Does a member count as landed when its pull request merged, or when it reaches `completed_success`? `JobDelivery::landed` in `crates/ipc/src/detail.rs` is the merge, and `completed_success` is reached before the merge on a Job whose gate hands off to a person. The parent's completion reads one of them and they are not the same moment.
 - **[landing-what-dispatches-the-next-member]** What dispatches the next member when its dependency clears? A dependent becomes dispatchable and is not auto-dispatched, so today a person presses it.
 - **[landing-where-land-together-lives]** Where does "land together or not at all" live — a setting on a group, a field replacing `atomic`, or something else? The pattern is confirmed real; only its home is open.
 - **[landing-a-target-branch-that-moves]** What happens to a Job whose target branch moves, or is deleted, while it runs? And what does the merge line do with a target that is not `main`, which it takes turns onto by construction?

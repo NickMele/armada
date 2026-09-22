@@ -87,8 +87,9 @@ function members(): JobFixture[] {
       created_at: "2026-09-22T08:05:00Z",
       started_at: "2026-09-22T08:06:00Z",
       ended_at: "2026-09-22T09:40:00Z",
-      row: { landed: "merged" },
+      row: { landed: "merged", tasks: { done: 4, working: 0, open: 0, dropped: 0 } },
       detail: {
+        write_targets: ["packages/settings/src/store.ts"],
         delivery: {
           commit: "a19c4b7",
           pushed: "origin/armada/22-give-the-store-one-shape",
@@ -106,7 +107,10 @@ function members(): JobFixture[] {
       says: "awaiting_review — the second landing is waiting on you",
       created_at: "2026-09-22T08:05:00Z",
       started_at: "2026-09-22T09:41:00Z",
+      row: { asking: true, tasks: { done: 3, working: 0, open: 0, dropped: 0 } },
       detail: {
+        write_targets: ["packages/settings/src/read.ts", "apps/desktop/src/renderer/"],
+        judge_question: MEMBER_QUESTION,
         delivery: {
           commit: "c72d0e9",
           pushed: "origin/armada/23-read-the-store-through-selectors",
@@ -123,11 +127,38 @@ function members(): JobFixture[] {
       says: "running — the third landing is working on top of the second",
       created_at: "2026-09-22T08:05:00Z",
       started_at: "2026-09-22T10:20:00Z",
+      row: { tasks: { done: 1, working: 1, open: 3, dropped: 0 } },
+      detail: { write_targets: ["packages/settings/src/", "crates/config/src/"] },
     }),
   ];
 }
 
-/** What the parent's members are, and how each one's work reaches the next. */
+/**
+ * The refusal the second member is holding, answered from the parent.
+ *
+ * **The wire's own `JudgeQuestion`**, against the member's Job id — answering
+ * it here sends the same `answer_judge` as answering it on that Job, which is
+ * the whole reason a person never has to leave this screen to clear it.
+ */
+const MEMBER_QUESTION = {
+  step_id: "handoff",
+  criterion_id: "02-selectors-cover-the-empty-store",
+  question: "Does every selector answer for a store nothing has written to yet?",
+  expected: "A case for the empty store beside each selector",
+  produced: "Two of the six selectors are exercised only against a filled store",
+  consequence: "A first launch reads undefined through those two, before anything is saved",
+  asked_at: "2026-09-22T10:48:00Z",
+};
+
+/**
+ * What the parent's members are, and how each one's work reaches the one
+ * before it.
+ *
+ * **The first carries no link**, because nothing is before it; its pull
+ * request targets where the Job lands and `landed` says that pull request
+ * merged. The other two carry a link each, so both moments together draw all
+ * three of `docs/concepts/landing.md`'s edges.
+ */
 function membersView(third: MemberView["link"]): JobMembersView {
   return {
     job: PARENT_ID,
@@ -137,16 +168,38 @@ function membersView(third: MemberView["link"]): JobMembersView {
         job: MEMBER_IDS.a,
         title: "Give the store one shape",
         status: "completed_success",
-        link: "merged",
+        landed: true,
         landed_at: "2026-09-22T09:40:00Z",
+        branch: "armada/22-give-the-store-one-shape",
+        pull_request: "https://git.example/armada/pull/1591",
+        scope: ["packages/settings/src/store.ts"],
+        tasks: { done: 4, working: 0, open: 0, dropped: 0 },
       },
       {
+        // It waits on the snapshot the first member's merge publishes, not on
+        // the merge itself — the `published` edge, and the only one of the
+        // three that needs nothing at the parent's level.
         job: MEMBER_IDS.b,
         title: "Read the store through selectors",
         status: "awaiting_review",
         link: "published",
+        landed: false,
+        branch: "armada/23-read-the-store-through-selectors",
+        pull_request: "https://git.example/armada/pull/1598",
+        scope: ["packages/settings/src/read.ts", "apps/desktop/src/renderer/"],
+        tasks: { done: 3, working: 0, open: 0, dropped: 0 },
+        question: MEMBER_QUESTION,
       },
-      { job: MEMBER_IDS.c, title: "Drop the store singleton", status: "running", link: third },
+      {
+        job: MEMBER_IDS.c,
+        title: "Drop the store singleton",
+        status: "running",
+        link: third,
+        landed: false,
+        branch: "armada/24-drop-the-store-singleton",
+        scope: ["packages/settings/src/", "crates/config/src/"],
+        tasks: { done: 1, working: 1, open: 3, dropped: 0 },
+      },
     ],
   };
 }
@@ -386,11 +439,14 @@ export function epicWave(): ArcMoment {
       members: {
         job: WAVE_ID,
         title: "Carry the error contract through every surface",
-        members: children.map((one) => ({
+        members: children.map((one, at) => ({
           job: one.fixture.job.id,
           title: one.fixture.job.title,
           status: one.fixture.job.status,
-          link: one.link,
+          // Nothing is before the first, so it carries no link.
+          ...(at === 0 ? {} : { link: one.link }),
+          landed: one.fixture.job.landed === "merged",
+          ...(one.fixture.job.branch === undefined ? {} : { branch: one.fixture.job.branch }),
         })),
       },
       landing: landingInOrder("ready"),

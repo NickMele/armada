@@ -327,6 +327,8 @@
 @import "./compositions/CaptureBar/CaptureBar.css";
 /* The plan read as the groups it will run in, one card each. #1535. */
 @import "./compositions/PlanBoard/PlanBoard.css";
+/* A Job whose members are Jobs — pull requests landing in order. #1543. */
+@import "./compositions/JobMembers/JobMembers.css";
 
 /* The dispatch form's optional settings, and what else is writing where a
    request would. #1540. */

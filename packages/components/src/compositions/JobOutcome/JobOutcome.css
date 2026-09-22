@@ -13,7 +13,9 @@
 
 /* Five tracks declared once on the list and borrowed by each row through
    `subgrid`, so the names and the values line up down the whole region rather
-   than per row. Each is a floor and never a fixed width — a fixed one truncates
+   than per row. The value's floor is 288px, which is a pull request's address:
+   below it the meta beside it — a pushed ref, longer than the value it
+   annotates — took the room and clipped the address to nothing. Each is a floor and never a fixed width — a fixed one truncates
    the longest branch name against empty space, which is the defect the
    fixed-width column rule produced. The value track is the `minmax(0, 1fr)`
    that absorbs the slack, so growth lands in one deliberate place. */
@@ -22,8 +24,8 @@
   grid-template-columns:
     min-content
     max-content
-    minmax(0, 1fr)
-    max-content
+    minmax(calc(var(--space-12) * 6), 1fr)
+    minmax(0, max-content)
     max-content;
   gap: var(--space-2) var(--space-3);
   margin: 0;
@@ -90,12 +92,17 @@
 }
 
 /* What is known beside the value. Mono and neutral — nothing below Job level
-   declares a hue for a file count, so it stays neutral. */
+   declares a hue for a file count, so it stays neutral. It clips rather than
+   holding its full width: a pushed ref is longer than the value it annotates,
+   and a `max-content` meta squeezed the pull request's address to an ellipsis. */
 .armada-outcome__meta {
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-sm);
   color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -128,4 +135,279 @@
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* ── The Land board's additions (#1542) ────────────────────────────────────
+   A finished Job is read once, in one region: how it was answered, what it
+   produced, what it left on the machine, what it cost and what was run against
+   it. Each block below is optional, so a step's own outcome draws exactly what
+   it drew before. */
+
+/* How the Job was answered. The one block above the parts, and the only one
+   with a heading weight of its own. */
+.armada-outcome__headline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-outcome__verdict {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+}
+
+.armada-outcome__verb {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+/* The count. Mono, because it is a figure — and neutral, because the hue that
+   would say whether it is enough belongs on the criterion it came from. */
+.armada-outcome__count {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+}
+
+.armada-outcome__says,
+.armada-outcome__completes {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* What completing it means. Subtle: it is standing copy about the Job's own
+   rule rather than something that happened. */
+.armada-outcome__completes {
+  color: var(--fg-subtle);
+}
+
+/* One thing the Job was held to, and the verb that answered it. Two tracks
+   declared once and borrowed, so the verbs line up down the list however long
+   a criterion's words are. */
+.armada-outcome__criteria {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-outcome__criterion {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.armada-outcome__criterion-text {
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+  text-wrap: pretty;
+}
+
+/* The verdict's hue is the status token's, set inline from the stem the caller
+   names — `Badge` does the same, and for the same reason: the roster is the
+   state machine's and a stylesheet cannot enumerate it. */
+.armada-outcome__criterion-verdict {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+/* The cost readings. `FigureList` justifies its values to its own right edge,
+   which reads as two columns a screen apart when the region is wide — so the
+   list is held to the column width it was drawn for (384px). */
+.armada-outcome__cost {
+  max-width: calc(var(--space-12) * 8);
+  min-width: 0;
+}
+
+/* A block of parts, figures or runs under a name. */
+.armada-outcome__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-outcome__section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0;
+  min-width: 0;
+}
+
+/* The one place this region draws a label: `--text-2xs` at the eyebrow's
+   tracking, which is what every other region's band already uses. */
+.armada-outcome__section-name {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-2xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.armada-outcome__section-meta {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+/* A sentence under a section. Subtle, and a sentence rather than a reading —
+   what has no before-run, who else may post one, what nothing timed. */
+.armada-outcome__aside {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+/* One run of one case. Five tracks on the list, borrowed by each row, so the
+   verbs and the frames line up down the set.
+
+   `justify-content: start` puts the slack after the last column rather than
+   between the spec and what became of it: a row read as a sentence — this
+   spec, this verdict, by this hand — pulls apart at a wide window otherwise. */
+.armada-outcome__runs {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) repeat(4, max-content);
+  justify-content: start;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-outcome__run {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.armada-outcome__run-spec {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  white-space: nowrap;
+}
+
+/* The folder clips and the file name does not: four specs in one directory
+   read as four identical rows when a path clips from the right. */
+.armada-outcome__run-folder {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-subtle);
+}
+
+.armada-outcome__run-file {
+  flex: none;
+}
+
+.armada-outcome__run-outcome {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+/* Who ran it. Sans, because `you` and `Fleet` are words rather than values. */
+.armada-outcome__run-who {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.armada-outcome__run-meta,
+.armada-outcome__run-when {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+/* What to do next about it. Trailing, so it reads after everything it is
+   about, and on the row's own line rather than beside the note. */
+.armada-outcome__act {
+  display: flex;
+  justify-content: flex-start;
+  gap: var(--space-2);
+}
+
+/* The run, step by step. Four tracks on the list and the slack after the last,
+   on the runs list's own rule: the row is read as a sentence. */
+.armada-outcome__steps {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) repeat(3, max-content);
+  justify-content: start;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-outcome__step {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.armada-outcome__step-label {
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-outcome__step-verdict {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  white-space: nowrap;
 }

@@ -57,6 +57,13 @@ import type { OpenStudioFrom } from "./work";
 
 export type JobDetailProps = {
   job: JobSummary;
+  /**
+   * Every Job Bridge is holding, which is where the members of this one come
+   * from: a row whose `dispatched_by` names it. **Absent is a caller with no
+   * Board** — a story or a harness — and draws no members rather than none.
+   * `#1543`.
+   */
+  board?: readonly JobSummary[];
   /** `GET /jobs/:job_id` for this Job, as main published it. */
   watched: Watched;
   workflows: readonly WorkflowSummary[];
