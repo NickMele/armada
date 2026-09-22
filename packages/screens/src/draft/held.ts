@@ -13,6 +13,8 @@
 import type { CaseView } from "./cases";
 import type { CriterionView } from "./criterion";
 import type { GroupView } from "./group";
+import type { LandingRule } from "./landing";
+import type { JobMembersView } from "./members";
 
 /**
  * A Job's draft reading. **Every field is absent by default**, and absent
@@ -26,4 +28,17 @@ export type JobDraft = {
   cases?: readonly CaseView[];
   /** What the Job is held to, with where each criterion's words came from. */
   criteria?: readonly CriterionView[];
+  /**
+   * The Jobs landing under this one, in the order they land. **Absent is a Job
+   * that says nothing about members** — a board handed none derives what the
+   * Board's own rows can answer (`jobMembersOf`), and an ordinary Job has no
+   * members at all.
+   */
+  members?: JobMembersView;
+  /**
+   * What this Job does with the work when it is finished — where it lands,
+   * whether the pull request is offered ready, and what completes the Job.
+   * Read here for the complete-when line over the members.
+   */
+  landing?: LandingRule;
 };
