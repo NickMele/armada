@@ -13,8 +13,8 @@
 //! differently — which is the point of the lifetime.
 //!
 //! **One Manifest today, and the seam is named rather than assumed.** A Fleet
-//! holds one `armada.yml`; a Convoy is gated by several and
-//! `docs/concepts/convoy.md` settles the fold, so it is called here with the
+//! holds one `armada.yml`; a Job may be gated by several and
+//! `docs/concepts/manifest.md` settles the fold, so it is called here with the
 //! one Manifest there is rather than skipped. [`Policies::gating`] is where a
 //! second arrives.
 
@@ -37,7 +37,7 @@ impl Policies {
     ///
     /// It takes the pairs rather than the Manifests so that `fleet` does not
     /// grow an opinion about how a Job's gate list is assembled — that is
-    /// `Job::gate_manifests` and, for a Convoy, a lookup this crate does not
+    /// `Job::gate_manifests` and, where several gate it, a lookup this crate does not
     /// have yet.
     pub fn gating(said: impl IntoIterator<Item = (AutoMerge, ReviewGate)>) -> Policies {
         let (merges, gates): (Vec<AutoMerge>, Vec<ReviewGate>) = said.into_iter().unzip();

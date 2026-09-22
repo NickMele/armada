@@ -83,9 +83,9 @@ The narrative carries three named fields: `trying_to`, what the step was meant t
 
 **The narrative is not Evidence.** Why: Evidence is proof tied to an advance gate, and this states that no proof is coming.
 
-Fleet then adds what it knows and the Drone does not: sibling workspaces, Manifest, Kit and Machine config in force, and Convoy membership if the Job is atomic.
+Fleet then adds what it knows and the Drone does not: sibling workspaces, and the Manifest, Kit and Machine config in force.
 
-**Piloting a [Convoy](convoy.md) pilots all of it.** A Convoy is one Job and one worktree spanning its Workspaces, worked by one Drone at a time, so there is no per-workspace unit to take over — the Drone on the step calls `escape_hatch`, and the one worktree changes hands. The blast radius is wider than a single-workspace pilot: an unrestricted terminal on a worktree spanning several Workspaces at once.
+**Piloting a Job that writes in several Workspaces pilots all of it.** It is one Job and one worktree spanning them, worked by one Drone at a time, so there is no per-workspace unit to take over — the Drone on the step calls `escape_hatch`, and the one worktree changes hands. The blast radius is wider than a single-workspace pilot: an unrestricted terminal on a worktree spanning several Workspaces at once.
 
 ## The piloted session
 

@@ -379,7 +379,7 @@ fn one_frozen_manifest_of_two_freezes_the_job_and_is_the_one_named() {
 
 /// The second gating Manifest is frozen and the owner open, so admission holds the Job and
 /// names the second; the Job is built directly because nothing on `main` fills
-/// `gate_manifests` until Convoy (#49).
+/// `gate_manifests` until a Job is gated by several Manifests (#49).
 #[tokio::test]
 async fn a_frozen_second_gating_manifest_holds_admission_and_is_the_one_named() {
     let home = TempDir::new();

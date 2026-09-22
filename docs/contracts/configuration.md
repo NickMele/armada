@@ -623,19 +623,6 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
   The value is directionally 2-3 rounds; the exact value is a Kit/Manifest
   config row and needs a shipped default.
 
-- **[root-manifest-default-posture]** What is the schema and surface for the
-  root-Manifest default-posture setting?
-  The Job-shape classifier leans on this setting as a prior — prefer Convoy
-  versus prefer strict per-workspace boundaries. Its existence is agreed;
-  its schema and surface are not. Open: whether it is a two-value toggle or
-  a scale; whether it lives in the root `armada.yml` only or a workspace may
-  override it; where it is edited — Manifest Setup, or a settings surface
-  after the fact; and whether the classifier's proposed shape is shown
-  alongside the posture that produced it, so an unexpected proposal is
-  diagnosable. The step's Definition of Done requires that changing the
-  posture measurably changes the proposed shape for an otherwise-identical
-  prompt, which is untestable until the setting has a schema.
-
 - **[helm-budget-warning-threshold]** What is Helm's budget soft-warning
   threshold value?
   Helm has a soft-warning threshold and deliberately no hard cap — it is a
@@ -739,7 +726,8 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
   two-tier Kit settings. A design pass proposes a concrete schema —
   sections for `version`, `id`, `checks`, `commands`, `setup`,
   `permissions`, `knowledge` and `policy`, with `permissions` intersecting
-  across a Convoy and `knowledge` unioning — tested against the Armada Job
+  across a Job's gating Manifests and `knowledge` unioning — tested against
+  the Armada Job
   Scenarios, but is explicitly not a decision: scenarios it cannot express
   (a Workspace created mid-Job becoming a gate; a workspace depending on a
   sibling workspace's output) are named, and further gaps are filed as
