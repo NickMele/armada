@@ -168,3 +168,93 @@ function Size({ added = 0, deleted = 0, biggest }: { added?: number; deleted?: n
     </span>
   );
 }
+
+/**
+ * One group of the plan, once the Job is over. #1542.
+ *
+ * **The group is what a landed Job is read by**, not the task: the Checks run
+ * at a group's end, the commit is the group's and so is the retry — #1530,
+ * 21 Sep. A task's own figures are the Plan's to draw.
+ */
+export type ProducedGroup = {
+  /** `Group one`. The caller words it; this draws it. */
+  name: string;
+  /** The verb for where the group got to — `passed`, `landed`, `failed`. */
+  verb: string;
+  /** The status token stem that verb takes. `Badge`'s own field. */
+  status?: string;
+  /** `2 of 2 done`, from the tasks the group holds. */
+  tasks: string;
+  /**
+   * How long the group took. **Absent where nothing timed it**, which is every
+   * group today: the wire times a step and has no group to time. A caller says
+   * so in `note` rather than drawing a zero.
+   */
+  took?: string;
+  /** How many files its tasks claim. */
+  files: string;
+  /** What ran at its boundary — `7 Checks, run twice`. */
+  checks?: string;
+  /** The commit it left, where it left one. Mono, and it copies. */
+  commit?: string;
+};
+
+export type ProducedGroupsProps = {
+  groups: ProducedGroup[];
+  /** What a Job with no groups says. Never an empty table. */
+  emptyNote: string;
+  /** Under the list — what nothing timed, and anything else the rows cannot say. */
+  note?: ReactNode;
+};
+
+/**
+ * The groups a Job ran, one row each: what it came to, its tasks, how long it
+ * took, what it wrote and what it left.
+ *
+ * **A row says what it cannot say.** A group nothing timed draws the word for
+ * that in the column, rather than a dash a reader has to interpret or a zero
+ * that claims a measurement.
+ */
+export function ProducedGroups({ groups, emptyNote, note }: ProducedGroupsProps) {
+  if (groups.length === 0) {
+    return (
+      <p className="armada-produced__empty" role="note">
+        {emptyNote}
+      </p>
+    );
+  }
+  return (
+    <div className="armada-produced__groups">
+      <ol className="armada-produced__group-rows">
+        {groups.map((group) => (
+          <li className="armada-produced__group" key={group.name}>
+            <span className="armada-produced__group-name">{group.name}</span>
+            <span
+              className="armada-produced__group-verb"
+              {...(group.status === undefined
+                ? {}
+                : { style: { color: `var(--status-${group.status})` } })}
+            >
+              {group.verb}
+            </span>
+            <span className="armada-produced__group-fact">{group.tasks}</span>
+            <span className="armada-produced__group-fact">{group.took ?? NOT_TIMED}</span>
+            <span className="armada-produced__group-fact">{group.files}</span>
+            <span className="armada-produced__group-fact">{group.checks}</span>
+            <span className="armada-produced__group-commit mono">{group.commit}</span>
+          </li>
+        ))}
+      </ol>
+      {note === undefined ? null : <p className="armada-produced__note">{note}</p>}
+    </div>
+  );
+}
+
+/**
+ * What a group nothing timed reads as.
+ *
+ * **Not a dash and not a zero.** The wire times a step, and a group is between
+ * a step and a task, so there is no instant to subtract — which is a fact about
+ * what Fleet records rather than a group that took no time.
+ */
+const NOT_TIMED = "not timed";

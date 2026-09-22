@@ -541,15 +541,76 @@ async function onPulse(): Promise<void> {
 }
 
 describe("landing", () => {
-  it.todo(
+  test(
     "arc/landed: Land shows the whole test set run again before the pull request was " +
       "offered, with the one case that has no spec named as not covered",
+    async () => {
+      mount("arc/landed");
+      await expect
+        .element(page.getByText(/run again at handoff/i).first())
+        .toBeVisible();
+      for (const spec of [
+        "crates/api/src/tests/running.rs",
+        "packages/screens/src/overview.test.ts",
+        "packages/screens/src/Running.test.tsx",
+        "packages/screens/src/Board.test.tsx",
+      ]) {
+        await expect.element(page.getByText(spec, { exact: true }).first()).toBeVisible();
+      }
+      // The case with no spec says so in words, and nothing beside it reads as a pass.
+      await expect.element(page.getByText("not covered").first()).toBeVisible();
+      await expect.element(page.getByText("no spec covers Board.tsx")).toBeVisible();
+      // There is no before-run, and the board says so rather than leaving a gap.
+      await expect.element(page.getByText(/no before-run/i)).toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/landed: the run a person made themselves is drawn beside Fleet's, and says which of " +
       "them ran it",
+    async () => {
+      mount("arc/landed");
+      const byHand = page.getByText(/^Run by hand$/i);
+      await expect.element(byHand).toBeVisible();
+      // Fleet ran the set; the press this person made is its own set, named for them.
+      await expect.element(page.getByText("Fleet").first()).toBeVisible();
+      await expect.element(page.getByText("you", { exact: true }).first()).toBeVisible();
+    },
   );
-  it.todo("arc/landed: the pull request is on screen as an address a press opens");
+
+  test("arc/landed: the pull request is on screen as an address a press opens", async () => {
+    const { api } = mount("arc/landed");
+    const opened: string[] = [];
+    const was = api.openPullRequest;
+    api.openPullRequest = async (jobId: string) => {
+      opened.push(jobId);
+      return was(jobId);
+    };
+    // The header carries the same address on its `#1604` link, so the board's
+    // row is named by the text it draws rather than by the title both share.
+    const address = page.getByText("https://git.example/armada/pull/1604", { exact: true });
+    await expect.element(address).toBeVisible();
+    await page.getByRole("button", { name: "Open" }).first().click();
+    await expect.poll(() => opened).toHaveLength(1);
+  });
+
+  test("arc/landed: what it cost counts the agents and the Checks the retry ran again", async () => {
+    mount("arc/landed");
+    await expect.element(page.getByText("Drones", { exact: true }).first()).toBeVisible();
+    // Eight tasks and a retried group of two: ten agents, and its seven Checks twice.
+    await expect.element(page.getByText("10", { exact: true }).first()).toBeVisible();
+    await expect.element(page.getByText("32", { exact: true }).first()).toBeVisible();
+    await expect.element(page.getByText(/group three ran again/)).toBeVisible();
+  });
+
+  test("arc/landed: the board says what completes this Job, and what it left behind", async () => {
+    mount("arc/landed");
+    await expect.element(page.getByText("Completes when its pull request lands.")).toBeVisible();
+    await expect.element(page.getByText("Left behind", { exact: true })).toBeVisible();
+    await expect
+      .element(page.getByText(".armada/worktrees/3-show-what-s-running-in-the-drones-stat"))
+      .toBeVisible();
+  });
   it.todo(
     "members/stacked: three pull requests are drawn in the order they land — one merged, one " +
       "waiting on you, one stacked on it — and nothing on screen names a shape",

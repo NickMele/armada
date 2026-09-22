@@ -21,7 +21,7 @@ import { useCheckOutputs, useFollowing } from "./outputs";
 /** What `followed` reads as where the caller hands none in. */
 const NOT_FOLLOWING: FollowedLog = { state: "none" };
 import { useFrames } from "./frames";
-import { openArtifact } from "./opening";
+import { openArtifact, openPullRequest } from "./opening";
 import { planOf } from "./plan";
 import { declaredAgainstTouched, editsIn, filesByTask } from "./task-files";
 import { DIFF_CHAPTER, LOG_CHAPTER, useDetailKeys } from "./detail-keys";
@@ -35,6 +35,8 @@ import type { AttemptRead } from "./timeline";
 import type { StepChapter } from "@armada/components";
 import { againOf, useShowAgain } from "./again";
 import { approvalOverviewOf } from "./approval";
+import { LandBoard } from "./LandBoard";
+import { landedOf } from "./landed";
 import { span } from "./duration";
 import { ordered } from "./facts";
 import { holdingOf, logOf, lookOf, turnsOf } from "./mine";
@@ -234,6 +236,9 @@ export function OverviewTab(props: OverviewTabProps) {
 
   const workflow = workflows.find((held) => held.id === job.workflow_id);
   const manifest = manifests.find((held) => held.id === job.owner_manifest_id);
+  // The half of a board's reading no operation answers yet — `draft/held.ts`.
+  // Absent on a real Fleet, and each board falls back to the wire.
+  const draft = props.draft ?? {};
   // Every reading, narrowed to the Job on screen. **All five carry the id they
   // were taken for and all five are checked against it** — each lags a
   // selection by a round trip, so another Job's answer landing here would be
@@ -258,6 +263,8 @@ export function OverviewTab(props: OverviewTabProps) {
   // The workflow overview, while this Job waits for approval — what will run,
   // in place of the idle step view `open` above would otherwise draw. #1149.
   const overview = approvalOverviewOf(job, whole);
+  // What a Job that has finished shows, above the run that finished it. #1542.
+  const landed = landedOf({ job, whole, draft, manifest, holding });
   // What the observe socket says about itself, where it is not reading. **A
   // third answer the story needs**: four of the five states carry no rows, and
   // a chapter drawn from the rows alone reads every one of them as a step that
@@ -607,7 +614,66 @@ export function OverviewTab(props: OverviewTabProps) {
           ).get(onSheet.taskId) ?? [],
         );
 
-  return (
+  // The sheet layer, which the header opens on a Job at any state — so it is
+  // built beside the arrangement rather than inside it.
+  const sheetSlot =
+        open === undefined ? null : (
+          <DetailSheet
+            which={sheet}
+            job={job}
+            whole={whole}
+            step={open}
+            rows={rows}
+            {...(logAttempt === null ? {} : { ofAttempt: logAttempt })}
+            // The turns those rows were folded from, which carry the tool and
+            // the timing a row no longer does. The sheet folds runs of one tool
+            // the way the chapter does, and this is what it folds them by.
+            turns={read}
+            observed={observed}
+            diff={recorded.diff}
+            calls={calls}
+            // Its own name, so a row opened in the sheet is not a row opened in
+            // the chapter's preview. Two logs over one stream hold equal ids.
+            log={keys.inLog("sheet")}
+            held={held}
+            now={now}
+            checkId={openCheckId}
+            {...(onSheet.which === "task" ? { taskId: onSheet.taskId } : {})}
+            {...(taskTouched === undefined ? {} : { taskTouched })}
+            planTasks={plan?.recorded === true ? plan.tasks : undefined}
+            outputs={outputs}
+            following={following}
+            onHold={(to) => move({ move: "hold", held: to })}
+            onRedirect={onRedirect}
+            // The Pulse board, derived exactly as the Pulse tab derives it —
+            // `Look now` came with it, because it acts on this reading and not
+            // on the five lines that open it. Two derivations of one `Held`
+            // would let the sheet and the tab disagree about the same Job.
+            holds={{
+              jobId: job.handle,
+              reading: holding === null ? null : pulseReadingOf(pulseViewOf(holding), examinedNow),
+              figures: pulseFiguresOf(holding === null ? null : pulseViewOf(holding), whole),
+              note: whyNoReading(resources),
+              age: holding === null ? undefined : (span(holding.read_at, now) ?? undefined),
+              refreshed: PULSE_REFRESHES,
+              examined: examinedNow,
+              looking: looked?.state === "looking",
+              lookFailed: looked?.state === "failed" ? LOOK_FAILED : undefined,
+              nothingToAsk: nothingToAsk(resources),
+              onExamine: () => onExamine(job.id),
+            }}
+            // Every setting a person can change on this Job, and what each sends.
+            settings={{
+              models, stale, acting, actingAct, onSetWhenBlocked, onSetWhenRefused, onSetModel, onSetReviewModel,
+              onRemoveAllowedCommand, onRaiseCap, onRaiseTurnCap,
+            }}
+            run={runHook.slot}
+            floor={floor}
+            onClose={closeSheet}
+          />
+        );
+
+  const inside = (
     <InsideAJob
       run={run.map(named)}
       // The name Fleet holds, the id where it does not — a Job older than the
@@ -757,64 +823,29 @@ export function OverviewTab(props: OverviewTabProps) {
       }
       stepAbsent={whyNoSteps(watched, job.id)}
       stepReading={reading?.step}
-      sheet={
-        open === undefined ? null : (
-          <DetailSheet
-            which={sheet}
-            job={job}
-            whole={whole}
-            step={open}
-            rows={rows}
-            {...(logAttempt === null ? {} : { ofAttempt: logAttempt })}
-            // The turns those rows were folded from, which carry the tool and
-            // the timing a row no longer does. The sheet folds runs of one tool
-            // the way the chapter does, and this is what it folds them by.
-            turns={read}
-            observed={observed}
-            diff={recorded.diff}
-            calls={calls}
-            // Its own name, so a row opened in the sheet is not a row opened in
-            // the chapter's preview. Two logs over one stream hold equal ids.
-            log={keys.inLog("sheet")}
-            held={held}
-            now={now}
-            checkId={openCheckId}
-            {...(onSheet.which === "task" ? { taskId: onSheet.taskId } : {})}
-            {...(taskTouched === undefined ? {} : { taskTouched })}
-            planTasks={plan?.recorded === true ? plan.tasks : undefined}
-            outputs={outputs}
-            following={following}
-            onHold={(to) => move({ move: "hold", held: to })}
-            onRedirect={onRedirect}
-            // The Pulse board, derived exactly as the Pulse tab derives it —
-            // `Look now` came with it, because it acts on this reading and not
-            // on the five lines that open it. Two derivations of one `Held`
-            // would let the sheet and the tab disagree about the same Job.
-            holds={{
-              jobId: job.handle,
-              reading: holding === null ? null : pulseReadingOf(pulseViewOf(holding), examinedNow),
-              figures: pulseFiguresOf(holding === null ? null : pulseViewOf(holding), whole),
-              note: whyNoReading(resources),
-              age: holding === null ? undefined : (span(holding.read_at, now) ?? undefined),
-              refreshed: PULSE_REFRESHES,
-              examined: examinedNow,
-              looking: looked?.state === "looking",
-              lookFailed: looked?.state === "failed" ? LOOK_FAILED : undefined,
-              nothingToAsk: nothingToAsk(resources),
-              onExamine: () => onExamine(job.id),
-            }}
-            // Every setting a person can change on this Job, and what each sends.
-            settings={{
-              models, stale, acting, actingAct, onSetWhenBlocked, onSetWhenRefused, onSetModel, onSetReviewModel,
-              onRemoveAllowedCommand, onRaiseCap, onRaiseTurnCap,
-            }}
-            run={runHook.slot}
-            floor={floor}
-            onClose={closeSheet}
-          />
-        )
-      }
+      sheet={sheetSlot}
       onCopied={onCopied}
     />
+  );
+
+
+  // A Job that has finished is read for what it came to, not for the run that
+  // is over: the board takes this destination and the run is the Workflow
+  // tab's, the plan the Plan tab's, the ledger the Record tab's. #1542.
+  if (landed === undefined) return inside;
+  return (
+    <>
+      <LandBoard
+        read={landed}
+        onOpenPullRequest={() => {
+          void openPullRequest(onOpenPullRequest, job.id).then((because) => {
+            if (because !== null) onSaid(because);
+          });
+        }}
+        onCompose={onCompose}
+        onCopied={onCopied}
+      />
+      {sheetSlot}
+    </>
   );
 }

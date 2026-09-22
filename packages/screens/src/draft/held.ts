@@ -10,9 +10,11 @@
 // it by this path, never through `@armada/screens`, so the rule that keeps the
 // drafts out of the main process can still see every reach for one.
 
-import type { CaseView, ScopeRevisionView } from "./cases";
+import type { CaseRunView, CaseView, ScopeRevisionView } from "./cases";
 import type { CriterionView } from "./criterion";
 import type { GroupView } from "./group";
+import type { LandingRule } from "./landing";
+import type { LedgerRow } from "./ledger";
 
 /**
  * A Job's draft reading. **Every field is absent by default**, and absent
@@ -26,6 +28,12 @@ export type JobDraft = {
   cases?: readonly CaseView[];
   /** What the Job is held to, with where each criterion's words came from. */
   criteria?: readonly CriterionView[];
+  /** Every run of every case, with who ran it and what became of the run. */
+  runs?: readonly CaseRunView[];
+  /** How this Job's work reaches the repository, and what completes it. */
+  landing?: LandingRule;
+  /** The Record's rows. The Land board times a group by the ones inside it. */
+  record?: readonly LedgerRow[];
   /**
    * The changes asked of the plan's Drone, in the order they were asked.
    *
