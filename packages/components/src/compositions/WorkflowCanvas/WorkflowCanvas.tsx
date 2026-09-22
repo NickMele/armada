@@ -157,7 +157,12 @@ export function WorkflowCanvas({
         position: entry.position,
         type: "workflow",
         draggable: false,
-        selectable: false,
+        // **`selectable` is what gives the node pointer events at all.** React
+        // Flow sets `pointer-events: none` on a node nothing can select, drag
+        // or focus, and the pane behind it then swallows every press on the
+        // card. Nothing is drawn for a selected node — the card's own
+        // `aria-current` is what says which one is open.
+        selectable: true,
         focusable: false,
         data: { card: entry.card },
       })),

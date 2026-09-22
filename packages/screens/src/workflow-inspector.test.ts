@@ -37,9 +37,12 @@ describe("a step", () => {
     expect(reading.doing).toContain(`${groups.length} group`);
   });
 
-  it("draws every Check the step declares, with what the latest run came to", () => {
+  it("draws every Check the step declares, once each, whichever glob selected it", () => {
     const declared = (whole.steps[1]!.checks ?? []).map((check) => check.name ?? check.kind);
-    expect(reading.checks?.map((check) => check.name)).toEqual(declared);
+    // `implement` declares `test` twice — once for Rust and once for Bridge —
+    // and one command is one row.
+    expect(new Set(declared).size).toBeLessThan(declared.length);
+    expect(reading.checks?.map((check) => check.name)).toEqual([...new Set(declared)]);
   });
 
   it("draws the tests apart from the Checks, and says why there are none", () => {

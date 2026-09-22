@@ -38,9 +38,11 @@ const NO_TASKS_HERE = "No task of the plan is worked at this step.";
 function checksOf(step: StepDetail, only?: readonly string[]): WorkflowInspectorCheck[] {
   const latest = new Map<string, string>();
   for (const run of step.check_runs ?? []) latest.set(run.name, run.outcome);
-  return (step.checks ?? [])
-    .filter((check) => !isSweepMarker(check))
-    .map((check) => nameOf(check))
+  // **De-duplicated.** A step can declare the same Check twice under different
+  // globs — the arc's `implement` declares `test` for Rust and again for
+  // Bridge — and one command is one row whatever selected it.
+  const named = (step.checks ?? []).filter((check) => !isSweepMarker(check)).map((check) => nameOf(check));
+  return [...new Set(named)]
     .filter((name) => only === undefined || only.includes(name))
     .map((name) => {
       const outcome = latest.get(name);

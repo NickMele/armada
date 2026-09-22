@@ -238,13 +238,54 @@ describe("the wave", () => {
 });
 
 describe("one Job per workflow kind", () => {
-  it.todo(
-    "kinds: each of the eight Jobs draws the steps its own workflow file declares — three " +
-      "for the bug Job, two for the revert Job, four for the feature Job",
-  );
-  it.todo("kinds: no Job on the Board runs a workflow called verify-and-ship");
-  it.todo(
-    "kind/code-review: the run ends at a step that delivers a review, and no step of it " +
-      "offers a diff to land",
-  );
+  // The Workflow tab draws `JobDetail.steps`, which is the workflow the Job
+  // froze. So what these claims read is the workflow file, through the screen.
+  async function stepsOf(name: string) {
+    const scenario = scenarioNamed(name)!;
+    mount(scenario);
+    await page.getByRole("tab", { name: /^Workflow/ }).click();
+    const job = scenario.state.jobs[0]!;
+    return scenario.state.holds.workflows.find((one) => one.id === job.workflow_id)!.steps;
+  }
+
+  /** The card for one step of the run, by the name and state it carries. */
+  const stepCard = (label: string) => page.getByRole("button", { name: new RegExp(`^${label}, `) });
+
+  test.for([
+    ["kind/feature", 4],
+    ["kind/bug", 3],
+    ["kind/revert", 2],
+    ["kind/prototype", 3],
+    ["kind/refactor", 3],
+    ["kind/design-plan", 2],
+    ["kind/code-review", 3],
+    ["kind/epic", 3],
+  ] as const)("%s draws the steps its own workflow file declares", async ([name, count]) => {
+    const steps = await stepsOf(name);
+    expect(steps, `${name} declares ${String(count)} steps`).toHaveLength(count);
+    for (const step of steps) await expect.element(stepCard(step.label).first()).toBeVisible();
+    // And no step the boards invented: `design-plan` is draft and present with
+    // no `decide`, and only a feature Job has a step called Write tests.
+    if (!steps.some((step) => step.label === "Write tests")) {
+      expect(stepCard("Write tests").query(), `${name} draws a step it never declared`).toBeNull();
+    }
+    expect(stepCard("Decide").query(), `${name} draws a step it never declared`).toBeNull();
+  });
+
+  test("no Job on the Board runs a workflow called verify-and-ship", async () => {
+    const { scenario } = mount("kinds");
+    await openBoard();
+    expect(scenario.state.holds.workflows.map((one) => one.id)).not.toContain("verify-and-ship");
+    expect(document.body.textContent).not.toContain("verify-and-ship");
+  });
+
+  test("kind/code-review: the run ends at a step that delivers a review, and offers no diff to land", async () => {
+    const steps = await stepsOf("kind/code-review");
+    const last = steps[steps.length - 1]!;
+    expect(last.label).toBe("Deliver the review");
+    await expect.element(stepCard(last.label).first()).toBeVisible();
+    // Nothing on this run lands anything: a code review delivers a review.
+    expect(page.getByRole("button", { name: /^Merge/ }).query()).toBeNull();
+    expect(page.getByRole("button", { name: /^Land/ }).query()).toBeNull();
+  });
 });

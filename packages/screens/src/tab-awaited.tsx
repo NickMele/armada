@@ -10,7 +10,6 @@ import { TAB_LABEL } from "./detail-tabs";
 
 /** What each awaited tab says, and where its reading is in the meantime. */
 const AWAITED: Partial<Record<DetailTab, string>> = {
-  workflow: "The workflow canvas is not built. The run reads as a tree on Overview.",
   plan: "The plan board is not built. The plan reads beside the run on Overview.",
 };
 
