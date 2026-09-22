@@ -35,6 +35,8 @@ An order between members is not one thing. Three repositories give three answers
 
 **The default is the [Manifest](manifest.md)'s, and a plan overrides it.** Which repositories allow stacking, and which need a snapshot published between pull requests, is a fact about the repository that outlives any one change — which is what a Manifest is for. A plan that says otherwise is overriding the repository, not supplying what it failed to say.
 
+**Landed is the merge** (the owner, 22 Sep 2026). A member counts as landed when its pull request merged — `JobDelivery::landed` in `crates/ipc/src/detail.rs` — and not when it reaches `completed_success`, which a Job whose gate hands off to a person reaches while its pull request is still open. Bridge draws the two apart: the Overview region counts pull requests in, never Jobs that finished.
+
 **`published` needs nothing at the parent's level.** A member is a whole Job with its own workflow, and a step that publishes belongs to that workflow. The parent waits on the member; the member is done when its Job is; the Job is done when it has published. Nothing about the link has to know what publishing means.
 
 ## Landing together is a setting, not a shape
@@ -51,7 +53,7 @@ An order between members is not one thing. Three repositories give three answers
 | --- | --- | --- |
 | Target | `main`, or a named branch | **Not built.** `main` by construction, and the merge line takes turns onto it |
 | Pull requests | One for the Job, or one per group | **Not built.** One per Job |
-| Link between members | `stacked`, `merged` or `published`, per edge, defaulted by the Manifest | Only `merged` exists |
+| Link between members | `stacked`, `merged` or `published`, per edge, defaulted by the Manifest | Only `merged` exists. Bridge draws all three (`packages/components/.../JobMembers`), and a link derived from today's wire always reads `merged` |
 | Pull request mode | Ready, or draft | **Not built** |
 | Advance at review | Automatic, or a person | Built, as `manifest_rule:auto_merge` on an advance gate |
 | Complete when | The pull request lands, or every member has | Only the first exists |
@@ -67,7 +69,6 @@ A Job that names one place to write delivers one pull request onto its target, a
 
 ## Open questions
 
-- **[landing-when-a-member-counts-as-landed]** Does a member count as landed when its pull request merged, or when it reaches `completed_success`? `JobDelivery::landed` in `crates/ipc/src/detail.rs` is the merge, and `completed_success` is reached before the merge on a Job whose gate hands off to a person. The parent's completion reads one of them and they are not the same moment.
 - **[landing-what-dispatches-the-next-member]** What dispatches the next member when its dependency clears? A dependent becomes dispatchable and is not auto-dispatched, so today a person presses it.
 - **[landing-where-land-together-lives]** Where does "land together or not at all" live — a setting on a group, a field replacing `atomic`, or something else? The pattern is confirmed real; only its home is open.
 - **[landing-a-target-branch-that-moves]** What happens to a Job whose target branch moves, or is deleted, while it runs? And what does the merge line do with a target that is not `main`, which it takes turns onto by construction?

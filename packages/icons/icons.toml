@@ -300,11 +300,11 @@
   notes = "Removed from stalled because it reads as be patient for the state that most needs to read as wrong. Nothing in Armada may use it."
 
 [icons.layers]
-  means = "convoy"
+  means = "how many places a Job writes — one layer for one, stacked layers for several"
   group = "Graph"
   size = "12px"
   status = "Specified"
-  notes = "At the approval gate and in the detail header only, never in a Job Board row — the row already says convoy, 3 in text."
+  notes = "At the approval gate and in the detail header only, never in a Job Board row \u2014 the row already names the first write target and counts the rest in text. Read `means = \"convoy\"` until 22 Sep 2026: the owner retired every kind name that day (#1530), and the glyph had always stood for blast radius rather than for a shape of Job. `docs/contracts/iconography.md`, Blast radius, is the rule."
 
 [icons.layout-dashboard]
   means = "Overview — a rectangle split into panes, like the tile band and lists it opens on"
