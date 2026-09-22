@@ -27,6 +27,13 @@
   min-width: 0;
 }
 
+/* Write or Sketch. Leading rather than filling the row: the strip swaps the
+   one block under it, and stretched across the card it would read as chrome
+   for the whole card. #1547. */
+.armada-dispatch__modes {
+  display: flex;
+}
+
 /* Where the work happens: the repository it is for, and the two refs. One row
    where there is room and a column where there is not — three controls at a
    third of a narrow card each are three fields nobody can read.

@@ -8,6 +8,7 @@ import { Button } from "../../primitives/Button/Button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../primitives/Card/Card";
 import { Input } from "../../primitives/Input/Input";
 import { MentionPopover, useMention } from "../../primitives/MentionPopover/MentionPopover";
+import { Tabs } from "../../primitives/Tabs/Tabs";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 import { ErrorNotice } from "../../errors/ErrorNotice/ErrorNotice";
 import type { DebugPayload } from "../../errors/ErrorNotice/ErrorNotice";
@@ -138,6 +139,22 @@ export type DispatchRequestProps = {
    */
   settings?: ReactNode;
   /**
+   * Which of the two ways of saying it is open, and the surface Sketch draws.
+   *
+   * **Absent draws no switch at all**, which is a composer that takes words
+   * only. Where one is given, `mode` is controlled for the reason `request` is:
+   * what a person drew outlives a swap back to Write, so the caller holds it.
+   */
+  mode?: RequestMode;
+  onMode?: (mode: RequestMode) => void;
+  sketchPad?: ReactNode;
+  /**
+   * The sketch, as the chip beside the prompt reads it. **Absent attaches
+   * none** — an empty pad is not an attachment — and `from` is where it was
+   * made, which a sketch drawn from nothing does not have.
+   */
+  sketch?: { name: string; from?: string };
+  /**
    * Narrow the checkout against typed text, for the `@` mention popup —
    * `crate::files::search` on the other side of the wire. Never rejects: a
    * call that could not be made answers empty, the way `JobCommands.searchFiles`
@@ -223,6 +240,19 @@ export type DispatchRequestProps = {
  * as a branch name this surface made up.
  */
 export type Refs = { from: string; target: string };
+
+/**
+ * The two ways of saying what you want. **Words or a picture, never both at
+ * once on screen** — the prompt and the pad are one request, and a card
+ * holding the two side by side at 768px would give neither room to be read.
+ */
+export type RequestMode = "write" | "sketch";
+
+/** What the switch's two segments are called. */
+const MODES = [
+  { id: "write", label: "Write" },
+  { id: "sketch", label: "Sketch" },
+];
 
 /**
  * Where the one call has got to.
@@ -358,6 +388,10 @@ export function DispatchRequest({
   onRemoveLink,
   node,
   settings,
+  mode = "write",
+  onMode,
+  sketchPad,
+  sketch,
   onSearchFiles,
   attachments,
   onStage,
@@ -443,6 +477,14 @@ export function DispatchRequest({
             />
           ) : (
             <>
+              {/* Above the field rather than on the card's head: it swaps what
+                  is directly under it, and nothing else on the card. */}
+              {sketchPad === undefined ? null : (
+                <div className="armada-dispatch__modes">
+                  <Tabs items={MODES} value={mode} onChange={(id) => onMode?.(id as RequestMode)} />
+                </div>
+              )}
+              {sketchPad !== undefined && mode === "sketch" ? sketchPad : (
               <div className="armada-mention-anchor">
                 <Textarea
                   label="Request"
@@ -472,6 +514,7 @@ export function DispatchRequest({
                   />
                 ) : null}
               </div>
+              )}
               {/* Hidden behind the "Attach" button — no file input is ever
                   drawn directly, the platform's own picker chrome is not this
                   app's to style. */}
@@ -489,6 +532,7 @@ export function DispatchRequest({
                 {...(onAddLink === undefined ? {} : { onAddLink })}
                 {...(onRemoveLink === undefined ? {} : { onRemoveLink })}
                 {...(node === undefined ? {} : { node })}
+                {...(sketch === undefined ? {} : { sketch })}
                 disabled={reading || disabled}
                 onPickFile={() => fileInputRef.current?.click()}
               />
@@ -663,6 +707,7 @@ function Attached({
   onAddLink,
   onRemoveLink,
   node,
+  sketch,
   disabled,
   onPickFile,
 }: {
@@ -672,6 +717,7 @@ function Attached({
   onAddLink?: (address: string) => void;
   onRemoveLink?: (address: string) => void;
   node?: { name: string };
+  sketch?: { name: string; from?: string };
   disabled: boolean;
   onPickFile: () => void;
 }) {
@@ -725,9 +771,18 @@ function Attached({
           </Button>
         </div>
       )}
-      {attachments.length + links.length === 0 && node === undefined ? null : (
+      {attachments.length + links.length === 0 && node === undefined && sketch === undefined ? null : (
         <div className="armada-dispatch__chips">
           {node === undefined ? null : <AttachmentChip filename={node.name} kind="node" />}
+          {/* Read-only: a sketch is taken back on the pad, where the boxes
+              going are visible, and not by a press on a chip saying only
+              `sketch 1`. */}
+          {sketch === undefined ? null : (
+            <AttachmentChip
+              filename={sketch.name}
+              {...(sketch.from === undefined ? {} : { from: sketch.from })}
+            />
+          )}
           {attachments.map((attachment) => (
             <AttachmentChip
               key={attachment.path}
