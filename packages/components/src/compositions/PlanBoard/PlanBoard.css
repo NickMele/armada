@@ -1,0 +1,249 @@
+/* Plan board — the plan read as the groups it will run in.
+
+   Every track below carries a floor rather than a width, and every list wraps,
+   because this surface is read at 768px and at 2000 and the v1 entry that says
+   "layout breaks on resize" was its own line item. #1535. */
+.armada-plan-board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.armada-plan-board__approach {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--fg-muted);
+}
+
+.armada-plan-board__order {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* The order contradicting the scopes. A note, not an alarm: two groups
+   claiming one file is legal, and what it costs is a task finished twice. */
+.armada-plan-board__clashes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--notice-caution);
+  border-radius: var(--radius-md);
+  background: var(--notice-caution-bg);
+  min-width: 0;
+}
+
+.armada-plan-board__clashes-title {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+}
+
+.armada-plan-board__clashes ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-plan-board__groups {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-plan-board__group {
+  min-width: 0;
+}
+
+/* Where the group is, as a word. Plain sans in --fg-muted: a group is not a
+   Job, so it takes no badge and no status hue the token file has not
+   declared. Only the two outcomes below take one. */
+.armada-plan-board__state {
+  flex: none;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-plan-board__state[data-state="running"],
+.armada-plan-board__state[data-state="checking"],
+.armada-plan-board__state[data-state="joining"] {
+  color: var(--run-running);
+}
+
+.armada-plan-board__state[data-state="passed"],
+.armada-plan-board__state[data-state="landed"] {
+  color: var(--run-passed);
+}
+
+.armada-plan-board__state[data-state="failed"],
+.armada-plan-board__state[data-state="retrying"] {
+  color: var(--run-failed);
+}
+
+.armada-plan-board__group-facts,
+.armada-plan-board__scope,
+.armada-plan-board__checks,
+.armada-plan-board__tests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-plan-board__group-facts:empty {
+  display: none;
+}
+
+.armada-plan-board__scope,
+.armada-plan-board__checks,
+.armada-plan-board__tests {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.armada-plan-board__tasks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-plan-board__task {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  min-width: 0;
+}
+
+/* The row's own control. The title is what opens the inspector, so the row
+   stays one control rather than a pressable li with a button inside it. */
+.armada-plan-board__task-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.armada-plan-board__task-head > svg {
+  flex: none;
+  color: var(--fg-subtle);
+  align-self: center;
+}
+
+.armada-plan-board__task-head[aria-current] .armada-plan-board__task-title {
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}
+
+.armada-plan-board__task-id {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* minmax(0, 1fr)'s job on a flex line: the title absorbs the slack, so the
+   tier lands in one deliberate place rather than spreading the row apart. */
+.armada-plan-board__task-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  text-wrap: pretty;
+}
+
+.armada-plan-board__task[data-mark="dropped"] .armada-plan-board__task-title {
+  text-decoration: line-through;
+  color: var(--fg-subtle);
+}
+
+.armada-plan-board__task-tier {
+  flex: none;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+.armada-plan-board__task-notes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-inline-start: var(--space-4);
+  min-width: 0;
+}
+
+.armada-plan-board__task-beside {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* The flag. --instrument-outside-plan is the declared token for work that
+   reached past where it was meant to, which is exactly this claim. */
+.armada-plan-board__task-touched {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--instrument-outside-plan);
+}
+
+.armada-plan-board__task-failed {
+  padding-inline-start: var(--space-4);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* What runs once every task in the card has stopped, divided from them by a
+   rule: the boundary is a different actor, not a fifth task. */
+.armada-plan-board__boundary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--border-subtle);
+  min-width: 0;
+}
+
+.armada-plan-board__boundary-says {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}

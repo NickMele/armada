@@ -38,6 +38,12 @@
   color: var(--fg-subtle);
 }
 
+/* The agent stopped without finishing. `--step-failed` is the declared alias
+   of the Job's own system-failure hue, one level below a step. */
+.armada-task-mark[data-state="failed"] {
+  color: var(--step-failed);
+}
+
 /* Struck through in the row beside it; the mark itself carries no hue —
    dropped is a decision, not a failure. */
 .armada-task-mark[data-state="dropped"] {

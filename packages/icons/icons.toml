@@ -548,8 +548,16 @@
   group = "Job state"
   size = "12 and 16px"
   status = "Specified"
-  reserved = "System failure. Never a human decision — that is ban."
+  reserved = "Two uses, told apart by which record it marks. System failure as a badge, and the shadcn dialog close as chrome; a Plan region's failed task, below. Never a human decision — that is ban."
   notes = "Bare cross. As a badge it is system failure only; as chrome it is the shadcn dialog close, unchanged."
+
+  [[icons.x.usage]]
+    means = "A plan task whose own agent stopped without finishing"
+    group = "Step and Verdict"
+    size = "12px"
+    status = "Specified"
+    reserved = "TaskMark's (packages/components) failed state only, docs/concepts/plan.md. Never a dropped task, which is minus, and never a Check outcome, which is shield-x."
+    notes = "Added 2026-09-22 for #1535, once a Drone per task made a task able to fail on its own. Reuses the table above's claim one level below a Job: the system failed, nobody decided. It is the counterpart of check, which TaskMark already takes for done, so the pair reads at task level exactly as it does at Job level — and the pairing is what refused circle-x, which is reserved to Judge verdicts, and shield-x, which is reserved to Checks. A task's agent stopping is neither. Renders --step-failed, the declared alias of --status-completed-failed one level below a step, so no token was minted."
 
 [icons.chevron-down]
   means = "Disclosure — the caret segment of a split button"
