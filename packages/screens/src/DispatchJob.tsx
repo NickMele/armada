@@ -116,6 +116,11 @@ export type DispatchJobProps = {
   /** The repository this dispatch is for. A fact, answered before this opens. */
   repository?: string;
   /**
+   * What the request field opens on. **Absent opens it empty**, which is every
+   * dispatch a person starts themselves; a moment being replayed hands one in.
+   */
+  opensOn?: string;
+  /**
    * Where the work starts and where it lands, as the Manifest declares them.
    * Both `null` is a Manifest naming no base, which draws empty fields rather
    * than a branch name nobody chose.
@@ -161,12 +166,13 @@ export function DispatchJob({
   byHand,
   close,
   repository,
+  opensOn,
   landing,
   peers,
   workflows,
   models,
   machineCap,
-  settings: opensOn,
+  settings: settingsOpenOn,
   onTyped,
   watching,
   onStop,
@@ -174,7 +180,7 @@ export function DispatchJob({
   disabledNote,
   onCopied,
 }: DispatchJobProps) {
-  const [request, setRequest] = useState("");
+  const [request, setRequest] = useState(opensOn ?? "");
   const [attachments, setAttachments] = useState<StagedAttachment[]>([]);
   // The two refs, seeded from the Manifest and a person's to change. Held as
   // strings rather than as the rule's `string | null`: a field's empty value is
@@ -184,7 +190,7 @@ export function DispatchJob({
     target: landing.target ?? "",
   });
   const [links, setLinks] = useState<string[]>([]);
-  const [settings, setSettings] = useState<DispatchSettingsValue>(asChosen(opensOn));
+  const [settings, setSettings] = useState<DispatchSettingsValue>(asChosen(settingsOpenOn));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [proposal, setProposal] = useState<Proposal>({ at: "unasked" });
   // Which of the two ways through this surface is open. Describing is the

@@ -59,18 +59,61 @@ describe("every arc moment loads", () => {
 });
 
 describe("dispatch", () => {
-  it.todo(
+  test(
     "arc/dispatch-typing: the prompt a person is typing stands beside the two Jobs already " +
       "writing where this work would, each named with the path they share — and nothing is " +
       "greyed out, because an overlap is a fact and not a refusal",
+    async () => {
+      mount("arc/dispatch-typing");
+
+      const field = page.getByRole("textbox", { name: "Request" });
+      await expect.element(field).toHaveValue(expect.stringContaining("Drones 1 of 2"));
+
+      const beside = page.getByText("What else is running").first();
+      await expect.element(beside).toBeVisible();
+      await expect
+        .element(page.getByText("Fold the capacity read into one query"))
+        .toBeVisible();
+      // The chip's title is the whole path, which is what a person reads on
+      // hover and what survives the directory's own clip.
+      await expect.element(page.getByTitle("crates/api/src/")).toBeVisible();
+      await expect.element(page.getByText("Give the rail its own scroll")).toBeVisible();
+      await expect.element(page.getByTitle("packages/screens/src/overview.ts")).toBeVisible();
+
+      // The claim the panel exists for: it says what is running and stops
+      // nothing. A greyed Dispatch would make the reading a refusal.
+      await expect
+        .element(page.getByRole("button", { name: "Dispatch", disabled: true }))
+        .not.toBeInTheDocument();
+    },
   );
-  it.todo(
+
+  test(
     "arc/dispatch-typing: the form says how many Drones this Job may run at once, and what " +
       "the machine allows across every Job, as two different numbers",
+    async () => {
+      mount("arc/dispatch-typing");
+      // The block's own head, which says how many are set — the rail carries a
+      // Settings of its own.
+      await page.getByRole("button", { name: /Settings \d set/ }).click();
+
+      await expect.element(page.getByRole("spinbutton", { name: "Drones at once" })).toHaveValue(2);
+      await expect.element(page.getByText("This machine runs 4 at once")).toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/dispatch-typing: where the work starts and where it lands are two fields, and both " +
       "read main without either one being called the other's default",
+    async () => {
+      mount("arc/dispatch-typing");
+
+      await expect.element(page.getByRole("textbox", { name: "From" })).toHaveValue("main");
+      await expect.element(page.getByRole("textbox", { name: "Lands in" })).toHaveValue("main");
+      // Neither field says what the other does. A parenthetical default is how
+      // the pair collapses back into the one field it used to be.
+      await expect.element(page.getByText("default", { exact: false })).not.toBeInTheDocument();
+    },
   );
   it.todo(
     "arc/dispatch-sketch: the picture a person drew is on screen beside the prompt, with what " +

@@ -12,8 +12,12 @@ import { Button, Dialog, KbdBinding } from "@armada/components";
 import { AskRepository, Composer, DispatchJob, watchOf } from "@armada/screens";
 import { Boundary } from "@armada/shell";
 
+import { dispatchSettingsOf } from "@armada/screens/src/draft/dispatch";
+import { landingRuleOf } from "@armada/screens/src/draft/landing";
+
 import type { BridgeState } from "../../shared/bridge";
 import { readComposing, searchFiles, stageAttachment, type useCommands } from "./commands";
+import { useDrafted } from "./drafted";
 
 /**
  * The way out, on the head of the thing it closes — the owner's call of
@@ -106,6 +110,10 @@ export function Composing({
   const [typedForm, setTypedForm] = useState(false);
   // Whether the discard ask is up. While it is, the key below is the dialog's.
   const [asking, setAsking] = useState(false);
+  // What a mock moment already holds — the request half typed, who else is
+  // writing there, the two refs. `{}` in the app, where nothing serves any of
+  // it yet: `drafted.tsx` is the whole of that seam.
+  const drafted = useDrafted();
   const typed = typedRequest || typedForm;
   /** The one act the control and the key share: leave, or ask first. */
   const leave = useCallback(() => {
@@ -185,6 +193,24 @@ export function Composing({
         }
         onStage={stageAttachment}
         onSearchFiles={searchFiles}
+        {...(manifest === undefined ? {} : { repository: manifest.repository })}
+        // Where the work starts and where it lands. **`landingRuleOf` with no
+        // Manifest is two null refs**, which draw as empty fields — Bridge
+        // holds no `base` outside the Manifest editor's own read, and a branch
+        // name invented here would be a value nobody chose.
+        landing={drafted.landing ?? landingRuleOf()}
+        // `null` is nobody having looked, which is every request at dispatch:
+        // the overlap read hangs off a Job and there is no Job yet.
+        peers={drafted.peers ?? null}
+        workflows={state.holds.workflows}
+        models={state.holds.models?.models ?? []}
+        // The machine's own cap. A moment carries its own, because `limits` is
+        // a read and a scenario publishes none.
+        machineCap={drafted.proposal?.machine_cap ?? state.limits?.concurrency ?? null}
+        {...(drafted.proposal === undefined
+          ? {}
+          : { settings: dispatchSettingsOf(drafted.proposal) })}
+        {...(drafted.prompt === undefined ? {} : { opensOn: drafted.prompt })}
         // On the head of each card this surface draws, since each is its own
         // way out of the same composer.
         close={<WayOut ground="card" onClose={leave} />}
