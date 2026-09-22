@@ -1809,6 +1809,143 @@
 .armada-workflow-tab[data-view="stacked"] .armada-workflow-tab__inspector {
   overflow: visible;}
 
+/* The wave a Job dispatched — the graph or the list, the loop it is on, and
+   the two halves of what it is asking you. Appended, per the rule at the head
+   of `index.css`. #1544. */
+.armada-wave {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-wave__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.armada-wave__said {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+/* Which pass of plan, dispatch and roll up this is. Quiet: it is context for
+   the wave above it, not a fact anybody acts on. */
+.armada-wave__loop {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+/* React Flow measures its own frame, so the canvas needs a height rather than
+   a flex basis of nothing — `.armada-workflow-tab__canvas`'s reason, and the
+   same floor, because a wave card is a step card's width. */
+.armada-wave__canvas {
+  min-height: var(--h-workflow-canvas);
+}
+
+.armada-wave__needs,
+.armada-wave__needs-half {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* What the half is, in one line under its own count. */
+.armada-wave__needs-said {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-wave__ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Which Job the card underneath is about. The card itself names the criterion
+   and never the Job, because everywhere else it is drawn inside one. */
+.armada-wave__ask-of {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}
+
+/* The Plan destination's half of the wave: every pass of the split, and one
+   Job read whole. #1544. */
+.armada-wave__rounds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.armada-wave__rounds > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+/* The plan being run now. An edge rather than a fill: a fill is what a verdict
+   takes, and which pass is live is not an outcome. */
+.armada-wave__rounds > li[data-live] {
+  border-color: var(--border-strong);
+}
+
+.armada-wave__round-at {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}
+
+.armada-wave__round-says {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+.armada-wave__round-live,
+.armada-wave__judged {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-wave__inspector,
+.armada-wave__inspector-acts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.armada-wave__facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.armada-wave__facts > dt {
+  color: var(--fg-muted);
+}
+
+.armada-wave__facts > dd {
+  color: var(--fg-default);
+}
+
 /* Several pull requests landing in order, above the two columns rather than
    inside the run's. The order between three Jobs is what the parent *is*, and
    the run column tops out at 380px — a card carrying a pull request, a branch,

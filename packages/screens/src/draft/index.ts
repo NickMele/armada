@@ -39,4 +39,5 @@ export * from "./pulse";
 export * from "./revision";
 export * from "./sketch";
 export * from "./task";
+export * from "./wave";
 export * from "./words";

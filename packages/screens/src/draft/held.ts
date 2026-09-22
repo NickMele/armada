@@ -17,6 +17,7 @@ import type { LandingRule } from "./landing";
 import type { LedgerRow } from "./ledger";
 import type { JobMembersView } from "./members";
 import type { ProposalView } from "./proposal";
+import type { WaveView } from "./wave";
 
 /**
  * A Job's draft reading. **Every field is absent by default**, and absent
@@ -31,11 +32,17 @@ export type JobDraft = {
   /** What the Job is held to, with where each criterion's words came from. */
   criteria?: readonly CriterionView[];
   /**
-   * The proposal this Job is at, where it is still at one.
+   * The proposal this Job is at, and what was frozen when it was approved.
    *
    * **The same shape the dispatch form holds one moment earlier** — a title,
-   * a gate per step, the tier map and the two caps — and its `approved_at` is
-   * the whole difference between "yours to change" and "frozen at the press".
+   * a gate per step, the tier map and the caps, including how many Drones this
+   * Job may run at once (`#1550`) — and its `approved_at` is the whole
+   * difference between "yours to change" and "frozen at the press".
+   *
+   * **Read after approval as well as at it.** A group running two tasks at the
+   * same time is bounded by that number, so the board that draws the group
+   * draws the bound beside it rather than leaving a person to find it on a
+   * screen they have already left.
    */
   proposal?: ProposalView;
   /** Every run of every case, with who ran it and what became of the run. */
@@ -63,13 +70,10 @@ export type JobDraft = {
    */
   members?: JobMembersView;
   /**
-   * What was settled at the approval gate, and frozen there — the tier map,
-   * the gates and how many Drones this Job may run at once (`#1550`).
+   * The wave this Job dispatched, and which of its Jobs waits on which.
    *
-   * **Read after approval as well as at it.** A group running two tasks at the
-   * same time is bounded by this number, so the board that draws the group
-   * draws the bound beside it rather than leaving a person to find it on a
-   * screen they have already left.
+   * **Absent derives one from the Board's own rows** (`draft/wave.ts`), which
+   * is every Job and no order between them — thinner, never broken.
    */
-  proposal?: ProposalView;
+  wave?: WaveView;
 };

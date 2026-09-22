@@ -35,6 +35,7 @@ import type {
   ModelChoices,
   Observed,
   Outcome,
+  RepositorySummary,
   Watched,
   WhenBlocked,
   WhenRefused,
@@ -42,6 +43,7 @@ import type {
 } from "@armada/protocol";
 
 import type { ConfirmableAct, HeldAct } from "./Acts";
+import type { Outstanding } from "./outstanding";
 import type { JobDraft } from "./draft/held";
 import type { ShowAgainCall } from "./again";
 import type { ExplainCommand, ReadCall } from "./calls";
@@ -56,16 +58,24 @@ import type { OpenStudioFrom } from "./work";
 export type JobDetailProps = {
   job: JobSummary;
   /**
-   * Every Job Bridge is holding, which is where the members of this one come
-   * from: a row whose `dispatched_by` names it. **Absent is a caller with no
-   * Board** — a story or a harness — and draws no members rather than none.
-   * `#1543`.
+   * Every Job Bridge is holding, which is where the members of this one and
+   * the wave it dispatched both come from: a row whose `dispatched_by` names
+   * it. **Absent is a caller with no Board** — a story or a harness — and
+   * draws neither rather than drawing them empty. `#1543`, `#1544`.
    */
   board?: readonly JobSummary[];
   /** `GET /jobs/:job_id` for this Job, as main published it. */
   watched: Watched;
   workflows: readonly WorkflowSummary[];
   manifests: readonly ManifestSummary[];
+  /**
+   * Every question waiting on a person, as main gathers them across every
+   * repository. The wave answers its own Jobs' questions where they are read,
+   * from the same list the dock draws.
+   */
+  questions?: readonly Outstanding[];
+  /** The repositories Fleet serves, for the label a question's card carries. */
+  repositories?: readonly RepositorySummary[];
   /** True while what is shown is not live. Every control is refused. */
   stale: boolean;
   /** Now, injected. A whole-Job elapsed is read, so it has to move. */

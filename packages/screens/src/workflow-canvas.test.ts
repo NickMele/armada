@@ -47,9 +47,15 @@ describe("every shipped workflow draws", () => {
       const whole = wholeOf(fixture);
       const run = workflowRunOf({ whole, groups: taskGroupsOf(whole) });
       const spine = run.edges.filter((edge) => edge.source.startsWith("step:") && edge.target.startsWith("step:"));
-      expect(spine).toHaveLength(Math.max(0, whole.steps.length - 1));
-      // No shipped workflow declares a loop, so none is drawn for one.
-      expect(spine.filter((edge) => edge.returning === true)).toHaveLength(0);
+      // One edge per pair, and one more for each step that sends the run back.
+      // **`epic.json` is the one shipped file that does** — `verdict_routing`
+      // on `roll_up`, capped at five passes — and the returning edge is what
+      // the wave's iteration count is drawn from (`#1544`).
+      const loops = whole.steps.filter(
+        (step) => step.pass !== undefined && step.verdict_routing_target !== undefined,
+      ).length;
+      expect(spine).toHaveLength(Math.max(0, whole.steps.length - 1) + loops);
+      expect(spine.filter((edge) => edge.returning === true)).toHaveLength(loops);
     });
   }
 });

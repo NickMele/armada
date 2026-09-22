@@ -306,6 +306,9 @@ function moment(prefix: string, one: ArcMoment): Scenario {
     state: {
       ...built.state,
       repository: picked,
+      // The questions this moment's Jobs are holding, published the way main
+      // gathers them — the dock draws them, and so does the wave.
+      ...(one.questions === undefined ? {} : { questions: one.questions }),
       ...(one.proposing === undefined ? {} : { proposing: one.proposing }),
     },
   };

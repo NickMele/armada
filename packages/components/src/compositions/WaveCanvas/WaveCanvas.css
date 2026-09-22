@@ -1,0 +1,70 @@
+/* One Job of a wave, on the canvas. The frame, the token mapping over React
+   Flow's `base.css`, the handles and the controls are `GraphCanvas.css`.
+
+   A card on the canvas rather than a `Card`: the canvas is not a surface
+   `glass.css` can read an ancestry through, and a node has to stay one fixed
+   width so an edge lands where the placement says it will — `WorkflowStepCard`
+   made the same call for the same reason, and this borrows its width rather
+   than minting a second one for a card of the same weight. */
+.armada-wave-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: var(--w-workflow-node);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  color: var(--fg-default);
+  text-align: start;
+}
+
+button.armada-wave-card {
+  cursor: pointer;
+}
+
+button.armada-wave-card:hover {
+  background: var(--bg-hover);
+}
+
+.armada-wave-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* A wire status the registry carries no verb for. Shown rather than swallowed:
+   a missing word is a fact about the registry, not a reason to draw nothing. */
+.armada-wave-card__state {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* Clipped to the card with the whole of it in the title — `FactChip`'s rule
+   for a value longer than its column. */
+.armada-wave-card__handle {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-wave-card__title {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}
+
+.armada-wave-card__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}

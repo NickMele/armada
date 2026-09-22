@@ -41,7 +41,9 @@ import type {
   ScopeRevisionView,
   SketchAttachment,
   TaskView,
+  WaveView,
 } from "../../draft";
+import type { Outstanding } from "../../outstanding";
 import type { JobFixture } from "../fixture";
 import { manifest, MANIFEST_ID } from "./base";
 
@@ -75,6 +77,13 @@ export type ArcMoment = {
   opens?: string;
   /** A proposer call still out — `BridgeState.proposing`, which is on the wire. */
   proposing?: ProposalInFlight;
+  /**
+   * Every question this moment's Jobs are holding open, as main gathers them
+   * across every repository (`apps/desktop/src/main/questions.ts`). Wire
+   * shapes, so a card answers from what was asked — which is why they are
+   * here and not on the draft.
+   */
+  questions?: Outstanding[];
   draft: ArcDraft;
 };
 
@@ -102,6 +111,8 @@ export type ArcDraft = {
   scope_revisions?: ScopeRevisionView[];
   pulse?: PulseView;
   members?: JobMembersView;
+  /** The wave this Job dispatched, and which of its Jobs waits on which. */
+  wave?: WaveView;
 };
 
 /**

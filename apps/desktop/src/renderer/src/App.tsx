@@ -751,6 +751,11 @@ export function App({ draft }: AppProps = {}) {
                 watched={state.watched}
                 workflows={state.holds.workflows}
                 manifests={state.holds.manifests}
+                // Every question waiting on a person. A Job that dispatched a
+                // wave answers its Jobs' where they are read — the Board's own
+                // rows, above, say which Jobs those are. #1544.
+                questions={state.questions}
+                repositories={repositories}
                 stale={!live}
                 now={now}
                 acting={commands.acting === reading.id}

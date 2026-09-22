@@ -74,6 +74,7 @@ import {
 import { pulseViewOf } from "./draft/pulse";
 import { jobMembersOf } from "./draft/members";
 import { membersOf, useDroppedMembers } from "./members";
+import { waveReadingOf } from "./tab-wave";
 import { briefOf, whyNoBrief, workOf, workRehearsalOf } from "./work";
 
 
@@ -602,7 +603,12 @@ export function OverviewTab(props: OverviewTabProps) {
 
   // Read once: `plan` gates both the region and its own eyebrow act, and a
   // second call would be a second, possibly different, reading of `whole`.
-  const plan = planOf(whole);
+  // **A wave's plan is the split above, not a list of tasks.** `plan.md` is
+  // what the epic workflow's plan step records, so the task well's own "no
+  // plan yet" placeholder sat under a drawn wave and contradicted it. #1544.
+  const drawsAWave = waveReadingOf(whole, props.draft, props.board ?? []) !== undefined;
+  const planRead = planOf(whole);
+  const plan = drawsAWave && planRead?.recorded !== true ? undefined : planRead;
   // How many of the open step's tasks are through, where it holds groups. The
   // same groups the Workflow tab's board opens, read for one line here.
   const stepTasks =
@@ -612,9 +618,18 @@ export function OverviewTab(props: OverviewTabProps) {
   // The Jobs landing under this one. The mock hands the whole reading; against
   // a real Fleet it is derived from the Board's own rows, which carry each
   // member's status, its branch and whether its pull request merged.
+  //
+  // **Not for a Job that dispatched a wave** (`#1544`). The two regions answer
+  // different questions: members are a landing order — each one parked until
+  // the one before it lands — and a wave is a dependency graph whose Jobs land
+  // whenever each is done. Drawn together, this band said "parked until the
+  // one before it lands" about a Job that had already merged, and the same
+  // five Jobs were drawn twice on one screen. The derivation from the Board's
+  // rows cannot tell the two apart, because `dispatched_by` is all it has.
   const memberDraft = props.draft?.members;
-  const membersRead =
-    memberDraft ?? (whole === null ? undefined : jobMembersOf(whole, props.board ?? []));
+  const membersRead = drawsAWave
+    ? undefined
+    : (memberDraft ?? (whole === null ? undefined : jobMembersOf(whole, props.board ?? [])));
   const members = membersOf(dropping.over(membersRead), props.draft?.landing, {
     ...(props.onOpenJob === undefined ? {} : { onOpenJob: props.onOpenJob }),
     // The member's own Job id, never the address the card drew — the header's

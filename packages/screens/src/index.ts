@@ -108,3 +108,8 @@ export * from "./tab-workflow";
 export * from "./workflow-canvas";
 export * from "./workflow-inspector";
 export * from "./workflow-view";
+// The wave a Job dispatched — which Jobs wait on which, and which are asking
+// you something. #1544.
+export * from "./tab-wave";
+export * from "./wave";
+export * from "./wave-plan";

@@ -31,6 +31,9 @@ import {
   touchedByOf,
 } from "./tab-plan-read";
 import { PlanAskDialog, rewriteInstruction, type PlanAskInFlight } from "./tab-plan-ask";
+import { WavePlan } from "./wave-plan";
+import { waveReadingOf, type WaveRegionProps } from "./tab-wave";
+import type { HeldAct } from "./Acts";
 import type { JobDraft } from "./draft/held";
 import type { CriterionView } from "./draft/criterion";
 import type { PlanAskKind, PlanRevisionView } from "./draft/revision";
@@ -41,6 +44,12 @@ const PLAN_RECORDED = "plan_recorded";
 export type PlanTabProps = {
   job: JobSummary;
   whole: JobWhole | null;
+  /**
+   * The wave this Job dispatched, as the region draws it. **The same reading
+   * Overview takes**, so the toggle between the graph and the list does not
+   * reset on the way between the two destinations.
+   */
+  wave: WaveRegionProps;
   /** What this moment's boards draw that Fleet cannot serve yet. */
   draft?: JobDraft;
   /** The window is at `--window-floor`, so the inspector goes flush. */
@@ -52,6 +61,8 @@ export type PlanTabProps = {
   deciding: boolean;
   onApproveReview: (jobId: string) => void;
   onRedirect: (jobId: string, instruction: string) => void;
+  /** Held, never pressed. What Drop from the wave sends, on that Job. */
+  onActHeld: (act: HeldAct, jobId: string) => void;
 };
 
 /**
@@ -269,6 +280,7 @@ function PlanGate({
 export function PlanTab({
   job,
   whole,
+  wave,
   draft,
   floor,
   stale,
@@ -276,6 +288,7 @@ export function PlanTab({
   deciding,
   onApproveReview,
   onRedirect,
+  onActHeld,
 }: PlanTabProps) {
   // Which task the inspector is on. **This tab's own state, not the screen's**
   // — the sheet is contained by the destination, so a reader who leaves and
@@ -287,6 +300,10 @@ export function PlanTab({
   const [asking, setAsking] = useState<PlanAskInFlight | null>(null);
 
   const step = planStepOf(whole);
+  // Whether the split above is this Job's plan. A wave's plan is the Jobs it
+  // dispatched, not a list of tasks — `plan.md` records the one and never the
+  // other.
+  const drawsAWave = waveReadingOf(whole, draft, wave.board) !== undefined;
   // **Only while the step that recorded the plan is waiting on a person, and
   // only while the window is live.** Past that gate the plan is a record, and
   // a stale window cannot tell whether the ask would still land.
@@ -315,12 +332,26 @@ export function PlanTab({
        the whole argument for. */
     <>
     <div className="armada-detail-tab" role="tabpanel" aria-label={TAB_LABEL.plan}>
+      {/* What the split became, above the plan that drew it: the wave is what
+          a person came to this destination to read on a Job that dispatched
+          one, and the task board underneath is how it was written. #1544. */}
+      <WavePlan
+        {...wave}
+        {...(step === undefined ? {} : { planStep: step })}
+        floor={floor}
+        onDropFromWave={(jobId) => onActHeld("kill_job", jobId)}
+      />
       {board === undefined ? (
-        <p className="armada-inside__absent" role="note">
-          {step === undefined
-            ? "This workflow records no plan, so there is no split to read."
-            : `No plan yet — ${step.label} records it.`}
-        </p>
+        /* **A Job whose plan is a wave has recorded one**, and the split above
+           is it — so the task board's own absence is not "no plan yet", which
+           read as a contradiction under a drawn wave. #1544. */
+        drawsAWave ? null : (
+          <p className="armada-inside__absent" role="note">
+            {step === undefined
+              ? "This workflow records no plan, so there is no split to read."
+              : `No plan yet — ${step.label} records it.`}
+          </p>
+        )
       ) : (
         <PlanBoard
           {...board}

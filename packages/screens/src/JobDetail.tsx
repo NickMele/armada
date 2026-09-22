@@ -10,7 +10,7 @@
 // `tab-workflow.tsx`, `tab-plan.tsx`, `tab-record.tsx`, `tab-pulse.tsx`.
 
 import { JobDetailHeaderActions, type JobResourcesProps } from "@armada/components";
-import { useReducer, useState } from "react";
+import { useCallback, useReducer, useState } from "react";
 import { useAtFloor, useNarrow } from "@armada/shell";
 
 import { countsOf, FIRST_TAB, JobTabs, type DetailTab } from "./detail-tabs";
@@ -38,8 +38,9 @@ import { PlanTab } from "./tab-plan";
 import { PulseTab } from "./tab-pulse";
 import { RecordTab } from "./tab-record";
 import { WorkflowTab } from "./tab-workflow";
+import { WaveRegion, type WaveRegionProps } from "./tab-wave";
 import { whyNoSteps } from "./run";
-import { FIRST_WORKFLOW_VIEW } from "./workflow-view";
+import { FIRST_WORKFLOW_VIEW, type WorkflowView } from "./workflow-view";
 import { ledgerOf } from "./draft/ledger";
 
 export type { ConfirmableAct, HeldAct, JobAct } from "./Acts";
@@ -123,6 +124,35 @@ function OneJob(props: JobDetailProps) {
   // workflow two different reasons.
   const absent = whyNoSteps(props.watched, props.job.id);
 
+  // Whether the wave is drawn as the graph or the list. **Held here and not on
+  // a tab**: Overview and Plan draw the same wave, and a toggle that reset on
+  // the way between them would be two readings of one thing.
+  const [waveView, setWaveView] = useState<WorkflowView>(FIRST_WORKFLOW_VIEW);
+  // Stable across a tick of `now`, which is what keeps the wave's canvas from
+  // rebuilding its nodes every second.
+  const opens = props.onOpenJob;
+  const openJob = useCallback((jobId: string) => opens?.(jobId), [opens]);
+
+  const wave: WaveRegionProps = {
+    job,
+    whole,
+    ...(props.draft === undefined ? {} : { draft: props.draft }),
+    board: props.board ?? [],
+    questions: props.questions ?? [],
+    repositories: props.repositories ?? [],
+    now: props.now,
+    stale: props.stale,
+    acting: props.acting,
+    view: waveView,
+    onView: setWaveView,
+    // A wave whose caller offers no way to open a Job draws its cards inert
+    // rather than pressing into nothing — `onOpenJob` is the shell's, and
+    // optional for that reason.
+    onOpenJob: openJob,
+    onAnswerJudge: props.onAnswerJudge,
+    onAnswerCommand: props.onAnswerCommand,
+  };
+
   // The Job header, and everything that goes in it. `heading.tsx` holds what
   // it is made of — the badge, the facts, the acts that end or replace the Job,
   // and the way out to the pull request — which is where the next thing added
@@ -176,7 +206,8 @@ function OneJob(props: JobDetailProps) {
 
       {tab === "overview" && edits !== undefined ? (
         // A Job at or just past its approval gate: the proposal is what
-        // Overview has to draw, because no step has run.
+        // Overview has to draw, because no step has run. **And no wave**: a
+        // Job that has not been approved has dispatched nothing.
         <ProposalTab
           job={job}
           whole={whole}
@@ -186,6 +217,11 @@ function OneJob(props: JobDetailProps) {
           stale={props.stale}
         />
       ) : tab === "overview" ? (
+        <>
+        {/* The wave this Job dispatched, above the run — what it dispatched is
+            the product of an Epic Job, and the run is how it got there. A Job
+            that dispatched nothing draws nothing. #1544. */}
+        <WaveRegion {...wave} />
         <OverviewTab
           {...props}
           job={job}
@@ -199,6 +235,7 @@ function OneJob(props: JobDetailProps) {
           onRaising={setRaising}
           onRaisingTurns={setRaisingTurns}
         />
+        </>
       ) : tab === "workflow" ? (
         <WorkflowTab
           job={job}
@@ -224,12 +261,14 @@ function OneJob(props: JobDetailProps) {
         <PlanTab
           job={job}
           whole={whole}
+          wave={wave}
           floor={floor}
           stale={props.stale}
           acting={props.acting}
           deciding={props.deciding}
           onApproveReview={props.onApproveReview}
           onRedirect={props.onRedirect}
+          onActHeld={props.onActHeld}
           {...(props.draft === undefined ? {} : { draft: props.draft })}
         />
       ) : tab === "record" ? (
