@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
-import type { JobExamined, JobResources as Held } from "@armada/protocol";
+import type { JobExamined } from "@armada/protocol";
 
+import type { PulseReading } from "../JobResources/JobResources";
 import { JobHoldsSheet } from "./JobHoldsSheet";
 
 /**
@@ -33,34 +34,40 @@ export default meta;
 
 type Story = StoryObj<typeof JobHoldsSheet>;
 
-const READING: Held = {
-  job_id: "job_2d90bb",
-  read_at: "2026-09-04T09:16:52.402Z",
+const BRANCH = "armada/settings-split-selectors";
+
+const READING: PulseReading = {
   held: "running",
+  readAt: "2026-09-04T09:16:52.402Z",
   processes: [
     {
       pid: 41233,
       command: "node",
-      cpu_percent: 8.2,
-      memory_bytes: 402_653_184,
-      running_for: "06:11",
+      owner: BRANCH,
+      cpuPercent: 8.2,
+      memoryBytes: 402_653_184,
+      runningFor: "06:11",
       recorded: true,
     },
     {
       pid: 41287,
       command: "cargo",
-      cpu_percent: 61.4,
-      memory_bytes: 268_435_456,
-      running_for: "00:12",
+      owner: BRANCH,
+      cpuPercent: 61.4,
+      memoryBytes: 268_435_456,
+      runningFor: "00:12",
       recorded: false,
     },
   ],
-  worktree: {
-    path: "/Users/user/armada/.armada/worktrees/job_2d90bb",
-    branch: "fix/settings-split-selectors",
-    bytes: 1_288_490_188,
-  },
-  wrote_last_at: "2026-09-04T09:16:44.100Z",
+  worktrees: [
+    {
+      path: "/Users/user/armada/.armada/worktrees/job_2d90bb",
+      branch: BRANCH,
+      state: "on disk",
+      bytes: 1_288_490_188,
+    },
+  ],
+  logs: [{ kind: "job", owner: null, writing: true }],
 };
 
 const EXAMINED: JobExamined = {
@@ -77,7 +84,8 @@ const EXAMINED: JobExamined = {
     { asked: "worktree", found: "working", said: "the worktree is on disk" },
     { asked: "span", found: "working", said: "waiting for the step to finish" },
   ],
-  resources: READING,
+  // The wire's own reading, carried back by the look — not the board above.
+  resources: { job_id: "job_2d90bb", read_at: "2026-09-04T09:16:52.402Z", held: "running", processes: [] },
 };
 
 /**
