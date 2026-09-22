@@ -14,6 +14,7 @@ import {
   countsOf,
   familyOf,
   LEDGER_FAMILIES,
+  unfiledIn,
   type LedgerActor,
   type LedgerFamily,
   type LedgerRow,
@@ -58,7 +59,14 @@ function whoOf(actor: LedgerActor): LedgerWho {
   return actor === "person" ? "you" : actor;
 }
 
-/** The eight filters, with how many rows each holds. The seven sum to All. */
+/**
+ * The eight filters, with how many rows each holds.
+ *
+ * **All is the total and the seven are families of it, which is not the same
+ * as All being their sum.** A row the Job's own machine made answers to none
+ * of the seven, so the seven can come to less — `unfiledSays` is what tells a
+ * reader by how much, rather than leaving them the subtraction.
+ */
 export function filtersOf(rows: readonly LedgerRow[]): JobLedgerFilter[] {
   const counts = countsOf(rows);
   return RECORD_FILTERS.map((filter) => ({
@@ -154,13 +162,21 @@ export function toneOf(row: LedgerRow): LedgerTone | undefined {
 }
 
 /**
- * Which family a row belongs to, for the inspector's own line.
+ * What All holds that no filter does, in one line — or nothing, where every
+ * row answers to a filter.
  *
- * Re-exported so a surface reads one module rather than reaching past this one
- * into the draft for a single lookup.
+ * **It names what those rows are, not just how many.** A person reading `All
+ * 24` against families summing to 21 is owed the three, and "the Job's own
+ * moves" is the answer for almost all of them: a Job created, approved,
+ * started or ended. The sentence covers a kind this Bridge has no filter for
+ * as well, because both are the same fact — a row under All and nowhere else.
  */
-export function familyLabelOf(kind: string): string {
-  return FILTER_LABEL[familyOf(kind) as RecordFilter];
+export function unfiledSays(rows: readonly LedgerRow[]): string | undefined {
+  const count = unfiledIn(rows).length;
+  if (count === 0) return undefined;
+  return count === 1
+    ? "One more row is under All alone: the Job's own machine moving, which no filter names."
+    : `${count} more rows are under All alone: the Job's own machine moving, which no filter names.`;
 }
 
 export type { LedgerFamily };

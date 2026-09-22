@@ -17,8 +17,10 @@ import { TabsWithCounts } from "../../primitives/TabsWithCounts/TabsWithCounts";
  * five readings behind a strip of its own, so reading why a step was refused
  * meant opening four and lining timestamps up by hand.
  *
- * **The filters partition the rows, so the counts sum to All** — the board this
- * came from said All 34 while its filters summed to 35.
+ * **No row is counted twice, and the filters need not sum to All** — the board
+ * this came from said All 34 while its filters summed to 35. A row that
+ * answers to no filter is under All alone, and `note` is where the surface
+ * says how many and what they are.
  *
  * **Who ran it is a column**, and telling a Check, a Judge and Fleet apart is
  * most of what this table is for.
@@ -84,6 +86,13 @@ export type JobLedgerProps = {
   filters: readonly JobLedgerFilter[];
   filter: string;
   onFilter: (id: string) => void;
+  /**
+   * One line under the strip, for what the counts cannot say — the rows All
+   * holds that no filter does. **Absent draws nothing**, which is the ordinary
+   * case: it appears only where the arithmetic would otherwise be a reader's
+   * to do.
+   */
+  note?: ReactNode;
   /** Which row is open, held by the surface so a live redraw does not close it. */
   openRow?: string | null;
   onOpenRow?: (rowId: string | null) => void;
@@ -119,6 +128,7 @@ export function JobLedger({
   filters,
   filter,
   onFilter,
+  note,
   openRow = null,
   onOpenRow,
   inspector,
@@ -142,6 +152,12 @@ export function JobLedger({
             onChange={onFilter}
             items={filters.map((one) => ({ id: one.id, label: one.label, count: one.count }))}
           />
+
+          {note === undefined ? null : (
+            <p className="armada-ledger__note" role="note">
+              {note}
+            </p>
+          )}
 
           {drawn.length === 0 ? (
             <p className="armada-ledger__note" role="note">

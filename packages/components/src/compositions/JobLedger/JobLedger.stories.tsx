@@ -91,6 +91,11 @@ const ROWS: JobLedgerRow[] = [
   },
 ];
 
+/**
+ * All is the total; the seven are families of it. They come to five, because
+ * `status_queued` — the Job's own machine moving — answers to none of them.
+ * `NOTE` is what tells a reader that rather than leaving the subtraction.
+ */
 const FILTERS = [
   { id: "all", label: "All", count: ROWS.length },
   { id: "evidence", label: "Evidence", count: 0 },
@@ -98,27 +103,36 @@ const FILTERS = [
   { id: "checks", label: "Checks", count: 2 },
   { id: "judges", label: "Judges", count: 1 },
   { id: "drones", label: "Drones", count: 0 },
-  { id: "tasks", label: "Tasks", count: 3 },
+  { id: "tasks", label: "Tasks", count: 2 },
   { id: "tests", label: "Tests", count: 0 },
 ];
 
+const NOTE = "One more row is under All alone: the Job's own machine moving, which no filter names.";
+
 /** The ledger with nothing open — eight filters, and the table under them. */
 export const OneLedger: Story = {
-  args: { rows: ROWS, filters: FILTERS, filter: "all", onFilter: () => undefined },
+  args: {
+    rows: ROWS,
+    filters: FILTERS,
+    filter: "all",
+    onFilter: () => undefined,
+    note: NOTE,
+  },
   /**
-   * **The seven filters sum to All**, which is the defect this component was
-   * built against: the board said All 34 while its filters summed to 35. The
-   * strip renders a zero as no count, so the sum is read off the props rather
-   * than off the screen — and a story that read the screen would pass with the
-   * three zeros silently missing.
+   * **No row is counted twice, and the difference is said out loud.** The
+   * defect this was built against is a board whose All read 34 while its
+   * filters summed to 35 — so the families may never exceed All. They may come
+   * to less, and where they do a reader is owed the line rather than the
+   * subtraction.
    */
-  play: async ({ args }) => {
+  play: async ({ args, canvas }) => {
     const all = args.filters.find((one) => one.id === "all")!.count;
-    const rest = args.filters
+    const families = args.filters
       .filter((one) => one.id !== "all")
       .reduce((total, one) => total + one.count, 0);
 
-    await expect(rest).toBe(all);
+    await expect(families).toBeLessThanOrEqual(all);
+    await expect(canvas.getByRole("note")).toHaveTextContent(/under All alone/);
   },
 };
 
@@ -129,6 +143,7 @@ export const ARowOpen: Story = {
     filters: FILTERS,
     filter: "all",
     onFilter: () => undefined,
+    note: NOTE,
     openRow: "r1",
     inspector: <p className="armada-ledger__note">What this Check printed goes here.</p>,
   },

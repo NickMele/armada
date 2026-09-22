@@ -75,10 +75,10 @@ export type LedgerRow = {
 /**
  * The seven the Record's filters divide rows into, beside All.
  *
- * **They partition the ledger**, which is the whole point: `#1537`'s own
- * finding is a board whose All said 34 while its filters summed to 35, so a
- * row belongs to exactly one of these and All is their sum. `familyOf` is the
- * one place a row is placed.
+ * **Each names a producer** — an evidence claim, a file, a Check, a Judge, a
+ * Drone, a task, a case run. **No row is ever counted twice**, which is what
+ * `#1537`'s own finding is about: a board whose All said 34 while its filters
+ * summed to 35. It is not that the seven sum to All — see `familyOf`.
  */
 export type LedgerFamily =
   | "evidence"
@@ -102,7 +102,8 @@ export const LEDGER_FAMILIES: readonly LedgerFamily[] = [
 
 // The spellings each family answers to. `kind` stays opaque on the wire (the
 // header says why), so this is a lookup a surface does and never a branch the
-// type forces — a kind nothing here names still draws, under `tasks`.
+// type forces. **Every entry is a producer.** A kind that is not here belongs
+// to no family, which `familyOf` answers with rather than guessing.
 const FAMILY_OF: Readonly<Record<string, LedgerFamily>> = {
   evidence_submitted: "evidence",
   handed_in: "evidence",
@@ -114,6 +115,14 @@ const FAMILY_OF: Readonly<Record<string, LedgerFamily>> = {
   flagged: "judges",
   drone_spawned: "drones",
   drone_exited: "drones",
+  plan_recorded: "tasks",
+  plan_revised: "tasks",
+  task_open: "tasks",
+  task_working: "tasks",
+  task_done: "tasks",
+  task_failed: "tasks",
+  task_dropped: "tasks",
+  touched_after_done: "tasks",
   case_run: "tests",
   cases_rerun: "tests",
   shown_again: "tests",
@@ -121,21 +130,23 @@ const FAMILY_OF: Readonly<Record<string, LedgerFamily>> = {
 };
 
 /**
- * Which filter a row answers to.
+ * Which filter a row answers to, or `null` for a row that answers to none.
  *
- * **`tasks` is the residual, and that is the one thing here the issue did not
- * decide.** Six of the seven name a producer — an evidence claim, a file, a
- * Check, a Judge, a Drone, a case run — and the Job's own machine moving
- * produces none of them. The seven have to sum to All, so a Job-machine row
- * cannot sit outside them: it is filed under the Job's own work, which is
- * `tasks`. A kind this module has never heard of lands there too, rather than
- * vanishing from every filter while still counting in All.
+ * **The Job's own machine moving is not a Task.** Approving a Job and merging
+ * its pull request produce no evidence, no file, no Check, no Judge, no Drone,
+ * no task and no case run — so they sit outside the seven rather than being
+ * filed under one of them, which would make that filter lie to keep an
+ * arithmetic promise. A kind this module has never heard of is `null` too.
+ *
+ * **The invariant is that no row is counted twice, not that the seven sum to
+ * All.** A surface that draws the counts owes a reader the difference — see
+ * `unfiledIn`.
  */
-export function familyOf(kind: string): LedgerFamily {
-  return FAMILY_OF[kind] ?? "tasks";
+export function familyOf(kind: string): LedgerFamily | null {
+  return FAMILY_OF[kind] ?? null;
 }
 
-/** How many rows each filter holds. The seven sum to the length of `rows`. */
+/** How many rows each filter holds. Never more than `rows.length` in total. */
 export function countsOf(rows: readonly LedgerRow[]): Record<LedgerFamily, number> {
   const counts = {
     evidence: 0,
@@ -146,8 +157,22 @@ export function countsOf(rows: readonly LedgerRow[]): Record<LedgerFamily, numbe
     tasks: 0,
     tests: 0,
   };
-  for (const row of rows) counts[familyOf(row.kind)] += 1;
+  for (const row of rows) {
+    const family = familyOf(row.kind);
+    if (family !== null) counts[family] += 1;
+  }
   return counts;
+}
+
+/**
+ * The rows no filter holds — under All and nowhere else.
+ *
+ * **What a reader would otherwise have to work out from the strip.** All says
+ * 34 and the families sum to 30; these are the four, and a surface says so
+ * rather than leaving the subtraction to whoever noticed.
+ */
+export function unfiledIn(rows: readonly LedgerRow[]): LedgerRow[] {
+  return rows.filter((row) => familyOf(row.kind) === null);
 }
 
 /** Every row of a Job's Record, oldest first. */

@@ -11,6 +11,7 @@ import {
   ledgerOf,
   ledgerRowOf,
   ledgerRowsOf,
+  unfiledIn,
 } from "./ledger";
 
 function moved(over: Partial<Recorded> = {}): Recorded {
@@ -143,15 +144,28 @@ describe("the eight filters", () => {
     expect(familyOf("cases_rerun")).toBe("tests");
   });
 
-  it("gives a kind it has never heard of a family rather than dropping it", () => {
-    expect(LEDGER_FAMILIES).toContain(familyOf("something_the_backend_invented"));
+  it("files the Job's own machine moving under no family, because it is not a Task", () => {
+    expect(familyOf("created")).toBeNull();
+    expect(familyOf("status_completed_success")).toBeNull();
   });
 
-  it("sums the seven to the whole, which is what All says", () => {
+  it("gives a kind it has never heard of no family rather than guessing one", () => {
+    expect(familyOf("something_the_backend_invented")).toBeNull();
+  });
+
+  it("counts no row twice, which is the invariant — never that the seven sum to All", () => {
     const rows = ledgerOf({ detail: arcDetail() });
     const counts = countsOf(rows);
+    const filed = LEDGER_FAMILIES.reduce((total, one) => total + counts[one], 0);
 
-    expect(LEDGER_FAMILIES.reduce((total, one) => total + counts[one], 0)).toBe(rows.length);
+    expect(filed).toBe(rows.length - unfiledIn(rows).length);
+    expect(filed).toBeLessThan(rows.length);
+  });
+
+  it("names the rows All holds and no filter does, so nobody subtracts", () => {
+    const rows = ledgerOf({ detail: arcDetail() });
+
+    expect(unfiledIn(rows).map((row) => row.kind)).toContain("created");
   });
 });
 

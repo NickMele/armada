@@ -22,7 +22,13 @@ import type { JobDetail as JobWhole } from "@armada/protocol";
 
 import { TAB_LABEL } from "./detail-tabs";
 import { absoluteOf } from "./duration";
-import { filtersOf, ledgerRowsFor, underFilter, type RecordFilter } from "./record";
+import {
+  filtersOf,
+  ledgerRowsFor,
+  underFilter,
+  unfiledSays,
+  type RecordFilter,
+} from "./record";
 import { noteFor, regionOf, rowsOf, useCheckOutputs, type ReadCheckOutput } from "./outputs";
 import { FieldLabel } from "./regions";
 import { taskGroupsOf } from "./draft/group";
@@ -75,6 +81,7 @@ export function RecordTab({
           rows={drawn}
           filters={filtersOf(rows)}
           filter={filter}
+          {...(unfiledSays(rows) === undefined ? {} : { note: unfiledSays(rows) })}
           onFilter={(id) => {
             setFilter(id as RecordFilter);
             // The open row may not answer the new filter, and an inspector
