@@ -15,21 +15,19 @@ import { useAtFloor, useNarrow } from "@armada/shell";
 
 import { countsOf, FIRST_TAB, JobTabs, type DetailTab } from "./detail-tabs";
 import { headingOf, Unrenderable } from "./heading";
-import { detailOf, turnsOf } from "./mine";
+import { detailOf } from "./mine";
 import { renderFor } from "./render";
 import { replacedCallout } from "./replaced";
-import { runOf } from "./run";
-import { named } from "./run-labels";
 import { holdingOf, lookOf } from "./mine";
 import { span } from "./duration";
 import { LOOK_FAILED, nothingToAsk, whyNoReading } from "./resources";
-import { briefOf } from "./work";
 import { NO_SHEET, sheetMoved } from "./Sheets";
 import type { JobDetail as JobWhole } from "@armada/protocol";
 import { AwaitedTab } from "./tab-awaited";
 import { OverviewTab } from "./tab-overview";
 import { PulseTab } from "./tab-pulse";
 import { RecordTab } from "./tab-record";
+import { ledgerOf } from "./draft/ledger";
 
 export type { ConfirmableAct, HeldAct, JobAct } from "./Acts";
 export type { FoldedReads } from "./mine";
@@ -167,7 +165,14 @@ function OneJob(props: JobDetailProps) {
           onRaisingTurns={setRaisingTurns}
         />
       ) : tab === "record" ? (
-        <RecordTab {...recordOf(props, whole)} onCopied={props.onCopied} />
+        <RecordTab
+          {...recordOf(props, whole)}
+          jobId={job.id}
+          narrow={narrow}
+          floor={floor}
+          onReadCheckOutput={props.onReadCheckOutput}
+          onSaid={props.onSaid}
+        />
       ) : tab === "pulse" ? (
         <PulseTab holds={pulseOf(props, job.id)} />
       ) : (
@@ -178,19 +183,41 @@ function OneJob(props: JobDetailProps) {
 }
 
 /**
- * What the Record tab folds, off readings Overview already takes. **No
- * selection**: the record is the Job's, so the tree marks no step as the one
- * somebody happens to be reading.
+ * What the Record tab reads.
+ *
+ * **Composed here rather than fetched**, because no operation answers a ledger
+ * yet — `draft/ledger.ts` reads the Job whole, its evidence, its footprint and
+ * its history into one list, and every one of those is a read this screen is
+ * already holding for another region.
  */
 function recordOf(props: JobDetailProps, whole: JobWhole | null) {
-  const watching = turnsOf(props.observed, props.job.id);
+  if (whole === null) return { detail: null, rows: [] };
+  const jobId = props.job.id;
   const handed =
-    props.recorded.handed.state === "heard" && props.recorded.handed.jobId === props.job.id
+    props.recorded.handed.state === "heard" && props.recorded.handed.jobId === jobId
       ? props.recorded.handed.moment
       : undefined;
+  const footprint =
+    props.recorded.footprint.state === "read" && props.recorded.footprint.jobId === jobId
+      ? props.recorded.footprint.reading
+      : undefined;
+  const evidence =
+    props.recorded.evidence.state === "read" && props.recorded.evidence.jobId === jobId
+      ? props.recorded.evidence.steps
+      : undefined;
+  const history =
+    props.history?.state === "read" && props.history.jobId === jobId
+      ? props.history.moves
+      : undefined;
   return {
-    run: whole === null ? [] : runOf(whole, props.now, undefined, watching?.rows ?? [], handed).map(named),
-    ...(whole === null ? {} : { brief: briefOf(whole) }),
+    detail: whole,
+    rows: ledgerOf({
+      detail: whole,
+      ...(history === undefined ? {} : { history }),
+      ...(evidence === undefined ? {} : { evidence }),
+      ...(footprint === undefined ? {} : { footprint }),
+      ...(handed === undefined ? {} : { handed }),
+    }),
   };
 }
 

@@ -1,23 +1,9 @@
-/* Job ledger — the filter strip, one table, and the open row beside it.
-
-   Two columns above --layout-breakpoint and one below, which is the split
-   `.armada-inside` already draws. The numbers are the same two tokens, so the
-   Record and Overview put their panel in the same place. */
+/* Job ledger — the filter strip and one table. The open row is a sheet over
+   it at every width; the component's own note carries why. */
 .armada-ledger {
-  display: grid;
-  grid-template-columns:
-    minmax(0, 1fr)
-    minmax(var(--w-step-panel-min), var(--w-run-column));
-  column-gap: var(--space-6);
-  row-gap: var(--space-4);
-  align-items: start;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-}
-
-/* Below the bound the table is the whole content and the panel is a sheet
-   over it. A single track, never a panel squeezed under its own floor. */
-.armada-ledger[data-narrow] {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 /* min-width: 0 is load-bearing: without it a path wider than the window makes
@@ -30,27 +16,20 @@
   min-width: 0;
 }
 
-/* The panel is a card, which is what separates the two columns — there is no
-   rule between them, only this surface against the gutter. */
+/* The open row's reading, inside the sheet. */
 .armada-ledger__panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
   padding: var(--pad-card);
-  border: var(--border-width) solid var(--border-default);
-  border-radius: var(--radius-md);
-  background: var(--bg-raised);
 }
 
-/* Folded, the sheet already draws the surface, the border and the radius, so
-   drawing them again would be a card inside a card. */
-.armada-ledger__panel[data-folded] {
+/* The sheet already draws the surface, the border and the radius, so the panel
+   draws none of them — a card inside a card. It keeps its own padding, which
+   is why the sheet is `bleed`. */
+.armada-ledger__panel {
   flex: 1;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
 }
 
 /* table-layout: auto, so every column is sized from its own content once for
@@ -75,11 +54,32 @@
 
 /* The prose columns wrap rather than truncate. At the floor there is no room
    to truncate into, and a row that grows taller is the responsive rule the
-   Job row already keeps. */
+   Job row already keeps.
+
+   overflow-wrap: anywhere is what keeps the table inside its column: a table
+   is as wide as its longest unbreakable run, and a repository path has none —
+   so without it the Outcome column was pushed off the right edge at 768 and
+   at 1440 with the dock open. */
 .armada-ledger__where,
 .armada-ledger__what,
 .armada-ledger__outcome {
   text-wrap: pretty;
+}
+
+/* A path has no soft wrap opportunity in it, so a table holding one is as wide
+   as that path whatever its column can pay for — which pushed Outcome off the
+   right edge at 768 and at 1440 with the dock open. Breaking a path mid-token
+   is ugly; a column off the screen is the v1 failure. Only the two columns
+   that carry paths, because it breaks a heading too. */
+.armada-ledger__what,
+.armada-ledger__outcome {
+  overflow-wrap: anywhere;
+}
+
+/* The headings never break. `Where` wrapping to `WHER / E` is what this stops. */
+.armada-ledger__table .armada-table-header-cell {
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 /* Who ran it. --fg-muted on every value: who is context beside the sentence,
@@ -148,4 +148,27 @@
   line-height: var(--leading-xs);
   color: var(--fg-muted);
   text-wrap: pretty;
+}
+
+/* The open row's short facts — when, where, who, which filter. A wrapping run
+   rather than a grid: four labelled values at a 332px floor is two lines, and
+   a fixed pair of columns would break the moment one value grew. */
+.armada-ledger__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  min-width: 0;
+}
+
+.armada-ledger__fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-ledger__fact-value {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
 }

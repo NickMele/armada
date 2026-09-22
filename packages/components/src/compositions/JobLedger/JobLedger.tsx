@@ -22,6 +22,13 @@ import { TabsWithCounts } from "../../primitives/TabsWithCounts/TabsWithCounts";
  *
  * **Who ran it is a column**, and telling a Check, a Judge and Fleet apart is
  * most of what this table is for.
+ *
+ * **The open row is a sheet at every width, unlike the step inspector.** That
+ * one pays for a column because the run tree beside it is drawn for 240px. Six
+ * columns are not: at 1440 with Helm's dock open the table had 250px left and
+ * broke a repository path one character to a line, which is the v1 defect the
+ * fold exists to prevent. `floor.ts` also says the window measure answers for
+ * the window and not for a component's box, and the dock is 320px of it.
  */
 
 /** Who ran a row, as the column reads it. */
@@ -80,7 +87,7 @@ export type JobLedgerProps = {
   /** Which row is open, held by the surface so a live redraw does not close it. */
   openRow?: string | null;
   onOpenRow?: (rowId: string | null) => void;
-  /** The open row, read whole. */
+  /** The open row, read whole. The body of the sheet a press opens. */
   inspector?: ReactNode;
   /** The folded inspector's own name, which is the open row's. */
   inspectorTitle?: string;
@@ -93,7 +100,12 @@ export type JobLedgerProps = {
    * what is left out is counted under the table rather than truncated quietly.
    */
   bound?: number;
-  /** The window is under `--layout-breakpoint`: the inspector folds to a sheet. */
+  /**
+   * The window is under `--layout-breakpoint`: the Kind column gives way.
+   *
+   * **It does not decide where the inspector goes**, because the inspector is
+   * a sheet at every width — see the component's own note.
+   */
   narrow?: boolean;
   /** The window is at `--window-floor`, where the folded inspector goes flush. */
   floor?: boolean;
@@ -119,18 +131,6 @@ export function JobLedger({
 }: JobLedgerProps) {
   const drawn = rows.slice(0, bound);
   const leftOut = rows.length - drawn.length;
-
-  // One tree, drawn in whichever of the two places the window can pay for —
-  // `InsideAJob`'s rule, so a width does not become a second arrangement.
-  const panel = (
-    <div className="armada-ledger__panel" data-folded={narrow || undefined}>
-      {inspector ?? (
-        <p className="armada-ledger__note" role="note">
-          {inspectorAbsent}
-        </p>
-      )}
-    </div>
-  );
 
   return (
     <>
@@ -229,24 +229,27 @@ export function JobLedger({
           ) : null}
         </div>
 
-        {narrow ? null : panel}
       </div>
 
       {/* Contained, so the shell's rail stays out from under the layer. */}
-      {narrow ? (
-        <Sheet
-          open={openRow !== null}
-          contained
-          floor={floor}
-          title={inspectorTitle ?? "This row"}
-          closeLabel="Close"
-          closeBinding="Esc"
-          bleed
-          onClose={() => onOpenRow?.(null)}
-        >
-          {panel}
-        </Sheet>
-      ) : null}
+      <Sheet
+        open={openRow !== null}
+        contained
+        floor={floor}
+        title={inspectorTitle ?? "This row"}
+        closeLabel="Close"
+        closeBinding="Esc"
+        bleed
+        onClose={() => onOpenRow?.(null)}
+      >
+        <div className="armada-ledger__panel">
+          {inspector ?? (
+            <p className="armada-ledger__note" role="note">
+              {inspectorAbsent}
+            </p>
+          )}
+        </div>
+      </Sheet>
     </>
   );
 }
