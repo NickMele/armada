@@ -52,6 +52,18 @@ Open Bridge → Active Jobs → lightweight heartbeat per active Drone: status, 
 
 **A step or a group opens in the inspector beside it**: its tasks, what it is doing now, the redirect box naming which Drone it reaches, the Checks at its boundary, the tests at that boundary drawn apart from those Checks, and hold to stop.
 
+### The implement step, opened
+
+**Under the run, the step the plan is worked at opens into its groups, and each group into its tasks.** The canvas above stays the map — it says where in the workflow the Job is — and the board under it says which task is moving. A run that read `implement · running` for two hours named neither the task nor the Check that broke.
+
+**A group opens; it is not always open.** Eight tasks and four boundaries drawn at once is the wall of rows this replaced, so the group that is moving opens itself and the rest are one line each. A folded group still says where it got to and the commit it left, so reading a run is not opening every group in turn.
+
+**A task row carries the planner's tier, the model that tier resolved to, how it is run, and what it has spent.** Turns while it runs; the cost only once its own agent stopped, because cost reaches Armada on a session's last line and a live figure would be invented. A done task a later task edited keeps `done` and carries a flag naming the task that did it.
+
+**A group's boundary is a bar of one segment per Check**, with four readings: not run, one in flight, all passed, and one failed with the group stopped behind it. Where it stopped it names the group it is holding back, how many times it has been run again, and what the next Drone is told — the failed Check's own output, never a summary of it. **The tests at that same boundary are a region apart**, carrying their own reason for being empty.
+
+**A task opens in the same inspector a step and a group open in**: what it is doing now, what its Drone was told, what it may touch, what it runs beside, its last edit, its own lines, a redirect addressed to that task's Drone, and hold to stop it. Fleet has no operation to stop one task or to redirect one Drone of several, so both are mocked against the Job's own Drone.
+
 **The strip stays put and the destination under it scrolls.** A destination is chosen from wherever a reading got to.
 
 ### Overview — one arrangement, at every state
@@ -71,6 +83,8 @@ Open Bridge → Active Jobs → lightweight heartbeat per active Drone: status, 
 **Elapsed is a figure, never a chart, with one exception.** Why: a filled bar reads as progress, and a step has no percentage — a task, unlike a step, does have one. Plan progress is a bar, on the Plan region below, never on a step's own fields.
 
 **An attempt is a row, not a counter.** Why: attempts beside each other show whether a Drone is trying different things or rephrasing one, and a count shows neither.
+
+**The step the plan is worked at carries how many of its tasks are through, and it counts tasks rather than Drones.** A step running eight of them read `running` and nothing else; a count of Drones says the same nothing with a smaller number. Which task is moving is the Workflow destination's board, one press away.
 
 **A path keeps its basename.** The directory truncates and recedes; the filename does not truncate at any width.
 

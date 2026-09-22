@@ -48,7 +48,9 @@ import { openKept } from "./phases";
 import { CHECKS_CHAPTER } from "./checks";
 import { whileReading, whyUnreachable } from "./while-reading";
 import { runOf, whyNoSteps } from "./run";
-import { answeringOf, askingOf, commandOf, fieldsOf, noticeOf, questionOf, waitingOf } from "./step";
+import { taskGroupsOf } from "./draft/group";
+import { stepTheGroupsHangUnder } from "./workflow-canvas";
+import { answeringOf, askingOf, commandOf, fieldsOf, noticeOf, questionOf, tasksField, waitingOf } from "./step";
 import { StepActs } from "./StepActs";
 import { refusedAsideOf, type Deciding } from "./flag-held";
 import { whyNoNotes } from "./notes";
@@ -589,6 +591,12 @@ export function OverviewTab(props: OverviewTabProps) {
   // Read once: `plan` gates both the region and its own eyebrow act, and a
   // second call would be a second, possibly different, reading of `whole`.
   const plan = planOf(whole);
+  // How many of the open step's tasks are through, where it holds groups. The
+  // same groups the Workflow tab's board opens, read for one line here.
+  const stepTasks =
+    whole === null || open === undefined || open.step_id !== stepTheGroupsHangUnder(whole)
+      ? undefined
+      : tasksField(props.draft?.groups ?? taskGroupsOf(whole));
   // `#1432`. What the open task said it would touch against what it did, from
   // the Job's own turns rather than the step's — a task's files include what
   // it wrote on an earlier run, `grouped.tsx`'s rule for the same reading.
@@ -713,7 +721,10 @@ export function OverviewTab(props: OverviewTabProps) {
           : {
               label: open.label,
               labelIsAnIdentifier: open.label === open.step_id || undefined,
-              fields: fieldsOf(open, now),
+              // The step's own facts, and — on the step the plan is worked at
+              // — how many of its tasks are through. `#1536`: a step running
+              // eight tasks used to read `running` and nothing else.
+              fields: [...fieldsOf(open, now), ...(stepTasks === undefined ? [] : [stepTasks])],
               acts: (
                 <StepActs
                   job={job}

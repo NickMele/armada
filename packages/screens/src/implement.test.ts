@@ -22,6 +22,7 @@ import {
   toldNextOf,
   verdictSaid,
 } from "./implement";
+import { tasksField } from "./step";
 
 /** The Job whole behind a moment, and the step its groups hang under. */
 function reading(moment: ArcMoment) {
@@ -229,5 +230,21 @@ describe("what the board refuses to draw", () => {
     const task = reading(executingSequential()).groups[0]!.tasks[0]!;
     expect(tierSaid({ ...task, treatment: "step_drone" })).toContain("the step's Drone");
     expect(tierSaid({ ...task, treatment: "job" })).toContain("a Job of its own");
+  });
+});
+
+describe("the open step's own line on Overview", () => {
+  test("it counts tasks and never Drones", () => {
+    const groups = reading(executingSequential()).groups;
+    expect(tasksField(groups)).toEqual({ label: "Tasks", value: "4 of 8 done · 1 working", mono: true });
+  });
+
+  test("a step whose groups are all through drops the working half rather than printing a zero", () => {
+    const groups = reading(executingConcurrent()).groups;
+    expect(tasksField(groups)?.value).toBe("6 of 8 done");
+  });
+
+  test("a step with no group draws no line at all", () => {
+    expect(tasksField([])).toBeUndefined();
   });
 });
