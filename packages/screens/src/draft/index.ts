@@ -29,6 +29,7 @@ export * from "./coord";
 export * from "./criterion";
 export * from "./dispatch";
 export * from "./group";
+export * from "./held";
 export * from "./landing";
 export * from "./ledger";
 export * from "./members";

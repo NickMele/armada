@@ -267,3 +267,97 @@
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
 }
+
+/* One band of the board — a label and the list under it. The tab's own region
+   gap, so a reading here lays out the way the run column's regions do. */
+.armada-holds__region {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The band's name. The look rows' own label treatment, because the two are the
+   same register — what this group of readings is — and a second one would be a
+   heading competing with the verdict above. */
+.armada-holds__band {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: var(--weight-medium);
+  color: var(--text-label);
+}
+
+/* The checkouts, and the logs. Each is a list of rows that wrap rather than
+   shrinking every value at once, for `.armada-holds__disk`'s own reason. */
+.armada-holds__disks,
+.armada-holds__logs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-holds__log {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+  color: var(--fg-muted);
+}
+
+/* What a checkout is doing. Sans against the mono around it, because it is a
+   word somebody would say and not a reading off the machine. */
+.armada-holds__state {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+/* A checkout a look found wrong. The hue on the state alone, never on the size
+   beside it — a fault has no size to report. */
+.armada-holds__state[data-wrong] {
+  color: var(--error);
+}
+
+/* Still being written. The running hue, because that is what it says: a Drone
+   has this file open. Text and not a pill — a bordered pill is a Job state. */
+.armada-holds__writing {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--status-running);
+}
+
+/* Which checkout a process is in. **It wraps where the other cells clip**, and
+   that is what keeps the table inside the card: a branch is one unbreakable
+   mono run, and at 768px `armada/3-show-what-s-running-in-the-drones-stat`
+   pushed Memory and Running for off the right edge of the window. Wrapping
+   spends a line the row has — `.armada-holds__disk`'s own argument. */
+.armada-holds__owner {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+/* A middot between a row's fields. Without one a checkout reads
+   `972.8 MiB armada/24-drop-the-store-singleton on disk /Users/…` as one run
+   of mono, and the app already separates facts on a line this way. In the
+   stylesheet rather than the markup, so a row's fields stay fields — and
+   trailing, so a row that wraps does not begin its second line on a dot. */
+.armada-holds__disk span:not(:last-child)::after,
+.armada-holds__log span:not(:last-child)::after {
+  content: "·";
+  margin-inline-start: var(--space-2);
+  color: var(--fg-subtle);
+}

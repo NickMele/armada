@@ -9,7 +9,7 @@
 // What a tab holds is that tab's own module: `tab-overview.tsx`,
 // `tab-record.tsx`, `tab-pulse.tsx`, `tab-awaited.tsx`.
 
-import { JobDetailHeaderActions } from "@armada/components";
+import { JobDetailHeaderActions, type JobResourcesProps } from "@armada/components";
 import { useReducer, useState } from "react";
 import { useAtFloor, useNarrow } from "@armada/shell";
 
@@ -22,12 +22,21 @@ import { runOf } from "./run";
 import { named } from "./run-labels";
 import { holdingOf, lookOf } from "./mine";
 import { span } from "./duration";
-import { LOOK_FAILED, nothingToAsk, whyNoReading } from "./resources";
+import {
+  LOOK_FAILED,
+  nothingToAsk,
+  PULSE_REFRESHES,
+  pulseFiguresOf,
+  pulseReadingOf,
+  whyNoReading,
+} from "./resources";
+import { pulseViewOf } from "./draft/pulse";
 import { briefOf } from "./work";
 import { NO_SHEET, sheetMoved } from "./Sheets";
 import type { JobDetail as JobWhole } from "@armada/protocol";
 import { AwaitedTab } from "./tab-awaited";
 import { OverviewTab } from "./tab-overview";
+import { PlanTab } from "./tab-plan";
 import { PulseTab } from "./tab-pulse";
 import { RecordTab } from "./tab-record";
 
@@ -166,10 +175,22 @@ function OneJob(props: JobDetailProps) {
           onRaising={setRaising}
           onRaisingTurns={setRaisingTurns}
         />
+      ) : tab === "plan" ? (
+        <PlanTab
+          job={job}
+          whole={whole}
+          floor={floor}
+          stale={props.stale}
+          acting={props.acting}
+          deciding={props.deciding}
+          onApproveReview={props.onApproveReview}
+          onRedirect={props.onRedirect}
+          {...(props.draft === undefined ? {} : { draft: props.draft })}
+        />
       ) : tab === "record" ? (
         <RecordTab {...recordOf(props, whole)} onCopied={props.onCopied} />
       ) : tab === "pulse" ? (
-        <PulseTab holds={pulseOf(props, job.id)} />
+        <PulseTab holds={pulseOf(props, whole, job.id)} />
       ) : (
         <AwaitedTab tab={tab} />
       )}
@@ -194,16 +215,26 @@ function recordOf(props: JobDetailProps, whole: JobWhole | null) {
   };
 }
 
-/** The Pulse tab's reading, in the shape `JobResources` has always taken. */
-function pulseOf(props: JobDetailProps, jobId: string) {
+/**
+ * The Pulse board: the machine reading, the figures over it, and the look.
+ *
+ * **`pulseViewOf` is the one derivation.** The board is built on the draft
+ * shape (`draft/pulse.ts`), filled from what Fleet serves today — so the same
+ * board draws the real Fleet and whatever `#1545` promotes onto the wire.
+ */
+function pulseOf(props: JobDetailProps, whole: JobWhole | null, jobId: string): JobResourcesProps {
   const holding = holdingOf(props.resources, jobId);
+  const view = holding === null ? null : pulseViewOf(holding);
   const looked = lookOf(props.examination, jobId);
+  const examined = looked?.state === "found" ? looked.examined : null;
   const nothing = nothingToAsk(props.resources);
   return {
-    reading: holding,
+    reading: view === null ? null : pulseReadingOf(view, examined),
+    figures: pulseFiguresOf(view, whole),
     note: whyNoReading(props.resources),
-    ...(holding === null ? {} : { age: span(holding.read_at, props.now) ?? undefined }),
-    examined: looked?.state === "found" ? looked.examined : null,
+    ...(view === null ? {} : { age: span(view.read_at, props.now) ?? undefined }),
+    refreshed: PULSE_REFRESHES,
+    examined,
     looking: looked?.state === "looking",
     ...(looked?.state === "failed" ? { lookFailed: LOOK_FAILED } : {}),
     ...(nothing === undefined ? {} : { nothingToAsk: nothing }),

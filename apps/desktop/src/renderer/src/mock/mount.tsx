@@ -37,9 +37,11 @@ export function mountApp(scenario: string | Scenario, host: HTMLElement, shared?
         {/* As `main.tsx` mounts it, so a test can read what a press asked the trackpad to play. */}
         <HapticsProvider perform={(pattern) => api.tap(pattern)}>
           {/* What this moment holds that Fleet cannot serve yet. The app's own
-              mount provides none, so every field is absent there. */}
+              mount provides none, so every field is absent there. The context
+              is what a composer reads before a Job exists; the prop is what a
+              Job's own boards read. */}
           <DraftedFrom held={chosen.draft ?? {}}>
-            <App />
+            <App {...(chosen.draft === undefined ? {} : { draft: chosen.draft })} />
           </DraftedFrom>
         </HapticsProvider>
       </Boundary>

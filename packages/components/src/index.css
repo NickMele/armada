@@ -314,6 +314,8 @@
 @import "./compositions/VerifySheet/VerifySheet.css";
 /* Bridge's chrome above another repository's running web app. #1294. */
 @import "./compositions/CaptureBar/CaptureBar.css";
+/* The plan read as the groups it will run in, one card each. #1535. */
+@import "./compositions/PlanBoard/PlanBoard.css";
 
 /* The dispatch form's optional settings, and what else is writing where a
    request would. #1540. */
