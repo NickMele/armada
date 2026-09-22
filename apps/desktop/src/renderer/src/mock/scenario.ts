@@ -292,10 +292,12 @@ function moment(prefix: string, one: ArcMoment): Scenario {
   const built = holding(`${prefix}/${kebab(one.name)}`, one.says, one.fixtures, {
     opens: one.opens,
   });
-  // The arc is one Job in one repository, so the rail opens on it rather than
-  // on All. Without this, every moment meets the composer's own ask before it
-  // can draw anything — a person walking the arc has already picked.
-  const picked = built.state.holds.repositories?.[0]?.root ?? null;
+  // A moment that has already typed a request is a moment inside the composer,
+  // and the composer asks which repository first on All — so the rail opens on
+  // the one this work is for, the way a person who got that far already has.
+  // Every other moment opens a Job, where the pick changes nothing.
+  const picked =
+    one.draft.prompt === undefined ? null : (built.state.holds.repositories?.[0]?.root ?? null);
   return {
     ...built,
     draft: one.draft,
