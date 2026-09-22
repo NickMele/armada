@@ -176,23 +176,100 @@ describe("implement", () => {
 });
 
 describe("the Record", () => {
-  it.todo(
+  test(
     "arc/planned: the Record's who column says Judge on the row where the plan was judged, " +
       "and Fleet on the row where the plan was recorded",
+    async () => {
+      await record("arc/planned");
+      const rows = ledger();
+
+      expect(whoSaid(rows, /Pressing the stat lists the Drone's Job and step/)).toBe("Judge");
+      expect(whoSaid(rows, /^the plan was recorded$/)).toBe("Fleet");
+    },
   );
-  it.todo(
+
+  test(
     "arc/executing-sequential: a Check's run is its own row, with Check in the who column — " +
       "not Fleet, and not the Drone that produced the work",
+    async () => {
+      await record("arc/executing-sequential");
+      const rows = ledger();
+
+      expect(whoSaid(rows, /^typecheck$/)).toBe("Check");
+      expect(whoSaid(rows, /^screens_test$/)).toBe("Check");
+      // The same Job's Drone and Fleet are both on screen, so Check is a
+      // distinction the table is drawing rather than the only word it has.
+      expect(rows.map((row) => row["Who ran it"])).toContain("Drone");
+      expect(rows.map((row) => row["Who ran it"])).toContain("Fleet");
+    },
   );
-  it.todo(
-    "arc/executing-sequential: each row says where in the Job it happened, down to the group " +
-      "and the task where it has one",
+
+  // **The group is named where it holds more than one task.** Today's wire has
+  // no groups, so `taskGroupsOf` derives one per task — and `Implement · group
+  // 1 · T1` would then put the same fact on the row twice. The coordinate
+  // still carries the group; `draft/ledger.test.ts` is where that is pinned.
+  test(
+    "arc/executing-sequential: each row says where in the Job it happened, down to the task " +
+      "where it has one",
+    async () => {
+      await record("arc/executing-sequential");
+      const rows = ledger();
+
+      expect(rows.every((row) => row["Where"] !== "")).toBe(true);
+      expect(rows.map((row) => row["Where"])).toContain("Implement · T1");
+      expect(rows.map((row) => row["Where"])).toContain("Plan the change");
+    },
   );
-  it.todo(
-    "arc/approved-frozen: the approval row names no step at all, because the Job's own " +
-      "machine moving is a fact about the Job",
+
+  // **Reworded from "the approval row".** The instant a Job was approved is a
+  // status move, and status moves live in `GET /jobs/:job_id/events`, which no
+  // arc fixture answers — so the row carrying this claim is the Job's creation.
+  // The claim itself is unchanged: a fact about the Job names no step.
+  test(
+    "arc/approved-frozen: the row for the Job's own machine moving names no step at all, " +
+      "because that is a fact about the Job",
+    async () => {
+      await record("arc/approved-frozen");
+      const rows = ledger();
+
+      expect(rows.map((row) => row["Where"])).toContain("The Job itself");
+      expect(whoSaid(rows, /^this Job was created$/)).toBe("You");
+    },
   );
 });
+
+/** App on an arc moment, with the Record open. */
+async function record(name: string): Promise<void> {
+  mount(name);
+  await page.getByRole("tab", { name: /^Record/ }).click();
+  await expect.poll(() => ledger().length).toBeGreaterThan(0);
+}
+
+/**
+ * The Record's rows, each keyed by the column its cells sit under.
+ *
+ * Read through the table's own header rather than by position, so a column
+ * added or reordered moves the keys with it instead of silently shifting every
+ * assertion one cell along.
+ */
+function ledger(): Record<string, string>[] {
+  const table = document.querySelector("table");
+  if (table === null) return [];
+  const columns = [...table.querySelectorAll("thead th")].map((one) => one.textContent?.trim() ?? "");
+  return [...table.querySelectorAll("tbody tr")].map((row) =>
+    Object.fromEntries(
+      [...row.querySelectorAll("td")].map((cell, at) => [
+        columns[at] ?? String(at),
+        cell.textContent?.trim() ?? "",
+      ]),
+    ),
+  );
+}
+
+/** Who ran the one row whose What matches. */
+function whoSaid(rows: Record<string, string>[], what: RegExp): string | undefined {
+  return rows.find((row) => what.test(row["What"] ?? ""))?.["Who ran it"];
+}
 
 describe("Pulse", () => {
   it.todo(
