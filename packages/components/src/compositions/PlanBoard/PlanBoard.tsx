@@ -130,7 +130,11 @@ function TaskRow({
     </>
   );
   return (
-    <li className="armada-plan-board__task" data-mark={task.mark}>
+    // **Named by its task, because the mark speaks first.** `TaskMark` carries
+    // its state as the row's leading text for a screen reader, so a row with no
+    // name of its own is announced "Open T6 …" and cannot be reached by the id
+    // a plan is discussed in.
+    <li className="armada-plan-board__task" data-mark={task.mark} aria-label={`${task.id} ${task.title}`}>
       {onOpenTask === undefined ? (
         <span className="armada-plan-board__task-head">{body}</span>
       ) : (
@@ -187,7 +191,15 @@ function Boundary({ group }: { group: PlanBoardGroup }) {
         <ul className="armada-plan-board__tests">
           {group.tests.map((test) => (
             <li key={test.id}>
-              <PathChip {...splitPath(test.spec)} note={test.droppedSays ?? test.reads} />
+              {/* **Only the exceptional reading is noted.** A note on every
+                  row would put a word beside each and say nothing; the row
+                  worth stopping on is the case nothing will run. */}
+              <PathChip
+                {...splitPath(test.spec)}
+                {...(test.reads === "owed"
+                  ? {}
+                  : { note: test.droppedSays ?? test.reads })}
+              />
             </li>
           ))}
         </ul>
