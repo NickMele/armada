@@ -84,6 +84,14 @@ The full set of Job statuses — each with its meaning, its reason values and wh
 
 A top-level Job enters at `awaiting_approval`. A sub-dispatched Job enters at `queued`, already approved as part of its parent.
 
+### Reading the request is a status, and approval is what locks
+
+**Not yet built.** A Job is created before the [Job proposer](job-proposer.md) has answered, at the `proposing` status #1159 adds, so the reading shows on the [Job Board](job-board.md) while it happens rather than only where the request was typed. Classifying what the work is is that same status and not a second one.
+
+**What the reading proposes is loose until a person approves it.** The workflow, the title, the brief, the gate on each step and how the work lands are all editable at `awaiting_approval`, and all of them freeze on the approval that dispatches the Job. Creation freezes nothing, which is the change: the resolved `WorkflowDef` is frozen into the Job at creation today (`crates/core-model/domain/job-fields.toml`), so a proposal that picked the wrong workflow cannot be corrected without a new Job.
+
+**What freezes is still the yardstick the work is judged against.** Moving the freeze from creation to approval moves when it is settled, never whether — see [Workflow](workflow.md).
+
 Two diagrams. The first answers *how a Job moves*; the second answers *how a Job ends*. Between them every legal edge appears exactly once.
 
 **How a Job moves** — every edge between non-terminal statuses. Colour is the band: grey is the approval gate, blue the Drone working, amber waiting on a person, violet a person working. Dotted is a return to the approval gate.
@@ -457,7 +465,7 @@ The full transition table — every legal edge, its trigger and its guard — is
 
 The full set of step states is in `crates/core-model/domain/step-states.toml`. The columns of `job_steps` are part of the Job schema in `crates/core-model/domain/job-fields.toml`.
 
-**No [Convoy](convoy.md) shape here.** The rows are keyed per step, not per Workspace. A Convoy's shared `retry_count` and single combined approval gate are unaffected, consistent with Convoy recording that no `workflow_status` change is needed. Nothing in this map reads `write_targets` or `atomic`.
+**Nothing in this map reads `write_targets`.** The rows are keyed per step, not per Workspace, so a Job gated by several Manifests holds one shared `retry_count` and one combined gate and needs no change here — see [Manifest](manifest.md), A Job gated by several Manifests.
 
 ## Facts vs. Evidence
 
@@ -536,6 +544,18 @@ Three fields, three readers, and none of them substitutes for another.
 
 **The [Job proposer](job-proposer.md) generates it**, from the same reading of the request that produces `workflow_id`. Hand entry is the override.
 
+## What a Job is held to
+
+`acceptance_criteria[]` is what the [Judge](judge.md) marks against. Each criterion carries how it is verified — a Check, a Judge, or attested — in `crates/core-model/src/job/fields.rs`.
+
+**Not yet built:** where a criterion came from, and what happens when that source moves.
+
+**A criterion carries its origin beside how it is verified**, and the two are different questions. The origin is the issue the request linked, the prompt the person wrote, or the person themselves, typed at the gate. Overloading `source` with it would make one field answer both.
+
+**Where the request links an issue, the criteria are read out of it.** Each one is editable until the Job is approved, and every one is frozen on approval with everything else the gate settles.
+
+**The frozen words are what counts, and the issue is where they came from.** An issue edited after approval does not move the yardstick — the Job keeps what it froze and says that the issue has moved since, so a person can see the divergence and decide. Noticing that is a live read of the forge, and nothing does it today.
+
 ## Scope is two lists, and only one of them is on this record
 
 `job_write_targets` is what a person mentioned when asking. It is partial by design, it binds no writes, and it is null on every Job the [Job proposer](job-proposer.md) drafted.
@@ -566,7 +586,9 @@ The complete Job field list is in `crates/core-model/domain/job-fields.toml`.
 
 Scheduling over that graph belongs to [Fleet](fleet.md), which walks it in topological order on top of the approval and resource gates.
 
-**Consequence for the surface:** the [Job Board](job-board.md) needs a graph view, not only a flat list. Not yet designed — see [Convoy](convoy.md), Open questions.
+**Consequence for the surface:** the [Job Board](job-board.md) needs a graph view, not only a flat list. Not yet designed — see [Job Board](job-board.md), Open questions.
+
+**A Job whose members are Jobs is this graph with a parent over it**, and the parent's completion waiting on its members is not an edge on this field — see [Landing](landing.md).
 
 ## Job scenarios
 
