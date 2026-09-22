@@ -4,6 +4,7 @@ import {
   applyNodeChanges,
   useReactFlow,
   type Edge,
+  type FitViewOptions,
   type Node,
   type NodeChange,
   type NodeProps,
@@ -120,6 +121,13 @@ function BoxView({ data, selected }: NodeProps<PadNode>) {
 
 const NODE_TYPES = { sketch: BoxView };
 const EDGE_TYPES = {};
+
+/**
+ * Room around a fitted picture. **A tenth rather than React Flow's default**:
+ * the acts sit over the top-right corner and the zoom pair over the
+ * bottom-right, so a picture fitted edge to edge has a box under each of them.
+ */
+const FIT: FitViewOptions = { padding: 0.1 };
 
 /**
  * Held down, a second box joins the selection rather than replacing it — which
@@ -278,6 +286,7 @@ export function SketchPad(props: SketchPadProps) {
           onSelectionChange={setPicked}
           nodesDraggable={!disabled}
           multiSelectionKeyCode={JOINS_THE_SELECTION}
+          fitViewOptions={FIT}
           controls="signs"
           aside={
             <Acts

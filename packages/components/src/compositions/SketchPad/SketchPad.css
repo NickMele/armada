@@ -49,16 +49,19 @@
   color: var(--fg-subtle);
 }
 
-/* One box. A well and its frame, at one width so a pad of them reads as a
-   picture rather than as a column of fields. */
+/* One box, at one width so a pad of them reads as a picture rather than as a
+   column of fields. **No edge of its own**: the well inside already draws one,
+   and two frames a padding apart read as a box holding a box. What is left is
+   the fill, which is also the grip a drag starts on. */
 .armada-sketch-box {
   width: var(--w-sketch-box);
   padding: var(--space-2);
-  border: var(--border-width) solid var(--border-default);
   border-radius: var(--radius-md);
   background: var(--bg-raised);
 }
 
+/* Selected. An outline rather than a border, so nothing reflows and the well
+   inside keeps its own edge. */
 .armada-sketch-box[aria-current] {
-  border-color: var(--edge-focus);
+  outline: var(--border-width) solid var(--edge-focus);
 }

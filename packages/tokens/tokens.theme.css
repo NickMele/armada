@@ -163,6 +163,8 @@
   --spacing-workflow-group-node: var(--w-workflow-group-node);
   --spacing-workflow-canvas: var(--h-workflow-canvas);
   --spacing-workflow-canvas-min: var(--w-workflow-canvas-min);
+  --spacing-sketch-box: var(--w-sketch-box);
+  --spacing-sketch-pad: var(--h-sketch-pad);
   --spacing-width: var(--palette-width);
   --spacing-max-height: var(--palette-max-height);
   --spacing-dialog: var(--w-dialog);
