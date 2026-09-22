@@ -122,3 +122,77 @@
   display: flex;
   justify-content: flex-start;
 }
+
+/* A task's own regions: what it was told, what it may touch, what it wrote and
+   what it said. Drawn for `kind: "task"` alone. #1536. */
+.armada-wf-inspector__brief,
+.armada-wf-inspector__beside {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+.armada-wf-inspector__scope,
+.armada-wf-inspector__log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.armada-wf-inspector__scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.armada-wf-inspector__log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.armada-wf-inspector__log > li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-wf-inspector__at {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-wf-inspector__said {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* Why the boundary stopped, and what the next Drone is given. */
+.armada-wf-inspector__failed {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--run-failed);
+  text-wrap: pretty;
+}
+
+.armada-wf-inspector__told {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}

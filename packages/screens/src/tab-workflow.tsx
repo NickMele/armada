@@ -8,17 +8,20 @@
 // cards nobody can read, so the canvas opens on the step a person is on and
 // its neighbours instead.
 
-import { Tabs, WorkflowCanvas, WorkflowInspector, WorkflowStacked } from "@armada/components";
+import { ImplementBoard, Tabs, WorkflowCanvas, WorkflowInspector, WorkflowStacked } from "@armada/components";
 import { useState } from "react";
-import type { JobDetail as JobWhole, JobSummary } from "@armada/protocol";
+import type { JobDetail as JobWhole, JobSummary, Turn } from "@armada/protocol";
 
 import type { ConfirmableAct, HeldAct } from "./Acts";
 import type { ActingAct } from "./pending";
+import type { CaseView } from "./draft/cases";
 import { TAB_LABEL } from "./detail-tabs";
 import { taskGroupsOf, type GroupView } from "./draft/group";
 import { ACT_LABEL, HOLD_LABEL, HOLD_SAID } from "./copy";
+import { groupsThatOpen, implementBoardOf } from "./implement";
+import { taskReadingOf } from "./implement-task";
 import { steeringOf } from "./steering";
-import { stepTheGroupsHangUnder, workflowRunOf } from "./workflow-canvas";
+import { groupNodeId, stepTheGroupsHangUnder, workflowRunOf } from "./workflow-canvas";
 import { workflowReadingOf } from "./workflow-inspector";
 import { WORKFLOW_VIEWS, WORKFLOW_VIEW_LABEL, type WorkflowView } from "./workflow-view";
 
@@ -39,6 +42,15 @@ export type WorkflowTabProps = {
    * broken — `draft/group.ts` carries the reasoning.
    */
   groups?: readonly GroupView[];
+  /** The cases the plan owes, for the tests drawn apart at each boundary. */
+  cases?: readonly CaseView[];
+  /**
+   * The Job's turns, where the second socket is carrying them. A task's own
+   * lines and its last edit are read off these — `implement-task.ts`.
+   */
+  turns?: readonly Turn[];
+  /** Whether anything is watching those turns, so an absence can say which it is. */
+  watching?: boolean;
   /** A press is out and Fleet has not answered. */
   acting: boolean;
   actingAct?: ActingAct;
@@ -55,6 +67,9 @@ export function WorkflowTab({
   view,
   onView,
   groups: given,
+  cases = [],
+  turns = [],
+  watching = false,
   acting,
   actingAct,
   onRedirect,
@@ -70,6 +85,11 @@ export function WorkflowTab({
   // centred on one card is a run with its other steps off screen.
   const [following, setFollowing] = useState(false);
   const [instruction, setInstruction] = useState("");
+  // The task a person has open, and which groups they have folded or unfolded.
+  // **`null` for the groups means nobody has chosen yet**, so the group that is
+  // moving opens itself — and a person's first press is what takes that over.
+  const [openTask, setOpenTask] = useState<string | null>(null);
+  const [opened, setOpened] = useState<string[] | null>(null);
 
   const toggle = (
     <Tabs
@@ -91,11 +111,49 @@ export function WorkflowTab({
 
   const groups = given ?? taskGroupsOf(whole);
   const groupsUnder = stepTheGroupsHangUnder(whole);
-  const run = workflowRunOf({ whole, groups, onOpen: setOpen });
+  // A press on a card is a press on a step or a group, so it takes the panel
+  // off whichever task was open rather than leaving two selections live.
+  const run = workflowRunOf({
+    whole,
+    groups,
+    onOpen: (id) => {
+      setOpen(id);
+      setOpenTask(null);
+    },
+  });
+  const step = whole.steps.find((one) => one.step_id === groupsUnder);
+  const openGroups = opened ?? groupsThatOpen(groups);
+  // The implement step, opened under the run — `#1536`. The canvas above is
+  // where the step sits; this is what is inside it.
+  const board = implementBoardOf({
+    whole,
+    groups,
+    cases,
+    step,
+    openGroups,
+    onOpenGroup: (id) => {
+      setOpened(openGroups.includes(id) ? openGroups.filter((one) => one !== id) : [...openGroups, id]);
+      setOpen(groupNodeId(id));
+      setOpenTask(null);
+    },
+    ...(openTask === null ? {} : { openTaskId: openTask }),
+    onOpenTask: (id) => setOpenTask(id === openTask ? null : id),
+  });
   // **The inspector lands on the step the Job is on**, so the panel is never a
   // blank column beside a full canvas. A person's own press then wins, and the
-  // Job advancing does not take the panel off what they are reading.
-  const reading = workflowReadingOf({ whole, groups, selected: open ?? run.running, groupsUnder });
+  // Job advancing does not take the panel off what they are reading. A task
+  // outranks both: it is the newest press and the narrowest reading.
+  const reading =
+    (openTask === null
+      ? undefined
+      : taskReadingOf({
+          whole,
+          groups,
+          taskId: openTask,
+          turns,
+          watching,
+          ...(groupsUnder === undefined ? {} : { stepId: groupsUnder }),
+        })) ?? workflowReadingOf({ whole, groups, selected: open ?? run.running, groupsUnder });
   const steering = steeringOf(job, whole);
 
   return (
@@ -120,6 +178,10 @@ export function WorkflowTab({
           ) : (
             <WorkflowStacked label={`${job.title}, as its workflow's steps`} rows={run.rows} />
           )}
+          {/* The step the canvas draws as one card, opened. The run above is
+              the same canvas the destination has always used, drawn small so
+              what is inside the step has the room. `#1536`. */}
+          {board === undefined ? null : <ImplementBoard {...board} />}
         </div>
 
         <div className="armada-workflow-tab__inspector">

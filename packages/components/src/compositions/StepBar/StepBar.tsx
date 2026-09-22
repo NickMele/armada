@@ -33,8 +33,15 @@ import type { StepActivity } from "../StepActivityMark/StepActivityMark";
  * is. `open`/`working`/`done` map onto the same three segment weights
  * (`remaining`/`current`/`past`) because the drawing wants one segment
  * grammar, not because a task's state is a position.
+ *
+ * **`failed` is the fourth, and it is a claim rather than a weight.** A group's
+ * boundary draws one segment per Check, and the Check that failed is the whole
+ * reading of that boundary — given a `past` segment it would be
+ * indistinguishable from the six beside it that passed. It takes
+ * `--step-failed`, which this bar already declares for a step's own activity.
+ * `#1536`.
  */
-export type TaskBarSegment = "open" | "working" | "done";
+export type TaskBarSegment = "open" | "working" | "done" | "failed";
 
 export type StepBarProps =
   | {
@@ -84,8 +91,14 @@ export function StepBar(props: StepBarProps) {
   const segments =
     props.tasks !== undefined
       ? props.tasks.map((task) => ({
-          state: task === "done" ? ("past" as const) : task === "working" ? ("current" as const) : ("remaining" as const),
-          activity: task === "working" ? ("running" as const) : undefined,
+          state:
+            task === "done"
+              ? ("past" as const)
+              : task === "working" || task === "failed"
+                ? ("current" as const)
+                : ("remaining" as const),
+          activity:
+            task === "working" ? ("running" as const) : task === "failed" ? ("failed" as const) : undefined,
         }))
       : Array.from({ length: props.total }, (_, i) => {
           const position = i + 1;

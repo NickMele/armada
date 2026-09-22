@@ -1,0 +1,125 @@
+/* A group's boundary — the Checks bar, and the tests region kept apart from it.
+
+   Divided from the tasks above by a rule: the boundary is a different actor,
+   not one more task. #1536. */
+.armada-boundary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--border-subtle);
+  min-width: 0;
+}
+
+.armada-boundary__region {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The tests region sits under the Checks with its own rule above it, so the
+   two are never read as one list. */
+.armada-boundary__region + .armada-boundary__region {
+  padding-top: var(--space-2);
+  border-top: var(--border-width) dashed var(--border-subtle);
+}
+
+.armada-boundary__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+}
+
+.armada-boundary__says {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+.armada-boundary__absent {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+/* The bar takes the region's width here rather than StepBar's drawn 72px: a
+   segment per Check is a reading, not a field in a row's fixed track. */
+.armada-boundary .armada-step-bar {
+  max-width: none;
+}
+
+.armada-boundary__checks,
+.armada-boundary__tests {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+
+.armada-boundary__checks > li,
+.armada-boundary__tests > li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-boundary__check {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-boundary__checks > li[data-reads="failed"] .armada-boundary__check {
+  color: var(--fg-default);
+}
+
+.armada-boundary__stops {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+.armada-boundary__told {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-boundary__eyebrow {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+}
+
+/* The Check's own output, verbatim. It wraps rather than scrolling sideways:
+   what the next Drone is told is read, not scrubbed. */
+.armada-boundary__output {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}

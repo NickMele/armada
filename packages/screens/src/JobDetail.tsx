@@ -18,7 +18,7 @@ import { headingOf, Unrenderable } from "./heading";
 import { detailOf } from "./mine";
 import { renderFor } from "./render";
 import { replacedCallout } from "./replaced";
-import { holdingOf, lookOf } from "./mine";
+import { holdingOf, lookOf, turnsOf } from "./mine";
 import { span } from "./duration";
 import {
   LOOK_FAILED,
@@ -191,6 +191,9 @@ function OneJob(props: JobDetailProps) {
           acting={props.acting}
           {...(props.actingAct === undefined ? {} : { actingAct: props.actingAct })}
           {...(props.draft?.groups === undefined ? {} : { groups: props.draft.groups })}
+          {...(props.draft?.cases === undefined ? {} : { cases: props.draft.cases })}
+          turns={turnsOf(props.observed, job.id)?.rows ?? []}
+          watching={props.observed.state === "watching"}
           onRedirect={props.onRedirect}
           onAct={props.onAct}
           onActHeld={props.onActHeld}
