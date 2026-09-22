@@ -30,8 +30,12 @@ export type ProposalGateRow = {
   advanceGate: string;
   /** What Fleet does with it, in one sentence. */
   does: string;
-  /** Fleet has nothing to do with this combination yet. Said, never hidden. */
-  unmeant?: boolean;
+  /**
+   * What this combination asks for that Fleet has nothing to do, where it asks
+   * for anything. **The sentence, not a flag** — what is missing differs per
+   * step, and "not supported" would say nothing about which part.
+   */
+  unmeant?: string;
 };
 
 /** Which of the three boxes moved. */
@@ -75,9 +79,9 @@ export function ProposalGates({ steps, onGate, onOverride, alwaysLooks }: Propos
               <Boxes step={step} {...(onGate === undefined ? {} : { onGate })} />
             )}
             <p className="armada-proposal__gate-does">{step.does}</p>
-            {step.unmeant !== true ? null : (
+            {step.unmeant === undefined ? null : (
               <p className="armada-proposal__unmeant" role="note">
-                Fleet does nothing with this combination yet.
+                {step.unmeant}
               </p>
             )}
             {step.repositoryDecides === undefined || step.overridden !== true ? null : (

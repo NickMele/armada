@@ -26,8 +26,7 @@ const STEPS: ProposalGateRow[] = [
     judge: true,
     you: false,
     advanceGate: "auto_if_judge_passes",
-    does: "Nothing yet — a Judge declines to refuse a mechanical pass, and this step has none to produce one.",
-    unmeant: true,
+    does: "It advances unless the Judge refuses it.",
   },
   {
     id: "implement",
@@ -42,10 +41,14 @@ const STEPS: ProposalGateRow[] = [
     id: "tests",
     label: "Write tests",
     checks: true,
-    judge: false,
+    judge: true,
     you: false,
-    advanceGate: "auto",
-    does: "Its Checks are the whole gate: they pass and it advances.",
+    advanceGate: "auto_if_judge_passes",
+    does: "Its Checks have to pass and the Judge has to decline to refuse them.",
+    // A tick moves the gate and never what the step declares, which is the one
+    // reading on this screen a person cannot get from the boxes alone.
+    unmeant:
+      "This step declares nothing for a Judge to read, so asking for a Judge asks for a verdict on no criteria.",
   },
   {
     id: "handoff",

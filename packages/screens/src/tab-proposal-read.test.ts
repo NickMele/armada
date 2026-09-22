@@ -78,9 +78,20 @@ describe("one row per step", () => {
     const rows = gateRowsOf(GATES, null);
 
     expect(rows[0]?.advanceGate).toBe("auto_if_judge_passes");
-    // A Judge with no Checks, which is the combination Fleet cannot act on.
-    expect(rows[0]?.unmeant).toBe(true);
     expect(rows[1]?.repositoryDecides).toBe("review_gate");
+  });
+
+  // What the step declares is what a tick cannot move, so the warning is read
+  // against the frozen step rather than against the boxes alone.
+  it("says where a box asks for something the step declares nothing for", () => {
+    const declares = sampleDetail({
+      steps: [sampleStep({ step_id: "plan", judge_checks: [{ criteria: 2, gaming_check: false }] })],
+    });
+
+    expect(gateRowsOf(GATES, declares)[0]?.unmeant).toBeUndefined();
+    expect(gateRowsOf(gatesWith(GATES, "plan", { checks: true }), declares)[0]?.unmeant).toContain(
+      "declares no Check",
+    );
   });
 
   it("moves one box on one step and leaves the others alone", () => {

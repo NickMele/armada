@@ -189,11 +189,11 @@ describe("classifying", () => {
       await expect.element(checks).not.toBeChecked();
       await checks.click();
       await expect.element(checks).toBeChecked();
-      // Moving a box moves what Fleet would be told, which is the whole of why
-      // the wire value is on screen beside it.
+      // A tick moves the gate and never what the step declares, so asking for
+      // a Check on a step that declares none says so rather than looking done.
       await expect
         .element(page.getByRole("listitem", { name: "Plan the change" }))
-        .toHaveTextContent("auto_if_judge_passes");
+        .toHaveTextContent("declares no Check");
     },
   );
 

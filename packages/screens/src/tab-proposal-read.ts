@@ -16,7 +16,7 @@ import type { CriterionView } from "./draft/criterion";
 import type { JobDraft } from "./draft/held";
 import { COMPLETE_WHEN_SERVED } from "./draft/landing";
 import type { CompleteWhen, LandingRule } from "./draft/landing";
-import { gateReadingOf } from "./draft/proposal";
+import { gateReadingOf, unmeantOf } from "./draft/proposal";
 import type { GateView, ProposalView } from "./draft/proposal";
 import { absoluteOf } from "./duration";
 
@@ -70,10 +70,17 @@ export function gateRowsOf(
   whole: JobWhole | null,
 ): ProposalGateRow[] {
   return gates.map((gate) => {
+    const step = whole?.steps.find((one) => one.step_id === gate.step_id);
     const reading = gateReadingOf(gate);
+    // What the step declares, which a tick cannot change. A step Fleet holds
+    // no record of declares nothing, and a box ticked on it says so.
+    const unmeant = unmeantOf(gate, {
+      checks: (step?.checks?.length ?? 0) > 0,
+      judge: (step?.judge_checks?.length ?? 0) > 0,
+    });
     const row: ProposalGateRow = {
       id: gate.step_id,
-      label: whole?.steps.find((step) => step.step_id === gate.step_id)?.label ?? gate.step_id,
+      label: step?.label ?? gate.step_id,
       checks: gate.checks,
       judge: gate.judge,
       you: gate.you,
@@ -82,7 +89,7 @@ export function gateRowsOf(
     };
     if (gate.repository_decides !== undefined) row.repositoryDecides = gate.repository_decides;
     if (gate.overridden !== undefined) row.overridden = gate.overridden;
-    if (reading.unmeant) row.unmeant = true;
+    if (unmeant !== undefined) row.unmeant = unmeant;
     return row;
   });
 }

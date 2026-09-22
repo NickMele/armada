@@ -3,7 +3,7 @@
 import type { LimitValues } from "@armada/protocol";
 import { describe, expect, it } from "vitest";
 
-import { gateReadingOf, gateViewOf, proposalViewOf } from "./proposal";
+import { gateReadingOf, gateViewOf, proposalViewOf, unmeantOf } from "./proposal";
 import type { GateView } from "./proposal";
 import { sampleDetail, sampleStep } from "./sample";
 
@@ -146,7 +146,6 @@ describe("what a combination of the boxes is on the wire", () => {
 
     expect(reading.advance_gate).toBe("auto");
     expect(reading.does).toBe("Nothing stops it.");
-    expect(reading.unmeant).toBe(false);
   });
 
   it("reads Checks alone as auto with the Checks as the whole gate", () => {
@@ -154,21 +153,19 @@ describe("what a combination of the boxes is on the wire", () => {
   });
 
   it("reads Checks and a Judge as auto_if_judge_passes", () => {
-    const reading = gateReadingOf(boxes({ checks: true, judge: true }));
-
-    expect(reading.advance_gate).toBe("auto_if_judge_passes");
-    expect(reading.unmeant).toBe(false);
+    expect(gateReadingOf(boxes({ checks: true, judge: true })).advance_gate).toBe(
+      "auto_if_judge_passes",
+    );
   });
 
-  // The one combination the issue is named after. `AutoIfJudgePasses` is the
-  // mechanical tier holding *and* the Judge not refusing, and the enum's own
-  // words are that there is no such thing as a Judge pass — so a step with no
-  // Checks produces no mechanical pass for the Judge to decline.
-  it("names a Judge with no Checks as a combination Fleet does nothing with yet", () => {
+  // The combination the issue is named after, and it is not meaningless: the
+  // `feature` workflow's own plan step is a Judge and no Check, and with
+  // nothing mechanical to fail, the Judge refusing is all that holds it.
+  it("reads a Judge with no Checks as advancing unless the Judge refuses", () => {
     const reading = gateReadingOf(boxes({ judge: true }));
 
     expect(reading.advance_gate).toBe("auto_if_judge_passes");
-    expect(reading.unmeant).toBe(true);
+    expect(reading.does).toBe("It advances unless the Judge refuses it.");
   });
 
   it("reads You as human_always, and says what ran before you read it", () => {
@@ -197,5 +194,41 @@ describe("what a combination of the boxes is on the wire", () => {
     );
 
     expect(reading.advance_gate).toBe("human_always");
+  });
+});
+
+
+describe("what a tick asks for that Fleet cannot do", () => {
+  const declared = { checks: true, judge: true };
+
+  it("is nothing where the step declares what the ticks ask for", () => {
+    expect(unmeantOf(boxes({ checks: true, judge: true }), declared)).toBeUndefined();
+    expect(unmeantOf(boxes({ you: true }), { checks: false, judge: false })).toBeUndefined();
+  });
+
+  // `mechanical_checks[]` and `judge_checks[]` are the workflow's and are
+  // frozen at creation, so a tick moves the gate and never what runs at it.
+  it("names a Check asked for on a step that declares none", () => {
+    expect(unmeantOf(boxes({ checks: true }), { checks: false, judge: true })).toContain(
+      "declares no Check",
+    );
+  });
+
+  it("names a Judge asked for on a step that declares nothing to read", () => {
+    expect(unmeantOf(boxes({ judge: true }), { checks: true, judge: false })).toContain(
+      "nothing for a Judge to read",
+    );
+  });
+
+  // `manifest_rule:review_gate` is frozen unresolved because the policy is
+  // live. An override is the first per-Job answer that would resolve it at
+  // approval, and nothing says which wins if the repository's rule moves.
+  it("names the override as carrying no answer to what wins later", () => {
+    const said = unmeantOf(
+      boxes({ you: true, repository_decides: "review_gate", overridden: true }),
+      declared,
+    );
+
+    expect(said).toContain("which wins");
   });
 });

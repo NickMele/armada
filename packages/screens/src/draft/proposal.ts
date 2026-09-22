@@ -150,21 +150,21 @@ export function gateViewOf(step: StepDetail): GateView {
  * What one gate is on the wire, and what Fleet does with it.
  *
  * **The boxes are not the wire and the wire is not the boxes.** `advance_gate`
- * is one value per step and says what it takes to *advance*; Checks and a
- * Judge are declarations on the step that run whatever the gate is
- * (`crates/core-model/src/job/declared.rs`). So three independent boxes cover
- * five wire values unevenly, and two of the eight combinations land on a value
- * Fleet cannot act on yet. `unmeant` is where that happens, said rather than
- * hidden behind a tick that looks like it did something.
+ * is one value per step and says what it takes to *advance*; the Checks a step
+ * runs and the criteria a Judge reads are declared on the step itself and are
+ * frozen at creation (`crates/core-model/src/job/declared.rs`). So a tick
+ * moves the gate and never the declarations — which is the whole of why
+ * `unmeantOf` exists.
  */
 export type GateReading = {
   /** The `advance_gate` this combination is today. */
   advance_gate: string;
   /** What Fleet does with it, in one sentence. */
   does: string;
-  /** Whether Fleet has nothing to do with this combination yet. */
-  unmeant: boolean;
 };
+
+/** What a step declares for the two automatic tiers to work on. */
+export type Declared = { checks: boolean; judge: boolean };
 
 /** What the two `manifest_rule` keys decide, in the repository's own terms. */
 const REPOSITORY_DOES: Readonly<Record<RepositoryDecides, string>> = {
@@ -187,18 +187,12 @@ export function gateReadingOf(gate: GateView): GateReading {
     return {
       advance_gate: `manifest_rule:${gate.repository_decides}`,
       does: REPOSITORY_DOES[gate.repository_decides],
-      unmeant: false,
     };
   }
   if (gate.you) {
     return {
       advance_gate: "human_always",
-      does: ranBeside(
-        "It holds at awaiting_review for you to answer",
-        gate.checks,
-        gate.judge,
-      ),
-      unmeant: false,
+      does: ranBeside("It holds at awaiting_review for you to answer", gate.checks, gate.judge),
     };
   }
   if (gate.judge) {
@@ -206,12 +200,10 @@ export function gateReadingOf(gate: GateView): GateReading {
       advance_gate: "auto_if_judge_passes",
       does: gate.checks
         ? "Its Checks have to pass and the Judge has to decline to refuse them."
-        : // `AutoIfJudgePasses` is "the mechanical tier holds **and** the Judge
-          // did not refuse", and the enum's own words are that there is no such
-          // thing as a Judge pass. A step with no Checks has no mechanical pass
-          // for a Judge to decline, so Fleet advances it on nothing.
-          "Nothing yet — a Judge declines to refuse a mechanical pass, and this step has none to produce one.",
-      unmeant: !gate.checks,
+        : // There is no such thing as a Judge pass, only a mechanical pass a
+          // Judge declined to refuse — so with no Check to fail, the Judge
+          // refusing is the only thing that can hold it.
+          "It advances unless the Judge refuses it.",
     };
   }
   return {
@@ -219,8 +211,35 @@ export function gateReadingOf(gate: GateView): GateReading {
     does: gate.checks
       ? "Its Checks are the whole gate: they pass and it advances."
       : "Nothing stops it.",
-    unmeant: false,
   };
+}
+
+/**
+ * What this combination asks for that Fleet has nothing to do, or `undefined`
+ * where it is an ordinary gate.
+ *
+ * **A tick moves the gate and never what the step declares.** `mechanical_checks[]`
+ * and `judge_checks[]` are the workflow's and are frozen at creation, so
+ * asking for a Check on a step that declares none runs nothing at all — and
+ * the combination reads, on the wire, exactly like one that does.
+ */
+export function unmeantOf(gate: GateView, declared: Declared): string | undefined {
+  if (gate.repository_decides !== undefined && gate.overridden === true) {
+    // `ManifestRuleReviewGate` is frozen unresolved on purpose, because the
+    // policy is live and may move mid-Job. An override is the first per-Job
+    // answer that would resolve it at approval, and nothing says which wins.
+    return (
+      "Nothing carries a per-Job override yet, and nothing says which wins if the repository's " +
+      `${gate.repository_decides} moves after you approve.`
+    );
+  }
+  if (gate.checks && !declared.checks) {
+    return "This step declares no Check, so asking for Checks runs nothing until the workflow declares one.";
+  }
+  if (gate.judge && !declared.judge) {
+    return "This step declares nothing for a Judge to read, so asking for a Judge asks for a verdict on no criteria.";
+  }
+  return undefined;
 }
 
 /** What still runs on a step a person answers, where anything does. */
