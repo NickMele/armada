@@ -352,3 +352,6 @@ export * from "./compositions/VerifySheet/VerifySheet";
 // request would. #1540.
 export * from "./compositions/DispatchSettings/DispatchSettings";
 export * from "./compositions/WhatElseIsRunning/WhatElseIsRunning";
+
+// A wave of Jobs under one plan, and which of them waits on which. #1544.
+export * from "./compositions/WaveCanvas/WaveCanvas";

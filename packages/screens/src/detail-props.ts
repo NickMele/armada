@@ -35,6 +35,7 @@ import type {
   ModelChoices,
   Observed,
   Outcome,
+  RepositorySummary,
   Watched,
   WhenBlocked,
   WhenRefused,
@@ -42,6 +43,7 @@ import type {
 } from "@armada/protocol";
 
 import type { ConfirmableAct, HeldAct } from "./Acts";
+import type { Outstanding } from "./outstanding";
 import type { JobDraft } from "./draft/held";
 import type { ShowAgainCall } from "./again";
 import type { ExplainCommand, ReadCall } from "./calls";
@@ -59,6 +61,21 @@ export type JobDetailProps = {
   watched: Watched;
   workflows: readonly WorkflowSummary[];
   manifests: readonly ManifestSummary[];
+  /**
+   * The Board's own rows. **What a Job dispatched is read from them** — a
+   * member is a row whose `dispatched_by` names this Job — and nothing else
+   * on this screen reads them, so a caller with none passes none and a Job
+   * that dispatched a wave simply draws no wave.
+   */
+  board?: readonly JobSummary[];
+  /**
+   * Every question waiting on a person, as main gathers them across every
+   * repository. The wave answers its own Jobs' questions where they are read,
+   * from the same list the dock draws.
+   */
+  questions?: readonly Outstanding[];
+  /** The repositories Fleet serves, for the label a question's card carries. */
+  repositories?: readonly RepositorySummary[];
   /** True while what is shown is not live. Every control is refused. */
   stale: boolean;
   /** Now, injected. A whole-Job elapsed is read, so it has to move. */

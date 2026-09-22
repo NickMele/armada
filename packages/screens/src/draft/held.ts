@@ -13,6 +13,7 @@
 import type { CaseView, ScopeRevisionView } from "./cases";
 import type { CriterionView } from "./criterion";
 import type { GroupView } from "./group";
+import type { WaveView } from "./wave";
 
 /**
  * A Job's draft reading. **Every field is absent by default**, and absent
@@ -34,4 +35,11 @@ export type JobDraft = {
    * recorded it — `draft/revision.ts` pairs the two.
    */
   scope_revisions?: readonly ScopeRevisionView[];
+  /**
+   * The wave this Job dispatched, and which of its Jobs waits on which.
+   *
+   * **Absent derives one from the Board's own rows** (`draft/wave.ts`), which
+   * is every Job and no order between them — thinner, never broken.
+   */
+  wave?: WaveView;
 };
