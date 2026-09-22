@@ -220,14 +220,99 @@ describe("the plan", () => {
     await expect.element(taskRow("T7")).not.toHaveTextContent("$");
   });
 
-  it.todo(
-    "arc/plan-revision-refused: the Judge's refusal names the one task that was revised, and " +
-      "the other seven are untouched beside it",
-  );
-  it.todo(
-    "arc/plan-revision-refused: the case that fell out of the revised scope reads dropped, " +
-      "with the revision that dropped it",
-  );
+  test("arc/plan-revision-refused: the Judge's refusal names the one task that was revised, and the other seven are untouched beside it", async () => {
+    await at("arc/plan-revision-refused", "Plan");
+    const asked = page.getByRole("region", {
+      name: "What you asked the plan's Drone to change",
+    });
+    await expect.element(asked).toHaveTextContent("out of T5");
+    await expect.element(asked).toHaveTextContent("Refused");
+    await expect
+      .element(asked)
+      .toHaveTextContent("the plan names every file the panel's rows are drawn from");
+    await expect.element(asked).toHaveTextContent("no other task claims it");
+    await expect
+      .element(asked)
+      .toHaveTextContent("T5 is the one task the ask touched. The other 7 stand");
+    // The plan itself is the one the Drone recorded: eight tasks, four groups.
+    const ids = [
+      ...page
+        .getByRole("list", { name: "Groups, in the order they run" })
+        .element()
+        .querySelectorAll("[aria-label$='tasks'] > li"),
+    ].map((one) => one.getAttribute("aria-label")?.split(" ")[0]);
+    expect(ids).toEqual(["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"]);
+  });
+
+  test("arc/plan-revision-refused: the case that fell out of the revised scope reads dropped, with the revision that dropped it", async () => {
+    await at("arc/plan-revision-refused", "Plan");
+    await expect.element(groupCard(4)).toHaveTextContent("Running.test.tsx");
+    await expect.element(groupCard(4)).toHaveTextContent("dropped by a scope revision");
+    await expect
+      .element(page.getByRole("region", { name: "What you asked the plan's Drone to change" }))
+      .toHaveTextContent("It drops packages/screens/src/Running.test.tsx.");
+  });
+
+  test("arc/plan-revision-refused: a group offers move up, move down and remove while the plan waits, and the first group cannot move up", async () => {
+    await at("arc/plan-revision-refused", "Plan");
+    const asks = page.getByRole("group", { name: "Ask about group 1" });
+    await expect.element(asks.getByRole("button", { name: "Move up" })).toBeDisabled();
+    await expect.element(asks.getByRole("button", { name: "Move down" })).toBeEnabled();
+    await expect.element(asks.getByRole("button", { name: "Remove" })).toBeEnabled();
+    await expect
+      .element(page.getByRole("tabpanel", { name: "Plan" }))
+      .toHaveTextContent("The plan is the Drone's record");
+  });
+
+  test("arc/plan-revision-refused: moving a group past one that claims the same file warns before the ask goes out", async () => {
+    await at("arc/plan-revision-refused", "Plan");
+    await page
+      .getByRole("group", { name: "Ask about group 3" })
+      .getByRole("button", { name: "Move down" })
+      .click();
+    const dialog = page.getByRole("dialog").first();
+    await expect
+      .element(dialog)
+      .toHaveTextContent("Ask the Drone to run group 3 after group 4?");
+    await expect
+      .element(dialog)
+      .toHaveTextContent("Group 3 and group 4 both claim packages/screens/src/running-rows.tsx");
+    await expect.element(dialog).toHaveTextContent("Group 3 writes it first as the plan stands");
+    await expect.element(dialog).toHaveTextContent("it may refuse");
+  });
+
+  test("arc/plan-revision-refused: a reorder the scopes do not disagree with carries no warning", async () => {
+    await at("arc/plan-revision-refused", "Plan");
+    await page
+      .getByRole("group", { name: "Ask about group 2" })
+      .getByRole("button", { name: "Move up" })
+      .click();
+    const dialog = page.getByRole("dialog").first();
+    await expect
+      .element(dialog)
+      .toHaveTextContent("Ask the Drone to run group 2 before group 1?");
+    await expect.element(dialog).not.toHaveTextContent("both claim");
+  });
+
+  test("arc/plan-revision-refused: a task's inspector asks for a rewrite, and the control is off until something is typed", async () => {
+    await at("arc/plan-revision-refused", "Plan");
+    await taskRow("T6").getByRole("button").first().click();
+    const sheet = page.getByRole("dialog").first();
+    await expect.element(sheet).toHaveTextContent("Rewrite this task");
+    const send = sheet.getByRole("button", { name: "Ask the Drone" });
+    await expect.element(send).toBeDisabled();
+    await sheet.getByRole("textbox").first().fill("Split the rows out of this one");
+    await expect.element(send).toBeEnabled();
+  });
+
+  test("arc/planned: a plan already past its gate offers no changes at all", async () => {
+    await at("arc/planned", "Plan");
+    await expect.element(page.getByRole("tabpanel", { name: "Plan" })).toBeVisible();
+    expect(page.getByRole("group", { name: "Ask about group 1" }).elements()).toHaveLength(0);
+    await expect
+      .element(page.getByRole("tabpanel", { name: "Plan" }))
+      .not.toHaveTextContent("The plan is the Drone's record");
+  });
 });
 
 describe("implement", () => {

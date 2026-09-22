@@ -184,3 +184,55 @@ export const OpeningATask: Story = {
     await expect(canvas.getByRole("button", { name: /T1/ })).not.toHaveAttribute("aria-current");
   },
 };
+
+/** What the board offers while the plan is still a question. `#1552`. */
+const ASKS = [
+  { id: "move_up", label: "Move up" },
+  { id: "move_down", label: "Move down" },
+  { id: "remove", label: "Remove" },
+];
+
+const ASKS_SAY =
+  "The plan is the Drone's record. Each of these asks it for a different split, and it may refuse.";
+
+/**
+ * The plan at its gate, where it may still be argued with. Every group offers
+ * the same three controls, and the first group's Move up is drawn off rather
+ * than left out — a card whose controls change place as it moves is a card a
+ * person has to read again.
+ */
+export const WaitingAtItsGate: Story = {
+  args: {
+    approach: APPROACH,
+    orderSays: ORDER,
+    asksSay: ASKS_SAY,
+    groups: planned().map((group, at) => ({
+      ...group,
+      asks: ASKS.map((ask) =>
+        ask.id === "move_up" && at === 0 ? { ...ask, disabled: true } : ask,
+      ),
+    })),
+    onOpenTask: fn(),
+    onAsk: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const first = canvas.getByRole("group", { name: "Ask about group 1" });
+    await expect(within(first).getByRole("button", { name: "Move up" })).toBeDisabled();
+    await userEvent.click(within(first).getByRole("button", { name: "Remove" }));
+    await expect(args.onAsk).toHaveBeenCalledWith("g1", "remove");
+  },
+};
+
+/**
+ * One ask is out, so every one of them is off — a second press while the first
+ * is unanswered would be two asks about one plan with no order between them.
+ */
+export const AnAskIsOut: Story = {
+  args: { ...WaitingAtItsGate.args, askPending: true } as Story["args"],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const second = canvas.getByRole("group", { name: "Ask about group 2" });
+    await expect(within(second).getByRole("button", { name: "Move down" })).toBeDisabled();
+  },
+};

@@ -55,12 +55,22 @@ export type PlanTabProps = {
 };
 
 /**
- * Which step recorded the plan, where one did. **Read off the declared checks,
- * never the workflow's name** — `plan.ts`'s rule, and `#1006` lets any step
- * declare `plan_recorded`.
+ * Which step recorded the plan, where one did.
+ *
+ * **The plan's own `recorded_by` first, and the declared check after it.**
+ * `plan.ts`'s rule is that the workflow's name never decides this, and both
+ * readings obey it: a recorded plan says which run of which step wrote it,
+ * which is the exact fact, and a plan not yet recorded has only the step that
+ * declares it will. `#1006` is why the second is a check and not a name.
  */
 function planStepOf(whole: JobWhole | null): StepDetail | undefined {
-  return whole?.steps.find((step) =>
+  if (whole === null) return undefined;
+  const wrote = whole.work_plan?.recorded_by;
+  if (wrote !== undefined && wrote.by === "step") {
+    const step = whole.steps.find((one) => one.step_id === wrote.step_id);
+    if (step !== undefined) return step;
+  }
+  return whole.steps.find((step) =>
     (step.checks ?? []).some((check) => check.kind === PLAN_RECORDED),
   );
 }
