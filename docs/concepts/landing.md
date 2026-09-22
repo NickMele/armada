@@ -53,7 +53,7 @@ An order between members is not one thing. Three repositories give three answers
 | --- | --- | --- |
 | Target | `main`, or a named branch | **Not built.** `main` by construction, and the merge line takes turns onto it |
 | Pull requests | One for the Job, or one per group | **Not built.** One per Job |
-| Link between members | `stacked`, `merged` or `published`, per edge, defaulted by the Manifest | Only `merged` exists. Bridge draws all three (`packages/components/.../JobMembers`), and a link derived from today's wire always reads `merged` |
+| Link between members | `stacked`, `merged` or `published`, per edge, defaulted by the Manifest | Only `merged` exists. Bridge draws all three (`packages/components/src/compositions/JobMembers/JobMembers.tsx`), and a link derived from today's wire always reads `merged` |
 | Pull request mode | Ready, or draft | **Not built** |
 | Advance at review | Automatic, or a person | Built, as `manifest_rule:auto_merge` on an advance gate |
 | Complete when | The pull request lands, or every member has | Only the first exists |

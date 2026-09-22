@@ -347,7 +347,7 @@ function Fact({
       </dt>
       <dd
         className="armada-members__fact-value"
-        data-absent={value === undefined ? true : undefined}
+        data-absent={value === undefined ? "true" : undefined}
       >
         {value ?? absent}
       </dd>

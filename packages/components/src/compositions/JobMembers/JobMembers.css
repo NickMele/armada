@@ -206,7 +206,7 @@
 
 /* A part nothing serves keeps its row and says so in words. Sans and subtle,
    because it is a sentence about a missing value rather than a value. */
-.armada-members__fact-value[data-absent] {
+.armada-members__fact-value[data-absent="true"] {
   font-family: var(--font-sans);
   color: var(--fg-subtle);
 }
