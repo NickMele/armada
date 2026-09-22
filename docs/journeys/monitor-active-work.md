@@ -40,7 +40,17 @@ Open Bridge → Active Jobs → lightweight heartbeat per active Drone: status, 
 
 **A tab carries a count only where the count is a reading.** Workflow carries the frozen workflow's steps and Plan carries the tasks a Drone may still do — a dropped task is not work outstanding, so it is not counted. The rest carry nothing, because a zero on a tab trains the eye to skip the number.
 
-**A destination named before it is built says so.** Workflow and Plan draw one line naming what will hold them and where that reading is today. A strip that grew tabs as issues landed would change shape under a reader between releases, and the position a tab sits in is what a hand learns.
+**A destination named before it is built says so.** Plan draws one line naming what will hold it and where that reading is today. A strip that grew tabs as issues landed would change shape under a reader between releases, and the position a tab sits in is what a hand learns.
+
+### Workflow — the run as the workflow it froze
+
+**Steps along a spine, a step's groups hanging under it, and a loop returning above.** The steps are the ones the Job's own workflow file declares, read off the frozen workflow rather than off a catalogue, so a bug Job draws three and a revert Job two.
+
+**A toggle chooses between the canvas and the stacked run, canvas by default, at every width.** It is remembered per viewer rather than per Job, because it is a way of reading. The stacked run draws the same cards in a column: a toggle that changed what a step said about itself would be two screens rather than two arrangements.
+
+**Legibility wins over completeness.** A run too wide to fit and still be read opens on the step a person is on with its neighbours, and the rest is panned to. *Stay on the running step* is a press, never the default — on by default it wins over the fit and opens every run centred on one card.
+
+**A step or a group opens in the inspector beside it**: its tasks, what it is doing now, the redirect box naming which Drone it reaches, the Checks at its boundary, the tests at that boundary drawn apart from those Checks, and hold to stop.
 
 **The strip stays put and the destination under it scrolls.** A destination is chosen from wherever a reading got to.
 

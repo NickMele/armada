@@ -7,29 +7,38 @@
 // **This file is the screen, not a tab.** It reads the Job whole, draws the
 // header, the standing callout and the strip, and hands each tab what it needs.
 // What a tab holds is that tab's own module: `tab-overview.tsx`,
-// `tab-record.tsx`, `tab-pulse.tsx`, `tab-awaited.tsx`.
+// `tab-workflow.tsx`, `tab-plan.tsx`, `tab-record.tsx`, `tab-pulse.tsx`.
 
-import { JobDetailHeaderActions } from "@armada/components";
+import { JobDetailHeaderActions, type JobResourcesProps } from "@armada/components";
 import { useReducer, useState } from "react";
 import { useAtFloor, useNarrow } from "@armada/shell";
 
 import { countsOf, FIRST_TAB, JobTabs, type DetailTab } from "./detail-tabs";
 import { headingOf, Unrenderable } from "./heading";
-import { detailOf, turnsOf } from "./mine";
+import { detailOf } from "./mine";
 import { renderFor } from "./render";
 import { replacedCallout } from "./replaced";
-import { runOf } from "./run";
-import { named } from "./run-labels";
 import { holdingOf, lookOf } from "./mine";
 import { span } from "./duration";
-import { LOOK_FAILED, nothingToAsk, whyNoReading } from "./resources";
-import { briefOf } from "./work";
+import {
+  LOOK_FAILED,
+  nothingToAsk,
+  PULSE_REFRESHES,
+  pulseFiguresOf,
+  pulseReadingOf,
+  whyNoReading,
+} from "./resources";
+import { pulseViewOf } from "./draft/pulse";
 import { NO_SHEET, sheetMoved } from "./Sheets";
 import type { JobDetail as JobWhole } from "@armada/protocol";
-import { AwaitedTab } from "./tab-awaited";
 import { OverviewTab } from "./tab-overview";
+import { PlanTab } from "./tab-plan";
 import { PulseTab } from "./tab-pulse";
 import { RecordTab } from "./tab-record";
+import { WorkflowTab } from "./tab-workflow";
+import { whyNoSteps } from "./run";
+import { FIRST_WORKFLOW_VIEW } from "./workflow-view";
+import { ledgerOf } from "./draft/ledger";
 
 export type { ConfirmableAct, HeldAct, JobAct } from "./Acts";
 export type { FoldedReads } from "./mine";
@@ -101,6 +110,11 @@ function OneJob(props: JobDetailProps) {
   const narrow = useNarrow();
   const floor = useAtFloor();
 
+  // Why the Workflow tab has no run to draw, where it has none. The same
+  // reading Overview's run column takes, so the two never give a Job's empty
+  // workflow two different reasons.
+  const absent = whyNoSteps(props.watched, props.job.id);
+
   // The Job header, and everything that goes in it. `heading.tsx` holds what
   // it is made of — the badge, the facts, the acts that end or replace the Job,
   // and the way out to the pull request — which is where the next thing added
@@ -166,44 +180,108 @@ function OneJob(props: JobDetailProps) {
           onRaising={setRaising}
           onRaisingTurns={setRaisingTurns}
         />
+      ) : tab === "workflow" ? (
+        <WorkflowTab
+          job={job}
+          whole={whole}
+          {...(absent === undefined ? {} : { absent })}
+          narrow={narrow}
+          view={props.workflowView ?? FIRST_WORKFLOW_VIEW}
+          onView={(view) => props.onWorkflowView?.(view)}
+          acting={props.acting}
+          {...(props.actingAct === undefined ? {} : { actingAct: props.actingAct })}
+          {...(props.draft?.groups === undefined ? {} : { groups: props.draft.groups })}
+          onRedirect={props.onRedirect}
+          onAct={props.onAct}
+          onActHeld={props.onActHeld}
+        />
+      ) : tab === "plan" ? (
+        <PlanTab
+          job={job}
+          whole={whole}
+          floor={floor}
+          stale={props.stale}
+          acting={props.acting}
+          deciding={props.deciding}
+          onApproveReview={props.onApproveReview}
+          onRedirect={props.onRedirect}
+          {...(props.draft === undefined ? {} : { draft: props.draft })}
+        />
       ) : tab === "record" ? (
-        <RecordTab {...recordOf(props, whole)} onCopied={props.onCopied} />
-      ) : tab === "pulse" ? (
-        <PulseTab holds={pulseOf(props, job.id)} />
+        <RecordTab
+          {...recordOf(props, whole)}
+          jobId={job.id}
+          narrow={narrow}
+          floor={floor}
+          onReadCheckOutput={props.onReadCheckOutput}
+          onSaid={props.onSaid}
+        />
       ) : (
-        <AwaitedTab tab={tab} />
+        <PulseTab holds={pulseOf(props, whole, job.id)} />
       )}
     </div>
   );
 }
 
 /**
- * What the Record tab folds, off readings Overview already takes. **No
- * selection**: the record is the Job's, so the tree marks no step as the one
- * somebody happens to be reading.
+ * What the Record tab reads.
+ *
+ * **Composed here rather than fetched**, because no operation answers a ledger
+ * yet — `draft/ledger.ts` reads the Job whole, its evidence, its footprint and
+ * its history into one list, and every one of those is a read this screen is
+ * already holding for another region.
  */
 function recordOf(props: JobDetailProps, whole: JobWhole | null) {
-  const watching = turnsOf(props.observed, props.job.id);
+  if (whole === null) return { detail: null, rows: [] };
+  const jobId = props.job.id;
   const handed =
-    props.recorded.handed.state === "heard" && props.recorded.handed.jobId === props.job.id
+    props.recorded.handed.state === "heard" && props.recorded.handed.jobId === jobId
       ? props.recorded.handed.moment
       : undefined;
+  const footprint =
+    props.recorded.footprint.state === "read" && props.recorded.footprint.jobId === jobId
+      ? props.recorded.footprint.reading
+      : undefined;
+  const evidence =
+    props.recorded.evidence.state === "read" && props.recorded.evidence.jobId === jobId
+      ? props.recorded.evidence.steps
+      : undefined;
+  const history =
+    props.history?.state === "read" && props.history.jobId === jobId
+      ? props.history.moves
+      : undefined;
   return {
-    run: whole === null ? [] : runOf(whole, props.now, undefined, watching?.rows ?? [], handed).map(named),
-    ...(whole === null ? {} : { brief: briefOf(whole) }),
+    detail: whole,
+    rows: ledgerOf({
+      detail: whole,
+      ...(history === undefined ? {} : { history }),
+      ...(evidence === undefined ? {} : { evidence }),
+      ...(footprint === undefined ? {} : { footprint }),
+      ...(handed === undefined ? {} : { handed }),
+    }),
   };
 }
 
-/** The Pulse tab's reading, in the shape `JobResources` has always taken. */
-function pulseOf(props: JobDetailProps, jobId: string) {
+/**
+ * The Pulse board: the machine reading, the figures over it, and the look.
+ *
+ * **`pulseViewOf` is the one derivation.** The board is built on the draft
+ * shape (`draft/pulse.ts`), filled from what Fleet serves today — so the same
+ * board draws the real Fleet and whatever `#1545` promotes onto the wire.
+ */
+function pulseOf(props: JobDetailProps, whole: JobWhole | null, jobId: string): JobResourcesProps {
   const holding = holdingOf(props.resources, jobId);
+  const view = holding === null ? null : pulseViewOf(holding);
   const looked = lookOf(props.examination, jobId);
+  const examined = looked?.state === "found" ? looked.examined : null;
   const nothing = nothingToAsk(props.resources);
   return {
-    reading: holding,
+    reading: view === null ? null : pulseReadingOf(view, examined),
+    figures: pulseFiguresOf(view, whole),
     note: whyNoReading(props.resources),
-    ...(holding === null ? {} : { age: span(holding.read_at, props.now) ?? undefined }),
-    examined: looked?.state === "found" ? looked.examined : null,
+    ...(view === null ? {} : { age: span(view.read_at, props.now) ?? undefined }),
+    refreshed: PULSE_REFRESHES,
+    examined,
     looking: looked?.state === "looking",
     ...(looked?.state === "failed" ? { lookFailed: LOOK_FAILED } : {}),
     ...(nothing === undefined ? {} : { nothingToAsk: nothing }),

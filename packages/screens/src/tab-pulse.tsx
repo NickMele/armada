@@ -1,20 +1,16 @@
 // Pulse — what this Job is costing the machine right now.
 //
-// **Today's resources region, given a destination.** `JobResources` is a
-// verdict, a look, a process table, a disk figure and four absence states, and
-// none of them changes here: what moved is that it has a tab of its own rather
-// than being a sheet opened from a five-line summary. Overview keeps that
-// summary, which is the reading a person glances at without leaving the run.
-//
-// `#1538` replaces this with the full board — stat tiles, processes with their
-// owner, worktrees and the Job's own logs.
+// Drones, Checks and Judges running; spend and turns against their caps; the
+// processes, the checkouts and the logs. `#1538`, on `draft/pulse.ts`'s
+// `PulseView` — which is derived from today's wire, so this board renders
+// against the real Fleet as well as a mock.
 
 import { JobResources, type JobResourcesProps } from "@armada/components";
 
 import { TAB_LABEL } from "./detail-tabs";
 
 export type PulseTabProps = {
-  /** The reading and its act, exactly as the Pulse sheet already takes them. */
+  /** The board, and the act that goes and looks. */
   holds: JobResourcesProps;
 };
 

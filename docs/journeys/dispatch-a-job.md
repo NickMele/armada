@@ -24,6 +24,54 @@ Open Job Board (scoped to a Manifest) → browse the flat list (or opt into the 
 
 See Job Board for the full board mechanics — layout, status states, origin tags.
 
+## What the dispatch screen holds
+
+`DispatchRequest` in `packages/components`, assembled by `DispatchJob` in
+`packages/screens`. One card, in the order a person meets it:
+
+| On the card | What it is |
+| --- | --- |
+| Repository | A fact, answered before the card opens. Bridge dispatches into the workspace it is pointed at |
+| From, Lands in | Where the work starts and where it lands, as two fields. They differ when you start from an unmerged branch or land in a long-lived one |
+| Request | Prose, or a link to a ticket. `@` opens the file mention popup |
+| Attach, Add a link | A staged file, an address, or the Studio node the request came off. Each is a chip that says its kind and can be taken back. A link goes out with the request, one to a line |
+| Settings | Optional, and closed to start. Its head says how many are set |
+| What happens next | Armada reads the request and names the Job; you adjust and approve it; a planning Drone splits the work and a Judge reads what comes back |
+
+**Hand entry stays.** `Enter by hand` is one press away and builds the Job
+itself — the [Job proposer](../concepts/job-proposer.md) calls it the override.
+
+### Settings, and what absent means
+
+Four, each of them a decision somebody else takes when it is left alone:
+
+| Setting | Left alone |
+| --- | --- |
+| Workflow | The proposer picks it from the request |
+| Models by tier — difficult, medium, easy | Auto: the harness chooses, and a planning Drone's tier for a task is what selects the model |
+| Drones at once | The machine's own cap holds. The two figures are drawn apart: how many this Job may run, and how many run here across every Job |
+| How it lands | The workflow's delivering step decides. Set it to land without asking, or to stop for you at review |
+
+The four are **draft** — `packages/screens/src/draft/dispatch.ts`, which names
+the `crates/ipc` module it is meant for. Nothing on the wire carries them yet,
+so a Job created today is classified as it always was and the schema lock is
+where they reach Fleet.
+
+### What else is running
+
+Beside the request at a wide window, under it at a narrow one: the Jobs already
+writing where this work would, each with the paths the two of them share and
+where that Job is.
+
+**It is a fact and never a verdict.** Nothing on the surface is greyed by it and
+nothing is refused; dispatching into a file another Job holds is the ordinary
+case, and the panel exists so it is done knowingly.
+
+**Nobody looked and nobody was found are two sentences.** Today's overlap read
+hangs off an existing Job and answers nothing until paths are claimed, so at
+dispatch nothing has been compared and the panel says so. The shape is draft —
+`packages/screens/src/draft/peers.ts`.
+
 ## Approval Rules
 
 | Aspect | Resolution |
@@ -53,7 +101,7 @@ Two adjacent Job Board gaps sit in the same area and are still open surface ques
 A handful of questions this journey once carried are now settled, recorded here so their reasoning isn't lost even though the open item itself is gone from the decision record:
 
 - **The lexicon entry for the frozen acceptance criteria field** is plain lowercase "acceptance criteria" — no proper noun. Metaphor is confined to proper nouns and the lexicon already carries fourteen; countable things are lowercased by the casing rule, so "criterion" and "criteria" follow. The field is `Job.acceptance_criteria[]`, frozen at Job creation, designed for 1–6 entries, written into Job's Other Fields with type, cardinality and freeze point stated, plus the Evidence linkage — Evidence carries a per-criterion row `{criterion_id, verdict, citation, source}`, where `source` there is the verification source and a different vocabulary from the criterion's own. A criterion may be appended at an approved widening, but never edited, reordered or removed, so a frozen-position guarantee holds and a Judge citation to "criterion 4" still resolves after a widening.
-- **Model selection per Job** is yes in principle — `DroneSpawnConfig` carries a `model` field because the adapter must pass a model string to the harness on every spawn — but M1 builds no plumbing to vary it: no create-form field, no Job column a person sets, no picker in Bridge. The value comes from configuration. A picker arrives with the first milestone that wants two models, and per-Job selection will then have two other homes to reconcile with: `judge_check.model`, already a per-step dial, and `policy.model`, which sits in the deferred half of the `armada.yml` schema.
+- **Model selection per Job** is yes, and this journey is where it is set. `DroneSpawnConfig` carries a `model` field because the adapter must pass a model string to the harness on every spawn; hand entry names that model directly, and dispatch names one per tier instead, because a plan's tasks are not all the same size. The scope note that said M1 would build no picker was written before any of these surfaces existed and the owner decided otherwise. A model named nowhere still resolves to the configured default at the Fleet boundary. Per-Job selection has two other homes to reconcile with: `judge_check.model`, already a per-step dial, and `policy.model`, which sits in the deferred half of the `armada.yml` schema.
 - **The field naming which WorkflowDef a Job follows** is `workflow_id` on both sides, not `task_type`. `task_type` named a category that does not exist as an entity, while every other reference on the Job record — `owner_manifest_id`, `gate_manifest_ids[]`, `dispatched_by` — names the thing it points at. `task` is also a banned synonym for Job under the lexicon, which made `task_type` doubly wrong: it was the field name most likely to propagate the wrong word into code and UI. The rename costs nothing structural, since Job is not yet built.
 - **Every Job is a peer node in dependencies.** It carries and is the target of `depends_on` / `blocks`, whatever it writes and however it lands. The links sequence peers rather than children, so a Job whose own members are Jobs is sequenced against a peer like any other — see [Landing](../concepts/landing.md). How the work lands is not part of what the proposer proposes.
 - **A not-started Job's approval state and its readiness state are two separate fields, not one four-value field with a precedence rule.** Approval state (`needs_approval` / `pre_approved`) and readiness state (`blocked_by_dependency` / `waiting_on_resources` / ready) are two axes that were jammed into one, and a Job genuinely carries both at once. The existing symptom was the diagnosis: a sub-dispatched Job is always approved, inheriting its parent's approval, so one out of headroom used to compute as `pre_approved_queued` and, by the Board's own visibility rule, never rendered at all.

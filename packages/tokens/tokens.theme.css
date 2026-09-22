@@ -159,6 +159,10 @@
   --spacing-dock-min: var(--w-dock-min);
   --spacing-work-min: var(--w-work-min);
   --spacing-studio-node: var(--w-studio-node);
+  --spacing-workflow-node: var(--w-workflow-node);
+  --spacing-workflow-group-node: var(--w-workflow-group-node);
+  --spacing-workflow-canvas: var(--h-workflow-canvas);
+  --spacing-workflow-canvas-min: var(--w-workflow-canvas-min);
   --spacing-width: var(--palette-width);
   --spacing-max-height: var(--palette-max-height);
   --spacing-dialog: var(--w-dialog);

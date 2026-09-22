@@ -9,11 +9,10 @@ import { createRoot } from "react-dom/client";
 import { Boundary } from "@armada/shell";
 import { HapticsProvider } from "@armada/components";
 
-import { BoardDrafts } from "@armada/screens/src/boards";
-
 import "../styles/index.css";
 import type { BridgeApi } from "../../../shared/api";
 import { App } from "../App";
+import { DraftedFrom } from "../drafted";
 import { fakeBridge } from "./fake";
 import { scenarioNamed } from "./scenario";
 import type { Scenario } from "./scenario";
@@ -37,11 +36,13 @@ export function mountApp(scenario: string | Scenario, host: HTMLElement, shared?
       <Boundary region="the window" usable={false} bridge={chosen.state.bridge}>
         {/* As `main.tsx` mounts it, so a test can read what a press asked the trackpad to play. */}
         <HapticsProvider perform={(pattern) => api.tap(pattern)}>
-          {/* The half of a board's reading no operation answers — `boards.tsx`.
-              A window on a real Fleet mounts none, and each board falls back. */}
-          <BoardDrafts draft={chosen.draft}>
-            <App />
-          </BoardDrafts>
+          {/* What this moment holds that Fleet cannot serve yet. The app's own
+              mount provides none, so every field is absent there. The context
+              is what a composer reads before a Job exists; the prop is what a
+              Job's own boards read. */}
+          <DraftedFrom held={chosen.draft ?? {}}>
+            <App {...(chosen.draft === undefined ? {} : { draft: chosen.draft })} />
+          </DraftedFrom>
         </HapticsProvider>
       </Boundary>
     </StrictMode>,

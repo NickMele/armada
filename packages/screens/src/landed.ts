@@ -19,9 +19,9 @@ import type {
 } from "@armada/protocol";
 import { artifactPath, recordsOf, repoOf } from "@armada/protocol";
 
-import type { BoardDraft } from "./boards";
 import { costOf, groupOf, summaryOf, GROUPS_NOTE, type LandedCost, type LandedGroup } from "./landed-cost";
 import { clock, span } from "./duration";
+import type { JobDraft } from "./draft/held";
 import {
   caseViewsOf,
   criterionViewsOf,
@@ -122,7 +122,7 @@ export type LandedRead = {
 export type LandedInput = {
   job: JobSummary;
   whole: JobWhole | null;
-  draft: BoardDraft;
+  draft: JobDraft;
   manifest: ManifestSummary | undefined;
   /** What the Job holds on the machine, where anybody has read it. */
   holding: JobResources | null;
@@ -201,7 +201,7 @@ const NO_VERDICT = {
 };
 
 /** Each criterion with the last verdict any step returned for it. */
-function answered(criteria: CriterionView[], whole: JobWhole): LandedRead["criteria"] {
+function answered(criteria: readonly CriterionView[], whole: JobWhole): LandedRead["criteria"] {
   return criteria.map((one) => {
     const said = lastVerdictOf(whole, one.criterion_id);
     const read = said === undefined ? NO_VERDICT : said === "met" ? MET : REFUSED;
@@ -366,7 +366,7 @@ function whoRan(run: CaseRunView): string {
 }
 
 /** The two sets: what Fleet ran at handoff, and what a person ran themselves. */
-function runSetsOf(cases: CaseView[], runs: CaseRunView[]): LandedRuns[] {
+function runSetsOf(cases: readonly CaseView[], runs: readonly CaseRunView[]): LandedRuns[] {
   const byId = new Map(cases.map((one) => [one.id, one]));
   const handoff = runs.filter((run) => run.purpose === "handoff");
   const byHand = runs.filter((run) => run.actor === "person" || run.actor === "contributor");
@@ -403,6 +403,6 @@ function rowOf(run: CaseRunView, cases: Map<string, CaseView>): LandedRun {
 }
 
 /** Every case's last run, where the caller handed no run list of its own. */
-function runsOfCases(cases: CaseView[]): CaseRunView[] {
+function runsOfCases(cases: readonly CaseView[]): CaseRunView[] {
   return cases.flatMap((one) => (one.last_run === undefined ? [] : [one.last_run]));
 }

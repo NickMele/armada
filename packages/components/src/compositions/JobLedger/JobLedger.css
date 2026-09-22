@@ -1,0 +1,174 @@
+/* Job ledger — the filter strip and one table. The open row is a sheet over
+   it at every width; the component's own note carries why. */
+.armada-ledger {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* min-width: 0 is load-bearing: without it a path wider than the window makes
+   the column demand that width and the page scrolls sideways instead of the
+   cell wrapping. */
+.armada-ledger__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The open row's reading, inside the sheet. */
+.armada-ledger__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--pad-card);
+}
+
+/* The sheet already draws the surface, the border and the radius, so the panel
+   draws none of them — a card inside a card. It keeps its own padding, which
+   is why the sheet is `bleed`. */
+.armada-ledger__panel {
+  flex: 1;
+}
+
+/* table-layout: auto, so every column is sized from its own content once for
+   the whole table rather than per row. No fixed widths: a number transcribed
+   from a drawing is what truncates a path beside empty space.
+
+   MISSING TOKEN. The spacing scale stops at --space-12, so there is no value
+   to give a column a floor above 48px. The three machine columns hold their
+   own width by not wrapping, and What and Outcome take the slack because they
+   carry the most text — which works, and is not the same as a declared floor. */
+.armada-ledger__table {
+  table-layout: auto;
+}
+
+/* The machine columns hold one value each and never wrap: a wrapped timestamp
+   is two lines of noise beside a sentence that needed the room. */
+.armada-ledger__when,
+.armada-ledger__who,
+.armada-ledger__kind {
+  white-space: nowrap;
+}
+
+/* The prose columns wrap rather than truncate. At the floor there is no room
+   to truncate into, and a row that grows taller is the responsive rule the
+   Job row already keeps.
+
+   overflow-wrap: anywhere is what keeps the table inside its column: a table
+   is as wide as its longest unbreakable run, and a repository path has none —
+   so without it the Outcome column was pushed off the right edge at 768 and
+   at 1440 with the dock open. */
+.armada-ledger__where,
+.armada-ledger__what,
+.armada-ledger__outcome {
+  text-wrap: pretty;
+}
+
+/* A path has no soft wrap opportunity in it, so a table holding one is as wide
+   as that path whatever its column can pay for — which pushed Outcome off the
+   right edge at 768 and at 1440 with the dock open. Breaking a path mid-token
+   is ugly; a column off the screen is the v1 failure. Only the two columns
+   that carry paths, because it breaks a heading too. */
+.armada-ledger__what,
+.armada-ledger__outcome {
+  overflow-wrap: anywhere;
+}
+
+/* The headings never break. `Where` wrapping to `WHER / E` is what this stops. */
+.armada-ledger__table .armada-table-header-cell {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* Who ran it. --fg-muted on every value: who is context beside the sentence,
+   and lifting one producer over another would rank them. */
+.armada-ledger__actor {
+  color: var(--fg-muted);
+}
+
+/* The keyboard's path into a row. It carries the row's sentence, so it is
+   styled as that sentence rather than as a control — the row's hover and the
+   selected fill are the affordance, which is the Job Board's own rule for a
+   value whose whole row is pressable. */
+.armada-ledger__open {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-wrap: pretty;
+  cursor: pointer;
+}
+
+.armada-ledger__open:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+/* What a row came to, as a tint of its own hue at --row-tint. 5% is a wash:
+   at the badge's 12% eight tinted rows were unreadable. Hover and selection
+   replace it rather than mixing with it, so --accent-muted still owns
+   selection. */
+.armada-ledger__table .armada-table-row[data-tone="passed"] {
+  background: color-mix(in srgb, var(--status-completed-success) var(--row-tint), transparent);
+}
+
+.armada-ledger__table .armada-table-row[data-tone="failed"] {
+  background: color-mix(in srgb, var(--status-completed-failed) var(--row-tint), transparent);
+}
+
+.armada-ledger__table .armada-table-row[data-tone="waiting"] {
+  background: color-mix(in srgb, var(--status-awaiting-review) var(--row-tint), transparent);
+}
+
+.armada-ledger__table .armada-table-row[data-tone="running"] {
+  background: color-mix(in srgb, var(--status-running) var(--row-tint), transparent);
+}
+
+.armada-ledger__table .armada-table-row[data-tone]:hover {
+  background: var(--bg-hover);
+}
+
+.armada-ledger__table .armada-table-row[data-tone][data-selected] {
+  background: var(--accent-muted);
+}
+
+/* A filter holding nothing, a row nobody has opened, and the count the bound
+   left off — three sentences, one treatment. Never an empty frame. */
+.armada-ledger__note {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* The open row's short facts — when, where, who, which filter. A wrapping run
+   rather than a grid: four labelled values at a 332px floor is two lines, and
+   a fixed pair of columns would break the moment one value grew. */
+.armada-ledger__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  min-width: 0;
+}
+
+.armada-ledger__fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-ledger__fact-value {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}

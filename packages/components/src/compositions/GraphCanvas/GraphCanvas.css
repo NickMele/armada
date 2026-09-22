@@ -1,0 +1,75 @@
+/* React Flow's structural sheet: positions, stacking and pointer handling. Its
+   `style.css` theme is not loaded. base.css still names defaults of its own, so
+   every variable it reads is set to a token below, and nothing it would paint
+   is left at React Flow's value. */
+@import "@xyflow/react/dist/base.css";
+
+.armada-graph-canvas-frame {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.armada-graph-canvas {
+  --xy-background-color: transparent;
+  --xy-edge-stroke: var(--border-strong);
+  --xy-edge-stroke-width: var(--border-width);
+  --xy-edge-stroke-selected: var(--fg-muted);
+  --xy-connectionline-stroke: var(--border-strong);
+  --xy-connectionline-stroke-width: var(--border-width);
+  --xy-handle-background-color: transparent;
+  --xy-node-border: none;
+  --xy-node-border-selected: none;
+  --xy-node-color: var(--fg-default);
+  --xy-selection-background-color: var(--accent-faint);
+  --xy-selection-border: var(--border-width) solid var(--edge-focus);
+  --xy-attribution-background-color: transparent;
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+}
+
+/* A node's focus ring follows its card's corner. */
+.armada-graph-canvas .react-flow__node {
+  border-radius: var(--radius-md);
+}
+
+/* The anchors edges hang from. Nothing connects by hand, so none is drawn. */
+.armada-graph-canvas .react-flow__handle {
+  min-width: 0;
+  min-height: 0;
+  width: var(--border-width);
+  height: var(--border-width);
+  border: none;
+  opacity: 0;
+}
+
+/* A selected edge thickens rather than taking a hue. */
+.armada-graph-canvas .react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: var(--edge-active);
+}
+
+.armada-graph-canvas .react-flow__panel {
+  margin: var(--space-3);
+}
+
+.armada-graph-canvas__controls {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* What the surface draws over the board: the acts on a selection, and whatever
+   is waiting on a person.
+
+   **It stops above the zoom controls** — #1399. The panel's own margin, the
+   controls' height and margin, and one more gap: nothing a surface hands this
+   aside can reach the corner the controls are in. A card that wants more room
+   scrolls inside itself. The width is the surface's, since a Studio's node and
+   a workflow's step are not the same width. */
+.armada-graph-canvas__aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-block-size: calc(100% - var(--h-control-sm) - var(--space-3) * 3);
+  min-block-size: 0;
+}

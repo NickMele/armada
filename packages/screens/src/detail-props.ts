@@ -19,6 +19,7 @@
 // and `Render` from their own modules.
 
 import type { ActAnswer, ActingAct, DecidingAct } from "./pending";
+import type { WorkflowView } from "./workflow-view";
 
 import type {
   CommandAnswer,
@@ -41,6 +42,7 @@ import type {
 } from "@armada/protocol";
 
 import type { ConfirmableAct, HeldAct } from "./Acts";
+import type { JobDraft } from "./draft/held";
 import type { ShowAgainCall } from "./again";
 import type { ExplainCommand, ReadCall } from "./calls";
 import type { FrameSrc, ReadFrame } from "./frames";
@@ -349,10 +351,28 @@ export type JobDetailProps = {
   whereOpen: boolean;
   onOpenWhere: (open: boolean) => void;
   /**
+   * Which arrangement the Workflow tab is in — canvas or stacked, canvas by
+   * default (#1530, 21 Sep). **Remembered per viewer and not per Job**, so it
+   * is the caller's to keep, the way `whereOpen` is; this package stays free
+   * of Electron and of storage.
+   */
+  workflowView?: WorkflowView;
+  onWorkflowView?: (view: WorkflowView) => void;
+  /**
    * Open the composer — `n` in `actions.toml`, scope `anywhere`. **The Board's
    * own key, answered here too**: `new_job` is the one contextual act that
    * acts on nothing on screen, so every contextual surface reaches the same
    * composer through the same handler rather than each opening its own.
    */
   onCompose: () => void;
+  /**
+   * What this Job's boards draw that Fleet cannot serve yet — `#1532`'s draft
+   * schema, carried by the mock and absent against a real Fleet.
+   *
+   * **Absent is not empty.** A destination handed nothing derives what today's
+   * wire can answer instead, which is what keeps a board built on the drafts
+   * rendering thinner rather than blank. It goes away in `#1545`, when a shape
+   * is promoted and arrives on the Job's own reads.
+   */
+  draft?: JobDraft;
 };

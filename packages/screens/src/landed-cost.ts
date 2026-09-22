@@ -28,7 +28,7 @@ export type LandedGroup = {
 export type LandedCost = { name: string; figures: Figure[]; note: string };
 
 /** What it cost: the run, the spend and the turns, the agents and the Checks. */
-export function costOf(whole: JobWhole, groups: GroupView[]): LandedCost {
+export function costOf(whole: JobWhole, groups: readonly GroupView[]): LandedCost {
   const spend = whole.spend;
   const tasks = groups.flatMap((group) => group.tasks);
   const priced = tasks.filter((task) => task.cost_micros !== undefined);
@@ -78,7 +78,7 @@ export function costOf(whole: JobWhole, groups: GroupView[]): LandedCost {
  * How many agents ran. **One per task, and a retried group ran its tasks
  * again** — the count the retry beside it implies.
  */
-function dronesOf(groups: GroupView[]): { count: number; detail?: string } {
+function dronesOf(groups: readonly GroupView[]): { count: number; detail?: string } {
   const count = groups.reduce((sum, group) => sum + group.tasks.length * (1 + group.retry_count), 0);
   const again = groups.filter((group) => group.retry_count > 0);
   if (again.length === 0) return { count };
@@ -86,7 +86,7 @@ function dronesOf(groups: GroupView[]): { count: number; detail?: string } {
 }
 
 /** How many Check runs the boundaries made, a retried boundary counted twice. */
-function checksOf(groups: GroupView[]): { count: number; detail?: string } {
+function checksOf(groups: readonly GroupView[]): { count: number; detail?: string } {
   const count = groups.reduce(
     (sum, group) => sum + group.checks_selected.length * (1 + group.retry_count),
     0,
@@ -97,7 +97,7 @@ function checksOf(groups: GroupView[]): { count: number; detail?: string } {
 }
 
 /** `group three` — what a retried group is called in a sentence. */
-function retriedIn(groups: GroupView[]): string {
+function retriedIn(groups: readonly GroupView[]): string {
   return groups.map((group) => `group ${ordinalWord(group.ordinal)}`).join(", ");
 }
 
@@ -131,7 +131,7 @@ export function groupOf(group: GroupView): LandedGroup {
   };
 }
 
-export function summaryOf(groups: GroupView[]): string {
+export function summaryOf(groups: readonly GroupView[]): string {
   const tasks = groups.flatMap((group) => group.tasks);
   const files = new Set(tasks.flatMap((task) => task.scope)).size;
   return `${groups.length} groups · ${tasks.length} tasks · ${files} files`;

@@ -35,7 +35,6 @@ import type { AttemptRead } from "./timeline";
 import type { StepChapter } from "@armada/components";
 import { againOf, useShowAgain } from "./again";
 import { approvalOverviewOf } from "./approval";
-import { useBoardDraft } from "./boards";
 import { LandBoard } from "./LandBoard";
 import { landedOf } from "./landed";
 import { span } from "./duration";
@@ -59,14 +58,18 @@ import { entriesOf, hideUnread, whyNotWatching } from "./story";
 import {
   LOOK_FAILED,
   NOTHING_HAPPENED_YET,
+  PULSE_REFRESHES,
   latestOf,
   movesOf,
   nothingToAsk,
+  pulseFiguresOf,
+  pulseReadingOf,
   spentOn,
   summarised,
   turnsTaken,
   whyNoReading,
 } from "./resources";
+import { pulseViewOf } from "./draft/pulse";
 import { briefOf, whyNoBrief, workOf, workRehearsalOf } from "./work";
 
 
@@ -233,8 +236,9 @@ export function OverviewTab(props: OverviewTabProps) {
 
   const workflow = workflows.find((held) => held.id === job.workflow_id);
   const manifest = manifests.find((held) => held.id === job.owner_manifest_id);
-  // The half of a board's reading no operation answers yet — `boards.tsx`.
-  const draft = useBoardDraft();
+  // The half of a board's reading no operation answers yet — `draft/held.ts`.
+  // Absent on a real Fleet, and each board falls back to the wire.
+  const draft = props.draft ?? {};
   // Every reading, narrowed to the Job on screen. **All five carry the id they
   // were taken for and all five are checked against it** — each lags a
   // selection by a round trip, so another Job's answer landing here would be
@@ -641,14 +645,17 @@ export function OverviewTab(props: OverviewTabProps) {
             following={following}
             onHold={(to) => move({ move: "hold", held: to })}
             onRedirect={onRedirect}
-            // The full reading, unchanged from what the run column used to
-            // draw — `Look now` came with it, because it acts on this reading
-            // and not on the five lines that open it.
+            // The Pulse board, derived exactly as the Pulse tab derives it —
+            // `Look now` came with it, because it acts on this reading and not
+            // on the five lines that open it. Two derivations of one `Held`
+            // would let the sheet and the tab disagree about the same Job.
             holds={{
               jobId: job.handle,
-              reading: holding,
+              reading: holding === null ? null : pulseReadingOf(pulseViewOf(holding), examinedNow),
+              figures: pulseFiguresOf(holding === null ? null : pulseViewOf(holding), whole),
               note: whyNoReading(resources),
               age: holding === null ? undefined : (span(holding.read_at, now) ?? undefined),
+              refreshed: PULSE_REFRESHES,
               examined: examinedNow,
               looking: looked?.state === "looking",
               lookFailed: looked?.state === "failed" ? LOOK_FAILED : undefined,

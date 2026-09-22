@@ -114,7 +114,10 @@ export function taskGroupsOf(detail: JobDetail): GroupView[] {
  * carries no instants either, so this is the only source a board has. A group
  * with no rows of its own keeps both fields absent and reads as not timed.
  */
-export function groupsTimedBy(groups: GroupView[], rows: readonly LedgerRow[]): GroupView[] {
+export function groupsTimedBy(
+  groups: readonly GroupView[],
+  rows: readonly LedgerRow[],
+): GroupView[] {
   return groups.map((group) => {
     const at = rows
       .filter((row) => row.coord?.group === group.id)
