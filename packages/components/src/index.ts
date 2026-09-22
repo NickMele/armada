@@ -363,3 +363,7 @@ export * from "./compositions/JobProposal/JobProposal";
 export * from "./compositions/SketchPad/SketchPad";
 // A Job whose members are Jobs — pull requests landing in order. #1543.
 export * from "./compositions/JobMembers/JobMembers";
+// The implement step opened — its groups, their tasks, and what ran at each
+// group's end. #1536.
+export * from "./compositions/GroupBoundary/GroupBoundary";
+export * from "./compositions/ImplementBoard/ImplementBoard";

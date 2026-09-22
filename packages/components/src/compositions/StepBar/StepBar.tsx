@@ -33,8 +33,12 @@ import type { StepActivity } from "../StepActivityMark/StepActivityMark";
  * is. `open`/`working`/`done` map onto the same three segment weights
  * (`remaining`/`current`/`past`) because the drawing wants one segment
  * grammar, not because a task's state is a position.
+ *
+ * **`failed` is a claim rather than a weight**, and it is what a boundary's
+ * Check takes: given `past` it would read as one of the six beside it that
+ * passed. `#1536`.
  */
-export type TaskBarSegment = "open" | "working" | "done";
+export type TaskBarSegment = "open" | "working" | "done" | "failed";
 
 export type StepBarProps =
   | {
@@ -84,8 +88,14 @@ export function StepBar(props: StepBarProps) {
   const segments =
     props.tasks !== undefined
       ? props.tasks.map((task) => ({
-          state: task === "done" ? ("past" as const) : task === "working" ? ("current" as const) : ("remaining" as const),
-          activity: task === "working" ? ("running" as const) : undefined,
+          state:
+            task === "done"
+              ? ("past" as const)
+              : task === "working" || task === "failed"
+                ? ("current" as const)
+                : ("remaining" as const),
+          activity:
+            task === "working" ? ("running" as const) : task === "failed" ? ("failed" as const) : undefined,
         }))
       : Array.from({ length: props.total }, (_, i) => {
           const position = i + 1;

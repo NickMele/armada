@@ -175,13 +175,20 @@ export type WorkflowRunReading = {
   groups: readonly GroupView[];
   /** Opens a step or a group in the inspector. Absent draws cards that are not controls. */
   onOpen?: (nodeId: string) => void;
+  /**
+   * The step's groups are opened under the run rather than hung on it — the
+   * implement board, `#1536`. The step still says how many it holds; the cards
+   * would be the same groups drawn twice, and they are what makes the run too
+   * tall to fit once the canvas is drawn small.
+   */
+  opened?: boolean;
 };
 
 /**
  * The whole run, placed. **One derivation for both arrangements**, so the
  * toggle changes the shape of the page and never what a step says.
  */
-export function workflowRunOf({ whole, groups, onOpen }: WorkflowRunReading): WorkflowRun {
+export function workflowRunOf({ whole, groups, onOpen, opened }: WorkflowRunReading): WorkflowRun {
   const steps = ordered(whole);
   const under = stepTheGroupsHangUnder(whole);
   const opener = (id: string) => (onOpen === undefined ? undefined : () => onOpen(id));
@@ -223,6 +230,7 @@ export function workflowRunOf({ whole, groups, onOpen }: WorkflowRunReading): Wo
       edges.push({ id: `${step.step_id}>${next.step_id}`, source: id, target: stepNodeId(next.step_id) });
     }
 
+    if (opened === true) return;
     mine.forEach((group, j) => {
       const groupId = groupNodeId(group.id);
       const groupsCard = groupCard(group, opener(groupId));
