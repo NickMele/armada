@@ -30,7 +30,7 @@ Open Bridge → Active Jobs → lightweight heartbeat per active Drone: status, 
 
 | Destination | What it answers | Its noun |
 | --- | --- | --- |
-| Overview | What needs you, and the run that says why | needs-you |
+| Overview | What needs you, and the run that says why — or what a finished Job came to | needs-you |
 | Workflow | What will run, and in what order | machinery |
 | Plan | The work, split into what a Drone takes | work |
 | Record | What the Job produced, and what judged it | produced |
@@ -44,9 +44,11 @@ Open Bridge → Active Jobs → lightweight heartbeat per active Drone: status, 
 
 **The strip stays put and the destination under it scrolls.** A destination is chosen from wherever a reading got to.
 
-### Overview — one arrangement, at every state
+### Overview — one arrangement, until the Job is over
 
 **The run is a tree on the left, the selected step fills the inspector, and the step's story reads in the order it happened.** Why: the screen had an arrangement per state, and below the header no region sat in the same place twice. Everything from The run down describes Overview.
+
+**A Job that has finished draws the Land board here instead** — how it was answered, what it delivered, what it left on the machine, what it cost, and the test set as it was run before the pull request was offered. Why this is not the per-state arrangement the rule above was written against: the run, the plan and the record each have a destination of their own now, so a finished Job's Overview is not one of several arrangements competing for a panel — it is the one question a Job nobody is waiting on is opened to answer. The board carries the run as a list of steps and their verdicts, so nothing that stood here goes unanswered.
 
 **Under `--layout-breakpoint` the inspector is a sheet over the run**, which is the move Helm's dock already makes at the same bound. Below it the window cannot pay for both columns: the run column holds its floor and the inspector would be under `--w-step-panel-min`, which is the word-a-line reading #1428 was written to end. The run is the whole content, pressing a step opens the inspector, `Esc` closes it, and at `--window-floor` it goes flush to both edges. Which regions the inspector holds, and what order they read in, do not change with the width.
 
