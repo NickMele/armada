@@ -10,7 +10,6 @@
 // board draws against a real Fleet as well as the mock.
 
 import { CRITERION_VERDICT_JUDGE, STEP_STATE, sized } from "@armada/components";
-import type { Figure } from "@armada/components";
 import type {
   JobDetail as JobWhole,
   JobResources,
@@ -21,26 +20,37 @@ import type {
 import { artifactPath, recordsOf, repoOf } from "@armada/protocol";
 
 import type { BoardDraft } from "./boards";
-import { cap } from "./RaiseCap";
+import { costOf, groupOf, summaryOf, GROUPS_NOTE, type LandedCost, type LandedGroup } from "./landed-cost";
 import { clock, span } from "./duration";
 import {
   caseViewsOf,
   criterionViewsOf,
+  groupsTimedBy,
   landingRuleOf,
   taskGroupsOf,
   CASE_RUN_OUTCOME_WORDS,
-  GROUP_STATE_WORDS,
+  CRITERION_NO_VERDICT_WORD,
   type CaseRunView,
   type CaseView,
   type CompleteWhen,
   type CriterionView,
-  type GroupView,
   type LandingRule,
 } from "./draft";
 import { LANDED } from "./Row";
 
 /** The one Job status this board is drawn for: work that finished. */
 const FINISHED = "completed_success";
+
+/**
+ * Whether the Land board is what this Job's Overview draws.
+ *
+ * **Read by *Where things are*, which drops the branch and the worktree where
+ * this is true** (owner, 22 Sep 2026): the board carries both, and one
+ * derivation drawn twice on one screen is two places to disagree.
+ */
+export function landBoardDraws(job: JobSummary): boolean {
+  return job.status === FINISHED;
+}
 
 /** One row of a section — a part of what the Job produced or left behind. */
 export type LandedPart = {
@@ -89,17 +99,7 @@ export type LandedStep = {
   meta?: string;
 };
 
-/** One group, as the Produced panel draws it. */
-export type LandedGroup = {
-  name: string;
-  verb: string;
-  status?: string;
-  tasks: string;
-  took?: string;
-  files: string;
-  checks?: string;
-  commit?: string;
-};
+export type { LandedCost, LandedGroup };
 
 /** What a landed Job shows, in the order it is read. */
 export type LandedRead = {
@@ -110,7 +110,7 @@ export type LandedRead = {
   completes: string;
   sections: LandedSection[];
   steps: { name: string; meta: string; steps: LandedStep[]; absent: string };
-  cost: { name: string; figures: Figure[]; note: string };
+  cost: LandedCost;
   runs: LandedRuns[];
   groups: LandedGroup[];
   groupsSummary: string;
@@ -135,17 +135,16 @@ export type LandedInput = {
  * is the whole record's, and half a board is worse than none.
  */
 export function landedOf({ job, whole, draft, manifest, holding }: LandedInput): LandedRead | undefined {
-  if (job.status !== FINISHED || whole === null) return undefined;
+  if (!landBoardDraws(job) || whole === null) return undefined;
   const rule = draft.landing ?? landingRuleOf();
-  const groups = draft.groups ?? taskGroupsOf(whole);
+  const groups = groupsTimedBy(draft.groups ?? taskGroupsOf(whole), draft.record ?? []);
   const cases = draft.cases ?? caseViewsOf(whole);
   const runs = draft.runs ?? runsOfCases(cases);
   const criteria = answered(draft.criteria ?? criterionViewsOf(whole), whole);
-  const met = criteria.filter((one) => one.status === MET.status).length;
 
   return {
     verb: verbOf(whole),
-    count: `${met} of ${criteria.length} met`,
+    count: countOf(criteria),
     says: saysOf(criteria),
     criteria,
     completes: COMPLETES[rule.complete_when],
@@ -190,17 +189,22 @@ const REFUSED = {
   verdict: CRITERION_VERDICT_JUDGE.not_met?.verb ?? "not_met",
   status: "completed-failed",
 };
-/** Nothing answered it. **Never green**, and never silence. */
-const NOT_COVERED = {
-  verdict: CASE_RUN_OUTCOME_WORDS.not_run.verb ?? "not covered",
-  status: CASE_RUN_OUTCOME_WORDS.not_run.badgeStatus ?? "not-started",
+/**
+ * Nothing wrote a verdict down for it. **Never green, and never "not covered"**
+ * — that is a case with no spec, and one sentence for two facts teaches a
+ * reader to distrust both (owner, 22 Sep 2026). A Check-verified criterion
+ * lands here because nothing on the wire links a Check to what it answers.
+ */
+const NO_VERDICT = {
+  verdict: CRITERION_NO_VERDICT_WORD.verb ?? "no verdict recorded",
+  status: CRITERION_NO_VERDICT_WORD.badgeStatus ?? "not-started",
 };
 
 /** Each criterion with the last verdict any step returned for it. */
 function answered(criteria: CriterionView[], whole: JobWhole): LandedRead["criteria"] {
   return criteria.map((one) => {
     const said = lastVerdictOf(whole, one.criterion_id);
-    const read = said === undefined ? NOT_COVERED : said === "met" ? MET : REFUSED;
+    const read = said === undefined ? NO_VERDICT : said === "met" ? MET : REFUSED;
     return { text: one.text, ...read };
   });
 }
@@ -218,13 +222,28 @@ function lastVerdictOf(whole: JobWhole, criterionId: string | undefined): string
   return said;
 }
 
+/**
+ * The headline's figure. **It counts what it says it counts**: where every
+ * criterion carries a verdict the figure is what was met, and where any does
+ * not it is how many were answered at all — a Job that merged reading
+ * `0 of 2 met` is a screen claiming a refusal nobody made.
+ */
+function countOf(criteria: LandedRead["criteria"]): string {
+  const ruled = criteria.filter((one) => one.status !== NO_VERDICT.status).length;
+  if (ruled < criteria.length) return `${ruled} of ${criteria.length} with a verdict recorded`;
+  const met = criteria.filter((one) => one.status === MET.status).length;
+  return `${met} of ${criteria.length} met`;
+}
+
 function saysOf(criteria: LandedRead["criteria"]): string {
-  const missing = criteria.filter((one) => one.status === NOT_COVERED.status).length;
+  const missing = criteria.filter((one) => one.status === NO_VERDICT.status).length;
   const refused = criteria.filter((one) => one.status === REFUSED.status).length;
   if (criteria.length === 0) return "Nothing was written down for this Job to be held to.";
   if (missing === 0 && refused === 0) return "Everything this Job was held to was met.";
-  if (missing > 0 && refused === 0) return `Nothing answered ${missing} of them.`;
-  return refused === 1 ? "One was refused." : `${refused} were refused.`;
+  if (refused > 0) return refused === 1 ? "One was refused." : `${refused} were refused.`;
+  return missing === criteria.length
+    ? "No verdict was recorded for any of them."
+    : `No verdict was recorded for ${missing} of them.`;
 }
 
 /** What reached the repository: the pull request, and the commit under it. */
@@ -330,115 +349,6 @@ function stepOf(step: StepDetail): LandedStep {
   if (attempts > 1) row.meta = `${attempts} runs`;
   return row;
 }
-
-/** What it cost: the run, the spend and the turns, the agents and the Checks. */
-function costOf(whole: JobWhole, groups: GroupView[]): LandedRead["cost"] {
-  const spend = whole.spend;
-  const tasks = groups.flatMap((group) => group.tasks);
-  const priced = tasks.filter((task) => task.cost_micros !== undefined);
-  const micros = priced.reduce((sum, task) => sum + (task.cost_micros ?? 0), 0);
-  const turns = tasks.reduce((sum, task) => sum + (task.turns ?? 0), 0);
-  const ran = whole.job.started_at === undefined || whole.job.ended_at === undefined
-    ? undefined
-    : (span(whole.job.started_at, whole.job.ended_at) ?? undefined);
-  const drones = dronesOf(groups);
-  const checks = checksOf(groups);
-
-  const figures: Figure[] = [];
-  if (ran !== undefined) figures.push({ label: "Run time", value: ran });
-  figures.push(
-    spend === undefined
-      ? { label: "Spend", value: cap(micros), detail: "no cap on this Job's record" }
-      : { label: "Spend", value: `${cap(spend.cost_micros)} of ${cap(spend.cost_cap_micros)}` },
-  );
-  figures.push(
-    spend === undefined
-      ? { label: "Turns", value: String(turns), detail: "no cap on this Job's record" }
-      : { label: "Turns", value: `${spend.turns} of ${spend.turn_cap}` },
-  );
-  figures.push({
-    label: "Drones",
-    value: String(spend?.drones ?? drones.count),
-    ...(drones.detail === undefined ? {} : { detail: drones.detail }),
-  });
-  if (checks.count > 0) {
-    figures.push({
-      label: "Checks",
-      value: String(checks.count),
-      ...(checks.detail === undefined ? {} : { detail: checks.detail }),
-    });
-  }
-  return {
-    name: "What it cost",
-    figures,
-    note:
-      spend === undefined
-        ? "Spend and turns are added up from each task's own agent, which is where cost arrives."
-        : "Spend and turns are the Job's own totals, which every Drone of it reported into.",
-  };
-}
-
-/**
- * How many agents ran. **One per task, and a retried group ran its tasks
- * again** — the count the retry beside it implies.
- */
-function dronesOf(groups: GroupView[]): { count: number; detail?: string } {
-  const count = groups.reduce((sum, group) => sum + group.tasks.length * (1 + group.retry_count), 0);
-  const again = groups.filter((group) => group.retry_count > 0);
-  if (again.length === 0) return { count };
-  return { count, detail: `${retriedIn(again)} ran again` };
-}
-
-/** How many Check runs the boundaries made, a retried boundary counted twice. */
-function checksOf(groups: GroupView[]): { count: number; detail?: string } {
-  const count = groups.reduce(
-    (sum, group) => sum + group.checks_selected.length * (1 + group.retry_count),
-    0,
-  );
-  const again = groups.filter((group) => group.retry_count > 0);
-  if (again.length === 0) return { count };
-  return { count, detail: `${retriedIn(again)} ran twice` };
-}
-
-/** `group three` — what a retried group is called in a sentence. */
-function retriedIn(groups: GroupView[]): string {
-  return groups.map((group) => `group ${ordinalWord(group.ordinal)}`).join(", ");
-}
-
-const ORDINALS = ["one", "two", "three", "four", "five", "six", "seven", "eight"];
-
-function ordinalWord(ordinal: number): string {
-  return ORDINALS[ordinal - 1] ?? String(ordinal);
-}
-
-/** One group's row: what it came to, and what it left. */
-function groupOf(group: GroupView): LandedGroup {
-  const word = GROUP_STATE_WORDS[group.state];
-  const done = group.tasks.filter((task) => task.state === "done").length;
-  const files = new Set(group.tasks.flatMap((task) => task.scope)).size;
-  const checks = group.checks_selected.length;
-  return {
-    name: `Group ${ordinalWord(group.ordinal)}`,
-    verb: word.verb ?? group.state,
-    status: word.badgeStatus ?? undefined,
-    tasks: `${done} of ${group.tasks.length} done`,
-    files: files === 1 ? "1 file" : `${files} files`,
-    ...(checks === 0
-      ? {}
-      : { checks: group.retry_count > 0 ? `${checks} Checks, twice` : `${checks} Checks` }),
-    ...(group.commit === undefined ? {} : { commit: group.commit }),
-  };
-}
-
-function summaryOf(groups: GroupView[]): string {
-  const tasks = groups.flatMap((group) => group.tasks);
-  const files = new Set(tasks.flatMap((task) => task.scope)).size;
-  return `${groups.length} groups · ${tasks.length} tasks · ${files} files`;
-}
-
-/** Why a group's row says `not timed`. Fleet times a step, and a group is not one. */
-const GROUPS_NOTE =
-  "Nothing times a group: the record times a step, so no group here carries a span of its own.";
 
 /** Who ran a case, in the words the board says it in. */
 const RAN_BY: Record<string, string> = {

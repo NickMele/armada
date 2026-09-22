@@ -12,6 +12,7 @@
 import type { JobDetail } from "@armada/protocol";
 
 import { derivedGroupId, stepAttemptOf } from "./coord";
+import type { LedgerRow } from "./ledger";
 import { taskViewsOf, type TaskView } from "./task";
 
 /**
@@ -49,6 +50,16 @@ export type GroupView = {
    * (#1530, 21 Sep).
    */
   cases_at_boundary: string[];
+  /**
+   * When the group started and ended.
+   *
+   * **Nothing on the wire times a group** — a step is timed and a group sits
+   * between a step and a task, so both are absent until #1545 decides whether
+   * Fleet records them. A surface says it is not timed rather than drawing a
+   * dash or a zero.
+   */
+  started_at?: string;
+  ended_at?: string;
   /** What the boundary came to. Absent until the Checks have run. */
   verdict?: string;
   /** How many times this group has been run again after a failure. */
@@ -93,6 +104,26 @@ export function taskGroupsOf(detail: JobDetail): GroupView[] {
     if (step?.last_verdict !== undefined) group.verdict = step.last_verdict.named;
     if (commit !== undefined) group.commit = commit;
     return group;
+  });
+}
+
+/**
+ * The groups, timed by what the Record says happened inside each one.
+ *
+ * **The first and last row recorded at a group, and nothing invented**: a task
+ * carries no instants either, so this is the only source a board has. A group
+ * with no rows of its own keeps both fields absent and reads as not timed.
+ */
+export function groupsTimedBy(groups: GroupView[], rows: readonly LedgerRow[]): GroupView[] {
+  return groups.map((group) => {
+    const at = rows
+      .filter((row) => row.coord?.group === group.id)
+      .map((row) => row.at)
+      .sort();
+    const first = at[0];
+    const last = at[at.length - 1];
+    if (first === undefined || last === undefined || first === last) return group;
+    return { ...group, started_at: first, ended_at: last };
   });
 }
 

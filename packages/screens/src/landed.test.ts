@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { landed } from "./fixtures/build/arc-landed";
 import type { JobFixture } from "./fixtures/fixture";
-import { landedOf, type LandedInput, type LandedRead } from "./landed";
+import { landBoardDraws, landedOf, type LandedInput, type LandedRead } from "./landed";
 
 const MOMENT = landed();
 const FIXTURE: JobFixture = MOMENT.fixtures[0]!;
@@ -48,15 +48,35 @@ describe("the headline counts what the Job was held to", () => {
     expect(read().count).toBe("2 of 2 met");
   });
 
-  it("reads not covered where nothing answered a criterion, and never green", () => {
+  /**
+   * **Two facts, two sentences.** A criterion nothing wrote a verdict for is
+   * not a case with no spec, and a Check-verified criterion lands here because
+   * nothing on the wire links a Check to what it answers.
+   */
+  it("says no verdict was recorded where nothing answered a criterion, and never green", () => {
     const criteria = [
       ...MOMENT.draft.criteria!,
       { criterion_id: "a9", text: "Nobody judged this", verified_by: "judge" as const, origin: { origin: "prompt" as const } },
     ];
     const board = read({ draft: { ...MOMENT.draft, criteria } });
-    expect(board.count).toBe("2 of 3 met");
-    expect(board.criteria[2]?.verdict).toBe("not covered");
+    expect(board.criteria[2]?.verdict).toBe("no verdict recorded");
+    expect(board.criteria[2]?.verdict).not.toBe("not covered");
     expect(board.criteria[2]?.status).not.toBe("completed-success");
+  });
+
+  // A Job that merged reading `0 of 2 met` is a screen claiming a refusal
+  // nobody made, so the figure counts what it says it counts.
+  it("counts verdicts rather than passes where any criterion is unanswered", () => {
+    const criteria = [
+      ...MOMENT.draft.criteria!,
+      { criterion_id: "a9", text: "Nobody judged this", verified_by: "check" as const, origin: { origin: "prompt" as const } },
+    ];
+    expect(read({ draft: { ...MOMENT.draft, criteria } }).count).toBe(
+      "2 of 3 with a verdict recorded",
+    );
+    expect(read({ draft: { ...MOMENT.draft, criteria } }).says).toBe(
+      "No verdict was recorded for 1 of them.",
+    );
   });
 
   it("says a Job with one pull request completes when it lands", () => {
@@ -129,8 +149,23 @@ describe("the groups", () => {
     expect(read().groups[2]?.checks).toBe("7 Checks, twice");
   });
 
-  it("leaves the time taken absent, because nothing times a group", () => {
+  it("leaves the time taken absent, because nothing in the record times a group", () => {
     expect(read().groups.every((one) => one.took === undefined)).toBe(true);
+  });
+
+  /**
+   * The Record is the only source a group's span has — a task carries no
+   * instants either — so a group whose rows the Record holds is timed by the
+   * first and last of them, and one it holds nothing for stays untimed.
+   */
+  it("times a group by the first and last thing the Record says happened in it", () => {
+    const record = [
+      { at: "2026-09-22T09:22:00Z", coord: { step: "implement", step_attempt: 1, group: "g1" }, actor: "drone" as const, kind: "drone_started", what: "T1's agent started", outcome: "", cursor: 1 },
+      { at: "2026-09-22T09:56:00Z", coord: { step: "implement", step_attempt: 1, group: "g1" }, actor: "check" as const, kind: "checked", what: "four Checks", outcome: "all four passed", cursor: 2 },
+    ];
+    const groups = read({ draft: { ...MOMENT.draft, record } }).groups;
+    expect(groups[0]?.took).toBe("34m 00s");
+    expect(groups[1]?.took).toBeUndefined();
   });
 
   it("counts the files the plan claims, de-duplicated", () => {
@@ -199,5 +234,19 @@ describe("what it produced and what it left", () => {
     const left = read({ holding: null }).sections[1]!;
     expect(left.parts[1]?.value).toBeUndefined();
     expect(left.parts[1]?.absent).toContain("worktree is unknown");
+  });
+});
+
+describe("what Where things are stops drawing", () => {
+  /**
+   * The board carries the branch and the worktree off the same derivation, so
+   * *Where things are* drops both — but only where the board is actually
+   * drawn. A finished Job whose read has not arrived keeps them, because
+   * nothing else on that screen would say them.
+   */
+  it("names the Job the board draws, which is the one that drops the two rows", () => {
+    expect(landBoardDraws(FIXTURE.job)).toBe(true);
+    expect(landBoardDraws({ ...FIXTURE.job, status: "running" })).toBe(false);
+    expect(landBoardDraws({ ...FIXTURE.job, status: "completed_failed" })).toBe(false);
   });
 });

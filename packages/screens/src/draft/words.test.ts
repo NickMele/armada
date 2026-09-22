@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   CASE_RUN_OUTCOME_WORDS,
   CLASSIFYING_WORD,
+  CRITERION_NO_VERDICT_WORD,
   DRAFT_VOCABULARIES,
   GROUP_STATE_WORDS,
   TASK_STATE_WORDS,
@@ -102,6 +103,14 @@ describe("the values that have no registry row at all", () => {
     expect(CASE_RUN_OUTCOME_WORDS.not_run.verb).toBe("not covered");
     expect(CASE_RUN_OUTCOME_WORDS.not_run.badgeStatus).not.toBe("completed-success");
   });
+
+  // Two facts, two sentences: a case with no spec has nothing to run, and a
+  // criterion with no verdict was never answered in the record.
+  it("keeps an unanswered criterion apart from a case with no spec", () => {
+    expect(CRITERION_NO_VERDICT_WORD.verb).toBe("no verdict recorded");
+    expect(CRITERION_NO_VERDICT_WORD.verb).not.toBe(CASE_RUN_OUTCOME_WORDS.not_run.verb);
+    expect(CRITERION_NO_VERDICT_WORD.badgeStatus).not.toBe("completed-success");
+  });
 });
 
 describe("the list #1545 reads", () => {
@@ -112,6 +121,7 @@ describe("the list #1545 reads", () => {
       "case_run_outcome",
       "case_state",
       "job_status",
+      "criterion_reading",
     ]);
   });
 });
