@@ -102,13 +102,17 @@ is allowed only as that light, and never where a person reads a state.
 4. **Dark is primary.** Design dark first. Light exists but is secondary.
 5. **Icons: lucide-react only**, used sparingly. A dashboard dense with
    icons reads as noise.
-6. **React Flow (`@xyflow/react`) is the one sanctioned graph surface**, and
-   a [Studio](../concepts/studio.md)'s whiteboard is what it draws. It
-   supplies placement, pan, zoom, fit and selection, and nothing that is
-   seen: every node inside it is built from the primitives above and the
+6. **React Flow (`@xyflow/react`) is the one sanctioned graph surface.** It
+   draws a [Studio](../concepts/studio.md)'s whiteboard and a Job's
+   workflow canvas, and nothing else takes a second library. It supplies
+   placement, pan, zoom, fit and selection, and nothing that is seen:
+   every node inside it is built from the primitives above and the
    tokens below, its controls are `button`, and every value its own
    stylesheet would paint is set to a token. No second graph or canvas
    library, and no node drawn from React Flow's defaults.
+   **The workflow canvas carries a toggle to a stacked run**, canvas by
+   default, because a narrow window reads a list better than a graph and
+   the graph is still what the surface is for.
 
 ---
 
@@ -1397,7 +1401,7 @@ you type is a target you misclick.
 navigation, jobs by id or name, settings.
 
 **The palette obeys the lexicon.** Displayed labels always use the
-lexicon term — Kill, Drone, Convoy. The search index may carry aliases
+lexicon term — Kill, Drone, Job Board. The search index may carry aliases
 so that "terminate" finds Kill, but the alias never renders. This is
 where the lexicon earns its keep: one vocabulary, searchable, with the
 shortcut shown beside every entry.
@@ -2177,7 +2181,7 @@ are legal Voice values. "Playful" is not.
 ### Principles
 
 **P1. Metaphor lives in proper nouns only.** Nautical vocabulary is
-confined to names: Armada, Fleet, Bridge, Helm, Drone, Manifest, Convoy,
+confined to names: Armada, Fleet, Bridge, Helm, Drone, Manifest,
 Job Board. Kit and Machine are lexicon terms but carry no metaphor —
 they say what they are. Every verb, state, error and instruction is
 plain English. Write "Drone 4 stopped reporting 12 minutes ago", not
@@ -2282,8 +2286,6 @@ read plausibly under a different job has failed.
 - **Task** one line of a Job's [plan](../concepts/plan.md). Never step —
   a step is the workflow's own unit, and a Job's plan is its own account
   of the work rather than the workflow that gates it.
-- **Convoy** a multi-workspace job landing as one PR. Never batch,
-  group.
 - **Job Board** the open queue. Never the queue, the backlog.
 - **Job proposer** the model call that reads a request — a prompt, a
   ticket link — and proposes a Job: its workflow, what to call it, and
@@ -2338,11 +2340,12 @@ page.
 | Daemon | **Fleet** | Dropped as a redundant second name for the same process |
 | Ground Zero | **M0 — Foundations** | Archived with the phase plan |
 | Phase 0 through Phase 6, and numbered implementation steps | **Milestones** and their **Steps** | The nine-phase plan and its ~110 Steps live under "Archive — v2 phase plan" and are reference only. Milestone Steps are disposable and discarded when the milestone is met |
+| Convoy, Train, Atomic | *Nothing.* Say what the Job does | Names for kinds of Job. A Job is a Job: a screen says "three pull requests, landing in order" and never names a shape. Where a page meant the rules for a Job gated by several Manifests, they are on [Manifest](../concepts/manifest.md); where it meant members in order, [Landing](../concepts/landing.md) |
 
 **Casing.** Docs capitalise throughout. UI capitalises the singular
 named things (Armada, Fleet, Bridge, Helm, Doctor, Judge, Kit, Machine,
-Job Board) and lowercases anything countable (job, drone, convoy,
-manifest, workspace, evidence, workflow). So: "No active jobs. 3 waiting
+Job Board) and lowercases anything countable (job, drone, manifest,
+workspace, evidence, workflow). So: "No active jobs. 3 waiting
 on the Job Board."
 
 ### Status grammar
@@ -2559,8 +2562,8 @@ only for now. Recurrence changing behaviour is a separate decision.
 
 **Approval gates** stay descriptive: what the job is, which workspaces,
 which workflow. They go consequence-forward on blast radius alone,
-meaning a Convoy, auto-merge on, a job touching root `armada.yml`, or a
-pre-approved batch. Cost never triggers it.
+meaning a job writing in several workspaces, auto-merge on, a job
+touching root `armada.yml`, or a pre-approved batch. Cost never triggers it.
 
 **Push alerts** carry facts rather than a ping. "Drone 4 stalled on
 step 2 of 5, `auth/session.rs`, 12 min." Kill and Redirect are not

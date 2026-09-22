@@ -159,13 +159,13 @@ A **port span that cannot be re-claimed during a scope revision** is the case wi
 
 **Nothing lands while it holds.** The delivering step is where the branch goes out, and it is not entered; the `auto_merge` sweep does not merge; a person's merge press is recorded and carried out by the first sweep after the freeze lifts.
 
-**A person's act is never refused for it**, for the reason above: an approval, a restart and an override each land where they always do, and where a step follows, admission holds the Job at `queued`. A freeze on a Convoy already running stays the open question on [Convoy](convoy.md).
+**A person's act is never refused for it**, for the reason above: an approval, a restart and an override each land where they always do, and where a step follows, admission holds the Job at `queued`.
 
 ### DAG scheduling
 
 **Fleet schedules by dependency graph in topological order**, on top of the approval and resource gates. **The tiebreak between ready peers reads a Job's `urgency` field**, which is what the concurrency/priority tiebreak setting names.
 
-The dependency model itself is a property of a Job — see [Job](job.md). Only the linked-DAG Job shape decomposes into sub-Jobs; a Convoy has no children.
+The dependency model itself is a property of a Job — see [Job](job.md). A Job whose members are Jobs is scheduled over the same graph, one edge per member — see [Landing](landing.md).
 
 **An edge releases on the upstream's terminal status, and not every terminal releases it.** `completed_success` makes the dependent dispatchable; `superseded` unblocks it and surfaces it with the dependency marked unsatisfied, since the work landed outside the Job rather than not landing; any other terminal escalates it as `dependency_failed`, so a person decides rather than one failure terminating a chain unattended.
 
@@ -424,7 +424,7 @@ Each piece of Fleet's behavior lives where it is specified:
 - Memory and disk resource gating before spawning a Drone — Scheduling and gating, above
 - Owns every `Job.status` and `Job.workflow_status` transition — [Job](job.md), Ownership Split
 - Evidence verification (Mechanical Check → Judge Check) — [Drone](drone.md), [Workflow](workflow.md)
-- DAG scheduling and cross-workspace work — [Job Board](job-board.md), [Manifest](manifest.md), Cross-Workspace Jobs, [Convoy](convoy.md)
+- DAG scheduling and cross-workspace work — [Job Board](job-board.md), [Manifest](manifest.md), Cross-Workspace Jobs, [Landing](landing.md)
 - Secrets brokering (Drone never holds secrets directly) — [Kit](kit.md), [Manifest](manifest.md), Secrets
 - Live re-evaluation of the allowlist, the budget cap and dispatch freeze at every gated checkpoint, versus Skills, MCP, Agent files and Commands, which are frozen into a Drone at spawn — [Drone](drone.md), What's Frozen at Spawn vs. Live
 - Auto-merge enforcement, VCS push/PR/merge, the sole actor touching Git credentials — [Manifest](manifest.md), auto_merge and review_gate
@@ -434,7 +434,7 @@ Each piece of Fleet's behavior lives where it is specified:
 - Own health status — [Doctor](doctor.md), Fleet module
 - What a repo may declare about ports, Check timeouts and teardown — [Manifest](manifest.md)
 
-The Job shapes are single-workspace, linked-DAG sub-Jobs and [Convoy](convoy.md). Only the linked-DAG shape decomposes into sub-Jobs; a Convoy has **no children**. Shape is derived from `write_targets` and `atomic` rather than stored, so Fleet branches on those two fields and a new combination of them costs no migration.
+**Fleet reads no Job shape, because none is stored.** A Job writes in one place or several, and lands on its own or with members before and after it; what Fleet branches on is `write_targets`, `gate_manifest_ids[]` and `dependencies`, never a category. See [Manifest](manifest.md), Cross-Workspace Jobs, and [Landing](landing.md).
 
 ## Open questions
 

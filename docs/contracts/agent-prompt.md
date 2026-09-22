@@ -302,7 +302,7 @@ supplies content that layers 4 and 6 point at.
 | Kind | Rule |
 | --- | --- |
 | **Instructions** | A later layer may **add** and may **specialise**. It may not contradict an earlier layer. **Layer 1 is unreachable from config** |
-| **Permissions** | Not governed here. Allowlist, MCP, Commands, secrets scope and Sub agents resolve per Drone's Convoy table — a permission intersects, knowledge unions, with Commands the amended exception since namespacing removed the conflict intersection existed to resolve |
+| **Permissions** | Not governed here. Allowlist, MCP, Commands, secrets scope and Sub agents resolve per Drone's resolution table — a permission intersects, knowledge unions, with Commands the amended exception since namespacing removed the conflict intersection existed to resolve |
 
 **Layer 1 is unreachable.** A Kit or Manifest able to edit the baseline
 could delete the sentence making Evidence the only completion path, at
@@ -1843,10 +1843,10 @@ arguably better, since the awkward cases — a revert, a partial fix, a
 change that turned out wrong — can be covered deliberately. Fifty is a
 target, not a floor.
 
-**Convoy resolution is unstated.** The corpus resolves at layer 3, and
-layer 3 resolves across several Manifests on a Convoy. Under *knowledge
-unions* a three-workspace Convoy carries 150 commit messages and 30 PR
-bodies. Nobody has said whether that is intended.
+**Resolution across several Manifests is unstated.** The corpus resolves
+at layer 3, and layer 3 resolves across every Manifest gating the Job.
+Under *knowledge unions* a Job gated by three carries 150 commit messages
+and 30 PR bodies. Nobody has said whether that is intended.
 
 Cutoff date decided — found by inspection when the corpus is harvested,
 with the method recorded alongside it.
@@ -1901,7 +1901,6 @@ below.
 | **The `Commit/PR message template` collision.** A Manifest template is layer-3 prompt content and it is a shape rule. Section 5 forbids shape rules in the baseline and says nothing about layers 2 to 6 | 3, 5 |
 | **Prior-iteration context on loop workflows.** Evidence Scope appends it, which is a further source of prompt content — and for the Judge it sits oddly against "stateless, one-shot, no memory between calls" | 2, 3 |
 | **Helm has no frozen/live story.** Sessions are persistent and per-Manifest; Voice and authority are configurable; Helm has no respawn path. What happens to a live session when the Kit or Machine config changes is unstated | 4 |
-| **Two of the three Job shapes have no name** to classify into. Inherited from System Architecture | 2 |
 | **Criterion independence** — may a Judge grading criterion 2 see criterion 1's verdict? | 2 |
 | **What a Job summary is and who writes it** | 2 |
 

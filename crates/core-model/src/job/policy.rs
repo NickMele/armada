@@ -11,7 +11,7 @@
 //! says must not happen: both settings are `Live`, so the answer is true only
 //! until somebody saves the file.
 //!
-//! **Most-restrictive-wins**, which `docs/concepts/convoy.md` settles and gives
+//! **Most-restrictive-wins**, which `docs/concepts/manifest.md` settles and gives
 //! the reason for — there is one pull request, so the most cautious gating
 //! Manifest holds. It is spelled here rather than in `config` because a Job's
 //! gate list is a Job's field and `config` knows one file at a time.
@@ -89,7 +89,7 @@ impl AutoMerge {
 
     /// How cautious this value is, lowest first. **Written out rather than
     /// derived from declaration order**, so reordering the variants cannot
-    /// quietly reverse the resolution `convoy.md` fixed.
+    /// quietly reverse the resolution `manifest.md` fixed.
     fn caution(policy: &AutoMerge) -> u8 {
         let policy = *policy;
         match policy {
@@ -211,7 +211,7 @@ mod tests {
     }
 
     /// `never` beats `checks-pass` beats `always`, in either order the
-    /// Manifests are listed in — `convoy.md`'s rule, and the order-independence
+    /// Manifests are listed in — `manifest.md`'s rule, and the order-independence
     /// is what makes it a resolution rather than a precedence.
     #[test]
     fn the_most_cautious_gating_manifest_holds() {

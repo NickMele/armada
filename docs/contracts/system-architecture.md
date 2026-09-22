@@ -198,7 +198,7 @@ it.
 | --- | --- | --- |
 | `schema_version` | One row. Auto-increment integer, checked on Fleet startup | `store` |
 | `manifests` | Registered workspaces — repo path, workspace root, resolved config snapshot, schema version | `config` |
-| `jobs` | The status machine, type (WorkflowDef ref), manifest ref, current step pointer, timestamps. No `shape` column — shape is derived from `write_targets` and `atomic`. States and reasons live on Job, and a reason is scoped by the status it sits under rather than flat, so no single reason count describes the set. `Job::transition` is the sole mutator | `fleet` |
+| `jobs` | The status machine, type (WorkflowDef ref), manifest ref, current step pointer, timestamps. No `shape` column, and nothing derives one. States and reasons live on Job, and a reason is scoped by the status it sits under rather than flat, so no single reason count describes the set. `Job::transition` is the sole mutator | `fleet` |
 | `job_steps` | The nested workflow machine — one row per (job, step), written at Job creation from the frozen WorkflowDef. State, last verdict, counters. What the top level calls `step_activity` and `last_step_verdict` is this table read at `jobs.current_step_id`, not a second copy | `fleet` |
 | `job_dependencies` | DAG edges. `(from_job, to_job)`, branch and fan-in both allowed | `fleet` |
 | `job_manifests` | The gate list — Manifests whose Checks gate a Job, one row per entry | `fleet` |
@@ -237,8 +237,8 @@ sections 6, 7 and above. The field contract that lets their lines be joined
 is the Log Envelope contract, which owns the fields, the ID authority rules
 and the redaction ordering.
 
-One dependency runs the other way: `workspace` is omitted on
-Convoy-spanning lines because `job_manifests` already records the set a Job
+One dependency runs the other way: `workspace` is omitted on a line
+spanning workspaces because `job_manifests` already records the set a Job
 spans. Drop that table and the decision reopens.
 
 ---
@@ -631,29 +631,32 @@ placement.
 | Bridge | Surface | Surface group, six surfaces inside it |
 | Doctor | Surface | Owns no probe logic and no state |
 | Job Board | Surface | A saved query. Its own definition is a filter, and nothing persists as a Job Board |
-| Convoy | **Shape** | A derived shape — several `write_targets` with `atomic` set. No ID of its own and no stored value. Keeps its page, which carries resolved decisions and its Open Items |
 | Judge | **Policy** | Verification tier in `verification` |
 
-## Two axes on Job, not one
+## One axis on Job, not two
 
-Type and Shape are independent. A Convoy can be a Feature or a Refactor.
+**There is no Job Shape.** A Job had a second axis beside its Type —
+single-workspace, linked-DAG sub-Jobs, or the atomic multi-workspace case
+— derived from `write_targets` and `atomic`. It is gone: a Job is a Job,
+and what it writes, how many Manifests gate it and what it lands beside
+are fields, not a category. Nothing names a shape and nothing branches on
+one.
 
 | Axis | Answers | Values | Owned by |
 | --- | --- | --- | --- |
 | Job Type | What work is this | Feature, Bug, Design Plan, Investigation, Refactor, Code Review, plus 4 policy variants | Workflow. Each type is a WorkflowDef |
-| Job Shape | How many workspaces does it touch | single-workspace, linked-DAG sub-Jobs, Convoy | Job |
 
-**Shape is not a WorkflowDef and the two are not the same kind of thing.**
-The test is what the code does with it. Fleet branches on a shape, and
-adding a fourth costs Rust changes to worktree handling, scheduling and
-failure propagation. Fleet interprets a WorkflowDef, and adding one costs
-nothing because it is data. Closed set against open authored set.
+**What replaced it is three fields that already existed.**
+`write_targets` says where the Job writes, `gate_manifest_ids[]` which
+Manifests gate it — see [Manifest](../concepts/manifest.md) — and
+`dependencies` what has to land before it, which is what a Job whose
+members are Jobs is built from — see [Landing](../concepts/landing.md).
+Each is read on its own, and no combination of them is given a name.
 
-**Shape is derived, not stored.** `core-model` computes it from a Job's
-`write_targets` and `atomic` flag, so the value is a closed set the
-compiler enumerates at every branch point while nothing persists it. A new
-combination costs no schema migration, no protocol bump and no Bridge
-fallback window.
+**`atomic` is still on the Job record and is no longer a discriminator.**
+What it served — a change with no valid intermediate state — becomes a
+landing setting. Where that setting lives is open; `landing.md` carries
+the question.
 
 ## Why there is no Definitions database
 
@@ -678,7 +681,7 @@ Crate ownership lives in the Armada Crates database, one row per crate.
 | Fleet | Fleet |
 | Kit | Kit |
 | Manifest | Manifest |
-| Job, Workflow, Job Shape | — |
+| Job, Workflow | — |
 | Judge | — |
 | Drone | — |
 | Bridge, Helm, Doctor, Job Board | — |
@@ -719,7 +722,7 @@ so they are not lost.
 | Gap |
 | --- |
 | **Drone Run** is implied as an entity by the Drone split. Needs an ID, a table and a state machine, or an explicit decision that it stays columns on `jobs`. A retry spawns a second run against one Job, which is what argues for the table.<br>**Added Aug 2026:** `drone_runs.worktree_path` is the **only persisted worktree path in the design**, and under the worktree root decision it should not exist. The path is derivable — the Job's Manifest gives the repo, the job id gives the directory — and nothing can change underneath it, since the root is not configurable. Cheap to drop now, a migration later. The counter-argument is auditability: a stored path records where work happened even after the repo moves. But that is `job_events`' job, not a live lookup column's |
-| **Workspace** has no home on any axis. Convoy spans them, `setup.requires` references them, toolset resolution intersects across them, and no Concept, crate or Doctor module names one |
+| **Workspace** has no home on any axis. A Job's `write_targets` span them, `setup.requires` references them, toolset resolution intersects across them, and no Concept, crate or Doctor module names one |
 | **Approval / Denial** and **Alert** may be missing entities. Both carry state that outlives the surface showing it — pattern learning counts denials across Jobs, and an Alert holds read and acted state |
 
 ---

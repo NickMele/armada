@@ -2,7 +2,7 @@
 //! admission, the step boundary and the Board share.
 //!
 //! **Most-restrictive-wins across a Job's gating Manifests**: any frozen one holds
-//! the Job, `docs/concepts/convoy.md`. **A person's act is never refused for it**
+//! the Job, `docs/concepts/manifest.md`. **A person's act is never refused for it**
 //! (`docs/concepts/fleet.md`): an approval still lands at `queued`, and this is
 //! what holds it there. **Nothing lands while it holds** either: delivery waits
 //! with the step it enters, and a merge — the sweep's or a person's — waits here.

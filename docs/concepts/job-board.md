@@ -30,7 +30,7 @@ Why it matters that this is a filter: the state a Job is in changes constantly a
 
 **A row on All names its repository by the picker's label, where more than one is served.** Picking one repository already says it for every row, so the column appears only on All.
 
-**The Board scopes by a Job's `owner_manifest_id` once a repository is picked.** A Job's old `manifest_id` / `manifest_ids` field split into an owner (exactly one, always present), a gate list (Manifests whose Checks must pass, possibly empty) and a write list. Every Job — [Convoy](convoy.md) included — has exactly one owner, so which repository's picked view it belongs to is never ambiguous, and it appears on All regardless.
+**The Board scopes by a Job's `owner_manifest_id` once a repository is picked.** A Job's old `manifest_id` / `manifest_ids` field split into an owner (exactly one, always present), a gate list (Manifests whose Checks must pass, possibly empty) and a write list. Every Job has exactly one owner, however many Manifests gate it, so which repository's picked view it belongs to is never ambiguous, and it appears on All regardless.
 
 ### A Board outlives its Workspace
 
@@ -40,9 +40,7 @@ Approving such a Job is refused at that moment, naming the missing Manifest — 
 
 ### Safety versus resource on the gate side
 
-**The gate side resolves along safety versus resource.** Dispatch freeze, `auto_merge` and `review_gate` are most-restrictive-wins across the gating Manifests: any frozen Manifest freezes the Job, `never` beats `checks-pass` beats `always`, `human_always` beats `auto_if_judge_passes`. The budget cap follows `owner_manifest_id` rather than the minimum, so a small Workspace's cap cannot kill a Convoy several times larger.
-
-Still uncovered: what a freeze does to a Convoy already running, since freeze is enforced live rather than only at dispatch — see [Convoy](convoy.md).
+**The gate side resolves along safety versus resource.** Dispatch freeze, `auto_merge` and `review_gate` are most-restrictive-wins across the gating Manifests: any frozen Manifest freezes the Job, `never` beats `checks-pass` beats `always`, `human_always` beats `auto_if_judge_passes`. The budget cap follows `owner_manifest_id` rather than the minimum, so a small Workspace's cap cannot kill a much larger Job. [Manifest](manifest.md) owns the fold and the reasoning.
 
 ### A sub-dispatched Job is here like any other
 
@@ -61,9 +59,7 @@ Still uncovered: what a freeze does to a Convoy already running, since freeze is
 
 Default view (list vs. graph) is user-configurable, not fixed — see Configuration below. The graph view is unscheduled: the graph a person asked for is a Job's own workflow, which is drawn on job detail — see [Monitor Active Work](../journeys/monitor-active-work.md).
 
-**The graph view has no Convoy case (see Open questions).** The graph view renders `dependencies`. A [Convoy](convoy.md) has none of its own by construction, but it **may be a peer node** in someone else's, and the Job proposer may emit a graph containing one.
-
-A Convoy in the graph is expected rather than exceptional, and whether it renders as an ordinary node, is visually distinguished, or expands its declared Workspaces is unstated.
+**The graph view has no case for a Job whose members are Jobs (see Open questions).** The graph view renders `dependencies`, and a parent's completion waiting on its members is not an edge on that field. Whether the parent renders as an ordinary node, is visually distinguished, or expands into its members is unstated — see [Landing](landing.md).
 
 ## The controls
 
@@ -324,15 +320,13 @@ stored and the edge is not, so the label stands and the way back goes quiet —
 the detail says the Studio is no longer there rather than offering a control
 that opens nothing. *A Board outlives its Workspace*, one scope smaller.
 
-### A Convoy's row names its first write target
+### A row naming several places names the first, then counts the rest
 
-**No origin value or shape field distinguishes a Convoy on this Board.** Shape is derived from a Job's `write_targets` and its `atomic` flag rather than stored — nothing on Job records a shape at all — so `origin` was never going to carry it and no shape field exists to read. **The Board computes the distinction from those two fields** rather than rendering a stored label.
+**Nothing on Job records a category, so no row renders one.** A Job that writes in several Workspaces differs from one that writes in a single Workspace only in how many paths `write_targets` holds, and the row says so without naming a kind.
 
-**The row shows the first write target, then a count of the rest** — `+2` where three Workspaces are declared. Every other row names a place in that column, so a Convoy names one too. A bare count there was drawn and rejected: it puts a number where the column holds an identifier, and it gives the folder glyph a second meaning.
+**The row shows the first write target, then a count of the rest** — `+2` where three Workspaces are declared. Every other row names a place in that column, so this one names a place too. A bare count there was drawn and rejected: it puts a number where the column holds an identifier, and it gives the folder glyph a second meaning.
 
-**A Convoy takes no chip and no hue.** A bordered pill is a Job state and nothing else, so shape reads as plain text.
-
-How a Convoy renders in the graph view is separate and unsettled — see Open questions. What surface approves or overrides the Job proposer's proposal is tracked separately — see [Convoy](convoy.md) — and is not resolved here.
+**It takes no chip and no hue.** A bordered pill is a Job state and nothing else, so the rest reads as plain text.
 
 ## Dispatch flow
 
@@ -364,7 +358,7 @@ Approving anyway is allowed and is the ordinary case — the overlap is a fact, 
 
 **This card is where the [Job proposer](job-proposer.md)'s proposal is approved or overridden.** A Job dispatched from a prompt or a ticket link arrives here with its workflow and its name already proposed, and the card is where either is changed. Why this gate and not one of its own, and what approving a proposal does and does not dispatch, are on that document.
 
-What this surface looks like is deliberately undecided; no journey has UI design started and this one is design order 1 — see [Convoy](convoy.md), Open questions.
+What this surface looks like is deliberately undecided; no journey has UI design started and this one is design order 1.
 
 ### What is called approval on a Job's path
 
@@ -383,4 +377,4 @@ The following settings (see `../contracts/configuration.md`) directly affect thi
 ## Open questions
 
 - **[board-name-for-an-overridden-workflow]** What does the Board call a Job whose steps no longer match the workflow it names? Per-job workflow overrides would let two Jobs both labelled `bug` have run different things, which is unreadable afterwards, and the row has no space for a second identifier. The candidates are a modified marker on the row, a derived name, or recording the override in Evidence and leaving the row alone. The same question lands twice — a citation naming a step has to resolve when the step is not in the workflow the Job names, which is what freezing `acceptance_criteria[]` already settles for criteria. Nothing can be drawn until this is answered.
-- **[job-board-graph-view]** What is the Board's graph view, and how does a Convoy render inside it? The Layout section above states an opt-in toggle beside the flat list, defaulting per Machine, and that much is settled. What is not: whether the view is a surface of its own or dependency affordances on the rows themselves, and how a Convoy renders once inside it — as an ordinary node, visually distinguished, or expanded into its declared Workspaces. A Convoy has no `dependencies` of its own by construction, though it may be a peer in someone else's. **Unscheduled.** The graph the owner wants is a Job's own workflow, drawn on job detail, and this one answers a question nobody is currently asking.
+- **[job-board-graph-view]** What is the Board's graph view, and how does a Job whose members are Jobs render inside it? The Layout section above states an opt-in toggle beside the flat list, defaulting per Machine, and that much is settled. What is not: whether the view is a surface of its own or dependency affordances on the rows themselves, and how a parent renders once inside it — as an ordinary node, visually distinguished, or expanded into its members. A parent's completion waiting on its members is not an edge on `dependencies`, which is what the view draws. **Unscheduled.** The graph the owner wants is a Job's own workflow, drawn on job detail, and this one answers a question nobody is currently asking.

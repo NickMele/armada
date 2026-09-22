@@ -6,7 +6,7 @@
 
 **Kind:** Policy.
 
-Formalises the Job proposer. Its rules previously lived across [Convoy](convoy.md), [Manifest](manifest.md), [Workflow](workflow.md), [Fleet](fleet.md), [Job](job.md) and [Job Board](job-board.md); this document is their home and those pages link here.
+Formalises the Job proposer. Its rules previously lived across [Manifest](manifest.md), [Workflow](workflow.md), [Fleet](fleet.md), [Job](job.md) and [Job Board](job-board.md); this document is their home and those pages link here.
 
 **A Policy gets a document when it needs a name and a single owner, not an ID** — the same reason [Judge](judge.md) has one while being a Policy rather than a domain object.
 
@@ -66,13 +66,13 @@ What it costs is real and is the same cost in every direction: a Drone on a spli
 
 ### Scope is not among them
 
-**It proposes no `write_targets` and no `atomic`.** A Job it drafted reaches the gate with the first null and the second false.
+**It proposes no `write_targets`.** A Job it drafted reaches the gate with that field null.
 
 Why: naming paths credibly needs the repository, and a guess would be a second source for something a [Drone](drone.md) states later with better information.
 
-**The workflow's declaring step does not fill them in either.** `declare_scope` sets that step's own `DeclaredPaths`, which is what the drift check reads; `write_targets` moves only on a scope revision, and `atomic` is frozen at dispatch. [Change a Job's scope](../journeys/change-a-jobs-scope.md) holds what each of the two lists is for.
+**The workflow's declaring step does not fill it in either.** `declare_scope` sets that step's own `DeclaredPaths`, which is what the drift check reads; `write_targets` moves only on a scope revision. [Change a Job's scope](../journeys/change-a-jobs-scope.md) holds what each of the two lists is for.
 
-**Shape is therefore not among them either.** A Job's shape follows from `write_targets` and `atomic`, and this call settles neither. [Convoy](convoy.md) — Three shapes, not two carries what the three are.
+**How the work lands is not among them either.** Whether it is one pull request or several landing in order follows from what somebody has read, and this call has read no code — see [Landing](landing.md). The order between several Jobs is the one thing here it does propose, and an order is not a landing rule.
 
 ### A sibling may land the work first
 
@@ -129,7 +129,7 @@ Skipping it where the answer looks obvious would cost the Job its entry zero, wh
 | 4 | The wait says what the call is doing, and offers the stop |
 | 5 | The person approves. That is what starts the work |
 
-At step 3 the proposer works out what kind of work it is and which workflow it runs under.
+At step 3 the proposer works out what kind of work it is and which workflow it runs under. **Not yet built:** it does that in a status of its own, `proposing`, so the reading shows on the [Job Board](job-board.md) while it happens rather than only where the request was typed — #1159. What it proposes is editable until step 5, and step 5 is what freezes it, never step 3. See [Job](job.md), Reading the request is a status, and approval is what locks.
 
 **Step 4 draws the call, not a partial proposal.** This page asked for the proposal to fill in progressively; what shipped is one request and one response, so the Jobs arrive whole, once, at the end. What moves during the wait is the call's own progress — how far it has reached, how long it has been out against Fleet's budget, which model is reading it — and past a mark the surface says so and offers the stop. A skeleton of Job rows would claim rows are arriving one at a time, which is not what happens. Corrected 2026-09-08, against the built surface.
 
