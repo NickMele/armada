@@ -8,7 +8,7 @@ import { Fragment, useCallback, useState } from "react";
 import {
   JobBrief,
   JobBriefSkeleton,
-  JobDetailHeaderActions,
+  Sheet,
   StepTimeline,
   StepTimelineSkeleton,
   RunTree,
@@ -20,7 +20,6 @@ import {
   conceptSaid,
   type JobBriefProps,
   type JobDetailField,
-  type JobDetailHeading,
   type JobLogReferenceRow,
   type NotOpened,
   type StepTimelineAttempt,
@@ -34,7 +33,14 @@ import type { PlanEditAnswer } from "./plan-edits";
 import { PlanPending, PlanWell } from "./PlanWell";
 
 /**
- * Inside a Job — one arrangement, at every state.
+ * Inside a Job — the Overview tab, and one arrangement at every state.
+ *
+ * **The header and the tab strip are above this and are not its.** `#1534` gave
+ * job detail five destinations and this is the first, unchanged; `JobDetail.tsx`
+ * draws the strip, and what a tab holds is that tab's own file.
+ *
+ * **Under `--layout-breakpoint` the inspector folds to a sheet** — `narrow`,
+ * below. Which regions there are and what order they read in do not move.
  *
  * **This is the whole point of the screen.** Job detail had an arrangement per
  * state — running, awaiting review, failed, finished, and observing as its own
@@ -202,7 +208,6 @@ export type StepReading = {
 };
 
 export type InsideAJobProps = {
-  heading: JobDetailHeading;
   /** The run, in order. One row per step of the frozen workflow. */
   run: RunTreeStep[];
   runLabel?: ReactNode;
@@ -370,20 +375,35 @@ export type InsideAJobProps = {
    */
   sheet?: ReactNode;
   /**
-   * A standing condition about the whole Job, under the header and above
-   * everything else — today, that this Job was replaced.
+   * The window is under `--layout-breakpoint`. **The inspector folds to a sheet
+   * over the run**, which is the move Helm's dock already makes at the same
+   * bound: two columns stop fitting, and a panel squeezed to a third of a
+   * reading width is the v1 defect — a word a line — wearing this screen's
+   * clothes.
    *
-   * **Above the arrangement rather than inside it.** It is not about the run,
-   * the step or the story, and putting it in any of those columns would make
-   * finding it depend on which region a reader happened to be in. Absent draws
-   * nothing and moves nothing: `--space-4` is a flex gap, not a margin.
+   * **A prop rather than a media query**, `Sheet.floor`'s own reason: a media
+   * feature value cannot be a custom property, and the bound is a token.
+   * `useNarrow` in `@armada/shell` is the one reader.
    */
-  callout?: ReactNode;
+  narrow?: boolean;
+  /** The window is at `--window-floor`, where the folded inspector goes flush. */
+  floor?: boolean;
+  /**
+   * Whether the folded inspector is open. Read only while `narrow` — above the
+   * bound the inspector is a column and is always on screen.
+   *
+   * **Closed until a step is pressed.** A sheet that opened itself on arrival
+   * would put a scrim over the run a reader came to read, and the run is what
+   * says which step to open.
+   */
+  inspectorOpen?: boolean;
+  /** The folded inspector's own name, which is the open step's. */
+  inspectorTitle?: string;
+  onCloseInspector?: () => void;
   onCopied?: (value: string) => void;
 };
 
 export function InsideAJob({
-  heading,
   run,
   runLabel = "The run",
   runWorkflowLabel,
@@ -417,15 +437,140 @@ export function InsideAJob({
   overview,
   unreachable,
   sheet,
-  callout,
+  narrow = false,
+  floor = false,
+  inspectorOpen = false,
+  inspectorTitle,
+  onCloseInspector,
   onCopied,
 }: InsideAJobProps) {
-  return (
-    <div className="armada-screen__detail">
-      <JobDetailHeaderActions {...heading} onCopied={onCopied} />
-      {callout}
+  // The panel's contents, built once and drawn in whichever of the two places
+  // the window can pay for — a column beside the run, or a sheet over it.
+  // **One tree, not two**: a second copy would be the arrangement-per-state
+  // this screen exists to end, arriving through the back door of a breakpoint.
+  const panel = (
+    <div className="armada-inside__panel" data-folded={narrow || undefined}>
+      {unreachable !== undefined ? null : (
+        <div className="armada-inside__brief">
+          <Eyebrow>Brief</Eyebrow>
+          {briefLoading ? (
+            <JobBriefSkeleton />
+          ) : brief === undefined ? (
+            <p className="armada-inside__absent" role="note">
+              {briefAbsent}
+            </p>
+          ) : (
+            <JobBrief {...brief} />
+          )}
+        </div>
+      )}
 
-      <div className="armada-inside">
+      {stepReading !== undefined ? (
+        <StepPanelReading {...stepReading} />
+      ) : unreachable !== undefined ? (
+        <div className="armada-inside__unreachable" role="status">
+          <Unplug size={20} strokeWidth={1.5} aria-hidden />
+          <span>{unreachable}</span>
+        </div>
+      ) : overview !== undefined ? (
+        <div className="armada-inside__overview">
+          <div className="armada-inside__step-fields">
+            {overview.facts.map((field, f) => (
+              <span className="armada-inside__field" key={f}>
+                {field.label === undefined ? null : <FieldLabel>{field.label}</FieldLabel>}
+                {field.value === undefined ? null : (
+                  <span className="armada-inside__field-value" data-mono={field.mono || undefined}>
+                    {field.value}
+                  </span>
+                )}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : step === undefined ? (
+        <p className="armada-inside__absent" role="note">
+          {stepAbsent}
+        </p>
+      ) : (
+        <>
+          <div className="armada-inside__step-head">
+            <div className="armada-inside__step-titles">
+              <span
+                className="armada-inside__step-name"
+                data-identifier={step.labelIsAnIdentifier || undefined}
+              >
+                {step.label}
+              </span>
+              <div className="armada-inside__step-fields">
+                {step.fields.map((field, f) => (
+                  <span className="armada-inside__field" key={f}>
+                    {field.label === undefined ? null : <FieldLabel>{field.label}</FieldLabel>}
+                    {field.value === undefined ? null : (
+                      <span
+                        className="armada-inside__field-value"
+                        data-mono={field.mono || undefined}
+                      >
+                        {field.value}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </div>
+            {/* The step acts, and the accent goes with them. */}
+            {step.acts === undefined ? null : (
+              <div className="armada-inside__step-acts">{step.acts}</div>
+            )}
+          </div>
+
+          {step.notice === undefined ? null : (
+            <div className="armada-inside__notice" data-tone={step.notice.tone} role="status">
+              {step.notice.title === undefined ? null : step.notice.says === undefined ? (
+                <span className="armada-inside__notice-title">{step.notice.title}</span>
+              ) : (
+                <Tooltip asChild label={step.notice.says}>
+                  <span className="armada-inside__notice-title">{step.notice.title}</span>
+                </Tooltip>
+              )}
+              {step.notice.children === undefined ? null : (
+                <span className="armada-inside__notice-body">{step.notice.children}</span>
+              )}
+            </div>
+          )}
+
+          {/* The box a person acts in comes before the story: you cannot
+              write a useful sentence until you have read it. */}
+          {step.before === undefined ? null : (
+            <div className="armada-inside__before">{step.before}</div>
+          )}
+
+          {step.timeline === undefined ? (
+            <p className="armada-inside__absent" role="note">
+              {step.timelineAbsent ?? "Gates unknown"}
+            </p>
+          ) : (
+            <StepTimeline
+              attempts={step.timeline}
+              label="Where this step is"
+              openRow={step.openRow}
+              onOpenRow={step.onOpenRow}
+              folded={step.timelineFolded}
+            />
+          )}
+
+          {step.produced}
+
+          {step.after === undefined ? null : (
+            <div className="armada-inside__after">{step.after}</div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      <div className="armada-inside" data-narrow={narrow || undefined}>
         {/* The run, and the pointers beneath it. Left, at every state. */}
         <div className="armada-inside__run">
           <div className="armada-inside__region-head">
@@ -507,133 +652,37 @@ export function InsideAJob({
             either side, so it measures the full height of the taller column
             whichever one that is. */}
 
-        {/* The panel. Same regions in the same order at every state. */}
-        <div className="armada-inside__panel">
-          {unreachable !== undefined ? null : (
-            <div className="armada-inside__brief">
-              <Eyebrow>Brief</Eyebrow>
-              {briefLoading ? (
-                <JobBriefSkeleton />
-              ) : brief === undefined ? (
-                <p className="armada-inside__absent" role="note">
-                  {briefAbsent}
-                </p>
-              ) : (
-                <JobBrief {...brief} />
-              )}
-            </div>
-          )}
-
-          {stepReading !== undefined ? (
-            <StepPanelReading {...stepReading} />
-          ) : unreachable !== undefined ? (
-            <div className="armada-inside__unreachable" role="status">
-              <Unplug size={20} strokeWidth={1.5} aria-hidden />
-              <span>{unreachable}</span>
-            </div>
-          ) : overview !== undefined ? (
-            <div className="armada-inside__overview">
-              <div className="armada-inside__step-fields">
-                {overview.facts.map((field, f) => (
-                  <span className="armada-inside__field" key={f}>
-                    {field.label === undefined ? null : <FieldLabel>{field.label}</FieldLabel>}
-                    {field.value === undefined ? null : (
-                      <span
-                        className="armada-inside__field-value"
-                        data-mono={field.mono || undefined}
-                      >
-                        {field.value}
-                      </span>
-                    )}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : step === undefined ? (
-            <p className="armada-inside__absent" role="note">
-              {stepAbsent}
-            </p>
-          ) : (
-            <>
-              <div className="armada-inside__step-head">
-                <div className="armada-inside__step-titles">
-                  <span
-                    className="armada-inside__step-name"
-                    data-identifier={step.labelIsAnIdentifier || undefined}
-                  >
-                    {step.label}
-                  </span>
-                  <div className="armada-inside__step-fields">
-                    {step.fields.map((field, f) => (
-                      <span className="armada-inside__field" key={f}>
-                        {field.label === undefined ? null : (
-                          <FieldLabel>{field.label}</FieldLabel>
-                        )}
-                        {field.value === undefined ? null : (
-                          <span
-                            className="armada-inside__field-value"
-                            data-mono={field.mono || undefined}
-                          >
-                            {field.value}
-                          </span>
-                        )}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                {/* The step acts, and the accent goes with them. */}
-                {step.acts === undefined ? null : (
-                  <div className="armada-inside__step-acts">{step.acts}</div>
-                )}
-              </div>
-
-              {step.notice === undefined ? null : (
-                <div className="armada-inside__notice" data-tone={step.notice.tone} role="status">
-                  {step.notice.title === undefined ? null : step.notice.says === undefined ? (
-                    <span className="armada-inside__notice-title">{step.notice.title}</span>
-                  ) : (
-                    <Tooltip asChild label={step.notice.says}>
-                      <span className="armada-inside__notice-title">{step.notice.title}</span>
-                    </Tooltip>
-                  )}
-                  {step.notice.children === undefined ? null : (
-                    <span className="armada-inside__notice-body">{step.notice.children}</span>
-                  )}
-                </div>
-              )}
-
-              {/* The box a person acts in comes before the story: you cannot
-                  write a useful sentence until you have read it. */}
-              {step.before === undefined ? null : (
-                <div className="armada-inside__before">{step.before}</div>
-              )}
-
-              {step.timeline === undefined ? (
-                <p className="armada-inside__absent" role="note">
-                  {step.timelineAbsent ?? "Gates unknown"}
-                </p>
-              ) : (
-                <StepTimeline
-                  attempts={step.timeline}
-                  label="Where this step is"
-                  openRow={step.openRow}
-                  onOpenRow={step.onOpenRow}
-                  folded={step.timelineFolded}
-                />
-              )}
-
-              {step.produced}
-
-              {step.after === undefined ? null : (
-                <div className="armada-inside__after">{step.after}</div>
-              )}
-            </>
-          )}
-        </div>
+        {/* The panel, beside the run wherever the window can pay for both.
+            Same regions in the same order at every state. */}
+        {narrow ? null : panel}
       </div>
 
+      {/* Under `--layout-breakpoint` the inspector is a sheet over the run.
+          **It is the screen's layer, not the window's** — `contained`, the
+          same rule the log and the patch already keep, so the shell's rail
+          stays out from under it.
+
+          It gives the layer up the moment a reading takes it: one sheet at a
+          time is this screen's rule, and two would answer one `Esc` between
+          them — `inspectorOpen` is false while one is up, and closing the
+          reading brings the inspector back where it was. */}
+      {narrow ? (
+        <Sheet
+          open={inspectorOpen}
+          contained
+          floor={floor}
+          title={inspectorTitle ?? "The step"}
+          closeLabel="Close"
+          closeBinding="Esc"
+          bleed
+          onClose={onCloseInspector}
+        >
+          {panel}
+        </Sheet>
+      ) : null}
+
       {sheet}
-    </div>
+    </>
   );
 }
 
@@ -771,7 +820,7 @@ function WhereHead({
  * a time, and it is the last press, because two stale rows arguing on screen is
  * worse than the one somebody just clicked.
  */
-function WhereRegion({
+export function WhereRegion({
   rows,
   onCopied,
 }: {

@@ -42,6 +42,13 @@ function shownWithText(text: string): boolean {
   );
 }
 
+/**
+ * The Plan region, by the name it carries. **Not by its text**: the strip's
+ * Plan tab spells the same word, and a region that is absent is the claim
+ * three of these tests make.
+ */
+const planRegion = () => page.getByRole("region", { name: "Plan" });
+
 /** A plan row, found by its task's title. A list item, because the Working area names the task too. */
 async function rowOf(title: string) {
   const row = page.getByRole("listitem").filter({ hasText: title });
@@ -51,7 +58,7 @@ async function rowOf(title: string) {
 
 test("a plan partway done: its region, its count, its tasks, and the branch in Where things are", async () => {
   await opened(withPlan(PLAN_PARTWAY));
-  await expect.element(page.getByText("Plan", { exact: true })).toBeVisible();
+  await expect.element(planRegion()).toBeVisible();
   await expect.poll(() => shownWithText("1 of 3")).toBe(true);
   await expect.element(page.getByRole("listitem").getByText("T1", { exact: true })).toBeVisible();
   await expect.poll(() => shownWithText("Re-point the reducer's own import at it")).toBe(true);
@@ -99,17 +106,17 @@ test("each task lists the files it changed, the one no task owns sits apart, and
 
 test("no plan on the workflow draws no Plan region", async () => {
   await opened(running());
-  expect(page.getByText("Plan", { exact: true }).query()).toBeNull();
+  expect(planRegion().query()).toBeNull();
 });
 
 test("before the plan step has recorded one, there is no Plan region", async () => {
   await opened(preparing());
-  expect(page.getByText("Plan", { exact: true }).query()).toBeNull();
+  expect(planRegion().query()).toBeNull();
 });
 
 test("a plan not recorded yet says which step records it, and offers no Add task", async () => {
   await opened(awaitingApprovalPlanPending());
-  await expect.element(page.getByText("Plan", { exact: true })).toBeVisible();
+  await expect.element(planRegion()).toBeVisible();
   await expect.element(page.getByText("No plan yet — Plan the change records it.")).toBeVisible();
   expect(page.getByRole("button", { name: "Add task" }).query()).toBeNull();
 });

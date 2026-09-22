@@ -100,3 +100,30 @@ export const Suspended: Story = {
     ],
   },
 };
+
+/**
+ * A screen whose whole navigation is the strip — job detail's five
+ * destinations. **The strip carries a name**, because there is no heading
+ * beside it to be one: a reader who cannot see it hears five tabs and
+ * otherwise never hears what they divide.
+ *
+ * Two of the five carry a figure and three do not. A tab counts what is
+ * behind it or says nothing; `Overview` is the arrangement itself and
+ * `Record` and `Pulse` count nothing a person is waiting on.
+ */
+export const AScreensDestinations: Story = {
+  args: {
+    label: "Job detail",
+    defaultValue: "overview",
+    items: [
+      { id: "overview", label: "Overview" },
+      { id: "workflow", label: "Workflow", count: 4 },
+      { id: "plan", label: "Plan", count: 6 },
+      { id: "record", label: "Record" },
+      { id: "pulse", label: "Pulse" },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("tablist", { name: "Job detail" })).toBeVisible();
+  },
+};

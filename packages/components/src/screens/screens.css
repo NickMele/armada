@@ -820,6 +820,28 @@
    The middle track is the rule between them. Half a gap either side, so the
    drawn 24px gutter still measures 24 with a hairline down the middle of it
    rather than 24 plus a rule plus another 24. */
+/* The strip under the Job header — the whole of navigation inside a Job. It
+   does not scroll away: a destination is chosen from wherever the reading got
+   to, so the strip stays put and the tab under it is what scrolls. */
+.armada-screen__detail-tabs {
+  flex: none;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* A destination that is not Overview. It fills what is left the way the two
+   columns do, and scrolls itself for the same reason: the screen's own box is
+   bounded, so the layer over it stays flush to the screen. */
+.armada-detail-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* `align-items: stretch` and not `start`, so both columns are the grid's full
    height and can scroll inside it rather than pushing the screen taller. */
 .armada-inside {
@@ -862,6 +884,25 @@
   background: var(--bg-raised);
 }
 
+/* Under `--layout-breakpoint` the run is the whole content and the inspector
+   is the sheet over it — `InsideAJob`'s `narrow`. A single track rather than a
+   panel squeezed under its floor: 305px was the bottom of what the two-column
+   band could pay for, and below the bound there is less than that. */
+.armada-inside[data-narrow] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Folded, the panel is the sheet's body rather than a card beside the run: the
+   sheet already draws the surface, the border and the radius, so drawing them
+   again would be a card inside a card. It keeps its own padding, which is why
+   the sheet is `bleed`. */
+.armada-inside__panel[data-folded] {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .armada-inside__region-head {
   display: flex;
   align-items: baseline;
@@ -885,6 +926,16 @@
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-muted);
+}
+
+/* The Plan region, named so a reader hears the same word the strip's Plan tab
+   uses. Its own gap is the run column's, so it lays the region out exactly as
+   the bare fragment it replaced did. */
+.armada-inside__plan-region {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 /* The Plan region's well — the same surface Pulse and Where things are draw

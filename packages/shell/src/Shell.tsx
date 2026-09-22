@@ -74,6 +74,10 @@ import type { Connection } from "@armada/protocol";
 import type { JobSummary } from "@armada/protocol";
 import type { RepositorySummary } from "@armada/protocol";
 import { useDockWidth } from "./dock-width";
+// The rail collapses below `--layout-breakpoint`, and job detail's inspector
+// folds to a sheet at the same bound. One reader, in `floor.ts`, so the two
+// cannot answer a resize a pixel apart.
+import { useNarrow } from "./floor";
 import { useLeftWidth } from "./left-width";
 import { ALL_REPOSITORIES } from "./RepositoryOptions";
 import { repositoryLabel } from "./repository-label";
@@ -297,31 +301,6 @@ function repositoryEntries(
     entries.push({ kind: "item", id: ADD_REPOSITORY, label: "Add a repository" });
   }
   return entries;
-}
-
-/**
- * Whether the window is below the layout breakpoint, so the rail collapses to
- * its 48px form. **The bound is read from the token**, never retyped: the
- * theme calls `--layout-breakpoint` a media query bound and this is the media
- * query. A layout designed only for the size it was built at is the v1 failure
- * this app exists to escape.
- */
-function useNarrow(): boolean {
-  const [narrow, setNarrow] = useState(false);
-
-  useEffect(() => {
-    const bound = getComputedStyle(document.documentElement)
-      .getPropertyValue("--layout-breakpoint")
-      .trim();
-    if (bound === "") return undefined;
-    const query = window.matchMedia(`(max-width: ${bound})`);
-    const read = (): void => setNarrow(query.matches);
-    read();
-    query.addEventListener("change", read);
-    return () => query.removeEventListener("change", read);
-  }, []);
-
-  return narrow;
 }
 
 /**
