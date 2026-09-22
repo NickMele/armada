@@ -9,6 +9,8 @@ import { createRoot } from "react-dom/client";
 import { Boundary } from "@armada/shell";
 import { HapticsProvider } from "@armada/components";
 
+import { BoardDrafts } from "@armada/screens/src/boards";
+
 import "../styles/index.css";
 import type { BridgeApi } from "../../../shared/api";
 import { App } from "../App";
@@ -35,7 +37,11 @@ export function mountApp(scenario: string | Scenario, host: HTMLElement, shared?
       <Boundary region="the window" usable={false} bridge={chosen.state.bridge}>
         {/* As `main.tsx` mounts it, so a test can read what a press asked the trackpad to play. */}
         <HapticsProvider perform={(pattern) => api.tap(pattern)}>
-          <App />
+          {/* The half of a board's reading no operation answers — `boards.tsx`.
+              A window on a real Fleet mounts none, and each board falls back. */}
+          <BoardDrafts draft={chosen.draft}>
+            <App />
+          </BoardDrafts>
         </HapticsProvider>
       </Boundary>
     </StrictMode>,

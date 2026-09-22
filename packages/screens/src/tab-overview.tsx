@@ -21,7 +21,7 @@ import { useCheckOutputs, useFollowing } from "./outputs";
 /** What `followed` reads as where the caller hands none in. */
 const NOT_FOLLOWING: FollowedLog = { state: "none" };
 import { useFrames } from "./frames";
-import { openArtifact } from "./opening";
+import { openArtifact, openPullRequest } from "./opening";
 import { planOf } from "./plan";
 import { declaredAgainstTouched, editsIn, filesByTask } from "./task-files";
 import { DIFF_CHAPTER, LOG_CHAPTER, useDetailKeys } from "./detail-keys";
@@ -35,6 +35,9 @@ import type { AttemptRead } from "./timeline";
 import type { StepChapter } from "@armada/components";
 import { againOf, useShowAgain } from "./again";
 import { approvalOverviewOf } from "./approval";
+import { useBoardDraft } from "./boards";
+import { LandBoard } from "./LandBoard";
+import { landedOf } from "./landed";
 import { span } from "./duration";
 import { ordered } from "./facts";
 import { holdingOf, logOf, lookOf, turnsOf } from "./mine";
@@ -230,6 +233,8 @@ export function OverviewTab(props: OverviewTabProps) {
 
   const workflow = workflows.find((held) => held.id === job.workflow_id);
   const manifest = manifests.find((held) => held.id === job.owner_manifest_id);
+  // The half of a board's reading no operation answers yet — `boards.tsx`.
+  const draft = useBoardDraft();
   // Every reading, narrowed to the Job on screen. **All five carry the id they
   // were taken for and all five are checked against it** — each lags a
   // selection by a round trip, so another Job's answer landing here would be
@@ -254,6 +259,8 @@ export function OverviewTab(props: OverviewTabProps) {
   // The workflow overview, while this Job waits for approval — what will run,
   // in place of the idle step view `open` above would otherwise draw. #1149.
   const overview = approvalOverviewOf(job, whole);
+  // What a Job that has finished shows, above the run that finished it. #1542.
+  const landed = landedOf({ job, whole, draft, manifest, holding });
   // What the observe socket says about itself, where it is not reading. **A
   // third answer the story needs**: four of the five states carry no rows, and
   // a chapter drawn from the rows alone reads every one of them as a step that
@@ -603,7 +610,7 @@ export function OverviewTab(props: OverviewTabProps) {
           ).get(onSheet.taskId) ?? [],
         );
 
-  return (
+  const inside = (
     <InsideAJob
       run={run.map(named)}
       // The name Fleet holds, the id where it does not — a Job older than the
@@ -809,5 +816,24 @@ export function OverviewTab(props: OverviewTabProps) {
       }
       onCopied={onCopied}
     />
+  );
+
+  // A Job that finished is read for its outcome first and its run second, so
+  // the board goes above the arrangement rather than in place of it.
+  if (landed === undefined) return inside;
+  return (
+    <>
+      <LandBoard
+        read={landed}
+        onOpenPullRequest={() => {
+          void openPullRequest(onOpenPullRequest, job.id).then((because) => {
+            if (because !== null) onSaid(because);
+          });
+        }}
+        onCompose={onCompose}
+        onCopied={onCopied}
+      />
+      {inside}
+    </>
   );
 }
