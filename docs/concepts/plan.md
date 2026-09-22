@@ -22,6 +22,10 @@ one.
 
 A Plan holds an `approach` — a paragraph — and an ordered list of Tasks.
 
+**Tasks sit in groups, and a group is what runs.** *Not yet built.* The plan's tasks are ordered into groups; the groups run one at a time in plan order, in the Job's one worktree, and the step's Checks run at the end of each group rather than once over the whole step. A verdict then names the group that broke, and a retry re-runs only that group.
+
+Groups exist because a parallel schedule cannot be derived. Intersecting the tasks' `scope` lists finds every edge where two tasks write one file, and finds none of the edges where one task uses what another made — four of the eight tasks on the Job the owner killed on 18 Sep were linked that way and shared no declared path. Plan order carries those edges, so running in plan order honours them; scope intersection catches a plan whose order contradicts its own paths.
+
 | Field | On | Meaning |
 | --- | --- | --- |
 | `approach` | Plan | The step's own account of how it means to do the work |
@@ -31,8 +35,9 @@ A Plan holds an `approach` — a paragraph — and an ordered list of Tasks.
 | `scope` | Task | The repository-relative paths this task touches |
 | `expects` | Task | What should prove it, written by the step that plans |
 | `shown` | Task | What did prove it, written by the step that does the work |
-| `state` | Task | `open`, `working`, `done`, `dropped` |
+| `state` | Task | `open`, `working`, `done`, `dropped`. A fifth, `failed`, is decided and not built |
 | `reason` | Task | Required when `state` is `dropped` |
+| `concurrent_with` | Task | Which tasks in its group may run at the same time, declared by the planner. *Not yet built* |
 
 **`scope` is a list because the step after the planning one reads it.** It
 was prose inside `note` until `#1421`, and a step handed prose went looking
@@ -71,11 +76,33 @@ overwritten.
 A retry of a step that follows the plan keeps task states — the work behind
 them is still on the branch, so the plan does not reset with the step.
 
-## Task states are a Drone's claim, never a gate
+## Fleet writes a task's state, and a Drone stops claiming it
+
+**Not yet built.** Fleet marks a task `working` when it dispatches a Drone for it and `done` when the group's Checks come back green, in place of a Drone claiming both afterwards. On the Job of 18 Sep three tasks flipped to `done` within 1.6 seconds of each other and five never entered `working` at all, which is what a self-reported state is worth.
+
+**`failed` is the state that has nowhere to go today.** A task whose group's Checks went red is not `open`, not `working`, not `done` and not `dropped`. Fleet writes it, and the retry that re-runs the group is what clears it.
+
+**A done task a later task edits stays done, and is flagged.** The work behind it is still on the branch, so nothing reopens it; what a person needs is to know that somebody wrote into its files afterwards, which the flag says and the state does not.
+
+## Tasks that may run at once are declared, never inferred
+
+**Not yet built.** The planning Drone names which tasks in a group may run at the same time. It is a declaration because it cannot be a derivation: intersecting declared paths finds the write-write edges and none of the read edges, and a planner that has just written the plan knows both.
+
+**They share the Job's one worktree.** Two Drones writing different files in one checkout do not collide. What needs care is anything that *reads* the tree, which is the group boundary the design already has: the concurrent tasks join, then the Checks run on a still tree, then the group commits once. Tasks that ran at once cannot each have their own commit.
+
+**The cost is an undeclared write.** Two writes to one file neither task declared are last-write-wins and silent, and `scope_diff_check` finds the drift after the fact — which is enough when tasks run in order and is not enough when they run together. Nothing yet catches it.
+
+## A task's cost appears when its agent stops
+
+**Turns while it runs, cost when it ends.** Cost arrives on a session's last line — see [Machine](machine.md) — so a live figure would be invented. It is the task's own agent stopping that settles it, not the group passing.
+
+## Task state is never a gate
 
 **Rule.** Fleet never refuses a step's submission because a task is open.
-Why: task state is self-report, and `docs/scope.md` treats self-report as a
-signal, not a source of truth.
+Why: while task state is a Drone's own claim, `docs/scope.md` treats
+self-report as a signal and not a source of truth — and once Fleet writes the
+state itself, the state says what Fleet already knows rather than adding a
+second gate over it.
 
 A step declaring `follows_plan: true` may still be judged against the plan's
 task states — whether the diff does what a task set `done` claims, whether a

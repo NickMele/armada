@@ -3,38 +3,43 @@
 // both load.
 
 import type { ReactNode } from "react";
-import { ChevronRight, ChevronUp, Unplug } from "lucide-react";
+import { ChevronRight, ChevronUp } from "lucide-react";
 import { Fragment, useCallback, useState } from "react";
 import {
-  JobBrief,
-  JobBriefSkeleton,
-  JobDetailHeaderActions,
-  StepTimeline,
-  StepTimelineSkeleton,
   RunTree,
   RunTreeSkeleton,
-  Skeleton,
-  Tooltip,
+  Sheet,
   WhereRow,
   WorkflowDiagram,
-  conceptSaid,
   type JobBriefProps,
-  type JobDetailField,
-  type JobDetailHeading,
   type JobLogReferenceRow,
   type NotOpened,
-  type StepTimelineAttempt,
   type RunTreeSkeletonProps,
   type RunTreeStep,
   type TaskMarkState,
-  type WorkflowDiagramStep,
 } from "@armada/components";
 
 import type { PlanEditAnswer } from "./plan-edits";
 import { PlanPending, PlanWell } from "./PlanWell";
+import { Inspector } from "./Inspector";
+import type { StepOverview, StepPanel, StepReading } from "./Inspector";
+
+// The inspector's own types are its file's. Re-exported here because a caller
+// configures the arrangement, not the file a type sits in — `JobDetailProps`'
+// own rule.
+export { Eyebrow } from "./regions";
+import { Eyebrow } from "./regions";
+export type { StepNotice, StepOverview, StepPanel, StepReading } from "./Inspector";
 
 /**
- * Inside a Job — one arrangement, at every state.
+ * Inside a Job — the Overview tab, and one arrangement at every state.
+ *
+ * **The header and the tab strip are above this and are not its.** `#1534` gave
+ * job detail five destinations and this is the first, unchanged; `JobDetail.tsx`
+ * draws the strip, and what a tab holds is that tab's own file.
+ *
+ * **Under `--layout-breakpoint` the inspector folds to a sheet** — `narrow`,
+ * below. Which regions there are and what order they read in do not move.
  *
  * **This is the whole point of the screen.** Job detail had an arrangement per
  * state — running, awaiting review, failed, finished, and observing as its own
@@ -65,81 +70,6 @@ import { PlanPending, PlanWell } from "./PlanWell";
  * **The brief sits above the step, on the panel's raised surface**, because
  * every step is read against it.
  */
-
-/** The selected step, as the panel draws it. */
-export type StepPanel = {
-  /** The step's name, in sans. Nouns naming the artifact. */
-  label: ReactNode;
-  /** Whether `label` is a `step_id` rather than a name, so it renders in mono. */
-  labelIsAnIdentifier?: boolean;
-  /**
-   * The step's short facts — `Running for 6m 11s`, `Attempt 2 of 3`, `Drone
-   * alive, idle`. **Figures, never a chart**: a filled bar reads as progress
-   * and a step has no percentage.
-   */
-  fields: JobDetailField[];
-  /**
-   * The acts that change this step. **They take the accent**, and they sit here
-   * rather than in the Job header because they act on the step.
-   */
-  acts?: ReactNode;
-  /**
-   * The band above the story: what happened, and why you are looking at this
-   * step. Absent on a step where nothing has gone wrong, which is most of them.
-   */
-  notice?: StepNotice;
-  /**
-   * The step as one timeline: its phases in the order they happened, repeated
-   * per attempt, each row holding the chapter that phase produced.
-   *
-   * **It replaced a strip above a story.** The two said the same thing twice — a
-   * failed Check was a red node in one and a printed exit code in the other —
-   * and this is the one reading.
-   */
-  timeline?: StepTimelineAttempt[];
-  /** Why there is no timeline, where there is none. */
-  timelineAbsent?: string;
-  /** What the Job has changed, as its own panel beside the run. #1187. */
-  produced?: ReactNode;
-  /** Which row is open, held by the surface, so a keyboard map can name one. */
-  openRow?: string | null;
-  onOpenRow?: (rowId: string | null) => void;
-  /** Whether the timeline starts folded. `StepTimeline`'s own `folded`. */
-  timelineFolded?: boolean;
-  /**
-   * Anything above the timeline — the failure every attempt hit, what the Drone
-   * tried, the box that drafts a redirect. **It comes before the story**
-   * because you cannot write a useful sentence until you have read it.
-   */
-  before?: ReactNode;
-  /**
-   * After the story — the decision, on a step waiting for one. **At the end
-   * rather than in the header**, because you make it after reading; the header
-   * is for acts that change what a Drone is doing.
-   */
-  after?: ReactNode;
-};
-
-/**
- * The band that says why you are here.
- *
- * **Its tone is a step-level token and never a Job status.** A failed Check is
- * `--step-failed`; a step holding with its retries spent is `--step-stopped-bg`;
- * a step waiting on a person is `--step-waiting`, amber and never red, because
- * everything mechanical has cleared and that must not read as a failure.
- * `note` takes no hue at all.
- */
-export type StepNotice = {
-  tone: "failed" | "stopped" | "waiting" | "note";
-  /** What happened, in one line. */
-  title?: ReactNode;
-  /**
-   * What the title means for a person, on hover over it. Prose, and never the
-   * evidence: a list of what was refused or flagged stays in `children`.
-   */
-  says?: ReactNode;
-  children?: ReactNode;
-};
 
 /** One task, as the Plan region draws it. `docs/concepts/plan.md`. */
 export type PlanTaskRow = {
@@ -181,28 +111,7 @@ export type PlanRegionRead =
   | ({ recorded: true } & PlanRegionData)
   | { recorded: false; stepLabel: string };
 
-/**
- * The panel while a Job waits for approval: what will run, in place of the
- * idle step view. #1149 — nothing has run, so there is nothing to draw a
- * result for, only what somebody is agreeing to.
- */
-export type StepOverview = {
-  diagram: WorkflowDiagramStep[];
-  /** Where the Job stops, its caps and its model — beside the diagram. */
-  facts: JobDetailField[];
-};
-
-/** The panel while its step is read: what is already known of the step. */
-export type StepReading = {
-  /** The step's name off the workflow. Absent draws a bar in its place. */
-  label?: ReactNode;
-  labelIsAnIdentifier?: boolean;
-  /** The phases every step is read against, by name. */
-  phases: readonly ReactNode[];
-};
-
 export type InsideAJobProps = {
-  heading: JobDetailHeading;
   /** The run, in order. One row per step of the frozen workflow. */
   run: RunTreeStep[];
   runLabel?: ReactNode;
@@ -370,20 +279,35 @@ export type InsideAJobProps = {
    */
   sheet?: ReactNode;
   /**
-   * A standing condition about the whole Job, under the header and above
-   * everything else — today, that this Job was replaced.
+   * The window is under `--layout-breakpoint`. **The inspector folds to a sheet
+   * over the run**, which is the move Helm's dock already makes at the same
+   * bound: two columns stop fitting, and a panel squeezed to a third of a
+   * reading width is the v1 defect — a word a line — wearing this screen's
+   * clothes.
    *
-   * **Above the arrangement rather than inside it.** It is not about the run,
-   * the step or the story, and putting it in any of those columns would make
-   * finding it depend on which region a reader happened to be in. Absent draws
-   * nothing and moves nothing: `--space-4` is a flex gap, not a margin.
+   * **A prop rather than a media query**, `Sheet.floor`'s own reason: a media
+   * feature value cannot be a custom property, and the bound is a token.
+   * `useNarrow` in `@armada/shell` is the one reader.
    */
-  callout?: ReactNode;
+  narrow?: boolean;
+  /** The window is at `--window-floor`, where the folded inspector goes flush. */
+  floor?: boolean;
+  /**
+   * Whether the folded inspector is open. Read only while `narrow` — above the
+   * bound the inspector is a column and is always on screen.
+   *
+   * **Closed until a step is pressed.** A sheet that opened itself on arrival
+   * would put a scrim over the run a reader came to read, and the run is what
+   * says which step to open.
+   */
+  inspectorOpen?: boolean;
+  /** The folded inspector's own name, which is the open step's. */
+  inspectorTitle?: string;
+  onCloseInspector?: () => void;
   onCopied?: (value: string) => void;
 };
 
 export function InsideAJob({
-  heading,
   run,
   runLabel = "The run",
   runWorkflowLabel,
@@ -417,15 +341,32 @@ export function InsideAJob({
   overview,
   unreachable,
   sheet,
-  callout,
+  narrow = false,
+  floor = false,
+  inspectorOpen = false,
+  inspectorTitle,
+  onCloseInspector,
   onCopied,
 }: InsideAJobProps) {
-  return (
-    <div className="armada-screen__detail">
-      <JobDetailHeaderActions {...heading} onCopied={onCopied} />
-      {callout}
+  // The inspector, built once and drawn in whichever of the two places the
+  // window can pay for — a column beside the run, or a sheet over it.
+  const panel = (
+    <Inspector
+      folded={narrow}
+      {...(brief === undefined ? {} : { brief })}
+      briefAbsent={briefAbsent}
+      briefLoading={briefLoading}
+      {...(step === undefined ? {} : { step })}
+      stepAbsent={stepAbsent}
+      {...(stepReading === undefined ? {} : { stepReading })}
+      {...(overview === undefined ? {} : { overview })}
+      {...(unreachable === undefined ? {} : { unreachable })}
+    />
+  );
 
-      <div className="armada-inside">
+  return (
+    <>
+      <div className="armada-inside" data-narrow={narrow || undefined}>
         {/* The run, and the pointers beneath it. Left, at every state. */}
         <div className="armada-inside__run">
           <div className="armada-inside__region-head">
@@ -507,203 +448,37 @@ export function InsideAJob({
             either side, so it measures the full height of the taller column
             whichever one that is. */}
 
-        {/* The panel. Same regions in the same order at every state. */}
-        <div className="armada-inside__panel">
-          {unreachable !== undefined ? null : (
-            <div className="armada-inside__brief">
-              <Eyebrow>Brief</Eyebrow>
-              {briefLoading ? (
-                <JobBriefSkeleton />
-              ) : brief === undefined ? (
-                <p className="armada-inside__absent" role="note">
-                  {briefAbsent}
-                </p>
-              ) : (
-                <JobBrief {...brief} />
-              )}
-            </div>
-          )}
-
-          {stepReading !== undefined ? (
-            <StepPanelReading {...stepReading} />
-          ) : unreachable !== undefined ? (
-            <div className="armada-inside__unreachable" role="status">
-              <Unplug size={20} strokeWidth={1.5} aria-hidden />
-              <span>{unreachable}</span>
-            </div>
-          ) : overview !== undefined ? (
-            <div className="armada-inside__overview">
-              <div className="armada-inside__step-fields">
-                {overview.facts.map((field, f) => (
-                  <span className="armada-inside__field" key={f}>
-                    {field.label === undefined ? null : <FieldLabel>{field.label}</FieldLabel>}
-                    {field.value === undefined ? null : (
-                      <span
-                        className="armada-inside__field-value"
-                        data-mono={field.mono || undefined}
-                      >
-                        {field.value}
-                      </span>
-                    )}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : step === undefined ? (
-            <p className="armada-inside__absent" role="note">
-              {stepAbsent}
-            </p>
-          ) : (
-            <>
-              <div className="armada-inside__step-head">
-                <div className="armada-inside__step-titles">
-                  <span
-                    className="armada-inside__step-name"
-                    data-identifier={step.labelIsAnIdentifier || undefined}
-                  >
-                    {step.label}
-                  </span>
-                  <div className="armada-inside__step-fields">
-                    {step.fields.map((field, f) => (
-                      <span className="armada-inside__field" key={f}>
-                        {field.label === undefined ? null : (
-                          <FieldLabel>{field.label}</FieldLabel>
-                        )}
-                        {field.value === undefined ? null : (
-                          <span
-                            className="armada-inside__field-value"
-                            data-mono={field.mono || undefined}
-                          >
-                            {field.value}
-                          </span>
-                        )}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                {/* The step acts, and the accent goes with them. */}
-                {step.acts === undefined ? null : (
-                  <div className="armada-inside__step-acts">{step.acts}</div>
-                )}
-              </div>
-
-              {step.notice === undefined ? null : (
-                <div className="armada-inside__notice" data-tone={step.notice.tone} role="status">
-                  {step.notice.title === undefined ? null : step.notice.says === undefined ? (
-                    <span className="armada-inside__notice-title">{step.notice.title}</span>
-                  ) : (
-                    <Tooltip asChild label={step.notice.says}>
-                      <span className="armada-inside__notice-title">{step.notice.title}</span>
-                    </Tooltip>
-                  )}
-                  {step.notice.children === undefined ? null : (
-                    <span className="armada-inside__notice-body">{step.notice.children}</span>
-                  )}
-                </div>
-              )}
-
-              {/* The box a person acts in comes before the story: you cannot
-                  write a useful sentence until you have read it. */}
-              {step.before === undefined ? null : (
-                <div className="armada-inside__before">{step.before}</div>
-              )}
-
-              {step.timeline === undefined ? (
-                <p className="armada-inside__absent" role="note">
-                  {step.timelineAbsent ?? "Gates unknown"}
-                </p>
-              ) : (
-                <StepTimeline
-                  attempts={step.timeline}
-                  label="Where this step is"
-                  openRow={step.openRow}
-                  onOpenRow={step.onOpenRow}
-                  folded={step.timelineFolded}
-                />
-              )}
-
-              {step.produced}
-
-              {step.after === undefined ? null : (
-                <div className="armada-inside__after">{step.after}</div>
-              )}
-            </>
-          )}
-        </div>
+        {/* The panel, beside the run wherever the window can pay for both.
+            Same regions in the same order at every state. */}
+        {narrow ? null : panel}
       </div>
+
+      {/* Under `--layout-breakpoint` the inspector is a sheet over the run.
+          **It is the screen's layer, not the window's** — `contained`, the
+          same rule the log and the patch already keep, so the shell's rail
+          stays out from under it.
+
+          It gives the layer up the moment a reading takes it: one sheet at a
+          time is this screen's rule, and two would answer one `Esc` between
+          them — `inspectorOpen` is false while one is up, and closing the
+          reading brings the inspector back where it was. */}
+      {narrow ? (
+        <Sheet
+          open={inspectorOpen}
+          contained
+          floor={floor}
+          title={inspectorTitle ?? "The step"}
+          closeLabel="Close"
+          closeBinding="Esc"
+          bleed
+          onClose={onCloseInspector}
+        >
+          {panel}
+        </Sheet>
+      ) : null}
 
       {sheet}
-    </div>
-  );
-}
-
-/**
- * The panel while its step is read: the step's name where the workflow gives
- * it, and its fields, gates and story waiting. The head is the real one, so
- * nothing moves when the step lands.
- */
-function StepPanelReading({ label, labelIsAnIdentifier, phases }: StepReading) {
-  return (
-    <>
-      <div className="armada-inside__step-head">
-        <div className="armada-inside__step-titles">
-          {label === undefined ? (
-            <Skeleton width="40%" />
-          ) : (
-            <span className="armada-inside__step-name" data-identifier={labelIsAnIdentifier || undefined}>
-              {label}
-            </span>
-          )}
-          <div className="armada-inside__step-fields" role="status" aria-label="Reading the step" aria-busy>
-            {/* Token widths: the row is as wide as its fields, so a percentage is of nothing. */}
-            <Skeleton width="var(--space-12)" />
-            <Skeleton width="var(--space-8)" />
-          </div>
-        </div>
-      </div>
-      <StepTimelineSkeleton phases={phases} />
     </>
-  );
-}
-
-/**
- * A region's band, and what that region is where its name is an Armada word.
- *
- * **The sentence is looked up rather than written here.** Six regions on this
- * screen name a thing rather than describe it — `Brief`, `The run`, `Where
- * things are` — and a screen that answered them itself would be a second place
- * the vocabulary is explained. `concepts.ts` is the first.
- *
- * `asChild`, because the brief's own rule keys off the band's class: a wrapper
- * would be the `:not(.armada-screen__eyebrow)` child and be styled as the
- * brief itself.
- */
-export function Eyebrow({ children, spaced }: { children: ReactNode; spaced?: boolean }) {
-  const says = conceptSaid(children);
-  const band = (
-    <span className="armada-screen__eyebrow" data-spaced={spaced || undefined}>
-      {children}
-    </span>
-  );
-  return says === undefined ? (
-    band
-  ) : (
-    <Tooltip asChild label={says}>
-      {band}
-    </Tooltip>
-  );
-}
-
-/** A step field's label, on the same rule as the header's and the tree's. */
-function FieldLabel({ children }: { children: ReactNode }) {
-  const says = conceptSaid(children);
-  const label = <span className="armada-inside__field-label">{children}</span>;
-  return says === undefined ? (
-    label
-  ) : (
-    <Tooltip asChild label={says}>
-      {label}
-    </Tooltip>
   );
 }
 
@@ -771,7 +546,7 @@ function WhereHead({
  * a time, and it is the last press, because two stale rows arguing on screen is
  * worse than the one somebody just clicked.
  */
-function WhereRegion({
+export function WhereRegion({
   rows,
   onCopied,
 }: {

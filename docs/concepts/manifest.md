@@ -58,33 +58,31 @@ Still open: whether the root *owns* the lockfile as opposed to merely being able
 
 ### Cross-Workspace Jobs
 
-The Job shapes covering cross-workspace work are selected **per-Job**, not fixed by the repo's overall shape.
+**A Job that writes in several Workspaces is still one Job.** It has one worktree on one branch, and every Drone it spawns works that one. One worktree per Workspace would mean either several Drones at once or one Drone straddling branches, and neither can produce a single commit.
 
-> **Not every cross-workspace Job is a Convoy.** "Cross-Workspace Jobs" remains the name of this broader category, covering every shape below. A Convoy is specifically the atomic case landing as one PR; linked-DAG sub-Jobs span workspaces but push separately and are **not** Convoys.
+**Every declared Workspace descends from a single root `armada.yml`.** One worktree cannot span two repositories and one pull request cannot touch two, so the bound is stated as one root rather than one repository — Armada knows roots and Workspaces. Work that has to cross roots is several Jobs, landing in order — see [Landing](landing.md).
 
-| Shape | When it applies |
-| --- | --- |
-| Single-workspace Job | Default — the change is contained to one workspace |
-| Linked-DAG sub-Jobs | Sequenceable dependencies — the "PR train" case |
-| **Convoy** (atomic multi-workspace Job) | No valid intermediate state — must land together in one commit |
+**Where work is sequenceable, it is separate Jobs linked by `dependencies`** — land the API change, then update the consumer against what merged. Each runs fully within its own Workspace's Manifest: own Checks, own approval, own worktree, own pull request. The dependent stays `blocked_by_dependency` until the upstream reaches `completed_success`, then becomes dispatchable but is not auto-dispatched.
 
-**Single-workspace Job.** Unchanged from today's model.
+**Nothing on the record says which of these a Job is.** A Job carries `owner_manifest_id` (exactly one, and the [Job Board](job-board.md)'s scoping key), `gate_manifest_ids[]` (may be empty) and `write_targets[]`. These replaced a single `manifest_ids` field, which answered four questions at once and whose entry count doubled as a shape discriminator. Nothing reads a shape, because there is none to read.
 
-**Linked-DAG sub-Jobs.** The PR train: land the API change first, update the consumer against what merged. Each sub-Job runs fully within its own workspace's Manifest — own Checks, own approval, own worktree, own PR.
+### A Job gated by several Manifests
 
-The dependent Job stays `blocked_by_dependency` until the upstream one reaches `completed_success`, then becomes dispatchable but not auto-dispatched.
+**Counting Manifests says nothing about a Job.** A root change gated by twelve Workspaces is an ordinary single-target Job. What follows applies wherever `gate_manifest_ids[]` holds more than one.
 
-**[Convoy](convoy.md).** Tightly coupled workspaces that must land together — a parser/generator pair, or tightly-coupled services common in real monorepos. One Job with **no children**, carrying several `write_targets` with `atomic` set.
+**Each gating Workspace's Checks run and gate independently against its own Manifest**, and any one of them failing fails the Job's single `workflow_status`, with the standard gate-failure retry flow applying to the whole Job. Workspaces that cannot land independently do not fail independently either. There is **one shared `retry_count` per step**, not one per Workspace.
 
-One Drone, one worktree spanning them; each gating workspace's Checks run independently against its own Manifest; one combined approval; one PR. The shape follows from those two fields, and nothing on the record carries a shape name. Full definition, open items and the naming decision are on [Convoy](convoy.md) — see also the `../contracts/design-system.md` lexicon.
+**Evidence carries a Manifest reference, and each gating Manifest an outcome** of ran-and-passed, ran-and-failed, or did-not-run-and-why. Without the first there is nowhere to record which Workspace's Checks failed; without the second a root Check correctly skipped because the diff touched no root path is indistinguishable from one silently misconfigured.
 
-**You don't hand-draft which shape applies.** A Job's shape follows from `write_targets` and its `atomic` flag — there is no shape value for anything to choose. What the [Job proposer](job-proposer.md) does propose, why scope is not among it, and what the workflow's declaring step does and does not settle are on that document.
+**One human gate over the combined diff.** It falls out of whole-Job failure: if any Workspace's Check failure fails the whole Job on one shared `retry_count`, a per-Workspace gate offers a choice that cannot be acted on, since rejecting one Workspace kills the Job anyway. Grouping the diff per Workspace for review is presentation, not gate scope.
 
-**The one input this file supplies is a root-Manifest-level default-posture setting** — "prefer atomic" against "prefer strict per-workspace boundaries" — giving the Job proposer a per-repo prior. A prototype repo might not care about workspace boundaries at all; a real work monorepo usually does. It is declared in the root `armada.yml`, which is why it is defined here.
+**The [Judge](judge.md) reads the combined diff, once.** It follows the human gate rather than the mechanical tier: `acceptance_criteria` are written by the requester about the change, not about a Workspace, so judging per Workspace would evaluate a criterion about consumers against a types package containing none. The asymmetry is deliberate — Checks are per gating Manifest and attributed as such, while the Judge and the human gate are both combined. Cost accepted: a wide combined diff is where `max_context_size` bites first, and exceeding it escalates to a person rather than failing the step.
 
-**Across repos, the atomic shape does not apply.** A [Convoy](convoy.md) is root-Manifest-scoped — every declared Workspace descends from a single root `armada.yml` — so it cannot span repos by construction, which is exactly what lets one worktree span Workspaces as ordinary git. Single-workspace and linked-DAG sub-Jobs both work across repos.
+**Permissions intersect; knowledge unions.** Allowlist, secrets, MCP and Sub agents all resolve most-restrictive-wins — only ops allowed by *every* gating Manifest, only secrets every one grants, only servers and personas every one defines. Commands are namespaced by Manifest `id` and union, because `api:migrate` and `billing:migrate` are two commands rather than one name with two meanings. Skills and the Agent file union, because they are instructions rather than authority. Ports union, qualified by Manifest id — see Ports. The table lives on [Drone](drone.md).
 
-How the Job proposer relates to [Helm](helm.md)'s planning assist is on [Job proposer](job-proposer.md).
+**Policy splits along safety against resource.** Dispatch freeze, `auto_merge` and `review_gate` are most-restrictive-wins: any frozen Manifest freezes the Job, `never` beats `checks-pass` beats `always`, `human_always` beats `auto_if_judge_passes`. The **budget cap follows `owner_manifest_id`**, not the minimum — taking the lowest lets a small Workspace's cap, sized for its own work, kill a much larger Job for a reason unrelated to that Workspace. Over-caution on a safety setting costs a manual step; over-caution on a resource setting makes the work impossible.
+
+How the [Job proposer](job-proposer.md) relates to [Helm](helm.md)'s planning assist is on [Job proposer](job-proposer.md).
 
 ## Registries
 
@@ -423,7 +421,7 @@ Every other evidence type is checkable by something other than the Drone. A scre
 
 A fourth definition registry, alongside Checks, Commands and Evidence. It defines rather than narrows, which is why it sits at the top level and not under permissions.
 
-**Ports union across a Convoy's declaring Manifests, qualified by Manifest id.** The direction is stated here because the section cannot carry it: the permissions and knowledge sections exist so a setting inherits its Convoy direction from where it sits, and Ports is a third direction on a two-direction boundary.
+**Ports union across a Job's declaring Manifests, qualified by Manifest id.** The direction is stated here because the section cannot carry it: the permissions and knowledge sections exist so a setting inherits its direction from where it sits, and Ports is a third direction on a two-direction boundary — see A Job gated by several Manifests.
 
 Why: a port is knowledge rather than authority. Injecting a port number grants no ability the Drone lacked, since it could already bind any port, and the allowlist is blast-radius reduction rather than a sandbox. Commands made the identical move once namespaced by Manifest id.
 
@@ -507,7 +505,7 @@ The same freeze holds everywhere else — the `WorkflowDef`, `acceptance_criteri
 
 **Nothing is unguarded in the meantime.** Nearest-ancestor owns those paths until the new file exists, so the root's or the parent Workspace's Checks gate the diff that creates it.
 
-**The atomic case needs no special handling.** An extraction landing as a [Convoy](convoy.md) would otherwise have to add a gate mid-Job, and would need an `id` for a Manifest that does not exist yet. Neither arises: the gate list does not move, and the new `id` matters from the next Job onward.
+**A Job writing in several Workspaces needs no special handling here.** An extraction would otherwise have to add a gate mid-Job, and would need an `id` for a Manifest that does not exist yet. Neither arises: the gate list does not move, and the new `id` matters from the next Job onward.
 
 **The adversarial version closes by construction rather than by approval.** A Drone weakening a Check that gates it is a live concern, and a Drone authoring one that would gate it is the same shape. Here it cannot, because nothing it writes joins the list mid-flight.
 
@@ -537,7 +535,7 @@ It needs no status of its own and no third `queued` reason: dispatch is human-ga
 
 Extends or restricts [Kit](kit.md) defaults — Kit holds the default set, a Manifest declares its own, and nothing above the Manifest constrains it. Applies to the allowlist, Skills, and **Sub agents** (project-specific definitions alongside Kit's global ones).
 
-**How they actually merge is not decided.** No merge strategy exists in the Configuration Settings registry for Skills, MCP or Sub agents, and Kit and [Drone](drone.md) disagree on Sub agents outright — Kit describes them as layered on top, Drone's Convoy table puts them under intersection.
+**How they actually merge is not decided.** No merge strategy exists in the Configuration Settings registry for Skills, MCP or Sub agents, and Kit and [Drone](drone.md) disagree on Sub agents outright — Kit describes them as layered on top, Drone's resolution table puts them under intersection.
 
 All three are currently placed by inferring the inheritance axis from the peer axis, which is not a decision (see Open questions).
 
@@ -585,9 +583,7 @@ lower cap is the stricter one, for whatever consults it later.
 
 A Manifest-level toggle to pause/freeze **all** dispatch for this project — during a release freeze, for example. It is independent of, and layered on top of, the existing per-Job approval gate.
 
-**Cross-workspace interaction:** for the **linked-DAG** shape, no special-case logic is needed. If a frozen Manifest's Job is blocking a dependent Job in another (unfrozen) workspace, that dependent Job simply stays `blocked_by_dependency` until the frozen Manifest unfreezes and its Job actually completes — falling out of the existing DAG dependency status_reason, not a new mechanism.
-
-**That reasoning does not cover a [Convoy](convoy.md)**, which has no children and so no dependent Job to block.
+**Cross-workspace interaction needs no special-case logic.** If a frozen Manifest's Job is blocking a dependent Job in another, unfrozen workspace, that dependent stays `blocked_by_dependency` until the frozen Manifest unfreezes and its Job actually completes — falling out of the existing DAG dependency status_reason, not a new mechanism. A Job whose members are Jobs is dependents all the way down, so the same reasoning reaches it.
 
 **Most-restrictive-wins.** Any frozen Manifest in a Job's gate list freezes the whole Job. Why: a freeze means do not touch this project, and the Job would touch it.
 
@@ -605,7 +601,7 @@ A Manifest-level toggle to pause/freeze **all** dispatch for this project — du
 
 Lifting it admits on the next turn, onto the step after the one that passed. Nothing is re-run and nothing is lost. Both the queued row and the gate's row carry `frozen_by`; only a queued one reads `frozen`, because that label is `queued`'s. A person's act is never refused for it, for [Fleet](fleet.md)'s reason: admission is the only thing that starts a Drone.
 
-That answers dispatch. **A freeze landing on a Convoy already running is still unresolved** — freeze is enforced live at every gated checkpoint, not only at dispatch — see [Convoy](convoy.md), Open questions.
+That answers dispatch, and the table above answers a Job already running: freeze is enforced live at every gated checkpoint, not only at dispatch.
 
 ## Auto-merge and review gate
 
@@ -642,4 +638,4 @@ The engineer-facing walk from "add a new repo" to a working Manifest is designed
 
 - **[manifest-root-lockfile-ownership]** Does the root `armada.yml` *own* a shared lockfile it can gate, as opposed to merely being able to gate it? The nearest-ancestor rule settles gating and not exclusivity.
 - **[manifest-check-timeout-raise-or-lower]** May a per-Check timeout field raise the configured bound, or may it only lower it?
-- **[manifest-kit-merge-rules]** What are the Kit→Manifest merge rules for Skills, MCP and Sub agents? No merge strategy exists in the Configuration Settings registry for any of the three, and Kit and Drone disagree on Sub agents outright — Kit describes them as layered on top, Drone's Convoy table puts them under intersection.
+- **[manifest-kit-merge-rules]** What are the Kit→Manifest merge rules for Skills, MCP and Sub agents? No merge strategy exists in the Configuration Settings registry for any of the three, and Kit and Drone disagree on Sub agents outright — Kit describes them as layered on top, Drone's resolution table puts them under intersection.

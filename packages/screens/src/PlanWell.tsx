@@ -5,7 +5,7 @@
 // Split out of `InsideAJob.tsx` for `Redirect.tsx`'s own reason — one file
 // per control that owns a dialog or a field — now that the well owns two.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import {
   Button,
@@ -294,14 +294,31 @@ function TaskRow({
  */
 export function PlanPending({ stepLabel }: { stepLabel: string }) {
   return (
-    <>
+    <PlanRegion>
       <div className="armada-inside__pulse-head">
         <Eyebrow>Plan</Eyebrow>
       </div>
       <p className="armada-inside__absent" role="note">
         No plan yet — {stepLabel} records it.
       </p>
-    </>
+    </PlanRegion>
+  );
+}
+
+/**
+ * The region both forms draw into. **It carries the name**, so what a reader
+ * hears is the same word the strip's Plan tab uses — and so a surface can ask
+ * whether the region is there at all without reading a class or matching a
+ * word the tab also spells.
+ *
+ * Its gap is the run column's own, so it lays the two forms out exactly as the
+ * bare fragments they replaced did.
+ */
+function PlanRegion({ children }: { children: ReactNode }) {
+  return (
+    <section className="armada-inside__plan-region" aria-label="Plan">
+      {children}
+    </section>
   );
 }
 
@@ -329,7 +346,7 @@ export function PlanWell({
   const done = notDropped.filter((task) => task.state === "done").length;
 
   return (
-    <>
+    <PlanRegion>
       <div className="armada-inside__pulse-head">
         <Eyebrow>Plan</Eyebrow>
         {onAddTask === undefined ? null : (
@@ -359,6 +376,6 @@ export function PlanWell({
           ))}
         </ul>
       </div>
-    </>
+    </PlanRegion>
   );
 }

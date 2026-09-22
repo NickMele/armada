@@ -66,6 +66,15 @@ export type TabsWithCountsProps = {
    * not a state, so it bypasses the state tab rather than changing it.
    */
   suspended?: boolean;
+  /**
+   * What this strip is choosing between, as the strip's own accessible name —
+   * `Job detail`, `Queues`. **A screen whose whole navigation is a tab strip
+   * needs one**: without it a reader hears five tabs and never what they
+   * divide, and a surface holding two strips gives them the same nothing. Every
+   * strip drawn before job detail had a heading beside it, which is why this
+   * arrived with the strip that does not.
+   */
+  label?: string;
 };
 
 export function TabsWithCounts({
@@ -74,6 +83,7 @@ export function TabsWithCounts({
   defaultValue,
   onChange,
   suspended = false,
+  label,
 }: TabsWithCountsProps) {
   const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
   const active = value ?? internal;
@@ -110,6 +120,7 @@ export function TabsWithCounts({
       ref={strip}
       className="armada-tabs-counts"
       role="tablist"
+      aria-label={label}
       data-suspended={suspended || undefined}
       onKeyDown={onKey}
     >

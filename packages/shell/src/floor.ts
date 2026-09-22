@@ -1,4 +1,5 @@
-// Whether the window is at `--window-floor`.
+// Whether the window is at `--window-floor`, and whether it is under
+// `--layout-breakpoint`. Two tokens, one reader.
 //
 // **`--window-floor` is not a breakpoint token.** The theme carries a
 // `--breakpoint-*` namespace with two entries in it, `wide` and `narrow`, and a
@@ -24,31 +25,53 @@ import { useEffect, useState } from "react";
 /** The token that says how narrow the window is allowed to get. */
 const FLOOR = "--window-floor";
 
+/** The token the layout collapses at, one band above the floor. */
+const BREAKPOINT = "--layout-breakpoint";
+
 /**
- * The floor as a media query, read off the document.
+ * A token read off the document as a `max-width` query.
  *
  * `null` where the token is not there — a stylesheet that failed to load is a
  * different fault, and answering `false` would quietly claim the window is
  * wide. Nothing then reports a floor, which is the safe half: the sheet keeps
  * its radius and its labelled close.
  */
-function query(): string | null {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(FLOOR).trim();
+function query(token: string): string | null {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
   return value === "" ? null : `(max-width: ${value})`;
 }
 
-export function useAtFloor(): boolean {
-  const [at, setAt] = useState(false);
+/** Whether the window is at or under `token`, kept live as it resizes. */
+function useUnder(token: string): boolean {
+  const [under, setUnder] = useState(false);
 
   useEffect(() => {
-    const asked = query();
+    const asked = query(token);
     if (asked === null) return;
     const media = window.matchMedia(asked);
-    setAt(media.matches);
-    const changed = (event: MediaQueryListEvent) => setAt(event.matches);
+    setUnder(media.matches);
+    const changed = (event: MediaQueryListEvent) => setUnder(event.matches);
     media.addEventListener("change", changed);
     return () => media.removeEventListener("change", changed);
-  }, []);
+  }, [token]);
 
-  return at;
+  return under;
+}
+
+export function useAtFloor(): boolean {
+  return useUnder(FLOOR);
+}
+
+/**
+ * Whether the window is at or below `--layout-breakpoint`, where a screen with
+ * two columns stops having room for both.
+ *
+ * **Read here rather than spelled as a media query**, for `useAtFloor`'s own
+ * reason: a media feature value cannot be a custom property, and the breakpoint
+ * lives in `packages/tokens`. The shell already answered this question for its
+ * own rail; job detail asks it about its inspector, and one reader is what
+ * keeps the two from drifting apart by a pixel.
+ */
+export function useNarrow(): boolean {
+  return useUnder(BREAKPOINT);
 }

@@ -12,7 +12,7 @@ Design fidelity: drawn. Analysis: Complete. UI/UX design: Complete.
 
 **Milestone:** Recovery.
 
-Frames `6a` the control, `6b` the modal, `6c` the bundle, `6d` the Convoy case, `6e` a piloted job and the way back, `6f` `hatch_unbidden`.
+Frames `6a` the control, `6b` the modal, `6c` the bundle, `6d` a Job writing in several Workspaces, `6e` a piloted job and the way back, `6f` `hatch_unbidden`.
 
 The mechanism lives on the Pilot concept page; this document is the flow. Assist stays deferred, so the hand-back leg is undrawn and this is worth revisiting when it ships.
 

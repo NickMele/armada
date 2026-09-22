@@ -26,7 +26,31 @@ Open Bridge → Active Jobs → lightweight heartbeat per active Drone: status, 
 
 ## Job detail
 
-**The screen is one arrangement at every state.** The run is a tree on the left, the selected step fills the panel, and the step's story reads in the order it happened. Why: the screen had an arrangement per state, and below the header no region sat in the same place twice.
+**The screen has a destination per question, and a strip under the Job header chooses between them.** The plan, the record of what a Job produced and what it costs used to compete for one panel, and the panel could only ever hold one of them.
+
+| Destination | What it answers | Its noun |
+| --- | --- | --- |
+| Overview | What needs you, and the run that says why | needs-you |
+| Workflow | What will run, and in what order | machinery |
+| Plan | The work, split into what a Drone takes | work |
+| Record | What the Job produced, and what judged it | produced |
+| Pulse | What it is costing this machine | cost |
+
+**One label per destination, written once.** `packages/screens/src/detail-tabs.tsx` carries it and every surface that names a tab reads it from there. The design boards called one destination `Plan`, `Plan the split` and `Plan 4 groups`; a name written twice is a name that drifts.
+
+**A tab carries a count only where the count is a reading.** Workflow carries the frozen workflow's steps and Plan carries the tasks a Drone may still do — a dropped task is not work outstanding, so it is not counted. The rest carry nothing, because a zero on a tab trains the eye to skip the number.
+
+**A destination named before it is built says so.** Workflow and Plan draw one line naming what will hold them and where that reading is today. A strip that grew tabs as issues landed would change shape under a reader between releases, and the position a tab sits in is what a hand learns.
+
+**The strip stays put and the destination under it scrolls.** A destination is chosen from wherever a reading got to.
+
+### Overview — one arrangement, at every state
+
+**The run is a tree on the left, the selected step fills the inspector, and the step's story reads in the order it happened.** Why: the screen had an arrangement per state, and below the header no region sat in the same place twice. Everything from The run down describes Overview.
+
+**Under `--layout-breakpoint` the inspector is a sheet over the run**, which is the move Helm's dock already makes at the same bound. Below it the window cannot pay for both columns: the run column holds its floor and the inspector would be under `--w-step-panel-min`, which is the word-a-line reading #1428 was written to end. The run is the whole content, pressing a step opens the inspector, `Esc` closes it, and at `--window-floor` it goes flush to both edges. Which regions the inspector holds, and what order they read in, do not change with the width.
+
+**One layer at a time.** A reading that takes the layer — the activity log, the patch, a Check's output, the run sheet — replaces the folded inspector rather than stacking on it, and closing the reading brings the inspector back. Two layers would answer one `Esc` between them.
 
 ### The run
 
@@ -40,11 +64,17 @@ Open Bridge → Active Jobs → lightweight heartbeat per active Drone: status, 
 
 **A path keeps its basename.** The directory truncates and recedes; the filename does not truncate at any width.
 
-### Plan
+### The Plan region, in Overview's rail
 
 **A Plan region sits in the rail, between The run and Pulse.** It is shown
 whichever step is selected, because the plan belongs to the Job rather than
-the step, and the panel stays the selected step's own.
+the step, and the inspector stays the selected step's own. It is not the Plan
+destination, which holds the split a Drone takes its work from; this is the
+reading a person keeps beside the run.
+
+**The region carries its name.** A reader who cannot see it hears `Plan`, the
+same word the strip's Plan tab uses, and a surface can ask whether the region
+is drawn at all without matching a word the tab also spells.
 
 **Before a plan is recorded, the region still draws — quietly.** When the
 workflow declares the step that will record it, and that step has not run
@@ -78,7 +108,7 @@ running Job, and Where things are is read rarely once a Job is open. It
 opens with one click and remembers the choice; `r` still opens the run
 sheet.
 
-### The panel
+### The inspector
 
 **The story is Drone instructions, then Activity log.** Each is a card with its own header. **Produced is the Job's own panel beside the run**, not a chapter inside the step: one card carrying both the work and what the work changed was doing two jobs, and the second shortcut in its header was the tell. Working keeps "Open the log"; Produced carries "Open the diff". #1187.
 

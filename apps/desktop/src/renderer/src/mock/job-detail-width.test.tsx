@@ -30,7 +30,12 @@ afterEach(async () => {
 
 /** The floors, as `spacing.css` declares them. Read, never retyped. */
 function floor(
-  token: "--w-run-column-min" | "--w-step-panel-min" | "--window-fold-left" | "--sidebar-rail",
+  token:
+    | "--w-run-column-min"
+    | "--w-step-panel-min"
+    | "--window-fold-left"
+    | "--sidebar-rail"
+    | "--w-sheet",
 ): number {
   const value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(token));
   if (!Number.isFinite(value)) throw new Error(`${token} is not declared`);
@@ -72,11 +77,24 @@ function brokenWord(): { text: string; words: number; lines: number } | null {
   return worst;
 }
 
-/** App on the Job the owner had open, at `width`, with the layout settled. */
+/**
+ * App on the Job the owner had open, at `width`, with the layout settled.
+ *
+ * **It waits on the run and not on the inspector.** Under
+ * `--layout-breakpoint` the inspector is a sheet that opens on a press, so a
+ * wait for the panel would hang at every width the fold covers — which is
+ * three of the widths this file measures.
+ */
 async function atWidth(width: number): Promise<void> {
   await page.viewport(width, 860);
   mount(onJob(workingAPlan()));
   await expect.element(page.getByText("THE RUN").first()).toBeVisible();
+  await expect.poll(() => document.querySelector(".armada-inside__run") !== null).toBe(true);
+}
+
+/** Press a step in the run, which is what opens the folded inspector. */
+async function openInspector(): Promise<void> {
+  await page.getByRole("button", { name: "Fix", exact: true }).first().click();
   await expect.poll(() => document.querySelector(".armada-inside__panel") !== null).toBe(true);
 }
 
@@ -108,13 +126,49 @@ test("at 1512 the run column is still at its drawn width", async () => {
   expect(brokenWord()).toBe(null);
 });
 
-// Below `--layout-breakpoint` the dock folds away and the panel was never the
-// problem — but the window floor was, with no dock involved at all: 768px drew
-// a 196px panel before this. Both ends of the band, and the floor itself.
-test.each([1100, 1000, 900, 768])("at %i the step panel is at or above its floor", async (width) => {
+// ---- below `--layout-breakpoint`, where the inspector folds ---------------
+//
+// **This is where the two-floor claim moved to, not where it was deleted.**
+// Until #1534 the panel was a column at every width and these three widths
+// asserted it held `--w-step-panel-min`; 768px drew a 196px panel before #1428
+// and the floor is what fixed that. Below the bound there is no arithmetic that
+// pays for two columns at once, so the inspector is a sheet over the run — the
+// move Helm's dock already makes at the same bound — and the claim is the same
+// one it always was: the reading is wide enough that no word breaks in it.
+test.each([1100, 1000, 900, 768])("at %i the run is the whole content and no inspector column is drawn", async (width) => {
   await atWidth(width);
-  expect(boxOf(".armada-inside__panel").width).toBeGreaterThanOrEqual(floor("--w-step-panel-min"));
+  expect(document.querySelector(".armada-inside__panel")).toBe(null);
+  // One track: the run is as wide as the arrangement, give or take rounding.
+  expect(boxOf(".armada-inside__run").width).toBeCloseTo(boxOf(".armada-inside").width, 0);
+});
+
+// The sheet is the reading, so it is the sheet the broken-word walker reads.
+// At the floor it goes flush to both edges, which is `Sheet`'s own rule and is
+// why the expected width is the ground there rather than `--w-sheet`.
+test.each([1100, 1000, 900])("at %i pressing a step opens the inspector at --w-sheet, unbroken", async (width) => {
+  await atWidth(width);
+  await openInspector();
+  expect(boxOf(".armada-inside__panel").width).toBeGreaterThanOrEqual(floor("--w-sheet") - 1);
   expect(brokenWord()).toBe(null);
+});
+
+test("at 768 the folded inspector is flush to both edges and nothing breaks", async () => {
+  await atWidth(768);
+  await openInspector();
+  const sheet = boxOf(".armada-sheet");
+  expect(sheet.width).toBeGreaterThan(floor("--w-sheet"));
+  expect(brokenWord()).toBe(null);
+});
+
+// Esc closes it, and the run is still where the reader left it: a layer, never
+// a route. `Sheet` catches the press in the capture phase so the same key does
+// not also leave the Job.
+test("Esc closes the folded inspector and leaves the Job open", async () => {
+  await atWidth(1000);
+  await openInspector();
+  await userEvent.keyboard("{Escape}");
+  await expect.poll(() => document.querySelector(".armada-inside__panel")).toBe(null);
+  await expect.element(page.getByText("THE RUN").first()).toBeVisible();
 });
 
 // Inside the band the window cannot pay for both floors, and the rule that
