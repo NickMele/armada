@@ -32,7 +32,7 @@ import {
 } from "./tab-plan-read";
 import { PlanAskDialog, rewriteInstruction, type PlanAskInFlight } from "./tab-plan-ask";
 import { WavePlan } from "./wave-plan";
-import type { WaveRegionProps } from "./tab-wave";
+import { waveReadingOf, type WaveRegionProps } from "./tab-wave";
 import type { HeldAct } from "./Acts";
 import type { JobDraft } from "./draft/held";
 import type { CriterionView } from "./draft/criterion";
@@ -300,6 +300,10 @@ export function PlanTab({
   const [asking, setAsking] = useState<PlanAskInFlight | null>(null);
 
   const step = planStepOf(whole);
+  // Whether the split above is this Job's plan. A wave's plan is the Jobs it
+  // dispatched, not a list of tasks — `plan.md` records the one and never the
+  // other.
+  const drawsAWave = waveReadingOf(whole, draft, wave.board) !== undefined;
   // **Only while the step that recorded the plan is waiting on a person, and
   // only while the window is live.** Past that gate the plan is a record, and
   // a stale window cannot tell whether the ask would still land.
@@ -338,11 +342,16 @@ export function PlanTab({
         onDropFromWave={(jobId) => onActHeld("kill_job", jobId)}
       />
       {board === undefined ? (
-        <p className="armada-inside__absent" role="note">
-          {step === undefined
-            ? "This workflow records no plan, so there is no split to read."
-            : `No plan yet — ${step.label} records it.`}
-        </p>
+        /* **A Job whose plan is a wave has recorded one**, and the split above
+           is it — so the task board's own absence is not "no plan yet", which
+           read as a contradiction under a drawn wave. #1544. */
+        drawsAWave ? null : (
+          <p className="armada-inside__absent" role="note">
+            {step === undefined
+              ? "This workflow records no plan, so there is no split to read."
+              : `No plan yet — ${step.label} records it.`}
+          </p>
+        )
       ) : (
         <PlanBoard
           {...board}

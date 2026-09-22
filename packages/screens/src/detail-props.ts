@@ -58,23 +58,16 @@ import type { OpenStudioFrom } from "./work";
 export type JobDetailProps = {
   job: JobSummary;
   /**
-   * Every Job Bridge is holding, which is where the members of this one come
-   * from: a row whose `dispatched_by` names it. **Absent is a caller with no
-   * Board** — a story or a harness — and draws no members rather than none.
-   * `#1543`.
+   * Every Job Bridge is holding, which is where the members of this one and
+   * the wave it dispatched both come from: a row whose `dispatched_by` names
+   * it. **Absent is a caller with no Board** — a story or a harness — and
+   * draws neither rather than drawing them empty. `#1543`, `#1544`.
    */
   board?: readonly JobSummary[];
   /** `GET /jobs/:job_id` for this Job, as main published it. */
   watched: Watched;
   workflows: readonly WorkflowSummary[];
   manifests: readonly ManifestSummary[];
-  /**
-   * The Board's own rows. **What a Job dispatched is read from them** — a
-   * member is a row whose `dispatched_by` names this Job — and nothing else
-   * on this screen reads them, so a caller with none passes none and a Job
-   * that dispatched a wave simply draws no wave.
-   */
-  board?: readonly JobSummary[];
   /**
    * Every question waiting on a person, as main gathers them across every
    * repository. The wave answers its own Jobs' questions where they are read,
