@@ -150,37 +150,157 @@ describe("dispatch", () => {
 });
 
 describe("classifying", () => {
-  it.todo(
+  test(
     "arc/proposing-reading: the form says the proposer is thinking, how long it has been out " +
       "and how long it may take — and offers to stop it",
+    async () => {
+      mount("arc/proposing-reading");
+
+      const wait = page.getByRole("status").filter({ hasText: "thinking" }).first();
+      await expect.element(wait).toBeVisible();
+      // What it is doing, how long it has been doing it, and how long it may
+      // take. The elapsed figure is against the window's own clock, so it is
+      // read as a shape rather than as a string.
+      await expect.element(wait).toHaveTextContent(/\d+[ms]/);
+      await expect.element(wait).toHaveTextContent("left");
+      await expect.element(wait).toHaveTextContent("sonnet");
+
+      await expect
+        .element(page.getByRole("button", { name: "Stop the proposer" }))
+        .toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/proposing-review: the workflow the proposer chose is named with its four steps, and " +
       "every one of them has a gate row a person can still change",
+    async () => {
+      mount("arc/proposing-review");
+
+      await expect.element(page.getByText("feature — 4 steps")).toBeVisible();
+      const gates = page.getByRole("region", { name: "What each step is gated by" });
+      await expect.element(gates).toBeVisible();
+
+      // A Judge on the plan step and no Check, which is what `feature.json`
+      // declares — and the box is a person's to move.
+      const judge = page.getByRole("checkbox", { name: "Judge on Plan the change" });
+      await expect.element(judge).toBeChecked();
+      const checks = page.getByRole("checkbox", { name: "Checks on Plan the change" });
+      await expect.element(checks).not.toBeChecked();
+      await checks.click();
+      await expect.element(checks).toBeChecked();
+      // Moving a box moves what Fleet would be told, which is the whole of why
+      // the wire value is on screen beside it.
+      await expect
+        .element(page.getByRole("listitem", { name: "Plan the change" }))
+        .toHaveTextContent("auto_if_judge_passes");
+    },
   );
-  it.todo(
+
+  test(
     "arc/proposing-review: the handoff step reads that the repository decides, which is not " +
       "one of the three tick boxes beside it",
+    async () => {
+      mount("arc/proposing-review");
+
+      const handoff = page.getByRole("listitem", { name: "Review the change" });
+      await expect.element(handoff).toHaveTextContent("The repository decides — review_gate");
+      await expect.element(handoff).toHaveTextContent("manifest_rule:review_gate");
+      // The three boxes are drawn on every step that answers for itself and on
+      // no step that defers, so the fourth state is a state and not a tick.
+      expect(handoff.getByRole("checkbox").all()).toHaveLength(0);
+
+      await page.getByRole("button", { name: "Decide it for this Job" }).click();
+      await expect
+        .element(page.getByRole("checkbox", { name: "You on Review the change" }))
+        .toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/proposing-review: one permanent line says Fleet checks the work stayed inside the " +
       "plan, and no tick turns it off",
+    async () => {
+      mount("arc/proposing-review");
+
+      const said = page.getByText(/Fleet checks that the work stayed inside/);
+      await expect.element(said).toBeVisible();
+
+      // Every box off on a step, and the line is still there — which is the
+      // claim: it is not a summary of what is ticked.
+      const judge = page.getByRole("checkbox", { name: "Judge on Plan the change" });
+      await judge.click();
+      await expect.element(judge).not.toBeChecked();
+      await expect
+        .element(page.getByRole("listitem", { name: "Plan the change" }))
+        .toHaveTextContent("Nothing stops it.");
+      await expect.element(said).toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/proposing-review: each of the three tiers names the model it resolves to, and the " +
       "planner's tier is what picks it",
+    async () => {
+      mount("arc/proposing-review");
+
+      await expect.element(page.getByRole("combobox", { name: "Difficult" })).toHaveValue("opus");
+      await expect.element(page.getByRole("combobox", { name: "Medium" })).toHaveValue("sonnet");
+      await expect.element(page.getByRole("combobox", { name: "Easy" })).toHaveValue("haiku");
+      await expect.element(page.getByText(/The planner marks each task/)).toBeVisible();
+
+      // This Job's share of the machine, beside what the machine allows.
+      await expect.element(page.getByRole("spinbutton", { name: "Drones at once" })).toHaveValue(2);
+      await expect.element(page.getByText("This machine runs 4 at once")).toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/approved-frozen: the Job says when it was approved, and that what it is held to was " +
       "frozen at that moment",
+    async () => {
+      mount("arc/approved-frozen");
+
+      // The instant is written out in the reader's own locale, so what is
+      // asserted is that it is there and dated — never its spelling.
+      const said = page.getByText(/Frozen when you approved it/);
+      await expect.element(said).toHaveTextContent(/Approved .*2026.*\./);
+      // Frozen is drawn as values rather than as fields nobody may move.
+      expect(page.getByRole("checkbox").all()).toHaveLength(0);
+      expect(page.getByRole("combobox", { name: "Difficult" }).query()).toBeNull();
+      await expect.element(page.getByText("Difficult")).toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/approved-frozen: the first criterion says the issue it came from has been edited " +
       "since, and the Job still shows the words it froze",
+    async () => {
+      mount("arc/approved-frozen");
+
+      const held = page.getByRole("region", { name: "Done when" });
+      await expect
+        .element(held)
+        .toHaveTextContent("The rail's Drones stat reads one running beside the machine's most");
+      await expect.element(held).toHaveTextContent("from armada/1162");
+      await expect.element(held).toHaveTextContent(/The issue has been edited since/);
+      await expect.element(held).toHaveTextContent("The Job is held to the words above.");
+    },
   );
-  it.todo(
+
+  test(
     "arc/approved-frozen: the handoff gate reads that this Job overrode the repository's rule " +
       "for itself",
+    async () => {
+      mount("arc/approved-frozen");
+
+      const handoff = page.getByRole("listitem", { name: "Review the change" });
+      await expect
+        .element(handoff)
+        .toHaveTextContent("This Job decides this step for itself, in place of the repository's review_gate.");
+      await expect.element(handoff).toHaveTextContent("human_always");
+      await expect.element(handoff).toHaveTextContent("You");
+    },
   );
 });
 

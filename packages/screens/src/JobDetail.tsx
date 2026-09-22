@@ -33,6 +33,8 @@ import { NO_SHEET, sheetMoved } from "./Sheets";
 import type { JobDetail as JobWhole } from "@armada/protocol";
 import { AwaitedTab } from "./tab-awaited";
 import { OverviewTab } from "./tab-overview";
+import { ProposalTab } from "./tab-proposal";
+import { proposalEditsOf } from "./tab-proposal-read";
 import { PlanTab } from "./tab-plan";
 import { PulseTab } from "./tab-pulse";
 import { RecordTab } from "./tab-record";
@@ -85,6 +87,12 @@ function OneJob(props: JobDetailProps) {
   // Whether the turn-cap dialog is up. Its own state beside the cost cap's:
   // `budget_hold` offers one control or the other, never both.
   const [raisingTurns, setRaisingTurns] = useState(false);
+
+  // What a person has moved on the proposal, before anything is approved.
+  // **Held by the screen rather than by the tab**, so reading the Record and
+  // coming back does not throw away a retyped title — nothing here has been
+  // sent, so this window is the only place it exists.
+  const [edits, setEdits] = useState(() => proposalEditsOf(props.draft));
 
   // Which sheet is up and what it is reading — `Sheets.tsx`'s `SheetReading`.
   // **Held here and not on the tab**, because the header opens one: Settings
@@ -159,7 +167,18 @@ function OneJob(props: JobDetailProps) {
       {replacedCallout(whole?.replaced_by, props.onOpenJob)}
       <JobTabs value={tab} onChange={setTab} counts={countsOf(whole)} />
 
-      {tab === "overview" ? (
+      {tab === "overview" && edits !== undefined ? (
+        // A Job at or just past its approval gate: the proposal is what
+        // Overview has to draw, because no step has run.
+        <ProposalTab
+          job={job}
+          whole={whole}
+          edits={edits}
+          onEdits={setEdits}
+          models={props.models?.models ?? []}
+          stale={props.stale}
+        />
+      ) : tab === "overview" ? (
         <OverviewTab
           {...props}
           job={job}
