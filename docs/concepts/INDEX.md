@@ -15,7 +15,6 @@ assuming it is restated here.
 | Concept | What it is |
 |---|---|
 | [bridge.md](bridge.md) | The Electron command-center shell — Armada's only engineer-facing surface |
-| [convoy.md](convoy.md) | The atomic multi-workspace Job shape — one Job, one worktree, one PR |
 | [doctor.md](doctor.md) | The health-check surface — a passive per-module grid and the first-run hard gate |
 | [drone.md](drone.md) | The execution runtime for a single Job — a confined Claude Code process with its own worktree |
 | [fleet.md](fleet.md) | The Rust daemon — the only actor that writes a state transition on a Job or a Drone |
@@ -25,6 +24,7 @@ assuming it is restated here.
 | [job.md](job.md) | The unit of work Fleet dispatches to a Drone — data, not an actor |
 | [judge.md](judge.md) | The semantic, veto-only tier of evidence verification |
 | [kit.md](kit.md) | The tool set you bring — Skills, MCP, sub agents, Commands, the allowlist |
+| [landing.md](landing.md) | How a Job's work reaches its target — one pull request, or members landing in order |
 | [log-envelope.md](log-envelope.md) | The field contract every log line carries across Fleet, Bridge and Drone |
 | [machine.md](machine.md) | How this installation behaves — resources, timing, budget, notification routing |
 | [manifest.md](manifest.md) | Per-project config, backed by `armada.yml` |
