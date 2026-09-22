@@ -39,6 +39,10 @@ import {
   runningAtGate,
   gateChecksStreaming,
 } from "@armada/screens/src/fixtures/build/index";
+import { ARC_MOMENTS } from "@armada/screens/src/fixtures/build/arc";
+import type { ArcMoment } from "@armada/screens/src/fixtures/build/arc";
+import { KIND_FIXTURES } from "@armada/screens/src/fixtures/build/kinds";
+import { epicWave, membersMerged, membersStacked } from "@armada/screens/src/fixtures/build/waves";
 import { repository, workflow } from "@armada/screens/src/fixtures/build/base";
 import { recorded, RECORDED_SLUGS } from "@armada/screens/src/fixtures/recorded";
 import realBoard from "@armada/screens/src/fixtures/boards/real-board.json";
@@ -272,6 +276,34 @@ function offAStudio(fixture: JobFixture): JobFixture {
   };
 }
 
+/** `dispatchTyping` as the picker spells it: `arc/dispatch-typing`. */
+function kebab(name: string): string {
+  return name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+}
+
+/**
+ * One moment of the arc, or of a landing order, as a scenario.
+ *
+ * **The draft half is carried on the scenario and not on a read.** Nothing
+ * Fleet serves answers it, so a board in this milestone takes it as props —
+ * `Scenario.draft` says why, and where it goes once a shape is promoted.
+ */
+function moment(prefix: string, one: ArcMoment): Scenario {
+  const built = holding(`${prefix}/${kebab(one.name)}`, one.says, one.fixtures, {
+    opens: one.opens,
+  });
+  return {
+    ...built,
+    draft: one.draft,
+    // A proposer call still out is `BridgeState.proposing`, which is on the
+    // wire — so it is published as state rather than carried as a draft.
+    state:
+      one.proposing === undefined
+        ? built.state
+        : { ...built.state, proposing: one.proposing },
+  };
+}
+
 /**
  * A second folder added by path and never set up, so that `NOTHING_SET_UP`
  * holds more than one — the surfaces that ask for a repository ask because
@@ -381,6 +413,24 @@ export const SCENARIOS: readonly Scenario[] = [
   manifesting({ alwaysAllowed: [GH_ISSUE_VIEW], drift: DRIFT_GONE, kitServers: KIT_SERVERS, runs: RUNS }),
   studying().scenario,
   talking(),
+  // The arc: one Feature Job from an empty prompt to a merge, one scenario per
+  // moment. **The roster is walked**, so a moment added to `ARC_MOMENTS` is a
+  // scenario here without a second edit.
+  ...ARC_MOMENTS.map((one) => moment("arc", one)),
+  // Several Jobs landing in order, and a wave under one plan. No kind name:
+  // the scenario says what it draws (#1530, 22 Sep).
+  moment("members", membersStacked()),
+  moment("members", membersMerged()),
+  moment("epic", epicWave()),
+  // One Job per workflow kind, on one Board and then one at a time.
+  holding("kinds", "One Job per workflow kind, each on the steps its own file declares", [
+    ...KIND_FIXTURES,
+  ]),
+  ...KIND_FIXTURES.map((fixture) =>
+    holding(`kind/${fixture.job.workflow_id.replace(/_/g, "-")}`, fixture.name, [fixture], {
+      opens: fixture.job.id,
+    }),
+  ),
   ...BUILT.map(([name, fixture]) => holding(`job/${name}`, fixture.name, [fixture], { opens: fixture.job.id })),
   ...RECORDED.map(([slug, fixture]) =>
     holding(`recorded/${slug}`, fixture.name, [fixture], { opens: fixture.job.id }),
