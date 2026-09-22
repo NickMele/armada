@@ -2,11 +2,7 @@ import {
   BaseEdge,
   EdgeLabelRenderer,
   Handle,
-  Panel,
-  Position,
-  ReactFlow,
   MarkerType,
-  ReactFlowProvider,
   applyNodeChanges,
   getBezierPath,
   useReactFlow,
@@ -18,18 +14,16 @@ import {
 } from "@xyflow/react";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 
-import { Button } from "../../primitives/Button/Button";
+import { GRAPH_CANVAS_SIDES, GraphCanvas, facingSides } from "../GraphCanvas/GraphCanvas";
 import { STUDIO_NODE_KIND, StudioNode, studioNodeLabel, type StudioNodeOf } from "../StudioNode/StudioNode";
 
 /**
  * Studio whiteboard — a Studio's nodes and edges, placed freely: drag, pan,
- * zoom, fit and select. React Flow draws it; `docs/contracts/design-system.md`,
- * Hard rules, names it the one sanctioned graph surface.
+ * zoom, fit and select.
  *
- * **Nothing inside is React Flow's own.** Every node is a `StudioNode`, every
- * edge is drawn here, and the controls are `Button`. React Flow's stylesheet is
- * its structural `base.css`, and every value it would paint is set to a token in
- * `StudioWhiteboard.css`.
+ * **`GraphCanvas` is the graph half**, shared with a Job's workflow canvas
+ * (`#1539`). What is left here is free placement and what a Studio draws: every
+ * node is a `StudioNode` and every edge is drawn below.
  *
  * **No edge carries colour.** Produced is a bare line; Same as, Blocks and
  * Answers carry their label; a proposed relation is dashed until a person
@@ -97,46 +91,23 @@ type BoardNode = Node<BoardNodeData, "studio">;
 type BoardEdgeData = { label: string | null; proposed: boolean };
 type BoardEdge = Edge<BoardEdgeData, "studio">;
 
-const SIDES = [Position.Left, Position.Right, Position.Top, Position.Bottom] as const;
-
 /**
  * The card, with an anchor for each end of an edge on every side. Which side
- * an edge takes is chosen from where the two nodes sit — see `sides`. Nothing
- * connects by hand, so none is drawn.
+ * an edge takes is chosen from where the two nodes sit — `facingSides`.
+ * Nothing connects by hand, so none is drawn.
  */
 function BoardNodeView({ data, selected }: NodeProps<BoardNode>) {
   return (
     <>
-      {SIDES.map((side) => (
+      {GRAPH_CANVAS_SIDES.map((side) => (
         <Handle key={`t-${side}`} id={`t-${side}`} type="target" position={side} isConnectable={false} />
       ))}
       <StudioNode {...data} selected={selected} />
-      {SIDES.map((side) => (
+      {GRAPH_CANVAS_SIDES.map((side) => (
         <Handle key={`s-${side}`} id={`s-${side}`} type="source" position={side} isConnectable={false} />
       ))}
     </>
   );
-}
-
-/**
- * The facing sides of two nodes: across when they are further apart
- * horizontally than vertically, otherwise up or down. A fixed right-to-left
- * pair looped every edge whose target sat left of or above its source.
- */
-function sides(source: BoardNode | undefined, target: BoardNode | undefined) {
-  const centre = (node: BoardNode | undefined) => ({
-    x: (node?.position.x ?? 0) + (node?.measured?.width ?? 0) / 2,
-    y: (node?.position.y ?? 0) + (node?.measured?.height ?? 0) / 2,
-  });
-  const from = centre(source);
-  const to = centre(target);
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const [out, into] =
-    Math.abs(dx) >= Math.abs(dy)
-      ? dx >= 0 ? [Position.Right, Position.Left] : [Position.Left, Position.Right]
-      : dy >= 0 ? [Position.Bottom, Position.Top] : [Position.Top, Position.Bottom];
-  return { sourceHandle: `s-${out}`, targetHandle: `t-${into}` };
 }
 
 function BoardEdgeView(props: EdgeProps<BoardEdge>) {
@@ -177,14 +148,6 @@ const JOINS_THE_SELECTION = ["Meta", "Control"];
 
 const NODE_TYPES = { studio: BoardNodeView };
 const EDGE_TYPES = { studio: BoardEdgeView };
-
-/** React Flow's default descriptions offer delete, which this surface never does. */
-const ARIA = {
-  "node.a11yDescription.default": "Press Enter or Space to select a node, then the arrow keys to move it.",
-  "node.a11yDescription.keyboardDisabled": "Press Enter or Space to select a node.",
-  "edge.a11yDescription.default": "Press Enter or Space to select an edge.",
-  "node.a11yDescription.ariaLiveMessage": ({ direction }: { direction: string }) => `Moved the node ${direction}.`,
-};
 
 function toBoardNode({ id, position, node }: StudioWhiteboardNode): BoardNode {
   return { id, position, type: "studio", data: node, ariaLabel: studioNodeLabel(node) };
@@ -235,23 +198,6 @@ export function useStudioPlacement(): () => { x: number; y: number } {
   }, [flow]);
 }
 
-function Controls() {
-  const flow = useReactFlow();
-  return (
-    <Panel position="bottom-right" className="armada-studio-whiteboard__controls">
-      <Button size="sm" onClick={() => void flow.zoomIn()}>
-        Zoom in
-      </Button>
-      <Button size="sm" onClick={() => void flow.zoomOut()}>
-        Zoom out
-      </Button>
-      <Button size="sm" onClick={() => void flow.fitView()}>
-        Fit
-      </Button>
-    </Panel>
-  );
-}
-
 function Board({
   nodes: given,
   edges: givenEdges,
@@ -295,7 +241,7 @@ function Board({
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      ...sides(placed.get(edge.source), placed.get(edge.target)),
+      ...facingSides(placed.get(edge.source), placed.get(edge.target)),
       type: "studio",
       ariaLabel: edgeLabel(edge, titleOf),
       markerEnd: { type: MarkerType.ArrowClosed },
@@ -306,47 +252,23 @@ function Board({
     }));
   }, [given, givenEdges, nodes]);
 
-  const onPicked = useCallback(
-    ({ nodes: picked }: { nodes: BoardNode[] }) => onSelectionChange?.(picked.map((node) => node.id)),
-    [onSelectionChange],
-  );
-
   return (
-    <ReactFlow<BoardNode, BoardEdge>
-      className="armada-studio-whiteboard"
-      colorMode="dark"
+    <GraphCanvas<BoardNode, BoardEdge>
+      surface="armada-studio-whiteboard"
+      label="Studio whiteboard"
       nodes={nodes}
       edges={edges}
       nodeTypes={NODE_TYPES}
       edgeTypes={EDGE_TYPES}
       onNodesChange={onNodesChange}
-      onSelectionChange={onPicked}
-      nodesConnectable={false}
+      onSelectionChange={onSelectionChange}
       nodesDraggable={!readOnly}
       multiSelectionKeyCode={JOINS_THE_SELECTION}
-      edgesReconnectable={false}
-      deleteKeyCode={null}
-      ariaLabelConfig={ARIA}
-      fitView
-      // The attribution is a link out of the app, and no surface may navigate.
-      proOptions={{ hideAttribution: true }}
-    >
-      {children === undefined ? null : (
-        <Panel position="top-right" className="armada-studio-whiteboard__aside">
-          {children}
-        </Panel>
-      )}
-      <Controls />
-    </ReactFlow>
+      aside={children}
+    />
   );
 }
 
 export function StudioWhiteboard(props: StudioWhiteboardProps) {
-  return (
-    <div className="armada-studio-whiteboard-frame">
-      <ReactFlowProvider>
-        <Board {...props} />
-      </ReactFlowProvider>
-    </div>
-  );
+  return <Board {...props} />;
 }

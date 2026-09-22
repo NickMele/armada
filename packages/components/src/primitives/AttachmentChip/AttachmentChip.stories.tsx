@@ -31,3 +31,13 @@ export const LongFilename: Story = {
 export const ReadOnly: Story = {
   args: { filename: "evidence.log" },
 };
+
+/** An address attached beside the request, rather than a file staged from disk. */
+export const ALink: Story = {
+  args: { filename: "armada/1162", kind: "link", onRemove: () => {} },
+};
+
+/** One node of a Studio, carried into the request it was dispatched from. */
+export const AStudioNode: Story = {
+  args: { filename: "The Drones stat says nothing", kind: "node", onRemove: () => {} },
+};

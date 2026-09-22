@@ -87,18 +87,61 @@ describe("every arc moment loads", () => {
 });
 
 describe("dispatch", () => {
-  it.todo(
+  test(
     "arc/dispatch-typing: the prompt a person is typing stands beside the two Jobs already " +
       "writing where this work would, each named with the path they share — and nothing is " +
       "greyed out, because an overlap is a fact and not a refusal",
+    async () => {
+      mount("arc/dispatch-typing");
+
+      const field = page.getByRole("textbox", { name: "Request" });
+      await expect.element(field).toHaveValue(expect.stringContaining("Drones 1 of 2"));
+
+      const beside = page.getByText("What else is running").first();
+      await expect.element(beside).toBeVisible();
+      await expect
+        .element(page.getByText("Fold the capacity read into one query"))
+        .toBeVisible();
+      // The chip's title is the whole path, which is what a person reads on
+      // hover and what survives the directory's own clip.
+      await expect.element(page.getByTitle("crates/api/src/")).toBeVisible();
+      await expect.element(page.getByText("Give the rail its own scroll")).toBeVisible();
+      await expect.element(page.getByTitle("packages/screens/src/overview.ts")).toBeVisible();
+
+      // The claim the panel exists for: it says what is running and stops
+      // nothing. A greyed Dispatch would make the reading a refusal.
+      await expect
+        .element(page.getByRole("button", { name: "Dispatch", disabled: true }))
+        .not.toBeInTheDocument();
+    },
   );
-  it.todo(
+
+  test(
     "arc/dispatch-typing: the form says how many Drones this Job may run at once, and what " +
       "the machine allows across every Job, as two different numbers",
+    async () => {
+      mount("arc/dispatch-typing");
+      // The block's own head, which says how many are set — the rail carries a
+      // Settings of its own.
+      await page.getByRole("button", { name: /Settings \d set/ }).click();
+
+      await expect.element(page.getByRole("spinbutton", { name: "Drones at once" })).toHaveValue(2);
+      await expect.element(page.getByText("This machine runs 4 at once")).toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/dispatch-typing: where the work starts and where it lands are two fields, and both " +
       "read main without either one being called the other's default",
+    async () => {
+      mount("arc/dispatch-typing");
+
+      await expect.element(page.getByRole("textbox", { name: "From" })).toHaveValue("main");
+      await expect.element(page.getByRole("textbox", { name: "Lands in" })).toHaveValue("main");
+      // Neither field says what the other does. A parenthetical default is how
+      // the pair collapses back into the one field it used to be.
+      await expect.element(page.getByText("default", { exact: false })).not.toBeInTheDocument();
+    },
   );
   it.todo(
     "arc/dispatch-sketch: the picture a person drew is on screen beside the prompt, with what " +
@@ -351,34 +394,151 @@ describe("implement", () => {
 });
 
 describe("the Record", () => {
-  it.todo(
+  test(
     "arc/planned: the Record's who column says Judge on the row where the plan was judged, " +
       "and Fleet on the row where the plan was recorded",
+    async () => {
+      await record("arc/planned");
+      const rows = ledger();
+
+      expect(whoSaid(rows, /Pressing the stat lists the Drone's Job and step/)).toBe("Judge");
+      expect(whoSaid(rows, /^the plan was recorded$/)).toBe("Fleet");
+    },
   );
-  it.todo(
+
+  test(
     "arc/executing-sequential: a Check's run is its own row, with Check in the who column — " +
       "not Fleet, and not the Drone that produced the work",
+    async () => {
+      await record("arc/executing-sequential");
+      const rows = ledger();
+
+      expect(whoSaid(rows, /^typecheck$/)).toBe("Check");
+      expect(whoSaid(rows, /^screens_test$/)).toBe("Check");
+      // The same Job's Drone and Fleet are both on screen, so Check is a
+      // distinction the table is drawing rather than the only word it has.
+      expect(rows.map((row) => row["Who ran it"])).toContain("Drone");
+      expect(rows.map((row) => row["Who ran it"])).toContain("Fleet");
+    },
   );
-  it.todo(
-    "arc/executing-sequential: each row says where in the Job it happened, down to the group " +
-      "and the task where it has one",
+
+  // **The group is named where it holds more than one task.** Today's wire has
+  // no groups, so `taskGroupsOf` derives one per task — and `Implement · group
+  // 1 · T1` would then put the same fact on the row twice. The coordinate
+  // still carries the group; `draft/ledger.test.ts` is where that is pinned.
+  test(
+    "arc/executing-sequential: each row says where in the Job it happened, down to the task " +
+      "where it has one",
+    async () => {
+      await record("arc/executing-sequential");
+      const rows = ledger();
+
+      expect(rows.every((row) => row["Where"] !== "")).toBe(true);
+      expect(rows.map((row) => row["Where"])).toContain("Implement · T1");
+      expect(rows.map((row) => row["Where"])).toContain("Plan the change");
+    },
   );
-  it.todo(
-    "arc/approved-frozen: the approval row names no step at all, because the Job's own " +
-      "machine moving is a fact about the Job",
+
+  // **Reworded from "the approval row".** The instant a Job was approved is a
+  // status move, and status moves live in `GET /jobs/:job_id/events`, which no
+  // arc fixture answers — so the row carrying this claim is the Job's creation.
+  // The claim itself is unchanged: a fact about the Job names no step.
+  test(
+    "arc/approved-frozen: the row for the Job's own machine moving names no step at all, " +
+      "because that is a fact about the Job",
+    async () => {
+      await record("arc/approved-frozen");
+      const rows = ledger();
+
+      expect(rows.map((row) => row["Where"])).toContain("The Job itself");
+      expect(whoSaid(rows, /^this Job was created$/)).toBe("You");
+    },
   );
 });
 
+/** App on an arc moment, with the Record open. */
+async function record(name: string): Promise<void> {
+  mount(name);
+  await page.getByRole("tab", { name: /^Record/ }).click();
+  await expect.poll(() => ledger().length).toBeGreaterThan(0);
+}
+
+/**
+ * The Record's rows, each keyed by the column its cells sit under.
+ *
+ * Read through the table's own header rather than by position, so a column
+ * added or reordered moves the keys with it instead of silently shifting every
+ * assertion one cell along.
+ */
+function ledger(): Record<string, string>[] {
+  const table = document.querySelector("table");
+  if (table === null) return [];
+  const columns = [...table.querySelectorAll("thead th")].map((one) => one.textContent?.trim() ?? "");
+  return [...table.querySelectorAll("tbody tr")].map((row) =>
+    Object.fromEntries(
+      [...row.querySelectorAll("td")].map((cell, at) => [
+        columns[at] ?? String(at),
+        cell.textContent?.trim() ?? "",
+      ]),
+    ),
+  );
+}
+
+/** Who ran the one row whose What matches. */
+function whoSaid(rows: Record<string, string>[], what: RegExp): string | undefined {
+  return rows.find((row) => what.test(row["What"] ?? ""))?.["Who ran it"];
+}
+
 describe("Pulse", () => {
-  it.todo(
-    "arc/executing-sequential: Pulse names the one process the running Drone holds, the " +
-      "worktree it belongs to, and the instant every figure was read at",
-  );
-  it.todo(
-    "arc/executing-concurrent: with no agent running, Pulse says so rather than drawing an " +
-      "empty table",
-  );
+  test("arc/executing-sequential: Pulse names the one process the running Drone holds, the worktree it belongs to, and the instant every figure was read at", async () => {
+    mount("arc/executing-sequential");
+    await onPulse();
+
+    const processes = page.getByRole("region", { name: "Processes" });
+    await expect.element(processes.getByText("52118")).toBeVisible();
+    // The branch is on the process row and on the worktree row, which is the
+    // whole of "the worktree it belongs to": one occurrence is a table that
+    // lists what is running and does not say where.
+    expect(processes.getByText(ARC_BRANCH).all()).toHaveLength(1);
+    await expect
+      .element(page.getByRole("region", { name: "Worktrees" }).getByText(ARC_BRANCH))
+      .toBeVisible();
+    await expect.element(page.getByText(/^Read .* ago\./)).toBeVisible();
+  });
+
+  test("arc/executing-concurrent: with no agent running, Pulse says so rather than drawing an empty table", async () => {
+    mount("arc/executing-concurrent");
+    await onPulse();
+
+    await expect
+      .element(page.getByText(/Fleet holds no process for this job/))
+      .toBeVisible();
+    expect(page.getByRole("columnheader", { name: /Process/ }).query()).toBeNull();
+  });
+
+  // The parent of three landings holds a plan and no checkout of its own, so
+  // every one of Pulse's lists is empty here — which is the state each of them
+  // has its own sentence for. It is also the one moment that proves none of
+  // them draws a bare empty table. Nothing on screen names a shape (#1530).
+  test("members/stacked: the parent says what it holds rather than drawing three empty lists", async () => {
+    mount("members/stacked");
+    await onPulse();
+
+    await expect.element(page.getByText(/the process table would not read/)).toBeVisible();
+    await expect.element(page.getByText("No worktree on disk.")).toBeVisible();
+    await expect.element(page.getByText(/Nothing has been written to this job's logs/)).toBeVisible();
+    expect(document.body.textContent).not.toMatch(/convoy|train/i);
+  });
 });
+
+/** The branch the arc's one Job works on — `arc-base.ts`'s own spelling. */
+const ARC_BRANCH = "armada/3-show-what-s-running-in-the-drones-stat";
+
+/** Open Pulse on the Job the moment opens, the way a person reaches it. */
+async function onPulse(): Promise<void> {
+  await page.getByRole("tab", { name: "Pulse" }).click();
+  await expect.element(page.getByRole("tabpanel", { name: "Pulse" })).toBeVisible();
+}
 
 describe("landing", () => {
   it.todo(
@@ -413,13 +573,54 @@ describe("the wave", () => {
 });
 
 describe("one Job per workflow kind", () => {
-  it.todo(
-    "kinds: each of the eight Jobs draws the steps its own workflow file declares — three " +
-      "for the bug Job, two for the revert Job, four for the feature Job",
-  );
-  it.todo("kinds: no Job on the Board runs a workflow called verify-and-ship");
-  it.todo(
-    "kind/code-review: the run ends at a step that delivers a review, and no step of it " +
-      "offers a diff to land",
-  );
+  // The Workflow tab draws `JobDetail.steps`, which is the workflow the Job
+  // froze. So what these claims read is the workflow file, through the screen.
+  async function stepsOf(name: string) {
+    const scenario = scenarioNamed(name)!;
+    mount(scenario);
+    await page.getByRole("tab", { name: /^Workflow/ }).click();
+    const job = scenario.state.jobs[0]!;
+    return scenario.state.holds.workflows.find((one) => one.id === job.workflow_id)!.steps;
+  }
+
+  /** The card for one step of the run, by the name and state it carries. */
+  const stepCard = (label: string) => page.getByRole("button", { name: new RegExp(`^${label}, `) });
+
+  test.for([
+    ["kind/feature", 4],
+    ["kind/bug", 3],
+    ["kind/revert", 2],
+    ["kind/prototype", 3],
+    ["kind/refactor", 3],
+    ["kind/design-plan", 2],
+    ["kind/code-review", 3],
+    ["kind/epic", 3],
+  ] as const)("%s draws the steps its own workflow file declares", async ([name, count]) => {
+    const steps = await stepsOf(name);
+    expect(steps, `${name} declares ${String(count)} steps`).toHaveLength(count);
+    for (const step of steps) await expect.element(stepCard(step.label).first()).toBeVisible();
+    // And no step the boards invented: `design-plan` is draft and present with
+    // no `decide`, and only a feature Job has a step called Write tests.
+    if (!steps.some((step) => step.label === "Write tests")) {
+      expect(stepCard("Write tests").query(), `${name} draws a step it never declared`).toBeNull();
+    }
+    expect(stepCard("Decide").query(), `${name} draws a step it never declared`).toBeNull();
+  });
+
+  test("no Job on the Board runs a workflow called verify-and-ship", async () => {
+    const { scenario } = mount("kinds");
+    await openBoard();
+    expect(scenario.state.holds.workflows.map((one) => one.id)).not.toContain("verify-and-ship");
+    expect(document.body.textContent).not.toContain("verify-and-ship");
+  });
+
+  test("kind/code-review: the run ends at a step that delivers a review, and offers no diff to land", async () => {
+    const steps = await stepsOf("kind/code-review");
+    const last = steps[steps.length - 1]!;
+    expect(last.label).toBe("Deliver the review");
+    await expect.element(stepCard(last.label).first()).toBeVisible();
+    // Nothing on this run lands anything: a code review delivers a review.
+    expect(page.getByRole("button", { name: /^Merge/ }).query()).toBeNull();
+    expect(page.getByRole("button", { name: /^Land/ }).query()).toBeNull();
+  });
 });

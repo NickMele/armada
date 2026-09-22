@@ -1903,7 +1903,7 @@ state    --dot (6px) + --text-base --fg-default
 rows     pid / port / protocol / up, one row each: label --text-xs
          --text-label on the left, value --font-mono --text-xs --text-body
          right-aligned to the panel's edge, where Stats puts its counts —
-         Pulse's figure rows, FigureList
+         FigureList, `column="fit"`
 detail   --font-mono --text-2xs --fg-subtle, the sentence a state carries
 doctor   border-top --border-subtle above it; a dot, "Doctor", the outcome
          (--status-completed-success / --status-awaiting-review /
@@ -1915,6 +1915,12 @@ at the cost of two lines in a column that was already tall. **A state draws
 only the rows it has a value for**, never a label beside a blank: a Fleet
 being connected to or not answering has pid and port, and protocol and up
 arrive with the connection.
+
+**The same rows run across in a destination, `column="strip"`.** The right
+edge is what a reader of a 160 to 380px panel runs down; a destination is the
+width of the window, and there the same rows put a label and its figure a
+hand's width apart. Pulse draws its Drones, Checks, Judges, spend and turns
+that way — label over figure, `--text-base`, wrapping by whole cells. #1538.
 
 **Fleet's state is one of three, and the panel's dot names which** — the
 same three the status bar used to carry, on the same grounds Doctor's pass,
