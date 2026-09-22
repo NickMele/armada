@@ -195,15 +195,55 @@ describe("the Record", () => {
 });
 
 describe("Pulse", () => {
-  it.todo(
-    "arc/executing-sequential: Pulse names the one process the running Drone holds, the " +
-      "worktree it belongs to, and the instant every figure was read at",
-  );
-  it.todo(
-    "arc/executing-concurrent: with no agent running, Pulse says so rather than drawing an " +
-      "empty table",
-  );
+  test("arc/executing-sequential: Pulse names the one process the running Drone holds, the worktree it belongs to, and the instant every figure was read at", async () => {
+    mount("arc/executing-sequential");
+    await onPulse();
+
+    const processes = page.getByRole("region", { name: "Processes" });
+    await expect.element(processes.getByText("52118")).toBeVisible();
+    // The branch is on the process row and on the worktree row, which is the
+    // whole of "the worktree it belongs to": one occurrence is a table that
+    // lists what is running and does not say where.
+    expect(processes.getByText(ARC_BRANCH).all()).toHaveLength(1);
+    await expect
+      .element(page.getByRole("region", { name: "Worktrees" }).getByText(ARC_BRANCH))
+      .toBeVisible();
+    await expect.element(page.getByText(/^Read .* ago\./)).toBeVisible();
+  });
+
+  test("arc/executing-concurrent: with no agent running, Pulse says so rather than drawing an empty table", async () => {
+    mount("arc/executing-concurrent");
+    await onPulse();
+
+    await expect
+      .element(page.getByText(/Fleet holds no process for this job/))
+      .toBeVisible();
+    expect(page.getByRole("columnheader", { name: /Process/ }).query()).toBeNull();
+  });
+
+  // The parent of three landings holds a plan and no checkout of its own, so
+  // every one of Pulse's lists is empty here — which is the state each of them
+  // has its own sentence for. It is also the one moment that proves none of
+  // them draws a bare empty table. Nothing on screen names a shape (#1530).
+  test("members/stacked: the parent says what it holds rather than drawing three empty lists", async () => {
+    mount("members/stacked");
+    await onPulse();
+
+    await expect.element(page.getByText(/the process table would not read/)).toBeVisible();
+    await expect.element(page.getByText("No worktree on disk.")).toBeVisible();
+    await expect.element(page.getByText(/Nothing has been written to this job's logs/)).toBeVisible();
+    expect(document.body.textContent).not.toMatch(/convoy|train/i);
+  });
 });
+
+/** The branch the arc's one Job works on — `arc-base.ts`'s own spelling. */
+const ARC_BRANCH = "armada/3-show-what-s-running-in-the-drones-stat";
+
+/** Open Pulse on the Job the moment opens, the way a person reaches it. */
+async function onPulse(): Promise<void> {
+  await page.getByRole("tab", { name: "Pulse" }).click();
+  await expect.element(page.getByRole("tabpanel", { name: "Pulse" })).toBeVisible();
+}
 
 describe("landing", () => {
   it.todo(
