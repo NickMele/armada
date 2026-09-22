@@ -16,6 +16,7 @@ import type { GroupView } from "./group";
 import type { LandingRule } from "./landing";
 import type { LedgerRow } from "./ledger";
 import type { JobMembersView } from "./members";
+import type { ProposalView } from "./proposal";
 import type { WaveView } from "./wave";
 
 /**
@@ -30,6 +31,20 @@ export type JobDraft = {
   cases?: readonly CaseView[];
   /** What the Job is held to, with where each criterion's words came from. */
   criteria?: readonly CriterionView[];
+  /**
+   * The proposal this Job is at, and what was frozen when it was approved.
+   *
+   * **The same shape the dispatch form holds one moment earlier** — a title,
+   * a gate per step, the tier map and the caps, including how many Drones this
+   * Job may run at once (`#1550`) — and its `approved_at` is the whole
+   * difference between "yours to change" and "frozen at the press".
+   *
+   * **Read after approval as well as at it.** A group running two tasks at the
+   * same time is bounded by that number, so the board that draws the group
+   * draws the bound beside it rather than leaving a person to find it on a
+   * screen they have already left.
+   */
+  proposal?: ProposalView;
   /** Every run of every case, with who ran it and what became of the run. */
   runs?: readonly CaseRunView[];
   /**

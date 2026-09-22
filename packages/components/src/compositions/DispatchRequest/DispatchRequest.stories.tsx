@@ -681,3 +681,64 @@ export const AddingALink: Story = {
     await expect(args.onRequest).not.toHaveBeenCalled();
   },
 };
+
+/**
+ * Write and Sketch, which are one request said two ways — #1547.
+ *
+ * **A `play`, because the whole claim is what survives the switch.** A still
+ * shows one mode or the other; what has to hold is that the words typed under
+ * Write come back untouched after a trip through Sketch, and that the picture
+ * is attached in both.
+ */
+export const WriteOrSketch: Story = {
+  args: {
+    request: REQUEST,
+    sketch: { name: "sketch 1", from: "From a Studio" },
+  },
+  render: function Switching(props) {
+    const [mode, setMode] = useState<"write" | "sketch">("write");
+    const [request, setRequest] = useState(props.request);
+    return (
+      <DispatchRequest
+        {...props}
+        request={request}
+        onRequest={setRequest}
+        mode={mode}
+        onMode={setMode}
+        sketchPad={<p>The pad goes here.</p>}
+      />
+    );
+  },
+  play: async ({ canvas, userEvent, step }) => {
+    const field = () => canvas.getByRole("textbox", { name: "Request" });
+
+    await step("the picture is attached under Write, with where it was made", async () => {
+      await expect(canvas.getByText("sketch 1")).toBeVisible();
+      await expect(canvas.getByText("From a Studio")).toBeVisible();
+    });
+
+    await step("Sketch puts the pad where the field was", async () => {
+      await userEvent.type(field(), " Start with the rail.");
+      await userEvent.click(canvas.getByRole("tab", { name: "Sketch" }));
+      await waitFor(() => expect(canvas.getByText("The pad goes here.")).toBeVisible());
+      await expect(canvas.queryByRole("textbox", { name: "Request" })).toBeNull();
+      // The chip stays: what is attached is a fact about the request, not
+      // about which way of saying it is open.
+      await expect(canvas.getByText("sketch 1")).toBeVisible();
+    });
+
+    await step("and Write brings the words back exactly as they were", async () => {
+      await userEvent.click(canvas.getByRole("tab", { name: "Write" }));
+      await waitFor(() => expect(field()).toBeVisible());
+      await expect(field()).toHaveValue(`${REQUEST} Start with the rail.`);
+    });
+  },
+};
+
+/** A composer that takes words only draws no switch at all. */
+export const NoSketchOffered: Story = {
+  args: { request: REQUEST },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole("tab", { name: "Sketch" })).toBeNull();
+  },
+};

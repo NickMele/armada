@@ -1,19 +1,20 @@
 // The milestone's claim: what a person sees at each moment of the arc, through
 // `App` and nothing else.
 //
-// **Written before the screens, and mostly still owed.** Each `it.todo` below
-// is one moment of #1533's roster, in the words of what somebody looking at
-// the window should be able to read. The issue that builds a board turns its
-// own todos into passing tests — #1535 the Plan, #1536 Implement, #1537 the
-// Record, #1538 Pulse, #1539 the canvas, #1540 Dispatch, #1541 classifying,
-// #1542 Land, #1543 landing in order, #1544 the wave.
+// **Written before the screens, and every one of them now owed nothing.**
+// Each claim below was an `it.todo` first — one moment of #1533's roster, in
+// the words of what somebody looking at the window should be able to read —
+// and the issue that built each board turned its own into a passing test:
+// #1535 the Plan, #1536 Implement, #1537 the Record, #1538 Pulse, #1539 the
+// canvas, #1540 Dispatch, #1541 classifying, #1542 Land, #1543 landing in
+// order, #1544 the wave. The wave was the last of them.
 //
-// **A todo names what a person sees, never a component.** A claim written
+// **A claim names what a person sees, never a component.** A claim written
 // against `RunningPanel` would have to be rewritten by whoever renames it; one
 // written against what is on screen survives the rename and fails the day the
 // sentence stops being true.
 
-import { expect, test, describe, it } from "vitest";
+import { expect, test, describe } from "vitest";
 import { page } from "vitest/browser";
 
 import { SCENARIOS, scenarioNamed } from "./scenario";
@@ -143,44 +144,211 @@ describe("dispatch", () => {
       await expect.element(page.getByText("default", { exact: false })).not.toBeInTheDocument();
     },
   );
-  it.todo(
+  test(
     "arc/dispatch-sketch: the picture a person drew is on screen beside the prompt, with what " +
       "they said about it and the Studio node it was made from",
+    async () => {
+      mount("arc/dispatch-sketch");
+
+      // Beside the prompt: the words are in the field and the picture is
+      // attached to them, with where it was made read before its name.
+      await expect
+        .element(page.getByRole("textbox", { name: "Request" }))
+        .toHaveValue(expect.stringContaining("Drones 1 of 2"));
+      await expect.element(page.getByText("From a Studio")).toBeVisible();
+      await expect.element(page.getByText("sketch 1")).toBeVisible();
+
+      await page.getByRole("tab", { name: "Sketch" }).click();
+
+      // The picture itself: three boxes and the two lines between them.
+      await expect.element(page.getByRole("group", { name: "Box: Drones 1 of 2" })).toBeVisible();
+      await expect
+        .element(page.getByRole("group", { name: /^Box: a panel under it/ }))
+        .toBeVisible();
+      await expect
+        .element(page.getByRole("group", { name: /^Box: the Job and the step/ }))
+        .toBeVisible();
+      expect(page.getByRole("group", { name: /^A line from / }).elements()).toHaveLength(2);
+
+      // What they said about it, and the node it was made from.
+      await expect
+        .element(page.getByRole("textbox", { name: "About this sketch" }))
+        .toHaveValue(expect.stringContaining("The panel opens under the stat"));
+      await expect.element(page.getByText(/Made from\s+rail-stats\s+in a Studio/)).toBeVisible();
+    },
+  );
+
+  test(
+    "arc/dispatch-sketch: the words typed under Write are still there after a trip through " +
+      "Sketch and back",
+    async () => {
+      mount("arc/dispatch-sketch");
+      const field = page.getByRole("textbox", { name: "Request" });
+      await expect.element(field).toBeVisible();
+      const before = (field.element() as HTMLTextAreaElement).value;
+
+      await page.getByRole("tab", { name: "Sketch" }).click();
+      await expect.element(page.getByRole("textbox", { name: "About this sketch" })).toBeVisible();
+      expect(page.getByRole("textbox", { name: "Request" }).query()).toBeNull();
+
+      await page.getByRole("tab", { name: "Write" }).click();
+      await expect.element(page.getByRole("textbox", { name: "Request" })).toHaveValue(before);
+    },
   );
 });
 
 describe("classifying", () => {
-  it.todo(
+  test(
     "arc/proposing-reading: the form says the proposer is thinking, how long it has been out " +
       "and how long it may take — and offers to stop it",
+    async () => {
+      mount("arc/proposing-reading");
+
+      const wait = page.getByRole("status").filter({ hasText: "thinking" }).first();
+      await expect.element(wait).toBeVisible();
+      // What it is doing, how long it has been doing it, and how long it may
+      // take. The elapsed figure is against the window's own clock, so it is
+      // read as a shape rather than as a string.
+      await expect.element(wait).toHaveTextContent(/\d+[ms]/);
+      await expect.element(wait).toHaveTextContent("left");
+      await expect.element(wait).toHaveTextContent("sonnet");
+
+      await expect
+        .element(page.getByRole("button", { name: "Stop the proposer" }))
+        .toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/proposing-review: the workflow the proposer chose is named with its four steps, and " +
       "every one of them has a gate row a person can still change",
+    async () => {
+      mount("arc/proposing-review");
+
+      await expect.element(page.getByText("feature — 4 steps")).toBeVisible();
+      const gates = page.getByRole("region", { name: "What each step is gated by" });
+      await expect.element(gates).toBeVisible();
+
+      // A Judge on the plan step and no Check, which is what `feature.json`
+      // declares — and the box is a person's to move.
+      const judge = page.getByRole("checkbox", { name: "Judge on Plan the change" });
+      await expect.element(judge).toBeChecked();
+      const checks = page.getByRole("checkbox", { name: "Checks on Plan the change" });
+      await expect.element(checks).not.toBeChecked();
+      await checks.click();
+      await expect.element(checks).toBeChecked();
+      // A tick moves the gate and never what the step declares, so asking for
+      // a Check on a step that declares none says so rather than looking done.
+      await expect
+        .element(page.getByRole("listitem", { name: "Plan the change" }))
+        .toHaveTextContent("declares no Check");
+    },
   );
-  it.todo(
+
+  test(
     "arc/proposing-review: the handoff step reads that the repository decides, which is not " +
       "one of the three tick boxes beside it",
+    async () => {
+      mount("arc/proposing-review");
+
+      const handoff = page.getByRole("listitem", { name: "Review the change" });
+      await expect.element(handoff).toHaveTextContent("The repository decides — review_gate");
+      await expect.element(handoff).toHaveTextContent("manifest_rule:review_gate");
+      // The three boxes are drawn on every step that answers for itself and on
+      // no step that defers, so the fourth state is a state and not a tick.
+      expect(handoff.getByRole("checkbox").all()).toHaveLength(0);
+
+      await page.getByRole("button", { name: "Decide it for this Job" }).click();
+      await expect
+        .element(page.getByRole("checkbox", { name: "You on Review the change" }))
+        .toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/proposing-review: one permanent line says Fleet checks the work stayed inside the " +
       "plan, and no tick turns it off",
+    async () => {
+      mount("arc/proposing-review");
+
+      const said = page.getByText(/Fleet checks that the work stayed inside/);
+      await expect.element(said).toBeVisible();
+
+      // Every box off on a step, and the line is still there — which is the
+      // claim: it is not a summary of what is ticked.
+      const judge = page.getByRole("checkbox", { name: "Judge on Plan the change" });
+      await judge.click();
+      await expect.element(judge).not.toBeChecked();
+      await expect
+        .element(page.getByRole("listitem", { name: "Plan the change" }))
+        .toHaveTextContent("Nothing stops it.");
+      await expect.element(said).toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/proposing-review: each of the three tiers names the model it resolves to, and the " +
       "planner's tier is what picks it",
+    async () => {
+      mount("arc/proposing-review");
+
+      await expect.element(page.getByRole("combobox", { name: "Difficult" })).toHaveValue("opus");
+      await expect.element(page.getByRole("combobox", { name: "Medium" })).toHaveValue("sonnet");
+      await expect.element(page.getByRole("combobox", { name: "Easy" })).toHaveValue("haiku");
+      await expect.element(page.getByText(/The planner marks each task/)).toBeVisible();
+
+      // This Job's share of the machine, beside what the machine allows.
+      await expect.element(page.getByRole("spinbutton", { name: "Drones at once" })).toHaveValue(2);
+      await expect.element(page.getByText("This machine runs 4 at once")).toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/approved-frozen: the Job says when it was approved, and that what it is held to was " +
       "frozen at that moment",
+    async () => {
+      mount("arc/approved-frozen");
+
+      // The instant is written out in the reader's own locale, so what is
+      // asserted is that it is there and dated — never its spelling.
+      const said = page.getByText(/Frozen when you approved it/);
+      await expect.element(said).toHaveTextContent(/Approved .*2026.*\./);
+      // Frozen is drawn as values rather than as fields nobody may move.
+      expect(page.getByRole("checkbox").all()).toHaveLength(0);
+      expect(page.getByRole("combobox", { name: "Difficult" }).query()).toBeNull();
+      await expect.element(page.getByText("Difficult")).toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/approved-frozen: the first criterion says the issue it came from has been edited " +
       "since, and the Job still shows the words it froze",
+    async () => {
+      mount("arc/approved-frozen");
+
+      const held = page.getByRole("region", { name: "Done when" });
+      await expect
+        .element(held)
+        .toHaveTextContent("The rail's Drones stat reads one running beside the machine's most");
+      await expect.element(held).toHaveTextContent("from armada/1162");
+      await expect.element(held).toHaveTextContent(/The issue has been edited since/);
+      await expect.element(held).toHaveTextContent("The Job is held to the words above.");
+    },
   );
-  it.todo(
+
+  test(
     "arc/approved-frozen: the handoff gate reads that this Job overrode the repository's rule " +
       "for itself",
+    async () => {
+      mount("arc/approved-frozen");
+
+      const handoff = page.getByRole("listitem", { name: "Review the change" });
+      await expect
+        .element(handoff)
+        .toHaveTextContent("This Job decides this step for itself, in place of the repository's review_gate.");
+      await expect.element(handoff).toHaveTextContent("human_always");
+      await expect.element(handoff).toHaveTextContent("You");
+    },
   );
 });
 
@@ -359,39 +527,174 @@ describe("the plan", () => {
 });
 
 describe("implement", () => {
-  it.todo(
+  test(
     "arc/executing-sequential: groups one and two read passed with the commit each left, " +
       "group three is working, and group four has not started",
+    async () => {
+      await at("arc/executing-sequential", "Workflow");
+
+      await expect.element(runGroup(1)).toHaveTextContent("passed");
+      await expect.element(runGroup(1)).toHaveTextContent("4c1b9d2");
+      await expect.element(runGroup(2)).toHaveTextContent("passed");
+      await expect.element(runGroup(2)).toHaveTextContent("7a2f0c5");
+      await expect.element(runGroup(3)).toHaveTextContent("working");
+      await expect.element(runGroup(4)).toHaveTextContent("not started");
+      // One group at a time is the rule, and this line is its only evidence.
+      await expect.element(page.getByText(/No task of the next group starts/)).toBeVisible();
+    },
   );
-  it.todo(
+
+  test(
     "arc/executing-sequential: the working task shows its turns and no cost, because its " +
       "agent has not stopped",
+    async () => {
+      await at("arc/executing-sequential", "Workflow");
+
+      // Group three is the one moving, so it opens itself.
+      await expect.element(runTask("T5")).toHaveTextContent("14 turns");
+      await expect.element(runTask("T5")).not.toHaveTextContent("$");
+    },
   );
-  it.todo(
+
+  test(
     "arc/executing-sequential: every finished task shows what it cost, including the ones in " +
       "a group that has already passed",
+    async () => {
+      await at("arc/executing-sequential", "Workflow");
+      await openGroup(1);
+      await openGroup(2);
+
+      await expect.element(runTask("T1")).toHaveTextContent("34 turns · ~$2.40");
+      await expect.element(runTask("T2")).toHaveTextContent("12 turns · ~$0.64");
+      await expect.element(runTask("T3")).toHaveTextContent("8 turns · ~$0.26");
+      await expect.element(runTask("T4")).toHaveTextContent("9 turns · ~$0.31");
+    },
   );
-  it.todo(
+
+  test(
     "arc/executing-concurrent: T5 and T6 are drawn as having run at the same time, each with " +
       "its own agent, and group three reads joining",
+    async () => {
+      await at("arc/executing-concurrent", "Workflow");
+
+      await expect.element(runGroup(3)).toHaveTextContent("joining its work");
+      await expect.element(runGroup(3)).toHaveTextContent("2 tasks, at the same time");
+      // What bounds the fan out, settled at the gate — `#1550`.
+      await expect.element(runGroup(3)).toHaveTextContent("this Job runs 2 Drones at once");
+      await expect.element(runTask("T5")).toHaveTextContent("its own agent");
+      await expect.element(runTask("T5")).toHaveTextContent("runs beside T6");
+      await expect.element(runTask("T6")).toHaveTextContent("its own agent");
+      await expect.element(runTask("T6")).toHaveTextContent("runs beside T5");
+    },
   );
-  it.todo(
+
+  test(
     "arc/executing-concurrent: both tasks show a cost the moment their own agent stopped, " +
       "before their group has been checked",
+    async () => {
+      await at("arc/executing-concurrent", "Workflow");
+
+      await expect.element(runTask("T5")).toHaveTextContent("27 turns · ~$1.90");
+      await expect.element(runTask("T6")).toHaveTextContent("15 turns · ~$0.72");
+      // The boundary has not run, and the two costs are on screen anyway.
+      const boundary = runGroup(3).getByRole("region", { name: "Checks at this boundary" });
+      await expect.element(boundary).toHaveTextContent("7 checks will run at this boundary");
+      await expect.element(boundary).toHaveTextContent("not run");
+    },
   );
-  it.todo(
+
+  test(
     "arc/group-failed: group three reads failed with the one Check that failed named, and " +
       "says this is its second run",
+    async () => {
+      await at("arc/group-failed", "Workflow");
+
+      await expect.element(runGroup(3)).toHaveTextContent("failed at its checks");
+      const boundary = runGroup(3).getByRole("region", { name: "Checks at this boundary" });
+      await expect.element(boundary).toHaveTextContent("screens_test failed");
+      await expect.element(boundary).toHaveTextContent("second run");
+      // What the next Drone is given is the Check's own output, not a summary.
+      await expect.element(boundary).toHaveTextContent("1 of 1384 failed");
+      // One group at a time, named with the group this one is holding back.
+      await expect.element(boundary).toHaveTextContent("No task of group 4 starts");
+    },
   );
-  it.todo(
+
+  test(
     "arc/group-failed: the six Checks that passed are drawn beside the one that did not, " +
       "rather than the group reading red with nothing said",
+    async () => {
+      await at("arc/group-failed", "Workflow");
+
+      const checks = runGroup(3)
+        .getByRole("region", { name: "Checks at this boundary" })
+        .getByRole("listitem");
+      // Every Check the boundary declares has a row, and exactly one is red.
+      await expect.poll(() => checks.all().length).toBe(7);
+      const reads = () => checks.all().map((one) => one.element().getAttribute("data-reads"));
+      expect(reads().filter((one) => one === "failed")).toHaveLength(1);
+      expect(reads().filter((one) => one === "passed")).toHaveLength(6);
+      await expect.element(checks.filter({ hasText: "typecheck" }).first()).toHaveTextContent("passed");
+    },
   );
-  it.todo(
+
+  test(
     "arc/done-touched: T6 still reads done and carries a flag saying a later task edited the " +
       "file it had finished, and T7 is named as the task that did",
+    async () => {
+      await at("arc/done-touched", "Workflow");
+      // Group three passed, so it is folded — a done task is read by opening it.
+      await openGroup(3);
+
+      await expect.element(runTask("T6")).toHaveTextContent("touched later · T7");
+      await expect.element(runTask("T6").getByText("Done")).toBeInTheDocument();
+      await expect.element(runGroup(3)).toHaveTextContent("passed");
+      // And the task that did it is still working, with turns and no cost.
+      await expect.element(runTask("T7")).toHaveTextContent("6 turns");
+      await expect.element(runTask("T7")).not.toHaveTextContent("$");
+    },
+  );
+
+  test(
+    "arc/executing-sequential: a task opens into what its Drone was told, what it may touch, " +
+      "what it runs beside, and a redirect addressed to that task's own Drone",
+    async () => {
+      await at("arc/executing-sequential", "Workflow");
+      await runTask("T5").getByRole("button").first().click();
+
+      const panel = page.getByRole("region", { name: /^T5 · .*, task$/ });
+      await expect.element(panel).toBeVisible();
+      await expect.element(panel).toHaveTextContent("Its agent is working");
+      await expect.element(panel).toHaveTextContent("14 turns");
+      await expect.element(panel).toHaveTextContent("Running.tsx");
+      await expect
+        .element(panel.getByRole("region", { name: "What its Drone was told" }))
+        .toHaveTextContent("The panel lists Drones");
+      await expect
+        .element(panel.getByRole("region", { name: "Redirect" }))
+        .toHaveTextContent("Drone on T5");
+      // Hold to stop this task, in the same panel as the reading. #1536.
+      await expect.element(panel.getByRole("button", { name: /^Hold to/ })).toBeVisible();
+    },
   );
 });
+
+/** One group of the implement step, on the run, by the heading it carries. */
+const runGroup = (ordinal: number) =>
+  page
+    .getByRole("list", { name: "The groups of this step, in the order they run" })
+    .getByRole("listitem")
+    .filter({ hasText: new RegExp(`^Group ${ordinal}`) })
+    .first();
+
+/** One task's row on the run, by the name the board gives it. */
+const runTask = (id: string) => page.getByRole("listitem", { name: new RegExp(`^${id} `) });
+
+/** Open a group that is not the one moving, the way a person opens it. */
+async function openGroup(ordinal: number): Promise<void> {
+  const head = runGroup(ordinal).getByRole("button", { name: new RegExp(`^Group ${ordinal}`) }).first();
+  if (head.element().getAttribute("aria-expanded") === "false") await head.click();
+}
 
 describe("the Record", () => {
   test(

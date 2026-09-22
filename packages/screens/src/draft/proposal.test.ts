@@ -3,7 +3,8 @@
 import type { LimitValues } from "@armada/protocol";
 import { describe, expect, it } from "vitest";
 
-import { gateViewOf, proposalViewOf } from "./proposal";
+import { gateReadingOf, gateViewOf, proposalViewOf, unmeantOf } from "./proposal";
+import type { GateView } from "./proposal";
 import { sampleDetail, sampleStep } from "./sample";
 
 const limits: LimitValues = {
@@ -126,5 +127,108 @@ describe("what locks at approval", () => {
       "plan",
       "implement",
     ]);
+  });
+});
+
+
+/** One gate, with the three boxes off unless the case turns one on. */
+const boxes = (over: Partial<GateView> = {}): GateView => ({
+  step_id: "implement",
+  checks: false,
+  judge: false,
+  you: false,
+  ...over,
+});
+
+describe("what a combination of the boxes is on the wire", () => {
+  it("reads nothing ticked as auto, which stops nothing", () => {
+    const reading = gateReadingOf(boxes());
+
+    expect(reading.advance_gate).toBe("auto");
+    expect(reading.does).toBe("Nothing stops it.");
+  });
+
+  it("reads Checks alone as auto with the Checks as the whole gate", () => {
+    expect(gateReadingOf(boxes({ checks: true })).advance_gate).toBe("auto");
+  });
+
+  it("reads Checks and a Judge as auto_if_judge_passes", () => {
+    expect(gateReadingOf(boxes({ checks: true, judge: true })).advance_gate).toBe(
+      "auto_if_judge_passes",
+    );
+  });
+
+  // The combination the issue is named after, and it is not meaningless: the
+  // `feature` workflow's own plan step is a Judge and no Check, and with
+  // nothing mechanical to fail, the Judge refusing is all that holds it.
+  it("reads a Judge with no Checks as advancing unless the Judge refuses", () => {
+    const reading = gateReadingOf(boxes({ judge: true }));
+
+    expect(reading.advance_gate).toBe("auto_if_judge_passes");
+    expect(reading.does).toBe("It advances unless the Judge refuses it.");
+  });
+
+  it("reads You as human_always, and says what ran before you read it", () => {
+    const alone = gateReadingOf(boxes({ you: true }));
+    const after = gateReadingOf(boxes({ you: true, checks: true, judge: true }));
+
+    expect(alone.advance_gate).toBe("human_always");
+    expect(alone.does).toContain("nothing run before you read it");
+    expect(after.does).toContain("its Checks and the Judge");
+  });
+
+  it("reads a step the repository decides as the repository's, whatever is ticked", () => {
+    const reading = gateReadingOf(
+      boxes({ you: true, repository_decides: "review_gate", overridden: false }),
+    );
+
+    expect(reading.advance_gate).toBe("manifest_rule:review_gate");
+    expect(reading.does).toContain("review_gate policy");
+  });
+
+  // Overriding hands the step back to the three boxes, which is the whole of
+  // what "you can override it for this Job" means — #1548.
+  it("reads an overridden step as its own boxes again", () => {
+    const reading = gateReadingOf(
+      boxes({ you: true, repository_decides: "review_gate", overridden: true }),
+    );
+
+    expect(reading.advance_gate).toBe("human_always");
+  });
+});
+
+
+describe("what a tick asks for that Fleet cannot do", () => {
+  const declared = { checks: true, judge: true };
+
+  it("is nothing where the step declares what the ticks ask for", () => {
+    expect(unmeantOf(boxes({ checks: true, judge: true }), declared)).toBeUndefined();
+    expect(unmeantOf(boxes({ you: true }), { checks: false, judge: false })).toBeUndefined();
+  });
+
+  // `mechanical_checks[]` and `judge_checks[]` are the workflow's and are
+  // frozen at creation, so a tick moves the gate and never what runs at it.
+  it("names a Check asked for on a step that declares none", () => {
+    expect(unmeantOf(boxes({ checks: true }), { checks: false, judge: true })).toContain(
+      "declares no Check",
+    );
+  });
+
+  it("names a Judge asked for on a step that declares nothing to read", () => {
+    expect(unmeantOf(boxes({ judge: true }), { checks: true, judge: false })).toContain(
+      "nothing for a Judge to read",
+    );
+  });
+
+  // `manifest_rule:review_gate` is frozen unresolved because the policy is
+  // live. An override is the first per-Job answer that would resolve it at
+  // approval, and nothing says which wins if the repository's rule moves.
+  it("names the override as carrying no answer to what wins later", () => {
+    const said = unmeantOf(
+      boxes({ you: true, repository_decides: "review_gate", overridden: true }),
+      declared,
+    );
+
+    expect(said).toContain("which wins");
   });
 });

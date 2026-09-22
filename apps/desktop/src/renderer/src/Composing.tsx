@@ -211,6 +211,7 @@ export function Composing({
           ? {}
           : { settings: dispatchSettingsOf(drafted.proposal) })}
         {...(drafted.prompt === undefined ? {} : { opensOn: drafted.prompt })}
+        {...(drafted.sketch === undefined ? {} : { sketch: drafted.sketch })}
         // On the head of each card this surface draws, since each is its own
         // way out of the same composer.
         close={<WayOut ground="card" onClose={leave} />}

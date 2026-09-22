@@ -30,13 +30,22 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { Button, DispatchRequest, DispatchSettings, WhatElseIsRunning } from "@armada/components";
+import {
+  Button,
+  DispatchRequest,
+  DispatchSettings,
+  SketchPad,
+  WhatElseIsRunning,
+} from "@armada/components";
 import type {
   DispatchSettingsValue,
   PeerJob,
   Proposal,
   ProposalWatch,
   Refs,
+  RequestMode,
+  SketchBox,
+  SketchLine,
 } from "@armada/components";
 import type { StagedAttachment, WorkflowSummary } from "@armada/protocol";
 
@@ -44,11 +53,34 @@ import { howManySet } from "./draft/dispatch";
 import type { DispatchSettingsView } from "./draft/dispatch";
 import type { LandingRule } from "./draft/landing";
 import type { PeerOverlapAnswer, PeerView } from "./draft/peers";
+import {
+  drawingOf,
+  isDrawn,
+  nextShapeId,
+  withBody,
+  withJoin,
+  withPlace,
+  withShape,
+  withoutShapes,
+} from "./draft/sketch";
+import type { Drawing, SketchAttachment } from "./draft/sketch";
 import type { Answered } from "./proposal";
 import { PROPOSAL_IS_SLOW } from "./proposal";
 
 /** What the control that goes back to describing is called. */
 const BACK = "Describe the work instead";
+
+/**
+ * What the sketch's chip is called. **Numbered because a request may carry
+ * more than one picture**, even though the composer holds one today (#1547).
+ */
+const SKETCH_NAME = "sketch 1";
+
+/** Where a sketch came from, on its chip. Only where a Studio node produced it. */
+const FROM_A_STUDIO = "From a Studio";
+
+/** What the pad is, read to somebody who cannot see it. */
+const PAD_LABEL = "The picture attached to this request";
 
 export type DispatchJobProps = {
   /**
@@ -142,6 +174,15 @@ export type DispatchJobProps = {
   /** What the settings block opens on. Absent is nothing set, which is the ordinary case. */
   settings?: DispatchSettingsView;
   /**
+   * The picture this opens holding, where a moment carries one. **Absent opens
+   * Sketch on a blank pad**, which is every dispatch somebody starts here.
+   *
+   * **Nothing stages it yet.** The wire takes a staged path and a filename, so
+   * what goes out with the request is unchanged until #1545 promotes the shape;
+   * the pad is the surface, and staging the PNG is that pull request's.
+   */
+  sketch?: SketchAttachment;
+  /**
    * Whether the request field or its attachments hold anything closing would
    * throw away. Reported as it changes, and `false` on the way out, so the
    * caller's way out can ask first. #1366.
@@ -173,6 +214,7 @@ export function DispatchJob({
   models,
   machineCap,
   settings: settingsOpenOn,
+  sketch,
   onTyped,
   watching,
   onStop,
@@ -193,6 +235,11 @@ export function DispatchJob({
   const [settings, setSettings] = useState<DispatchSettingsValue>(asChosen(settingsOpenOn));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [proposal, setProposal] = useState<Proposal>({ at: "unasked" });
+  // Words or a picture. Held here rather than in the card, because both halves
+  // of one request outlive a switch between them.
+  const [mode, setMode] = useState<RequestMode>("write");
+  const [drawing, setDrawing] = useState<Drawing>(() => drawingOf(sketch));
+  const [said, setSaid] = useState(sketch?.said ?? "");
   // Which of the two ways through this surface is open. Describing is the
   // path, so it is what the surface opens on.
   const [hand, setHand] = useState(false);
@@ -209,6 +256,7 @@ export function DispatchJob({
     request.trim() !== "" ||
     attachments.length > 0 ||
     links.length > 0 ||
+    isDrawn(drawing) ||
     howManySet(asDrafted(settings)) > 0;
   useEffect(() => {
     onTyped?.(typed);
@@ -245,7 +293,19 @@ export function DispatchJob({
     setAttachments([]);
     setLinks([]);
     setProposal({ at: "unasked" });
+    // The picture goes with the words. `Dispatch another` is a fresh request,
+    // and a pad still holding the last one's boxes would attach them to it.
+    setDrawing(drawingOf(undefined));
+    setSaid("");
+    setMode("write");
   }
+
+  // A call Fleet says is out, on a surface that did not press for it. **The
+  // window and the daemon have independent lifetimes** (`bridge.md`), so a
+  // composer reopened mid-read has no proposal of its own and a form drawn
+  // idle under a running proposer is the one reading that is never true.
+  const out: Proposal | null =
+    proposal.at === "unasked" && watching !== null ? { at: "reading", watch: watching } : null;
 
   // The rows, against the board's own reading of each Job where there is one.
   // Every other status on this surface is what came back with the proposal;
@@ -302,6 +362,38 @@ export function DispatchJob({
             disabled={disabled}
           />
         }
+        mode={mode}
+        onMode={setMode}
+        sketchPad={
+          <SketchPad
+            label={PAD_LABEL}
+            boxes={drawing.shapes.map(asBox)}
+            lines={drawing.joins.map(asLine)}
+            said={said}
+            onSaid={setSaid}
+            {...(sketch?.produced_by === undefined ? {} : { from: sketch.produced_by })}
+            onAdd={(at) =>
+              setDrawing((one) =>
+                withShape(one, { id: nextShapeId(one), x: at.x, y: at.y, body: "" }),
+              )
+            }
+            onBody={(id, body) => setDrawing((one) => withBody(one, id, body))}
+            onMove={(id, at) => setDrawing((one) => withPlace(one, id, at))}
+            onRemove={(ids) => setDrawing((one) => withoutShapes(one, ids))}
+            onJoin={(from, to) => setDrawing((one) => withJoin(one, from, to))}
+            disabled={disabled}
+          />
+        }
+        // Nothing drawn is nothing attached: an empty pad is a mode somebody
+        // opened, not a picture.
+        {...(isDrawn(drawing)
+          ? {
+              sketch: {
+                name: SKETCH_NAME,
+                ...(sketch?.produced_by === undefined ? {} : { from: FROM_A_STUDIO }),
+              },
+            }
+          : {})}
         attachments={attachments}
         onStage={onStage}
         onSearchFiles={onSearchFiles}
@@ -323,7 +415,7 @@ export function DispatchJob({
         proposal={
           proposal.at === "reading" && watching !== null
             ? { at: "reading", watch: watching }
-            : shown
+            : (out ?? shown)
         }
         onStop={onStop}
         slowAfterMs={PROPOSAL_IS_SLOW}
@@ -369,6 +461,21 @@ function asDrafted(chosen: DispatchSettingsValue): DispatchSettingsView {
   if (chosen.droneCap !== undefined) view.drone_cap = chosen.droneCap;
   if (chosen.lands !== undefined) view.lands = chosen.lands;
   return view;
+}
+
+/**
+ * The draft's boxes and joins as the pad holds them, and nothing else.
+ *
+ * **Two spellings of one shape, mapped in one function each** — the same seam
+ * `asChosen` is, and for the same reason: the draft is wire-shaped because
+ * that is where it is going, and a component's props are the app's own.
+ */
+function asBox(shape: Drawing["shapes"][number]): SketchBox {
+  return { id: shape.id, x: shape.x, y: shape.y, body: shape.body };
+}
+
+function asLine(join: Drawing["joins"][number]): SketchLine {
+  return { id: join.id, from: join.from, to: join.to };
 }
 
 /** One peer, as the panel draws it. */

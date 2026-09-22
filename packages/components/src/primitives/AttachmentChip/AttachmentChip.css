@@ -59,3 +59,14 @@
   flex: none;
   color: var(--fg-subtle);
 }
+
+/* Where it came from, before the name. The dot is drawn rather than written so
+   that nothing reads it out — `/ ""` is the empty alternative text. */
+.armada-attachment-chip__from {
+  flex: none;
+  color: var(--fg-subtle);
+}
+
+.armada-attachment-chip__from::after {
+  content: " ·" / "";
+}

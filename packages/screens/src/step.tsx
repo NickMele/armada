@@ -30,6 +30,7 @@ import {
   Refusals,
 } from "@armada/components";
 import type { Explaining, JobDetailField } from "@armada/components";
+import type { GroupView } from "./draft/group";
 import type { StepNotice } from "./InsideAJob";
 import { useState } from "react";
 import type { ReactNode } from "react";
@@ -73,6 +74,25 @@ export function fieldsOf(step: StepDetail, now: number): JobDetailField[] {
       ? []
       : [{ label: "Attempt", value: String(step.attempts.length), mono: true }]),
   ];
+}
+
+/**
+ * What the step's groups have got through — `2 of 8 done · 1 working`.
+ *
+ * **It counts tasks, never Drones** (`#1536`). A step running eight tasks read
+ * `implement · running` for two hours and said nothing about which one was
+ * moving; a Drone count says the same nothing with a smaller number.
+ *
+ * Absent where the step holds no group, which is every step but the one the
+ * plan is worked at.
+ */
+export function tasksField(groups: readonly GroupView[]): JobDetailField | undefined {
+  const tasks = groups.flatMap((group) => group.tasks);
+  if (tasks.length === 0) return undefined;
+  const done = tasks.filter((task) => task.state === "done").length;
+  const working = tasks.filter((task) => task.state === "working").length;
+  const rest = working === 0 ? "" : ` · ${working} working`;
+  return { label: "Tasks", value: `${done} of ${tasks.length} done${rest}`, mono: true };
 }
 
 /**

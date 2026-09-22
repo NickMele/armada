@@ -18,7 +18,7 @@ import { headingOf, Unrenderable } from "./heading";
 import { detailOf } from "./mine";
 import { renderFor } from "./render";
 import { replacedCallout } from "./replaced";
-import { holdingOf, lookOf } from "./mine";
+import { holdingOf, lookOf, turnsOf } from "./mine";
 import { span } from "./duration";
 import {
   LOOK_FAILED,
@@ -32,6 +32,8 @@ import { pulseViewOf } from "./draft/pulse";
 import { NO_SHEET, sheetMoved } from "./Sheets";
 import type { JobDetail as JobWhole } from "@armada/protocol";
 import { OverviewTab } from "./tab-overview";
+import { ProposalTab } from "./tab-proposal";
+import { proposalEditsOf } from "./tab-proposal-read";
 import { PlanTab } from "./tab-plan";
 import { PulseTab } from "./tab-pulse";
 import { RecordTab } from "./tab-record";
@@ -88,6 +90,12 @@ function OneJob(props: JobDetailProps) {
   // Whether the turn-cap dialog is up. Its own state beside the cost cap's:
   // `budget_hold` offers one control or the other, never both.
   const [raisingTurns, setRaisingTurns] = useState(false);
+
+  // What a person has moved on the proposal, before anything is approved.
+  // **Held by the screen rather than by the tab**, so reading the Record and
+  // coming back does not throw away a retyped title — nothing here has been
+  // sent, so this window is the only place it exists.
+  const [edits, setEdits] = useState(() => proposalEditsOf(props.draft));
 
   // Which sheet is up and what it is reading — `Sheets.tsx`'s `SheetReading`.
   // **Held here and not on the tab**, because the header opens one: Settings
@@ -196,7 +204,19 @@ function OneJob(props: JobDetailProps) {
       {replacedCallout(whole?.replaced_by, props.onOpenJob)}
       <JobTabs value={tab} onChange={setTab} counts={countsOf(whole)} />
 
-      {tab === "overview" ? (
+      {tab === "overview" && edits !== undefined ? (
+        // A Job at or just past its approval gate: the proposal is what
+        // Overview has to draw, because no step has run. **And no wave**: a
+        // Job that has not been approved has dispatched nothing.
+        <ProposalTab
+          job={job}
+          whole={whole}
+          edits={edits}
+          onEdits={setEdits}
+          models={props.models?.models ?? []}
+          stale={props.stale}
+        />
+      ) : tab === "overview" ? (
         <>
         {/* The wave this Job dispatched, above the run — what it dispatched is
             the product of an Epic Job, and the run is how it got there. A Job
@@ -227,6 +247,12 @@ function OneJob(props: JobDetailProps) {
           acting={props.acting}
           {...(props.actingAct === undefined ? {} : { actingAct: props.actingAct })}
           {...(props.draft?.groups === undefined ? {} : { groups: props.draft.groups })}
+          {...(props.draft?.cases === undefined ? {} : { cases: props.draft.cases })}
+          {...(props.draft?.proposal?.drone_cap === undefined
+            ? {}
+            : { droneCap: props.draft.proposal.drone_cap })}
+          turns={turnsOf(props.observed, job.id)?.rows ?? []}
+          watching={props.observed.state === "watching"}
           onRedirect={props.onRedirect}
           onAct={props.onAct}
           onActHeld={props.onActHeld}

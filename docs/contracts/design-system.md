@@ -103,8 +103,10 @@ is allowed only as that light, and never where a person reads a state.
 5. **Icons: lucide-react only**, used sparingly. A dashboard dense with
    icons reads as noise.
 6. **React Flow (`@xyflow/react`) is the one sanctioned graph surface.** It
-   draws a [Studio](../concepts/studio.md)'s whiteboard and a Job's
-   workflow canvas, and nothing else takes a second library. It supplies
+   draws a [Studio](../concepts/studio.md)'s whiteboard, a Job's workflow
+   canvas and the sketch beside a dispatch prompt, and nothing else takes
+   a second library — a surface that needs to draw takes the extracted
+   canvas rather than a drawing tool. It supplies
    placement, pan, zoom, fit and selection, and nothing that is seen:
    every node inside it is built from the primitives above and the
    tokens below, its controls are `button`, and every value its own

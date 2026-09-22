@@ -21,6 +21,17 @@ export type AttachmentChipProps = {
   /** Shown as typed at attach time. Never the staged path. */
   filename: string;
   /**
+   * Where it came from, set back **before** the name — `From a Studio ·
+   * sketch 1` (#1547).
+   *
+   * **Leading rather than trailing, because it is not the kind.** A kind says
+   * what a thing is and reads after the name; provenance says where it was
+   * made and is the first thing that matters about a picture, since a sketch
+   * with no source is a person drawing from nothing and that is a different
+   * answer. Absent draws nothing rather than "from nowhere".
+   */
+  from?: string;
+  /**
    * What was attached. **`file` draws no word**: a filename already says which
    * of the three it is, and `screenshot.png · file` spends a column on nothing.
    */
@@ -39,10 +50,13 @@ const KIND: Record<AttachmentKind, string | null> = {
   node: "Studio node",
 };
 
-export function AttachmentChip({ filename, kind = "file", onRemove }: AttachmentChipProps) {
+export function AttachmentChip({ filename, from, kind = "file", onRemove }: AttachmentChipProps) {
   const said = KIND[kind];
   return (
     <span className="armada-attachment-chip">
+      {from === undefined ? null : (
+        <span className="armada-attachment-chip__from">{from}</span>
+      )}
       <span className="armada-attachment-chip__name">{filename}</span>
       {said === null ? null : <span className="armada-attachment-chip__kind">{said}</span>}
       {onRemove !== undefined && (

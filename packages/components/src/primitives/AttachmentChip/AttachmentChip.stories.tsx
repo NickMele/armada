@@ -41,3 +41,17 @@ export const ALink: Story = {
 export const AStudioNode: Story = {
   args: { filename: "The Drones stat says nothing", kind: "node", onRemove: () => {} },
 };
+
+/**
+ * A picture drawn beside the prompt, with where it was made read first —
+ * #1547. Read-only: a sketch is taken back on the pad, where the boxes going
+ * are visible, rather than by a press on a chip that says only `sketch 1`.
+ */
+export const ASketch: Story = {
+  args: { filename: "sketch 1", from: "From a Studio" },
+};
+
+/** The same picture drawn from nothing, which says so by naming no source. */
+export const ASketchFromNothing: Story = {
+  args: { filename: "sketch 1" },
+};

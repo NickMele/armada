@@ -352,7 +352,20 @@ export * from "./compositions/VerifySheet/VerifySheet";
 // request would. #1540.
 export * from "./compositions/DispatchSettings/DispatchSettings";
 export * from "./compositions/WhatElseIsRunning/WhatElseIsRunning";
+// The tier map and the Drone cap, which the dispatch form and the proposal
+// both set — one control drawn at two moments, never two. #1549, #1550.
+export * from "./compositions/DispatchSettings/TierModels";
+export * from "./compositions/DispatchSettings/DroneCap";
+// The proposal itself: gates, tiers, how it lands and what it is held to,
+// editable until approval and frozen at it. #1541, #1548, #1551.
+export * from "./compositions/JobProposal/JobProposal";
+// The picture a person draws beside a prompt, on the one graph surface. #1547.
+export * from "./compositions/SketchPad/SketchPad";
 // A Job whose members are Jobs — pull requests landing in order. #1543.
 export * from "./compositions/JobMembers/JobMembers";
+// The implement step opened — its groups, their tasks, and what ran at each
+// group's end. #1536.
+export * from "./compositions/GroupBoundary/GroupBoundary";
+export * from "./compositions/ImplementBoard/ImplementBoard";
 // A wave of Jobs under one plan, and which of them waits on which. #1544.
 export * from "./compositions/WaveCanvas/WaveCanvas";
