@@ -482,11 +482,15 @@ group `Graph`. Nodes inside the graph reuse the badge icons at 12px — a
 graph node and a Job Board row showing the same job must show the same
 glyph.
 
-### Convoy
+### Blast radius
 
 `layers` at 12px, at the approval gate and in the detail header only —
-never in a Job Board row. Convoy is blast-radius information that matters
-when deciding, and the row already says "convoy, 3" in text. See
+never in a Job Board row. How many places a Job writes is information
+that matters while deciding, and the row already names the first write
+target and counts the rest in text — see
+[Job Board](../concepts/job-board.md). The registry's own entry still
+reads `means = "convoy"`, which is a retired name, and three stories
+draw the same glyph for a Job's workflow instead. See
 `packages/icons/icons.toml`.
 
 ### Chrome
