@@ -1,0 +1,151 @@
+/* Job ledger — the filter strip, one table, and the open row beside it.
+
+   Two columns above --layout-breakpoint and one below, which is the split
+   `.armada-inside` already draws. The numbers are the same two tokens, so the
+   Record and Overview put their panel in the same place. */
+.armada-ledger {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(var(--w-step-panel-min), var(--w-run-column));
+  column-gap: var(--space-6);
+  row-gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+/* Below the bound the table is the whole content and the panel is a sheet
+   over it. A single track, never a panel squeezed under its own floor. */
+.armada-ledger[data-narrow] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* min-width: 0 is load-bearing: without it a path wider than the window makes
+   the column demand that width and the page scrolls sideways instead of the
+   cell wrapping. */
+.armada-ledger__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The panel is a card, which is what separates the two columns — there is no
+   rule between them, only this surface against the gutter. */
+.armada-ledger__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--pad-card);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+/* Folded, the sheet already draws the surface, the border and the radius, so
+   drawing them again would be a card inside a card. */
+.armada-ledger__panel[data-folded] {
+  flex: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* table-layout: auto, so every column is sized from its own content once for
+   the whole table rather than per row. No fixed widths: a number transcribed
+   from a drawing is what truncates a path beside empty space.
+
+   MISSING TOKEN. The spacing scale stops at --space-12, so there is no value
+   to give a column a floor above 48px. The three machine columns hold their
+   own width by not wrapping, and What and Outcome take the slack because they
+   carry the most text — which works, and is not the same as a declared floor. */
+.armada-ledger__table {
+  table-layout: auto;
+}
+
+/* The machine columns hold one value each and never wrap: a wrapped timestamp
+   is two lines of noise beside a sentence that needed the room. */
+.armada-ledger__when,
+.armada-ledger__who,
+.armada-ledger__kind {
+  white-space: nowrap;
+}
+
+/* The prose columns wrap rather than truncate. At the floor there is no room
+   to truncate into, and a row that grows taller is the responsive rule the
+   Job row already keeps. */
+.armada-ledger__where,
+.armada-ledger__what,
+.armada-ledger__outcome {
+  text-wrap: pretty;
+}
+
+/* Who ran it. --fg-muted on every value: who is context beside the sentence,
+   and lifting one producer over another would rank them. */
+.armada-ledger__actor {
+  color: var(--fg-muted);
+}
+
+/* The keyboard's path into a row. It carries the row's sentence, so it is
+   styled as that sentence rather than as a control — the row's hover and the
+   selected fill are the affordance, which is the Job Board's own rule for a
+   value whose whole row is pressable. */
+.armada-ledger__open {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-wrap: pretty;
+  cursor: pointer;
+}
+
+.armada-ledger__open:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+/* What a row came to, as a tint of its own hue at --row-tint. 5% is a wash:
+   at the badge's 12% eight tinted rows were unreadable. Hover and selection
+   replace it rather than mixing with it, so --accent-muted still owns
+   selection. */
+.armada-ledger__table .armada-table-row[data-tone="passed"] {
+  background: color-mix(in srgb, var(--status-completed-success) var(--row-tint), transparent);
+}
+
+.armada-ledger__table .armada-table-row[data-tone="failed"] {
+  background: color-mix(in srgb, var(--status-completed-failed) var(--row-tint), transparent);
+}
+
+.armada-ledger__table .armada-table-row[data-tone="waiting"] {
+  background: color-mix(in srgb, var(--status-awaiting-review) var(--row-tint), transparent);
+}
+
+.armada-ledger__table .armada-table-row[data-tone="running"] {
+  background: color-mix(in srgb, var(--status-running) var(--row-tint), transparent);
+}
+
+.armada-ledger__table .armada-table-row[data-tone]:hover {
+  background: var(--bg-hover);
+}
+
+.armada-ledger__table .armada-table-row[data-tone][data-selected] {
+  background: var(--accent-muted);
+}
+
+/* A filter holding nothing, a row nobody has opened, and the count the bound
+   left off — three sentences, one treatment. Never an empty frame. */
+.armada-ledger__note {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}

@@ -58,7 +58,7 @@
 @import "./compositions/ChangedFiles/ChangedFiles.css";
 @import "./compositions/TransitionHistory/TransitionHistory.css";
 @import "./compositions/JobOutcome/JobOutcome.css";
-@import "./compositions/JobRecord/JobRecord.css";
+@import "./compositions/JobLedger/JobLedger.css";
 @import "./compositions/UnifiedDiff/UnifiedDiff.css";
 @import "./compositions/ReviewComments/ReviewComments.css";
 @import "./compositions/ReviewDecision/ReviewDecision.css";
