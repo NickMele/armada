@@ -113,22 +113,28 @@ export function JobProposal({
       <section className="armada-proposal__region" aria-label="What each task runs on">
         <h3 className="armada-proposal__heading">What each task runs on</h3>
         {onTiers === undefined || onDroneCap === undefined ? (
-          <dl className="armada-proposal__frozen-fields">
-            {TIERS.map(([tier, label]) => (
-              <div className="armada-proposal__frozen-field" key={tier}>
-                <dt>{label}</dt>
-                <dd>{tiers[tier] ?? "Auto — Armada picks it"}</dd>
+          <>
+            {/* The three tiers are read against each other, so they are one
+                list; the cap is a different question and is its own. */}
+            <dl className="armada-proposal__frozen-fields">
+              {TIERS.map(([tier, label]) => (
+                <div className="armada-proposal__frozen-field" key={tier}>
+                  <dt>{label}</dt>
+                  <dd>{tiers[tier] ?? "Auto — Armada picks it"}</dd>
+                </div>
+              ))}
+            </dl>
+            <dl className="armada-proposal__frozen-fields">
+              <div className="armada-proposal__frozen-field">
+                <dt>Drones at once</dt>
+                <dd>
+                  {droneCap === undefined
+                    ? "As many as the machine allows"
+                    : `${droneCap} of this machine's ${machineCap ?? "?"}`}
+                </dd>
               </div>
-            ))}
-            <div className="armada-proposal__frozen-field">
-              <dt>Drones at once</dt>
-              <dd>
-                {droneCap === undefined
-                  ? "As many as the machine allows"
-                  : `${droneCap} of this machine's ${machineCap ?? "?"}`}
-              </dd>
-            </div>
-          </dl>
+            </dl>
+          </>
         ) : (
           <>
             <TierModels
