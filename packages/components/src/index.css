@@ -334,6 +334,8 @@
    request would. #1540. */
 @import "./compositions/DispatchSettings/DispatchSettings.css";
 @import "./compositions/WhatElseIsRunning/WhatElseIsRunning.css";
+/* The picture a person draws beside the prompt, on GraphCanvas. #1547. */
+@import "./compositions/SketchPad/SketchPad.css";
 
 /* The implement step opened — its groups, their tasks, and what ran at each
    group's end. #1536. */

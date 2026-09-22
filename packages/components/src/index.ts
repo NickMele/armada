@@ -359,6 +359,8 @@ export * from "./compositions/DispatchSettings/DroneCap";
 // The proposal itself: gates, tiers, how it lands and what it is held to,
 // editable until approval and frozen at it. #1541, #1548, #1551.
 export * from "./compositions/JobProposal/JobProposal";
+// The picture a person draws beside a prompt, on the one graph surface. #1547.
+export * from "./compositions/SketchPad/SketchPad";
 // A Job whose members are Jobs — pull requests landing in order. #1543.
 export * from "./compositions/JobMembers/JobMembers";
 // The implement step opened — its groups, their tasks, and what ran at each

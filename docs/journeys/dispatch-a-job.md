@@ -33,7 +33,9 @@ See Job Board for the full board mechanics — layout, status states, origin tag
 | --- | --- |
 | Repository | A fact, answered before the card opens. Bridge dispatches into the workspace it is pointed at |
 | From, Lands in | Where the work starts and where it lands, as two fields. They differ when you start from an unmerged branch or land in a long-lived one |
+| Write, Sketch | Which of the two ways of saying it is open. Words or a picture, never both at once — the card is narrow, and the switch swaps the one block under it |
 | Request | Prose, or a link to a ticket. `@` opens the file mention popup |
+| Sketch | Boxes and the lines between them, on the canvas a Studio's whiteboard draws on. Beside it, what the picture is meant to show, and the Studio node it was made from where there was one |
 | Attach, Add a link | A staged file, an address, or the Studio node the request came off. Each is a chip that says its kind and can be taken back. A link goes out with the request, one to a line |
 | Settings | Optional, and closed to start. Its head says how many are set |
 | What happens next | Armada reads the request and names the Job; you adjust and approve it; a planning Drone splits the work and a Judge reads what comes back |
@@ -71,6 +73,20 @@ case, and the panel exists so it is done knowingly.
 hangs off an existing Job and answers nothing until paths are claimed, so at
 dispatch nothing has been compared and the panel says so. The shape is draft —
 `packages/screens/src/draft/peers.ts`.
+
+### The sketch, and what of it reaches Fleet
+
+A sketch attaches to the prompt as a chip reading *From a Studio · sketch 1*,
+and the words typed under Write stay where they are while it is drawn. The chip
+takes no removal control: a picture is taken back on the pad, where the boxes
+going are visible.
+
+**The picture is draft and the wire is unchanged** —
+`packages/screens/src/draft/sketch.ts`, which names the `crates/ipc` module it
+is meant for. An attachment on the wire carries a staged path, a filename and a
+type and no provenance, so where a sketch was made is a draft field. Nothing
+stages the pad yet either: pressing Dispatch sends the words, and staging the
+PNG belongs with the schema lock.
 
 ## Approval Rules
 

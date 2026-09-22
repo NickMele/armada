@@ -107,7 +107,13 @@ function peers(): PeerOverlapAnswer {
   };
 }
 
-/** The picture, and the Studio node it was made from. */
+/**
+ * The picture, the Studio node it was made from, and the boxes behind it.
+ *
+ * **`drawn` is what the composer reopens.** The staged path is the PNG that
+ * goes out; a flattened image cannot be edited, so a moment replaying the
+ * composer carries what it was drawn from as well (#1547).
+ */
 function sketch(): SketchAttachment {
   return {
     staged_path: "/Users/user/Library/Application Support/Armada/staged/drones-stat.png",
@@ -115,6 +121,17 @@ function sketch(): SketchAttachment {
     height: 340,
     produced_by: "rail-stats",
     said: "The panel opens under the stat, with the Drone's Job on the first line.",
+    drawn: {
+      shapes: [
+        { id: "b1", x: 0, y: 0, body: "Drones 1 of 2" },
+        { id: "b2", x: 0, y: 180, body: "a panel under it, one Drone to a line" },
+        { id: "b3", x: 320, y: 180, body: "the Job and the step each Drone is on" },
+      ],
+      joins: [
+        { id: "b1-b2", from: "b1", to: "b2" },
+        { id: "b2-b3", from: "b2", to: "b3" },
+      ],
+    },
   };
 }
 

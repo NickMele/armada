@@ -143,9 +143,56 @@ describe("dispatch", () => {
       await expect.element(page.getByText("default", { exact: false })).not.toBeInTheDocument();
     },
   );
-  it.todo(
+  test(
     "arc/dispatch-sketch: the picture a person drew is on screen beside the prompt, with what " +
       "they said about it and the Studio node it was made from",
+    async () => {
+      mount("arc/dispatch-sketch");
+
+      // Beside the prompt: the words are in the field and the picture is
+      // attached to them, with where it was made read before its name.
+      await expect
+        .element(page.getByRole("textbox", { name: "Request" }))
+        .toHaveValue(expect.stringContaining("Drones 1 of 2"));
+      await expect.element(page.getByText("From a Studio")).toBeVisible();
+      await expect.element(page.getByText("sketch 1")).toBeVisible();
+
+      await page.getByRole("tab", { name: "Sketch" }).click();
+
+      // The picture itself: three boxes and the two lines between them.
+      await expect.element(page.getByRole("group", { name: "Box: Drones 1 of 2" })).toBeVisible();
+      await expect
+        .element(page.getByRole("group", { name: /^Box: a panel under it/ }))
+        .toBeVisible();
+      await expect
+        .element(page.getByRole("group", { name: /^Box: the Job and the step/ }))
+        .toBeVisible();
+      expect(page.getByRole("group", { name: /^A line from / }).elements()).toHaveLength(2);
+
+      // What they said about it, and the node it was made from.
+      await expect
+        .element(page.getByRole("textbox", { name: "About this sketch" }))
+        .toHaveValue(expect.stringContaining("The panel opens under the stat"));
+      await expect.element(page.getByText(/Made from\s+rail-stats\s+in a Studio/)).toBeVisible();
+    },
+  );
+
+  test(
+    "arc/dispatch-sketch: the words typed under Write are still there after a trip through " +
+      "Sketch and back",
+    async () => {
+      mount("arc/dispatch-sketch");
+      const field = page.getByRole("textbox", { name: "Request" });
+      await expect.element(field).toBeVisible();
+      const before = (field.element() as HTMLTextAreaElement).value;
+
+      await page.getByRole("tab", { name: "Sketch" }).click();
+      await expect.element(page.getByRole("textbox", { name: "About this sketch" })).toBeVisible();
+      expect(page.getByRole("textbox", { name: "Request" }).query()).toBeNull();
+
+      await page.getByRole("tab", { name: "Write" }).click();
+      await expect.element(page.getByRole("textbox", { name: "Request" })).toHaveValue(before);
+    },
   );
 });
 
