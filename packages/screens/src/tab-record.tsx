@@ -1,61 +1,52 @@
-// Record — what this Job produced, folded.
+// Record — what this Job has produced so far, read after the fact.
 //
-// **Today's `JobRecord`, given the destination it was built for.** The
-// composition has existed since the fold was designed and nothing had a place
-// to draw it; the Record tab is that place. Its sections are the caller's, as
-// they always were, and they are drawn from readings this screen already holds
-// — nothing here asks Fleet for anything Overview did not.
+// **One strip on this screen, and it is the destination strip.** `JobRecord`
+// folds the same readings behind a strip of its own, and drawn here that is two
+// segmented controls stacked, four pixels apart, in the same treatment — looked
+// at, it reads as one broken control rather than two working ones. So the
+// sections are regions in a column instead, which is the grammar the run column
+// already uses, and `JobRecord` keeps its one consumer until `#1537` deletes
+// it. That issue's own words are "replace `JobRecord` rather than nesting it".
 //
-// `#1537` replaces it with one ledger: when, step, kind, what, outcome, eight
-// filters and a row that opens in the inspector. It replaces `JobRecord`
-// rather than nesting inside it, which is why nothing below grows a section.
+// `#1537` replaces this with one ledger: when, step, kind, what, outcome, eight
+// filters, and a row that opens in the inspector.
 
-import { JobBrief, JobRecord, RunTree, type JobBriefProps, type JobLogReferenceRow, type RunTreeStep } from "@armada/components";
+import { JobBrief, RunTree, type JobBriefProps, type RunTreeStep } from "@armada/components";
 
 import { TAB_LABEL } from "./detail-tabs";
-import { WhereRegion } from "./InsideAJob";
+import { Eyebrow } from "./InsideAJob";
 
 export type RecordTabProps = {
   /** The run, exactly as Overview's tree draws it. */
   run: RunTreeStep[];
   /** The frozen brief, where Fleet has answered with one. */
   brief?: JobBriefProps;
-  /** Where things are, in the rows the surface already builds. */
-  where?: JobLogReferenceRow[];
   onCopied?: (value: string) => void;
 };
 
-export function RecordTab({ run, brief, where, onCopied }: RecordTabProps) {
-  const sections = [
-    ...(run.length === 0
-      ? []
-      : [
-          {
-            id: "steps",
-            label: "Steps and checks",
-            panel: <RunTree steps={run} pulsing={false} onCopied={onCopied} />,
-          },
-        ]),
-    ...(brief === undefined
-      ? []
-      : [{ id: "told", label: "What it was told", panel: <JobBrief {...brief} /> }]),
-    ...(where === undefined || where.length === 0
-      ? []
-      : [
-          {
-            id: "paths",
-            label: "Where the work is",
-            panel: <WhereRegion rows={where} onCopied={onCopied} />,
-          },
-        ]),
-  ];
-
+export function RecordTab({ run, brief, onCopied }: RecordTabProps) {
+  const nothing = run.length === 0 && brief === undefined;
   return (
     <div className="armada-detail-tab" role="tabpanel" aria-label={TAB_LABEL.record}>
-      <JobRecord
-        sections={sections}
-        emptyNote="Fleet has not answered for this job, so there is no record to fold."
-      />
+      {nothing ? (
+        <p className="armada-inside__absent" role="note">
+          Fleet has not answered for this job, so there is no record to fold.
+        </p>
+      ) : null}
+      {run.length === 0 ? null : (
+        <section className="armada-detail-tab__region" aria-label="Steps and checks">
+          <Eyebrow>Steps and checks</Eyebrow>
+          {/* Nothing pulses here. A record is read after the fact, and a mark
+              that loops would claim this page is the live one. */}
+          <RunTree steps={run} pulsing={false} onCopied={onCopied} />
+        </section>
+      )}
+      {brief === undefined ? null : (
+        <section className="armada-detail-tab__region" aria-label="What it was told">
+          <Eyebrow>What it was told</Eyebrow>
+          <JobBrief {...brief} />
+        </section>
+      )}
     </div>
   );
 }

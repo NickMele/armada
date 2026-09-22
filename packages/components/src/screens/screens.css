@@ -842,6 +842,16 @@
   overflow-y: auto;
 }
 
+/* A region inside a destination — its band and what is under it. The run
+   column's own gap, so a reading that moved here from the column lays out the
+   way it did there. */
+.armada-detail-tab__region {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 /* `align-items: stretch` and not `start`, so both columns are the grid's full
    height and can scroll inside it rather than pushing the screen taller. */
 .armada-inside {

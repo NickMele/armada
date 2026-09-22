@@ -875,9 +875,11 @@ places to check and two chances to disagree.
 
 ### Content area
 
-**Full-width routes. No inspector pane, no modal for Job detail.** Board
-and detail are separate destinations. **Helm's dock is the one
-exception**: at `--layout-breakpoint` and wider it sits beside the content
+**Full-width routes. No inspector pane over a route, no modal for Job detail.**
+Board and detail are separate destinations, and job detail's own inspector is
+inside the route rather than over it — below `--layout-breakpoint` it folds to
+a sheet flush to that route's edge, never to the window's. **Helm's dock is the
+one exception**: at `--layout-breakpoint` and wider it sits beside the content
 when open, because it answers questions about whatever is on screen rather
 than inspecting one Job, and draws nothing at all when closed — the title
 row's own Helm button is the one way back, since the edge strip that used to
@@ -952,6 +954,7 @@ at the desktop floor:**
 | Left column | Expanded, user-resizable — Navigation, Stats and Fleet together | **Auto-collapses to the 48px rail**, and 152px go to the content; under 1128px the step panel is still short and gives way | Auto-collapses to the 48px rail; Stats and Fleet each keep one status dot | A bottom tab bar |
 | Job row | One shape at every width — a stacked row carrying the badge, the headline sentence and the labelled field run beneath | The same row | The same row. Nothing reshapes | The same row, field run wrapped |
 | Helm's dock | Beside the content when open; closed draws nothing, and the title row's Helm button reopens it | Beside the content, unmoved — it is what the middle column is paying for | An edge strip; open draws it as a sheet over the content instead | Not built |
+| Job detail's inspector | A column beside the run | A column beside the run; under 1128px it is short and gives way | **A sheet over the run**, opened by pressing a step and closed by `Esc`; flush to both edges at the floor | Not built |
 
 The middle and right columns draw the same rail, and what differs is what the
 rail has to pay for: below 1100 the dock takes itself off screen and hands back
