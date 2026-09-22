@@ -158,8 +158,8 @@ export function PlanAskDialog({
       }
     >
       <p>
-        The plan is a record the Drone wrote. This asks it for a different split, and it answers —
-        it may take the change, and it may refuse and say why.
+        The plan is a record the Drone wrote. This asks it for a different split. It may take the
+        change, and it may refuse and say why.
       </p>
       {holds === undefined ? null : <p>{holds}</p>}
       {/* The one mechanical catch there is. A warning rather than a refusal:
