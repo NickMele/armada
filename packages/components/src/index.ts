@@ -59,7 +59,7 @@ export * from "./compositions/JobBrief/JobBrief";
 export * from "./compositions/JobDetailHeaderActions/JobDetailHeaderActions";
 export * from "./compositions/JobLogReference/JobLogReference";
 export * from "./compositions/JobOutcome/JobOutcome";
-export * from "./compositions/JobRecord/JobRecord";
+export * from "./compositions/JobLedger/JobLedger";
 export * from "./compositions/JobRowStacked/JobRowStacked";
 export * from "./compositions/Panel/Panel";
 export * from "./compositions/ReviewComments/ReviewComments";
