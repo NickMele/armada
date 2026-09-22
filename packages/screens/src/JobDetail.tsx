@@ -36,7 +36,7 @@ export type { FoldedReads } from "./mine";
 export { renderFor } from "./render";
 export type { Render } from "./render";
 export type { DetailTab } from "./detail-tabs";
-export { DETAIL_TABS, TAB_LABEL, TAB_NOUN } from "./detail-tabs";
+export { DETAIL_TABS, TAB_LABEL } from "./detail-tabs";
 
 /**
  * What a caller hands this screen. It lives in `detail-props.ts`, moved there

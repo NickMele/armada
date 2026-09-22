@@ -34,15 +34,6 @@ export const TAB_LABEL: Record<DetailTab, string> = {
   pulse: "Pulse",
 };
 
-/** What each destination answers, in the tab's own words. For the journey doc and the strip alike. */
-export const TAB_NOUN: Record<DetailTab, string> = {
-  overview: "needs-you",
-  workflow: "machinery",
-  plan: "work",
-  record: "produced",
-  pulse: "cost",
-};
-
 /**
  * What a tab has behind it, where it has a number at all.
  *
