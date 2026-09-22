@@ -3,7 +3,8 @@
 import type { LimitValues } from "@armada/protocol";
 import { describe, expect, it } from "vitest";
 
-import { gateViewOf, proposalViewOf } from "./proposal";
+import { gateReadingOf, gateViewOf, proposalViewOf } from "./proposal";
+import type { GateView } from "./proposal";
 import { sampleDetail, sampleStep } from "./sample";
 
 const limits: LimitValues = {
@@ -126,5 +127,75 @@ describe("what locks at approval", () => {
       "plan",
       "implement",
     ]);
+  });
+});
+
+
+/** One gate, with the three boxes off unless the case turns one on. */
+const boxes = (over: Partial<GateView> = {}): GateView => ({
+  step_id: "implement",
+  checks: false,
+  judge: false,
+  you: false,
+  ...over,
+});
+
+describe("what a combination of the boxes is on the wire", () => {
+  it("reads nothing ticked as auto, which stops nothing", () => {
+    const reading = gateReadingOf(boxes());
+
+    expect(reading.advance_gate).toBe("auto");
+    expect(reading.does).toBe("Nothing stops it.");
+    expect(reading.unmeant).toBe(false);
+  });
+
+  it("reads Checks alone as auto with the Checks as the whole gate", () => {
+    expect(gateReadingOf(boxes({ checks: true })).advance_gate).toBe("auto");
+  });
+
+  it("reads Checks and a Judge as auto_if_judge_passes", () => {
+    const reading = gateReadingOf(boxes({ checks: true, judge: true }));
+
+    expect(reading.advance_gate).toBe("auto_if_judge_passes");
+    expect(reading.unmeant).toBe(false);
+  });
+
+  // The one combination the issue is named after. `AutoIfJudgePasses` is the
+  // mechanical tier holding *and* the Judge not refusing, and the enum's own
+  // words are that there is no such thing as a Judge pass — so a step with no
+  // Checks produces no mechanical pass for the Judge to decline.
+  it("names a Judge with no Checks as a combination Fleet does nothing with yet", () => {
+    const reading = gateReadingOf(boxes({ judge: true }));
+
+    expect(reading.advance_gate).toBe("auto_if_judge_passes");
+    expect(reading.unmeant).toBe(true);
+  });
+
+  it("reads You as human_always, and says what ran before you read it", () => {
+    const alone = gateReadingOf(boxes({ you: true }));
+    const after = gateReadingOf(boxes({ you: true, checks: true, judge: true }));
+
+    expect(alone.advance_gate).toBe("human_always");
+    expect(alone.does).toContain("nothing run before you read it");
+    expect(after.does).toContain("its Checks and the Judge");
+  });
+
+  it("reads a step the repository decides as the repository's, whatever is ticked", () => {
+    const reading = gateReadingOf(
+      boxes({ you: true, repository_decides: "review_gate", overridden: false }),
+    );
+
+    expect(reading.advance_gate).toBe("manifest_rule:review_gate");
+    expect(reading.does).toContain("review_gate policy");
+  });
+
+  // Overriding hands the step back to the three boxes, which is the whole of
+  // what "you can override it for this Job" means — #1548.
+  it("reads an overridden step as its own boxes again", () => {
+    const reading = gateReadingOf(
+      boxes({ you: true, repository_decides: "review_gate", overridden: true }),
+    );
+
+    expect(reading.advance_gate).toBe("human_always");
   });
 });
