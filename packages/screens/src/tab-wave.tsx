@@ -32,7 +32,6 @@ import { answerNamed } from "./copy";
 import { dockQuestionsOf } from "./dock-questions";
 import type { JobDraft } from "./draft/held";
 import type { WaveJobView, WaveView } from "./draft/wave";
-import { waveOf } from "./draft/wave";
 import type { Outstanding } from "./outstanding";
 import { Eyebrow } from "./regions";
 import { waveRunOf, waveSaid, waveStandingOf } from "./wave";
@@ -75,16 +74,24 @@ export type WaveRegionProps = {
 };
 
 /**
- * The wave to draw: the moment's own where it has one, else what the Board's
- * rows say. Absent is a Job that dispatched nothing.
+ * The wave to draw — **the moment's own, and nothing derived**.
+ *
+ * `dispatched_by` is all the wire has, and it is the same field a landing
+ * order is read from: a parent whose three Jobs land in turn and a parent
+ * whose five wait on each other are indistinguishable through it. Deriving a
+ * wave from it drew both regions over the members moments, where the landing
+ * band is the right one. So Bridge draws a wave only where something says this
+ * Job is one, which today is the mock and after `#1545` is the wire.
+ *
+ * `waveOf` is the derivation that promotion turns on, kept and tested beside
+ * its type. It is not reached from here until the wire can tell the two apart.
  */
 export function waveReadingOf(
-  whole: JobWhole | null,
+  _whole: JobWhole | null,
   draft: JobDraft | undefined,
-  board: readonly JobSummary[],
+  _board: readonly JobSummary[],
 ): WaveView | undefined {
-  if (draft?.wave !== undefined) return draft.wave;
-  return whole === null ? undefined : waveOf(whole, board);
+  return draft?.wave;
 }
 
 /**

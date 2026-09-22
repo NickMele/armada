@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { WaveJobView, WaveView } from "./draft/wave";
+import { waveReadingOf } from "./tab-wave";
 import { waveDepths, waveNeedOf, waveNodeId, waveRunOf, waveSaid, waveStandingOf } from "./wave";
 
 function job(over: Partial<WaveJobView> & Pick<WaveJobView, "job">): WaveJobView {
@@ -176,5 +177,32 @@ describe("where each Job stands", () => {
     expect(waveSaid(waveStandingOf(wave([job({ job: "a" })])))).toBe(
       "1 Job under one plan — 0 merged, 1 still out.",
     );
+  });
+});
+
+// **The wire cannot tell a wave from a landing order**, because both are read
+// off `dispatched_by`. A derived wave drew the graph over the members moments,
+// where the landing band is the right region — so nothing is derived, and
+// `waveOf` waits for the wire to say which a Job is (`#1545`).
+describe("which Jobs draw a wave", () => {
+  it("draws one only where the moment says this Job is one", () => {
+    const view = wave([job({ job: "a" })]);
+    expect(waveReadingOf(null, { wave: view }, [])).toBe(view);
+  });
+
+  it("draws none from the Board's rows alone, however many a Job dispatched", () => {
+    const whole = {
+      job: { id: "parent" },
+      created_at: "",
+      steps: [],
+      acceptance_criteria: [],
+      dependencies: [],
+    } as unknown as Parameters<typeof waveReadingOf>[0];
+    const rows = [
+      { id: "a", dispatched_by: "parent" },
+      { id: "b", dispatched_by: "parent" },
+    ] as unknown as Parameters<typeof waveReadingOf>[2];
+    expect(waveReadingOf(whole, undefined, rows)).toBeUndefined();
+    expect(waveReadingOf(whole, {}, rows)).toBeUndefined();
   });
 });
