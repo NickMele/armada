@@ -37,6 +37,15 @@ what happened stays; a sentence that teaches the reader what a thing is moves
 behind the mark. If you cannot tell which one you have written, ask whether it
 would still be true on a Job that had never run.
 
+> **Teach the way a game teaches, and never gamify.**
+> `2026-09-23-teach-like-a-game-never-gamify.md` — a card the first time you
+> meet a piece, once, with the first one offering to turn them all off; motion
+> that shows how pieces relate. No points, no streaks, no badges.
+
+The two rules above and this one are one position: the screen reports, the
+teaching is offered once and then waits to be asked. What he rejects is not
+being taught — it is being told things he did not ask for, twice.
+
 > **Remove the constraint rather than document it.**
 > `2026-09-22-helm-overlays.md` — three screens worked around the dock's 380px
 > and the proposal was a contract rule. He made the dock overlay instead, so
@@ -126,5 +135,5 @@ The register is the evidence; this file is only the reading of it.
 
 **A rule that gets contradicted is deleted, not hedged.** If he decides the
 other way, the decision file records both and the rule here goes or narrows.
-Ten rules from three days is a thin basis, and this file will read as more certain
+Eleven rules from three days is a thin basis, and this file will read as more certain
 than it is.
