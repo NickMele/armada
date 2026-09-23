@@ -6,6 +6,7 @@ import {
   HardDrive,
   Stethoscope,
 } from "lucide-react";
+import { useState } from "react";
 import { expect } from "storybook/test";
 import { Select } from "../../primitives/Select/Select";
 import { ShortcutRevealProvider } from "../../shortcut-reveal";
@@ -65,6 +66,56 @@ export const Expanded: Story = {
  */
 export const CollapsedRail: Story = {
   args: { surfaces, activeId: "board", appName: "Armada", collapsed: true },
+};
+
+/**
+ * The collapse control, wired — #1591. The same button in both states, at the
+ * column's trailing edge open and centred at the rail, drawing
+ * `panel-left-close` and `panel-left-open` so it says which state it is in
+ * without being hovered.
+ *
+ * What a rendering cannot show, and what the `play` reads: the press reaches
+ * the same 48px rail the breakpoint does rather than a second narrow width,
+ * and the control comes back with it. A control that collapsed a column and
+ * then went with it is a person stuck at 48px.
+ */
+export const CollapseControl: Story = {
+  args: { surfaces, activeId: "board", appName: "Armada", collapseBinding: "⌘\\" },
+  render: (args) => {
+    const [collapsed, setCollapsed] = useState(false);
+    return <Sidebar {...args} collapsed={collapsed} onCollapsedChange={setCollapsed} />;
+  },
+  play: async ({ canvas, userEvent }) => {
+    const nav = canvas.getByRole("navigation");
+    const open = nav.getBoundingClientRect().width;
+
+    await userEvent.click(canvas.getByRole("button", { name: "Collapse the left column" }));
+    const rail = nav.getBoundingClientRect().width;
+    await expect(rail).toBeLessThan(open);
+    await expect(canvas.queryByText("Job Board")).toBeNull();
+
+    const back = canvas.getByRole("button", { name: "Expand the left column" });
+    await expect(back).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(back);
+    await expect(nav.getBoundingClientRect().width).toBe(open);
+    await expect(canvas.getByText("Job Board")).toBeVisible();
+  },
+};
+
+/**
+ * The rail a person asked for, rather than the one the window imposed. It is
+ * the same 48px `CollapsedRail` draws — the only difference is that the
+ * control is there, saying which way out is.
+ */
+export const CollapsedByChoice: Story = {
+  args: {
+    surfaces,
+    activeId: "board",
+    appName: "Armada",
+    collapsed: true,
+    collapseBinding: "⌘\\",
+    onCollapsedChange: () => {},
+  },
 };
 
 /** The narrow end of the drag range. */

@@ -107,13 +107,12 @@ notes = "Studio capture (#1290): point at something wrong anywhere in Bridge and
 kind = "Action"
 tier = "Global"
 verb = "Toggle sidebar"
-icon = ""
-icon_absent = "undecided"
+icon = "panel-left-close"
 shortcut = '⌘\'
 scope = "anywhere"
 destructive = false
 confirms = false
-notes = "No panel glyph is registered. Navigation is reachable by ⌘-digit without labels, which is why hiding it costs little; Stats and Fleet are not, and a hidden column takes both. Bridge collapses the column to its 48px rail on its own under --layout-breakpoint, which keeps all three on screen — #1435 read that as hiding it and was corrected. Nothing hides the column at any width, and this act is still unbuilt."
+notes = "Built by #1591: the press collapses the left column to the same 48px rail --layout-breakpoint reaches, and brings it back. It hides nothing — #1435 read collapse as hiding and was corrected on 18 Sep 2026 — so the act's whole content is which of two widths the column stands at, and the choice is remembered per viewer. Under the breakpoint it is inert, there being one width there and no choice to make. panel-left-close is the resting sense, the column open and the press putting it away; panel-left-open is its pair in the registry and is what the control draws in the other state, which no single icon column here can say."
 
 [actions.history]
 kind = "Action"

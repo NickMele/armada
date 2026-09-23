@@ -51,7 +51,9 @@ export const ALIASES: Readonly<Record<string, readonly string[] | undefined>> = 
   open_log: ["activity", "turns", "history"],
   open_stage: ["gate", "phase", "check"],
   state_filter: ["tab", "narrow", "status"],
-  toggle_sidebar: ["rail", "hide the rail"],
+  // "hide the rail" left on 2026-09-22 (#1591): nothing hides the column, at
+  // any width, and an alias that promises it is a way in to the wrong act.
+  toggle_sidebar: ["rail", "collapse the column", "expand the column"],
   submit_for_verification: ["hand back", "verify"],
 };
 

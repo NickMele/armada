@@ -102,6 +102,40 @@ export const CollapsedRail: Story = {
 };
 
 /**
+ * The rail asked for rather than imposed — #1591, `toggle_sidebar` built. The
+ * column reaches the same 48px the breakpoint does, and the drag handle goes
+ * with it: there is nothing to size at the rail, which is what `onResizeLeft`
+ * already documents.
+ *
+ * What a rendering cannot show: the press moves one thing. The window is at
+ * its resting width here, so the panel, the title row and the dock are the
+ * same as `Shell`'s, and the column is the only difference between the two.
+ */
+export const RailByChoice: Story = {
+  args: { ...shell, onResizeLeft: () => {}, onCollapsedChange: () => {}, collapseBinding: "⌘\\" },
+  render: (args) => {
+    const [collapsed, setCollapsed] = useState(false);
+    return (
+      <div className="armada-screen">
+        <div className="armada-screen__window">
+          <TheShell {...args} collapsed={collapsed} onCollapsedChange={setCollapsed} />
+        </div>
+      </div>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole("separator", { name: "Resize the left column" })).toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Collapse the left column" }));
+    await expect(canvas.queryByText("pid")).toBeNull();
+    await expect(canvas.queryByRole("separator", { name: "Resize the left column" })).toBeNull();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Expand the left column" }));
+    await expect(canvas.getByText("pid")).toBeVisible();
+  },
+};
+
+/**
  * Expanded, and the title row's dot is still there — one of it, because the
  * panel says the state in words rather than taking a name of its own. This is
  * the width #1438 drew no dot at, and the one the owner looked at when he said
