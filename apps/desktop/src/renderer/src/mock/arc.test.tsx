@@ -390,12 +390,16 @@ describe("the plan", () => {
     await expect.element(asks.getByRole("button", { name: "Move up" })).toBeDisabled();
     await expect.element(asks.getByRole("button", { name: "Move down" })).toBeEnabled();
     await expect.element(asks.getByRole("button", { name: "Remove" })).toBeEnabled();
-    // The board says nothing about what an ask is. The `?` over the cards is
-    // where that went — #1602.
+    // The board says nothing about what an ask is. The `?` on the groups' own
+    // head is where that went — #1602. The head is the noun and nothing more:
+    // *The groups, in the order they run* would be the removed sentence in a
+    // label's clothes.
+    const head = page.getByRole("heading", { name: "Groups", exact: true }).last();
+    await expect.element(head).toHaveTextContent(/^Groups$/);
+    await expect.element(planAsksMark()).toBeVisible();
     await expect
       .element(page.getByRole("tabpanel", { name: "Plan" }))
       .not.toHaveTextContent("The plan is the Drone's record");
-    await expect.element(planAsksMark()).toBeVisible();
   });
 
   test("arc/plan-revision-refused: moving a group past one that claims the same file warns before the ask goes out", async () => {

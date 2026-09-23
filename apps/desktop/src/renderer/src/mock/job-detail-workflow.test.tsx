@@ -148,10 +148,15 @@ test("a press on a task opens that task, and a press on its group takes the pane
 const markFor = (guide: { number: number; title: string }) =>
   page.getByRole("button", { name: `Open guide ${guide.number}, ${guide.title}` });
 
-test("the implement board draws no order line, and its mark is where the line was", async () => {
+test("the implement board heads its groups with the noun, and the mark hangs on that", async () => {
   await workflow();
-  // The mark first: an assertion that something is absent passes against a
+  // The head first: an assertion that something is absent passes against a
   // window that has not drawn yet, so a negative stands behind a positive.
+  const head = page.getByRole("heading", { name: "Groups", exact: true }).last();
+  await expect.element(head).toBeVisible();
+  // The noun and nothing else. *The groups, in the order they run* would be
+  // the sentence that came off wearing a hat.
+  await expect.element(head).toHaveTextContent(/^Groups$/);
   await expect.element(markFor(GUIDE_GROUP_ORDER).last()).toBeVisible();
   // *One group at a time. No task of the next group starts…* stood over the
   // groups and was the only evidence of the rule. It is guide 4 now.

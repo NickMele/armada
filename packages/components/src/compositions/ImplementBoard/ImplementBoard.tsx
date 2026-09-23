@@ -191,13 +191,15 @@ export function ImplementBoard({
 }: ImplementBoardProps) {
   return (
     <section className="armada-implement" aria-label={`${stepName}, opened`}>
-      {/* Where the order line used to be, and the mark is all that is left of
-          it: the rule was true of a plan that had never run, so it is the
-          guide's. Not on a group head — that head is a button, and a button
-          inside a button is not markup a browser keeps. */}
-      <p className="armada-implement__order">
+      {/* The noun and nothing else, with the `?` on it. **A label, not the
+          sentence that was here** — `Groups` is true of a step that has never
+          run, and the rule about what runs when is the guide's (#1602). Not on
+          a group's own head: that head is a button, and a button inside a
+          button is not markup a browser keeps. */}
+      <div className="armada-implement__order">
+        <h3 className="armada-implement__order-title">Groups</h3>
         <GuideMark guide={GUIDE_GROUP_ORDER} />
-      </p>
+      </div>
       <ol className="armada-implement__groups" aria-label="The groups of this step, in the order they run">
         {groups.map((group) => (
           <Group

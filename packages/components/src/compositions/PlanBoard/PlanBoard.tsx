@@ -121,10 +121,10 @@ export type PlanBoardProps = {
   openTaskId?: string;
   onOpenTask?: (taskId: string) => void;
   /**
-   * The group controls are offered, so the board draws the `?` that says what
-   * they are. **Once above the cards rather than on each**: what it explains
-   * is true of the plan and not of any one group, and one mark per card is
-   * the noise a mark exists to replace.
+   * The group controls are offered, so the groups' own head draws the `?` that
+   * says what they are. **Once above the cards rather than on each**: what it
+   * explains is true of the plan and not of any one group, and one mark per
+   * card is the noise a mark exists to replace.
    */
   askable?: boolean;
   /** A group ask was pressed and nothing has answered — every ask is off. */
@@ -342,15 +342,6 @@ export function PlanBoard({
     <div className="armada-plan-board">
       <section className="armada-plan-board__approach" aria-label="The approach">
         <Clamped lines={3}>{approach}</Clamped>
-        {/* Where the line saying what the controls are used to be. The cards
-            are numbered, so the order needs no sentence and takes no mark;
-            what a person cannot read off them is that every control below is
-            a request the Drone may refuse. */}
-        {askable ? (
-          <p className="armada-plan-board__asks-say">
-            <GuideMark guide={GUIDE_PLAN_ASKS} />
-          </p>
-        ) : null}
       </section>
       {clashes.length === 0 ? null : (
         <section className="armada-plan-board__clashes" aria-label="Two groups claim the same file">
@@ -364,18 +355,30 @@ export function PlanBoard({
           </ul>
         </section>
       )}
-      <ol className="armada-plan-board__groups" aria-label="Groups, in the order they run">
-        {groups.map((group) => (
-          <GroupCard
-            key={group.id}
-            group={group}
-            askPending={askPending}
-            {...(openTaskId === undefined ? {} : { openTaskId })}
-            {...(onOpenTask === undefined ? {} : { onOpenTask })}
-            {...(onAsk === undefined ? {} : { onAsk })}
-          />
-        ))}
-      </ol>
+      <div className="armada-plan-board__group-region">
+        {/* The noun and nothing else. **A label, not the sentence that was
+            here** — `Groups` is true of a plan that has never run, the same
+            class as `Checks at this boundary`, and it is what the `?` hangs on
+            now that the line saying what an ask is has gone (#1602). The mark
+            is drawn only where the asks are, because that is what it
+            explains. */}
+        <div className="armada-plan-board__groups-head">
+          <h3 className="armada-plan-board__groups-title">Groups</h3>
+          {askable ? <GuideMark guide={GUIDE_PLAN_ASKS} /> : null}
+        </div>
+        <ol className="armada-plan-board__groups" aria-label="Groups, in the order they run">
+          {groups.map((group) => (
+            <GroupCard
+              key={group.id}
+              group={group}
+              askPending={askPending}
+              {...(openTaskId === undefined ? {} : { openTaskId })}
+              {...(onOpenTask === undefined ? {} : { onOpenTask })}
+              {...(onAsk === undefined ? {} : { onAsk })}
+            />
+          ))}
+        </ol>
+      </div>
     </div>
   );
 }
