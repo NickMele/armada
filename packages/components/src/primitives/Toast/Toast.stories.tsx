@@ -39,7 +39,7 @@ export const Killed: Story = {
 export const Landed: Story = {
   args: {
     status: "completed-success",
-    children: "Convoy landed as one PR.",
+    children: "The three pull requests landed in order.",
     actionLabel: "View",
   },
 };

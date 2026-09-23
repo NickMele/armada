@@ -362,8 +362,9 @@ function servingRows(jobId: string, rehearsal: WorkRehearsal): JobLogReferenceRo
  * which Job and roughly where. Whoever wants the file list is one click from
  * the other Job, and the whole list is still what copying the row writes.
  *
- * **A count for the rest, never the rest.** `+4` is the shape a Convoy's row
- * already uses for its extra write targets.
+ * **A count for the rest, never the rest.** `+4` is the shape a Board row
+ * already uses for the extra write targets of a Job that writes in several
+ * places.
  */
 function overlapRows(whole: JobWhole): JobLogReferenceRow[] {
   return (whole.write_scope_overlaps ?? []).map((other, at) => {

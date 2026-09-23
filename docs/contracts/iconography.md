@@ -493,11 +493,14 @@ never in a Job Board row. Blast radius is what matters while deciding,
 and the row already names the first write target and counts the rest in
 text — see [Job Board](../concepts/job-board.md).
 
-**It is not the workflow glyph.** A Job's workflow label needs one of its
-own, and does not have one yet; `packages/icons/icons.toml` is where that
-is decided. The registry's entry for `layers` read `means = "convoy"`
-until 22 Sep 2026, which was a retired name for this same idea; it now
-says what the glyph depicts.
+**It is not the workflow glyph.** A Job's workflow label takes
+`scroll-text`, settled 23 Sep 2026: a workflow is the one fact on the row
+that was authored before the Job existed, and a rolled sheet is the only
+silhouette in the set that depicts something written down in an order. The
+argument and what it refused are in `packages/icons/icons.toml`. The
+registry's entry for `layers` read `means = "convoy"` until 22 Sep 2026,
+which was a retired name for this same idea; it now says what the glyph
+depicts.
 
 ### Chrome
 
