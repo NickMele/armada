@@ -29,6 +29,15 @@ describe("what an element is stamped with", () => {
     expect(stampFor(element("div", { attributes: already }), FILE, ROOT)).toBeNull();
   });
 
+  it("is nothing inside a primitive, whose file is shared by every screen that draws one", () => {
+    const primitive = `${ROOT}/packages/components/src/primitives/Button/Button.tsx`;
+    expect(stampFor(element("button"), primitive, ROOT)).toBeNull();
+    const composition = `${ROOT}/packages/components/src/compositions/ActiveJobsList/ActiveJobsList.tsx`;
+    expect(stampFor(element("h2"), composition, ROOT)).toBe(
+      "packages/components/src/compositions/ActiveJobsList/ActiveJobsList.tsx:42",
+    );
+  });
+
   it("is nothing without a position, a repository, or a file inside it", () => {
     expect(stampFor(element("div", { loc: null }), FILE, ROOT)).toBeNull();
     expect(stampFor(element("div"), FILE, null)).toBeNull();

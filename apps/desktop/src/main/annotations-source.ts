@@ -37,10 +37,16 @@ type Types = {
 /** A host element: React's own rule for what it renders as a tag rather than a component. */
 const HOST = /^[a-z]/;
 
+// **A primitive is nobody's complaint.** Every button in the app draws the same
+// `<button>`, so stamping it sends a note about one screen to a file shared by
+// all of them. Unstamped, the nearest stamp is the composition that used it,
+// which is where the change goes. `component` still says `Button`.
+const PRIMITIVES = "packages/components/src/primitives/";
+
 /**
  * What the element's stamp says, or null where it must not carry one — a
- * component rather than a host element, a file outside the repository, a node
- * Babel gave no position, or an element that already carries one.
+ * component rather than a host element, a primitive, a file outside the
+ * repository, a node Babel gave no position, or one already stamped.
  */
 export function stampFor(node: OpeningElement, filename: string, root: string | null): string | null {
   if (root === null) return null;
@@ -54,6 +60,7 @@ export function stampFor(node: OpeningElement, filename: string, root: string | 
   if (!isAbsolute(path)) return null;
   const from = relative(root, path).split(sep).join("/");
   if (from === "" || from.startsWith("../") || from.includes("node_modules/")) return null;
+  if (from.startsWith(PRIMITIVES)) return null;
   return `${from}:${line}`;
 }
 

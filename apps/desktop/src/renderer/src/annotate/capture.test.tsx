@@ -65,3 +65,20 @@ test("a stamp that is not a file and a line is read as none rather than guessed 
     expect(capture(document.getElementById("target")!, AT).source, value).toBeUndefined();
   }
 });
+
+test("a pin on a primitive's own node resolves to the composition that drew it", () => {
+  // What the build leaves: the composition's elements stamped, the primitive's not.
+  document.body.innerHTML = `
+    <section ${SOURCE_ATTRIBUTE}="packages/components/src/compositions/ActiveJobsList/ActiveJobsList.tsx:224">
+      <h2 id="own" ${SOURCE_ATTRIBUTE}="packages/components/src/compositions/ActiveJobsList/ActiveJobsList.tsx:228">Needs you</h2>
+      <button class="armada-button"><span id="inside">Dispatch</span></button>
+    </section>`;
+  expect(capture(document.getElementById("inside")!, AT).source).toEqual({
+    file: "packages/components/src/compositions/ActiveJobsList/ActiveJobsList.tsx",
+    line: 224,
+  });
+  expect(capture(document.getElementById("own")!, AT).source).toEqual({
+    file: "packages/components/src/compositions/ActiveJobsList/ActiveJobsList.tsx",
+    line: 228,
+  });
+});
