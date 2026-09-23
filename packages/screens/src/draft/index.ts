@@ -24,6 +24,7 @@
 // a re-export would put the drafts behind the package name, where that rule
 // could no longer see them.
 
+export * from "./branches";
 export * from "./cases";
 export * from "./coord";
 export * from "./criterion";

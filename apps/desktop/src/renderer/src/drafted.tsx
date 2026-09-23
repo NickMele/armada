@@ -11,8 +11,8 @@
 import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 
+import type { BranchesAnswer } from "@armada/screens/src/draft/branches";
 import type { LandingRule } from "@armada/screens/src/draft/landing";
-import type { PeerOverlapAnswer } from "@armada/screens/src/draft/peers";
 import type { ProposalView } from "@armada/screens/src/draft/proposal";
 import type { SketchAttachment } from "@armada/screens/src/draft/sketch";
 
@@ -20,10 +20,13 @@ import type { SketchAttachment } from "@armada/screens/src/draft/sketch";
 export type Drafted = {
   /** What is already in the request field. Absent opens it empty. */
   prompt?: string;
-  /** What else is writing where this would. Absent is nobody having looked. */
-  peers?: PeerOverlapAnswer;
   /** Where the work starts and where it lands. Absent falls back to the Manifest. */
   landing?: LandingRule;
+  /**
+   * The repository's branches, for the two ref fields to pick over. Absent is
+   * nothing having listed them, which is the app on a real Fleet.
+   */
+  branches?: BranchesAnswer;
   /**
    * The proposal this moment is of — the tier map, the two caps, the refs.
    * **The dispatch form and the classifying screen read the same shape**, one

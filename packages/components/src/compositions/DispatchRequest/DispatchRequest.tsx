@@ -7,6 +7,8 @@ import { Badge } from "../../primitives/Badge/Badge";
 import { Button } from "../../primitives/Button/Button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../primitives/Card/Card";
 import { Input } from "../../primitives/Input/Input";
+import { BranchPicker } from "../BranchPicker/BranchPicker";
+import type { BranchOption } from "../BranchPicker/BranchPicker";
 import { MentionPopover, useMention } from "../../primitives/MentionPopover/MentionPopover";
 import { Tabs } from "../../primitives/Tabs/Tabs";
 import { Textarea } from "../../primitives/Textarea/Textarea";
@@ -20,12 +22,12 @@ import type { StagedAttachment } from "@armada/protocol";
  * Dispatch a job by describing the work. One field, one press, and the Job
  * proposer decides the rest.
  *
- * **Describing the work is the path; the form is the override.** A person types
- * what they want done, or pastes a link, and dispatches. They pick no workflow
- * and write no title — `../../../../../docs/concepts/job-proposer.md` says
- * both, and says why: doing it by hand means knowing the workflow catalogue
- * before you can ask for anything. Hand entry is one control away and is the
- * exception.
+ * **Describing the work is the only way in.** A person types what they want
+ * done, or pastes a link, and dispatches. They pick no workflow and write no
+ * title — `../../../../../docs/concepts/job-proposer.md` says both, and says
+ * why: doing it by hand means knowing the workflow catalogue before you can
+ * ask for anything. The form that let you is gone, and the Settings block is
+ * where a workflow, a model or a cap is overridden instead.
  *
  * # The wait says what the call is doing, and offers a way out of it
  *
@@ -59,8 +61,8 @@ import type { StagedAttachment } from "@armada/protocol";
  *
  * **No workflow resolved is Armada working.** Fleet answered, refused, and
  * returned the request unchanged — no Job was created. It takes no red and no
- * code: it is the surface saying what it will not send, and the two ways on are
- * to edit the request or to enter the job by hand.
+ * code: it is the surface saying what it will not send, and the way on is to
+ * edit the request, or to name the workflow in Settings.
  *
  * **The call not being made at all is Armada failing.** That is a fault, it
  * carries the code every error carries, and it renders in the error treatment
@@ -117,6 +119,15 @@ export type DispatchRequestProps = {
    */
   refs: Refs;
   onRefs: (refs: Refs) => void;
+  /**
+   * The repository's branches, for the two fields above to pick over.
+   *
+   * **`null` is nothing having listed them**, which draws the two plain fields
+   * they were — an empty picker would say the repository has no branches, and
+   * nothing has asked it. Nothing on the wire answers this today; the shape is
+   * `packages/screens/src/draft/branches.ts`.
+   */
+  branches?: readonly BranchOption[] | null;
   /**
    * Addresses attached beside the request — a ticket, a pull request, a page.
    *
@@ -179,8 +190,6 @@ export type DispatchRequestProps = {
   onRemoveAttachment: (path: string) => void;
   /** Send it. Never called with a blank request — the control is off until one. */
   onDispatch: () => void;
-  /** Fill the form in by hand instead. The override, and one press away. */
-  onEnterByHand: () => void;
   /** Drop what came back and describe something else. */
   onReset: () => void;
   /**
@@ -383,6 +392,7 @@ export function DispatchRequest({
   repository,
   refs,
   onRefs,
+  branches = null,
   links = [],
   onAddLink,
   onRemoveLink,
@@ -398,7 +408,6 @@ export function DispatchRequest({
   onAttach,
   onRemoveAttachment,
   onDispatch,
-  onEnterByHand,
   onReset,
   close,
   onOpen,
@@ -464,6 +473,7 @@ export function DispatchRequest({
               {...(repository === undefined ? {} : { repository })}
               refs={refs}
               onRefs={onRefs}
+              branches={branches}
               disabled={reading || disabled}
             />
           )}
@@ -544,9 +554,16 @@ export function DispatchRequest({
               <div className="armada-dispatch__next">
                 <span className="armada-dispatch__next-head">What happens next</span>
                 <ol className="armada-dispatch__next-list">
-                  {NEXT.map((line) => (
+                  {NEXT.map((line, index) => (
                     <li className="armada-dispatch__next-line" key={line}>
-                      {line}
+                      {/* The same ordinal the proposal's chain draws, because
+                          it is the same kind of thing one card down: a run
+                          whose order is the substance. Read rather than
+                          hidden — the chain's number restates a position its
+                          own `Waits on job 1` sentence already says, and
+                          nothing here says it twice. */}
+                      <span className="armada-dispatch__ordinal mono">{index + 1}</span>
+                      <span className="armada-dispatch__next-said">{line}</span>
                     </li>
                   ))}
                 </ol>
@@ -575,7 +592,7 @@ export function DispatchRequest({
               <p className="armada-dispatch__unresolved-body">
                 Nothing is assigned by default: the workflow is frozen into the job at creation
                 and becomes what the work is judged against. Edit the request and dispatch
-                again, or enter the job by hand.
+                again, or name the workflow yourself under Settings.
               </p>
             </div>
           ) : null}
@@ -622,25 +639,22 @@ export function DispatchRequest({
             Dispatch another
           </Button>
         ) : (
-          <>
-            {/* The override. Secondary and leading, because it is the exception
-                and the accent is spent on the path. */}
-            <Button variant="secondary" onClick={onEnterByHand} disabled={reading}>
-              Enter by hand
-            </Button>
-            <Button
-              variant="primary"
-              pending={reading}
-              onClick={onDispatch}
-              disabled={disabled || empty}
-            >
-              {reading
-                ? "Reading the request"
-                : proposal.at === "faulted"
-                  ? "Dispatch again"
-                  : "Dispatch"}
-            </Button>
-          </>
+          /* One control, because there is one way through this surface. The
+             form `Enter by hand` opened is gone: the Settings block took every
+             decision it carried, and the owner's call of 2026-09-23 is that
+             with those there it is not needed any more. */
+          <Button
+            variant="primary"
+            pending={reading}
+            onClick={onDispatch}
+            disabled={disabled || empty}
+          >
+            {reading
+              ? "Reading the request"
+              : proposal.at === "faulted"
+                ? "Dispatch again"
+                : "Dispatch"}
+          </Button>
         )}
       </CardFooter>
     </Card>
@@ -655,16 +669,22 @@ export function DispatchRequest({
  * are this form's, and both are drawn as fields even when they read the same
  * branch — a value only one of them could change would be the pair collapsed
  * back into one.
+ *
+ * **Both pick over the repository's branches, and only one of them makes
+ * one.** Where the work starts has to exist; where it lands may not, and
+ * naming a branch that is not there is how one gets made.
  */
 function Where({
   repository,
   refs,
   onRefs,
+  branches,
   disabled,
 }: {
   repository?: string;
   refs: Refs;
   onRefs: (refs: Refs) => void;
+  branches: readonly BranchOption[] | null;
   disabled: boolean;
 }) {
   return (
@@ -675,19 +695,20 @@ function Where({
           <span className="mono armada-dispatch__where-value">{repository}</span>
         </div>
       )}
-      <Input
+      <BranchPicker
         label="From"
-        mono
         value={refs.from}
+        onValue={(from) => onRefs({ ...refs, from })}
+        branches={branches}
         disabled={disabled}
-        onChange={(event) => onRefs({ ...refs, from: event.target.value })}
       />
-      <Input
+      <BranchPicker
         label="Lands in"
-        mono
         value={refs.target}
+        onValue={(target) => onRefs({ ...refs, target })}
+        branches={branches}
+        offerNew
         disabled={disabled}
-        onChange={(event) => onRefs({ ...refs, target: event.target.value })}
       />
     </div>
   );

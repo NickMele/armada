@@ -70,9 +70,8 @@ const PROPOSED: Answered = {
  * outstanding — which is the only state the guard exists for.
  */
 /**
- * What this screen is handed beside the request: where the work starts, who
- * else is writing there, and what the settings block may offer. **`peers` is
- * `null` on purpose** — nobody has looked, which is every dispatch today.
+ * What this screen is handed beside the request: where the work starts, and
+ * what the settings block may offer.
  */
 const HELD = {
   landing: {
@@ -84,7 +83,9 @@ const HELD = {
     complete_when: "delivered",
     land_together: [],
   },
-  peers: null,
+  // Nothing has listed the repository's branches either, which is every
+  // dispatch against a real Fleet — so the two ref fields draw plain.
+  branches: null,
   workflows: [],
   models: [],
   machineCap: null,
@@ -103,7 +104,6 @@ function opened(answering: () => Promise<Answered>): { sent: string[] } {
       onOpen={() => {}}
       onApprove={() => {}}
       approving={[]}
-      byHand={<p>The form, by hand</p>}
       // Nothing published, which is the state before Fleet's first message and
       // the one these cases are about: what the guard does is not a function of
       // how far the call has got.
@@ -202,16 +202,22 @@ test("whitespace is not a request", async () => {
 });
 
 /**
- * Hand entry is one press away and never a dead end. **The override has to be
- * leavable** — a form somebody reached by mistake with no way back is the
- * surface that made the proposer worth building.
+ * There is one way through this surface and no way off it.
+ *
+ * **The owner took hand entry out on 2026-09-23**, once Settings carried every
+ * decision the form did. This is what a screen that offered a second route
+ * would fail: a refusal draws no way out, and the footer carries one control.
  */
-test("hand entry is reachable and leavable", async () => {
+test("nothing offers a second way to make a Job", async () => {
   opened(() => Promise.resolve(UNRESOLVED));
-  await userEvent.click(page.getByRole("button", { name: "Enter by hand" }));
-  await expect.element(page.getByText("The form, by hand")).toBeVisible();
+  await userEvent.fill(field(), REQUEST);
+  await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
 
-  await userEvent.click(page.getByRole("button", { name: "Describe the work instead" }));
+  await expect.element(page.getByText(/No workflow fits this request/)).toBeVisible();
+  await expect.element(page.getByRole("button", { name: "Enter by hand" })).not.toBeInTheDocument();
+  await expect
+    .element(page.getByRole("button", { name: "Describe the work instead" }))
+    .not.toBeInTheDocument();
   await expect.element(field()).toBeVisible();
 });
 
@@ -231,7 +237,6 @@ test("the proposal is approved from here", async () => {
       onOpen={() => {}}
       onApprove={(jobId) => approved.push(jobId)}
       approving={[]}
-      byHand={<p>The form, by hand</p>}
       watching={null}
       onStop={() => {}}
       {...HELD}
@@ -265,7 +270,6 @@ test("the row follows the board, not the answer", async () => {
       approving={[]}
       // What the board says now, which is not what came back with the proposal.
       statusOf={() => "queued"}
-      byHand={<p>The form, by hand</p>}
       watching={null}
       onStop={() => {}}
       {...HELD}

@@ -32,7 +32,7 @@ See Job Board for the full board mechanics — layout, status states, origin tag
 | On the card | What it is |
 | --- | --- |
 | Repository | A fact, answered before the card opens. Bridge dispatches into the workspace it is pointed at |
-| From, Lands in | Where the work starts and where it lands, as two fields. They differ when you start from an unmerged branch or land in a long-lived one |
+| From, Lands in | Where the work starts and where it lands, as two fields over the repository's branches. They differ when you start from an unmerged branch or land in a long-lived one |
 | Write, Sketch | Which of the two ways of saying it is open. Words or a picture, never both at once — the card is narrow, and the switch swaps the one block under it |
 | Request | Prose, or a link to a ticket. `@` opens the file mention popup |
 | Sketch | Boxes and the lines between them, on the canvas a Studio's whiteboard draws on. Beside it, what the picture is meant to show, and the Studio node it was made from where there was one |
@@ -40,8 +40,26 @@ See Job Board for the full board mechanics — layout, status states, origin tag
 | Settings | Optional, and closed to start. Its head says how many are set |
 | What happens next | Armada reads the request and names the Job; you adjust and approve it; a planning Drone splits the work and a Judge reads what comes back |
 
-**Hand entry stays.** `Enter by hand` is one press away and builds the Job
-itself — the [Job proposer](../concepts/job-proposer.md) calls it the override.
+**There is no hand-entry form.** `Enter by hand` and the Job it built are gone
+— the owner's call of 23 September 2026, once Settings carried every decision
+the form did. [Job proposer](../concepts/job-proposer.md) has the rule.
+
+### The two branch fields
+
+Both open on the Manifest's base and both offer the repository's branches, each
+row saying what it is: the base, or the Job whose worktree is sitting on it.
+
+**Only where it lands makes one.** Typing a name no branch carries offers it as
+a new branch, and taking that row is the whole of creating it — there is no
+second control. Where the work starts offers none, because you cannot begin on
+a branch that does not exist.
+
+**Both still take a name typed by hand**, because the list is a floor rather
+than the repository's own. The shape is draft —
+`packages/screens/src/draft/branches.ts` — and nothing on the wire lists a
+repository's refs, so against a real Fleet the list is absent and the two draw
+as plain fields. A branch Armada has never met is not a branch that is not
+there, and the field says which of the two it is looking at.
 
 ### Settings, and what absent means
 
@@ -49,7 +67,7 @@ Four, each of them a decision somebody else takes when it is left alone:
 
 | Setting | Left alone |
 | --- | --- |
-| Workflow | The proposer picks it from the request |
+| Workflow | The proposer picks it from the request. Where a definition Fleet holds was left out, it is named under this field — #425 |
 | Models by tier — difficult, medium, easy | Auto: the harness chooses, and a planning Drone's tier for a task is what selects the model |
 | Drones at once | The machine's own cap holds. The two figures are drawn apart: how many this Job may run, and how many run here across every Job |
 | How it lands | The workflow's delivering step decides. Set it to land without asking, or to stop for you at review |
@@ -59,20 +77,20 @@ the `crates/ipc` module it is meant for. Nothing on the wire carries them yet,
 so a Job created today is classified as it always was and the schema lock is
 where they reach Fleet.
 
-### What else is running
+### What else is running, and why it is not here
 
-Beside the request at a wide window, under it at a narrow one: the Jobs already
-writing where this work would, each with the paths the two of them share and
-where that Job is.
+> **Rule.** The dispatch card draws nothing about what else is running. The
+> card is one column and the request is the whole of it.
+> Why: the owner, 23 September 2026, of the panel that stood beside it — *"How
+> are these jobs identified? I think its neat but also feels weird. If I have 10
+> jobs active, does it show all 10 jobs?"* Offered a cap, every running Job, a
+> count, or removal, he took removal. The overlap read happens anyway once the
+> Job has declared its paths, and the Job Board already says what is running.
 
-**It is a fact and never a verdict.** Nothing on the surface is greyed by it and
-nothing is refused; dispatching into a file another Job holds is the ordinary
-case, and the panel exists so it is done knowingly.
-
-**Nobody looked and nobody was found are two sentences.** Today's overlap read
-hangs off an existing Job and answers nothing until paths are claimed, so at
-dispatch nothing has been compared and the panel says so. The shape is draft —
-`packages/screens/src/draft/peers.ts`.
+**The cost was taken knowingly**: the warning is gone from the one moment a
+person could still change what they are asking for. A Job's own overlap is a
+different question and still has its draft — `packages/screens/src/draft/peers.ts`
+— which now derives from `JobDetail` alone.
 
 ### The sketch, and what of it reaches Fleet
 
@@ -147,7 +165,7 @@ Two adjacent Job Board gaps sit in the same area and are still open surface ques
 A handful of questions this journey once carried are now settled, recorded here so their reasoning isn't lost even though the open item itself is gone from the decision record:
 
 - **The lexicon entry for the frozen acceptance criteria field** is plain lowercase "acceptance criteria" — no proper noun. Metaphor is confined to proper nouns and the lexicon already carries fourteen; countable things are lowercased by the casing rule, so "criterion" and "criteria" follow. The field is `Job.acceptance_criteria[]`, designed for 1–6 entries, written into Job's Other Fields with type, cardinality and freeze point stated, plus the Evidence linkage — Evidence carries a per-criterion row `{criterion_id, verdict, citation, source}`, where `source` there is the verification source and a different vocabulary from the criterion's own. **The freeze point is the approval press** (22 Sep 2026), not Job creation: the criteria are read out of the linked issue where there is one, each is editable until you approve, and each says where its words came from — the issue, your prompt, or you. After the press they are what the Judge marks against, and the issue moving afterwards changes nothing except that the Job says it has moved. A criterion may then be appended at an approved widening, but never edited, reordered or removed, so a frozen-position guarantee holds and a Judge citation to "criterion 4" still resolves after a widening. **What is not built is the second half**: Fleet freezes at creation, `source` still means how a criterion is verified rather than where it came from, and nothing re-reads an issue to notice it changed — Bridge draws all three against the draft schema.
-- **Model selection per Job** is yes, and this journey is where it is set. `DroneSpawnConfig` carries a `model` field because the adapter must pass a model string to the harness on every spawn; hand entry names that model directly, and dispatch names one per tier instead, because a plan's tasks are not all the same size. The scope note that said M1 would build no picker was written before any of these surfaces existed and the owner decided otherwise. A model named nowhere still resolves to the configured default at the Fleet boundary. Per-Job selection has two other homes to reconcile with: `judge_check.model`, already a per-step dial, and `policy.model`, which sits in the deferred half of the `armada.yml` schema.
+- **Model selection per Job** is yes, and this journey is where it is set. `DroneSpawnConfig` carries a `model` field because the adapter must pass a model string to the harness on every spawn; dispatch names one per tier rather than one for the Job, because a plan's tasks are not all the same size — the hand form that named a model directly is gone. The scope note that said M1 would build no picker was written before any of these surfaces existed and the owner decided otherwise. A model named nowhere still resolves to the configured default at the Fleet boundary. Per-Job selection has two other homes to reconcile with: `judge_check.model`, already a per-step dial, and `policy.model`, which sits in the deferred half of the `armada.yml` schema.
 - **The field naming which WorkflowDef a Job follows** is `workflow_id` on both sides, not `task_type`. `task_type` named a category that does not exist as an entity, while every other reference on the Job record — `owner_manifest_id`, `gate_manifest_ids[]`, `dispatched_by` — names the thing it points at. `task` is also a banned synonym for Job under the lexicon, which made `task_type` doubly wrong: it was the field name most likely to propagate the wrong word into code and UI. The rename costs nothing structural, since Job is not yet built.
 - **Every Job is a peer node in dependencies.** It carries and is the target of `depends_on` / `blocks`, whatever it writes and however it lands. The links sequence peers rather than children, so a Job whose own members are Jobs is sequenced against a peer like any other — see [Landing](../concepts/landing.md). How the work lands is not part of what the proposer proposes.
 - **A not-started Job's approval state and its readiness state are two separate fields, not one four-value field with a precedence rule.** Approval state (`needs_approval` / `pre_approved`) and readiness state (`blocked_by_dependency` / `waiting_on_resources` / ready) are two axes that were jammed into one, and a Job genuinely carries both at once. The existing symptom was the diagnosis: a sub-dispatched Job is always approved, inheriting its parent's approval, so one out of headroom used to compute as `pre_approved_queued` and, by the Board's own visibility rule, never rendered at all.

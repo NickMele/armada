@@ -466,7 +466,6 @@ export const NOTHING_YET: BridgeState = {
 export const CHANNELS = {
   state: "bridge:state",
   changed: "bridge:changed",
-  proposeJob: "bridge:propose-job",
   proposeFromRequest: "bridge:propose-from-request",
   stopProposal: "bridge:stop-proposal",
   stageAttachment: "bridge:stage-attachment",
