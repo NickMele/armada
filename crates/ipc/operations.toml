@@ -2552,6 +2552,8 @@ notes = """
 
 **Every repository's, each naming its own.** A row's `manifest_id` is the repository it runs in — a Job's own, or the main checkout's — so two repositories' main-checkout servers are told apart on the row.
 
+**Every row says which checkout answers it.** `checkout` carries the path the server runs in, the branch for a Job's worktree, the commit it came up on, and how many commits have landed in that checkout since. A name and a port are not enough: another checkout of the same repository declares the same number and the address answers whichever bound first — `#1577`. `behind` absent is Fleet never having been told, which is not the same fact as zero.
+
 `agent_access` is `Yes` since `#697`. `start_server` and `stop_server` have read `Yes` since `#695`; a caller that may start one and may not ask which are up starts a second on the same port, which is the mistake the server tool exists to replace. It is a handful of rows and carries no output — that is `observe_server`'s, and stays Bridge's.
 """
 
@@ -2566,6 +2568,8 @@ notes = """
 **One instance per Job per server.** A second request, from a person or through a Drone's `start_server` tool, is answered with the instance already starting or serving rather than a second one on the same port.
 
 It answers at once, `starting`; `server.serving` and `server.exited` follow on `/events`, and the output is `observe_server`'s. Refused where the name declares no server, where the Job's worktree is gone or the Job has ended.
+
+**A refusal over a name says when this Fleet last read `armada.yml`.** Fleet holds the Manifest it resolved at startup, so a server declared since is one this process does not know — and the list of names it offers instead reads as the repository's answer when it is this process's memory of one. Where `commands` changed in that read and could not be taken up, the refusal says a restart is what takes it up. `#1564`.
 
 `agent_access` is `Yes`: holding a server up writes no Evidence and moves nothing on the Job, and an agent that cannot hold one up cannot look at what it is building.
 """
@@ -2955,6 +2959,8 @@ agent_access = "Bridge only"
 description = "A server's `ready` passed, or it started with no `ready` to wait for: its links are live"
 notes = """
 `serving_since` is what uptime counts from; nothing ticks on the wire.
+
+**Published again while it serves, whenever the row changed.** A merge that brings the main checkout forward moves `checkout.behind` on every server held over it, and the whole row goes out under this kind — a reader replaces a row rather than patching it, so there is nothing new to learn. Nothing is restarted: telling somebody what they are looking at is behind is the floor, and pressing is theirs. `#1564`.
 """
 
 [operations."server.exited"]
@@ -2963,6 +2969,6 @@ transport = "WebSocket"
 agent_access = "Bridge only"
 description = "A server ended: stopped by a person, its Job or Fleet — or on its own, which is a failure whatever its code"
 notes = """
-`stopped: false` is a server that fell over, with its exit code and a sentence; its log stays readable on `observe_server`. A Job's servers publish this before the Job's own terminal `job.state_changed`, because they are torn down before its span is released.
+`stopped: false` is a server that fell over, with its exit code and a sentence; its log stays readable on `observe_server`. Where something else is already answering on the port it let go, `ended` says so — the address a person is holding goes on opening, which is why nobody looks. `#1577`. A Job's servers publish this before the Job's own terminal `job.state_changed`, because they are torn down before its span is released.
 """
 

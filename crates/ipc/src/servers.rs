@@ -50,6 +50,38 @@ pub struct ServerPort {
     pub port: u16,
 }
 
+/// Which checkout a server serves, and whether what it serves is still what
+/// that checkout stands at.
+///
+/// **A name and a port are not enough.** Two checkouts of one repository
+/// declare the same server under the same name, the address answers either
+/// way, and nothing on it says whose build came back — `#1577`. Every answer
+/// that names a server carries this.
+///
+/// **Since 18.1.**
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServerCheckout {
+    /// The checkout the server runs in, absolute: a Job's worktree, or a
+    /// repository's main checkout.
+    pub path: String,
+    /// The branch checked out there. Absent for the main checkout, which a
+    /// person moves between branches and Fleet does not read per server —
+    /// `path` and `commit` are what say which build is answering there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    /// The commit the checkout stood at when the server started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit: Option<String>,
+    /// How many commits have landed in that checkout since the server started
+    /// — what it serves is that far behind what the repository says.
+    ///
+    /// **Absent is not zero.** Zero is Fleet having looked and found nothing
+    /// landed; absent is Fleet never having been told, which is every server
+    /// on a checkout no Job of this Fleet has merged into.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub behind: Option<u32>,
+}
+
 /// One instance of one server. `list_servers`' row, and the payload of all
 /// three `server.*` events.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,6 +98,8 @@ pub struct ServerState {
     /// Absent only from a Fleet that predates it. **Since 13.17.**
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub manifest_id: Option<ManifestId>,
+    /// Which checkout answers on this server's address. **Since 18.1.**
+    pub checkout: ServerCheckout,
     pub phase: ServerPhase,
     /// The `serve` line as it ran, `${port.NAME}` resolved.
     pub serve: String,

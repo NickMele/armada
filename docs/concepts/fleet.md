@@ -367,6 +367,22 @@ A server started with no Job runs in the main checkout of the repository `?manif
 > **Rule.** After a crash, Fleet kills the servers it left running when it next starts, confirming each is still the process it recorded.
 > Why: a leftover server holds its port with nothing to stop it, and a pid the system has since given another process must never be killed.
 
+#### Which checkout answers, and how far behind it is
+
+Every answer that names a server says which checkout serves it — its path, and for a Job its branch. A name and a port are not enough: another checkout of the same repository declares the same number, and the address answers whichever bound first. On 22 September 2026 five agents were told to watch one address and one of them photographed another branch's app.
+
+> **Rule.** A held server carries the checkout it runs in on every answer and every event.
+> Why: the failure is not the collision — it is that the address keeps answering, so nobody looks.
+
+When a Job this repository owns merges and Fleet brings the main checkout forward, every server held on that checkout is told how many commits landed under it, and says so.
+
+> **Rule.** A server whose checkout moved on says how far behind what it serves is, and is never restarted for it.
+> Why: restarting under somebody mid-look is worse than telling them. Telling is the floor; pressing is theirs.
+
+A server that falls over on its own leaves its address behind, and the next binder takes it within a second. Fleet probes the port as the server ends and says on the row where something else is answering there now.
+
+**A Fleet holds the Manifest it resolved at startup.** A server added to `armada.yml` since is declared by the repository and unknown to this process, so the refusal names when Fleet last read the file and whether `commands` changed in that read — the list on its own reads as the repository's answer when it is this process's memory of it.
+
 ### Compose
 
 Armada resolves the repo's compose files, rewrites every published port into the claimed span, and feeds the whole document on stdin, never to disk. The Docker adapter does the rewrite.
