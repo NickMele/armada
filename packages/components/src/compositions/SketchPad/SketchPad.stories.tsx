@@ -2,7 +2,13 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
 import { expect, waitFor } from "storybook/test";
 
-import { SketchPad, type SketchBox, type SketchLine } from "./SketchPad";
+import {
+  SketchPad,
+  type SketchBox,
+  type SketchLine,
+  type SketchPoint,
+  type SketchStroke,
+} from "./SketchPad";
 
 const meta: Meta<typeof SketchPad> = {
   title: "Compositions/Sketch pad",
@@ -25,6 +31,23 @@ const LINES: SketchLine[] = [
   { id: "b2-b3", from: "b2", to: "b3" },
 ];
 
+/** A ring round the two boxes the panel is made of — what no box and no join says. */
+const STROKES: SketchStroke[] = [
+  {
+    id: "s1",
+    points: [
+      { x: -40, y: 130 },
+      { x: 280, y: 112 },
+      { x: 570, y: 136 },
+      { x: 590, y: 240 },
+      { x: 280, y: 280 },
+      { x: -30, y: 256 },
+      { x: -46, y: 170 },
+      { x: -40, y: 130 },
+    ],
+  },
+];
+
 const SAID = "The panel opens under the stat, with the Drone's Job on the first line.";
 
 /**
@@ -34,9 +57,15 @@ const SAID = "The panel opens under the stat, with the Drone's Job on the first 
  * pad reports and draws, and a story that let it keep its own boxes would be
  * proving something the app does not do.
  */
-function Held({ boxes: open, lines: drawn, ...rest }: Parameters<typeof SketchPad>[0]) {
+function Held({
+  boxes: open,
+  lines: drawn,
+  strokes: inked,
+  ...rest
+}: Parameters<typeof SketchPad>[0]) {
   const [boxes, setBoxes] = useState<readonly SketchBox[]>(open);
   const [lines, setLines] = useState<readonly SketchLine[]>(drawn);
+  const [strokes, setStrokes] = useState<readonly SketchStroke[]>(inked);
   const [said, setSaid] = useState(rest.said);
 
   return (
@@ -44,6 +73,11 @@ function Held({ boxes: open, lines: drawn, ...rest }: Parameters<typeof SketchPa
       {...rest}
       boxes={boxes}
       lines={lines}
+      strokes={strokes}
+      onDraw={(points: readonly SketchPoint[]) =>
+        setStrokes((current) => [...current, { id: `s${String(current.length + 1)}`, points }])
+      }
+      onUndo={() => setStrokes((current) => current.slice(0, -1))}
       said={said}
       onSaid={setSaid}
       onAdd={(at) =>
@@ -75,6 +109,7 @@ const args = {
   label: "What the Drones stat should open into",
   boxes: BOXES,
   lines: LINES,
+  strokes: STROKES,
   said: SAID,
   from: "rail-stats",
   onMove: () => undefined,
@@ -82,18 +117,29 @@ const args = {
   onAdd: () => undefined,
   onRemove: () => undefined,
   onJoin: () => undefined,
+  onDraw: () => undefined,
+  onUndo: () => undefined,
   onSaid: () => undefined,
 };
 
-/** A picture already drawn, made from a Studio node. */
+/**
+ * A picture already drawn, made from a Studio node: boxes, the joins between
+ * them, and a ring round the two the panel is made of.
+ */
 export const Drawn: Story = { args, render: (props) => <Held {...props} /> };
+
+/** The boxes on their own, which is every pad drawn before the pen existed. */
+export const NoHand: Story = {
+  args: { ...args, strokes: [] },
+  render: (props) => <Held {...props} />,
+};
 
 /**
  * A pad nobody has drawn on. **The note is the whole state** — a blank canvas
- * under three controls says nothing about what it is for.
+ * under the controls says nothing about what it is for.
  */
 export const Nothing: Story = {
-  args: { ...args, boxes: [], lines: [], said: "", from: undefined },
+  args: { ...args, boxes: [], lines: [], strokes: [], said: "", from: undefined },
   render: (props) => <Held {...props} />,
 };
 
@@ -104,14 +150,14 @@ export const NotLive: Story = {
 };
 
 /**
- * The three acts, which no still can show.
+ * The box acts, which no still can show.
  *
  * **Join is the one worth asserting.** It takes exactly two boxes, so the
  * control is off until two are picked and the reason is on it — a dead control
  * with no reason reads as broken.
  */
 export const Drawing: Story = {
-  args: { ...args, boxes: [], lines: [], said: "" },
+  args: { ...args, boxes: [], lines: [], strokes: [], said: "" },
   render: (props) => <Held {...props} />,
   play: async ({ canvas, userEvent, step }) => {
     const add = canvas.getByRole("button", { name: "Add a box" });
@@ -160,6 +206,103 @@ export const Drawing: Story = {
         expect(canvas.queryByRole("group", { name: "Box: the stat" })).toBeNull(),
       );
       await expect(canvas.queryAllByRole("group", { name: /^A line from / })).toHaveLength(0);
+    });
+  },
+};
+
+/** What a hand's line is called, and what a still cannot show it doing. */
+const A_HAND_LINE = "Drawn by hand";
+
+/**
+ * One drag across the pad, in pointer events.
+ *
+ * **Dispatched by hand, and the layer found by what is under the point.** The
+ * layer that catches the pen carries no role — a surface to draw on is not a
+ * control — so there is nothing to locate it by, and `elementFromPoint` finds
+ * what a real pointer would have hit. The move and the lift go to the window,
+ * where the pad listens, so a line drawn off the pad still ends.
+ */
+function drag(graph: HTMLElement, through: readonly SketchPoint[]): void {
+  const at = graph.getBoundingClientRect();
+  const place = (point: SketchPoint) => ({ x: at.x + point.x, y: at.y + point.y });
+  const start = place(through[0]!);
+  const pen = document.elementFromPoint(start.x, start.y);
+  if (pen === null) throw new Error("Nothing is under the pen.");
+  const event = (kind: string, where: { x: number; y: number }) =>
+    new PointerEvent(kind, { clientX: where.x, clientY: where.y, bubbles: true, button: 0 });
+
+  pen.dispatchEvent(event("pointerdown", start));
+  for (const point of through.slice(1)) window.dispatchEvent(event("pointermove", place(point)));
+  window.dispatchEvent(event("pointerup", place(through[through.length - 1]!)));
+}
+
+/**
+ * The pen: a line drawn by hand, and the undo that takes it back.
+ *
+ * **The reason this is a `play` and not a still.** A stroke exists only after a
+ * drag, so no rendering can show that dragging makes one; Undo's scope — the
+ * last line and nothing else — is a rule about what does *not* happen; and a
+ * press with no travel making nothing is the defect a thinned freehand line
+ * invites, an invisible stroke sitting in the picture.
+ */
+export const ByHand: Story = {
+  args: { ...args, boxes: [], lines: [], strokes: [], said: "", from: undefined },
+  render: (props) => <Held {...props} />,
+  play: async ({ canvas, userEvent, step }) => {
+    const draw = canvas.getByRole("button", { name: "Draw" });
+    const undo = canvas.getByRole("button", { name: "Undo" });
+    const graph = canvas.getByLabelText(args.label);
+
+    await step("nothing is drawn by hand, so Undo is off and says so", async () => {
+      await expect(draw).toHaveAttribute("aria-pressed", "false");
+      await expect(undo).toBeDisabled();
+      await expect(undo).toHaveAttribute("title", "Nothing has been drawn by hand.");
+    });
+
+    await step("the pen says it is down", async () => {
+      await userEvent.click(draw);
+      await waitFor(() => expect(draw).toHaveAttribute("aria-pressed", "true"));
+    });
+
+    await step("a drag leaves a line, and Undo comes alive", async () => {
+      drag(graph, [
+        { x: 60, y: 60 },
+        { x: 110, y: 90 },
+        { x: 160, y: 60 },
+        { x: 210, y: 120 },
+      ]);
+      await waitFor(() => expect(canvas.getAllByRole("img", { name: A_HAND_LINE })).toHaveLength(1));
+      await expect(undo).toBeEnabled();
+    });
+
+    await step("a press that goes nowhere is not a line", async () => {
+      drag(graph, [{ x: 240, y: 200 }]);
+      await expect(canvas.getAllByRole("img", { name: A_HAND_LINE })).toHaveLength(1);
+    });
+
+    await step("a second line goes on top, and Undo takes back only the last", async () => {
+      drag(graph, [
+        { x: 80, y: 190 },
+        { x: 150, y: 190 },
+        { x: 220, y: 175 },
+      ]);
+      await waitFor(() => expect(canvas.getAllByRole("img", { name: A_HAND_LINE })).toHaveLength(2));
+      await userEvent.click(undo);
+      await waitFor(() => expect(canvas.getAllByRole("img", { name: A_HAND_LINE })).toHaveLength(1));
+      await expect(undo).toBeEnabled();
+    });
+
+    await step("the last line back leaves the pad empty and Undo off again", async () => {
+      await userEvent.click(undo);
+      await waitFor(() => expect(canvas.queryAllByRole("img", { name: A_HAND_LINE })).toHaveLength(0));
+      await expect(undo).toBeDisabled();
+    });
+
+    await step("any other act puts the pen down", async () => {
+      // The pen has been down throughout: nothing above it puts it away.
+      await expect(draw).toHaveAttribute("aria-pressed", "true");
+      await userEvent.click(canvas.getByRole("button", { name: "Add a box" }));
+      await waitFor(() => expect(draw).toHaveAttribute("aria-pressed", "false"));
     });
   },
 };

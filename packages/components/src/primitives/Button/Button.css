@@ -186,6 +186,22 @@
   background: var(--accent-muted);
 }
 
+/* A toggle that is on, whatever variant it is. --accent-muted is the contract's
+   selected fill and --fg-default its text; --accent as text on it reads 4.06:1.
+   Until this, `aria-pressed` was told to a screen reader and to nobody looking
+   — the workflow canvas's Stay on the running step had the same gap. */
+.armada-button[aria-pressed="true"]:not(:disabled):not([data-pending]) {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+  color: var(--fg-default);
+}
+
+/* One step up, the step tonal's hover already takes off the same fill. */
+.armada-button[aria-pressed="true"]:hover:not(:disabled):not([data-pending]),
+.armada-button[aria-pressed="true"][data-preview-hover] {
+  background: color-mix(in srgb, var(--accent) 24%, var(--accent-muted));
+}
+
 /* Focus is a 2px --accent ring at 2px offset, no glow — a resting edge and a
  * focus ring differ in colour, width and position. */
 .armada-button:focus-visible,

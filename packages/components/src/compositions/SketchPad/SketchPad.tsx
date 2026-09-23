@@ -1,6 +1,7 @@
 import {
   Handle,
   MarkerType,
+  ViewportPortal,
   applyNodeChanges,
   useReactFlow,
   type Edge,
@@ -9,21 +10,23 @@ import {
   type NodeChange,
   type NodeProps,
 } from "@xyflow/react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "../../primitives/Button/Button";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 import { GRAPH_CANVAS_SIDES, GraphCanvas, facingSides } from "../GraphCanvas/GraphCanvas";
 
 /**
- * Sketch pad — boxes and the lines between them, drawn beside a prompt.
+ * Sketch pad — boxes, the lines between them, and what a person draws by hand,
+ * beside a prompt. `docs/journeys/dispatch-a-job.md`, The sketch.
  *
  * **What a prompt cannot say** (`#1547`): when what somebody means is a shape,
  * they type a paragraph describing a picture and the Drone reads the paragraph.
  *
  * **`GraphCanvas` is the graph half** (`#1539`) — no second canvas and no
  * drawing library. A box is words and a place, the way a Studio's `Sketch` node
- * is `{ body: String }`: no colour, no size, nothing to pick.
+ * is `{ body: String }`: no colour, no size, nothing to pick. The pen is this
+ * surface's alone and no other canvas inherits it — see `Ink` below.
  *
  * **Nothing here stages anything.** What goes out is a PNG Bridge writes; every
  * edit is reported to the caller, so the drawing survives a switch to Write.
@@ -33,6 +36,8 @@ export type SketchPadProps = {
   label: string;
   boxes: readonly SketchBox[];
   lines: readonly SketchLine[];
+  /** Everything drawn by hand, in the order it was drawn. */
+  strokes: readonly SketchStroke[];
   /**
    * A box put down somewhere new, by pointer or by arrow key. Reported when it
    * lands, never while it travels.
@@ -46,6 +51,16 @@ export type SketchPadProps = {
   onRemove: (ids: readonly string[]) => void;
   /** Two boxes joined. Offered only while exactly two are selected. */
   onJoin: (from: string, to: string) => void;
+  /**
+   * A line drawn by hand, in the pad's own coordinates. **The caller mints the
+   * id**, as it does for a box. Reported when the pointer lifts, never during.
+   */
+  onDraw: (points: readonly SketchPoint[]) => void;
+  /**
+   * The last line drawn, taken back. Never called with nothing drawn by hand.
+   * It takes strokes and nothing else — a box comes off under Remove.
+   */
+  onUndo: () => void;
   /**
    * What a person said about the picture. **Beside the pad and not in a box**:
    * it is about the whole sketch, and a box holding it would be read as part
@@ -69,6 +84,12 @@ export type SketchBox = { id: string; x: number; y: number; body: string };
 /** One box joined to another, in the direction it was drawn. */
 export type SketchLine = { id: string; from: string; to: string };
 
+/** One place on the pad, in the same coordinates a box's `x` and `y` are in. */
+export type SketchPoint = { x: number; y: number };
+
+/** One line drawn by hand, kept as the line rather than as a picture of it. */
+export type SketchStroke = { id: string; points: readonly SketchPoint[] };
+
 /** What the field beside the pad asks for. Never a Wh- opener. */
 const SAID_LABEL = "About this sketch";
 
@@ -82,6 +103,12 @@ const BOX_LABEL = "The words in this box";
 
 /** What a box holds, shown rather than described. A phrase, never a paragraph. */
 const BOX_PLACEHOLDER = "A panel, a read, a step";
+
+/**
+ * What one stroke is, for somebody who cannot see it. Never "a line": a join
+ * between two boxes is already read as one, and the two are different things.
+ */
+const A_HAND_LINE = "Drawn by hand";
 
 type PadNodeData = { body: string; onBody: (body: string) => void; disabled: boolean };
 type PadNode = Node<PadNodeData, "sketch">;
@@ -140,6 +167,145 @@ const JOINS_THE_SELECTION = ["Meta", "Control"];
 const A_JOIN_TAKES = 2;
 
 /**
+ * How far the pointer travels before a stroke keeps another point, in pad
+ * coordinates. A pointer reports every frame, so an unthinned five-second line
+ * is hundreds of points in the draft for a shape three dozen would draw.
+ */
+const A_STEP = 3;
+
+/** Fewer points than this is a press with no travel, not a line. */
+const A_LINE_TAKES = 2;
+
+/** The point kept, or the run unchanged where the pointer has barely moved. */
+function further(points: readonly SketchPoint[], point: SketchPoint): readonly SketchPoint[] {
+  const last = points[points.length - 1];
+  if (last !== undefined && Math.hypot(point.x - last.x, point.y - last.y) < A_STEP) {
+    return points;
+  }
+  return [...points, point];
+}
+
+/**
+ * The points as one path, curved through their midpoints rather than joined
+ * corner to corner — a thinned freehand line drawn as straight segments reads
+ * as a saw, which is not what the hand did.
+ */
+function pathOf(points: readonly SketchPoint[]): string {
+  const first = points[0];
+  if (first === undefined) return "";
+  let d = `M ${String(first.x)} ${String(first.y)}`;
+  for (let at = 1; at < points.length - 1; at += 1) {
+    const here = points[at]!;
+    const next = points[at + 1]!;
+    d += ` Q ${String(here.x)} ${String(here.y)} ${String((here.x + next.x) / 2)} ${String((here.y + next.y) / 2)}`;
+  }
+  const last = points[points.length - 1]!;
+  return points.length === 1 ? d : `${d} L ${String(last.x)} ${String(last.y)}`;
+}
+
+/**
+ * The ink: every stroke already drawn, the one being drawn, and — while the
+ * pen is down — the layer that catches the pointer.
+ *
+ * **Mounted inside the flow through `GraphCanvas`'s `children`, so nothing was
+ * added to the shared canvas.** `ViewportPortal` puts the ink in React Flow's
+ * own transformed viewport, which is what makes a stroke pan and zoom with the
+ * box it was drawn beside. The catcher sits over the pane and under React
+ * Flow's panels, so the acts and the zoom pair stay pressable with the pen on.
+ */
+function Ink({
+  strokes,
+  pen,
+  onDraw,
+}: {
+  strokes: readonly SketchStroke[];
+  pen: boolean;
+  onDraw: (points: readonly SketchPoint[]) => void;
+}) {
+  const flow = useReactFlow();
+  const going = useRef<readonly SketchPoint[] | null>(null);
+  const stop = useRef<(() => void) | null>(null);
+  const [line, setLine] = useState<readonly SketchPoint[]>([]);
+
+  const at = useCallback(
+    (event: { clientX: number; clientY: number }): SketchPoint => {
+      const point = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      return { x: Math.round(point.x), y: Math.round(point.y) };
+    },
+    [flow],
+  );
+
+  const drop = useCallback(() => {
+    stop.current?.();
+    stop.current = null;
+    going.current = null;
+    setLine([]);
+  }, []);
+
+  /**
+   * The rest of the stroke, watched from the press itself rather than from an
+   * effect the press schedules — a pointer that has already moved by the time
+   * React commits would lose those points, and the whole line where every move
+   * lands in one task. The window rather than the layer, so a line drawn off
+   * the edge of the pad ends where the pointer lifted instead of hanging open.
+   */
+  const begin = (first: SketchPoint) => {
+    stop.current?.();
+    going.current = [first];
+    setLine(going.current);
+    const moved = (event: PointerEvent) => {
+      const next = further(going.current ?? [], at(event));
+      going.current = next;
+      setLine(next);
+    };
+    const lifted = () => {
+      const drawn = going.current;
+      drop();
+      if (drawn !== null && drawn.length >= A_LINE_TAKES) onDraw(drawn);
+    };
+    window.addEventListener("pointermove", moved);
+    window.addEventListener("pointerup", lifted);
+    window.addEventListener("pointercancel", lifted);
+    stop.current = () => {
+      window.removeEventListener("pointermove", moved);
+      window.removeEventListener("pointerup", lifted);
+      window.removeEventListener("pointercancel", lifted);
+    };
+  };
+
+  // The pen going away mid-line drops it rather than reporting half a stroke,
+  // and so does the pad going away — the listeners are the window's.
+  useEffect(() => {
+    if (!pen) drop();
+    return drop;
+  }, [pen, drop]);
+
+  return (
+    <>
+      <ViewportPortal>
+        {/* One pixel and `overflow: visible`: the paths carry pad coordinates,
+            which are negative as often as not, so the box is an origin rather
+            than a frame. */}
+        <svg className="armada-sketch-pad__ink" width="1" height="1">
+          {strokes.map((stroke) => (
+            <path key={stroke.id} d={pathOf(stroke.points)} role="img" aria-label={A_HAND_LINE} />
+          ))}
+          {line.length < A_LINE_TAKES ? null : <path d={pathOf(line)} aria-hidden />}
+        </svg>
+      </ViewportPortal>
+      {pen ? (
+        <div
+          className="armada-sketch-pad__pen"
+          onPointerDown={(event) => {
+            if (event.button === 0) begin(at(event));
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/**
  * The acts on the pad, drawn over its top-right corner.
  *
  * **A component rather than markup**, because where a new box lands is read off
@@ -151,12 +317,20 @@ function Acts({
   onAdd,
   onRemove,
   onJoin,
+  pen,
+  onPen,
+  drawn,
+  onUndo,
   disabled,
 }: {
   picked: readonly string[];
   onAdd: (at: { x: number; y: number }) => void;
   onRemove: (ids: readonly string[]) => void;
   onJoin: (from: string, to: string) => void;
+  pen: boolean;
+  onPen: (pen: boolean) => void;
+  drawn: boolean;
+  onUndo: () => void;
   disabled: boolean;
 }) {
   const flow = useReactFlow();
@@ -174,16 +348,40 @@ function Acts({
   }, [flow]);
 
   const joinable = picked.length === A_JOIN_TAKES;
+  // The pen is a mode, so any other act puts it down. A press on Add is a box
+  // somebody is about to type in, and Join and Remove read a selection the pen
+  // cannot change — each of the three is a person having finished drawing.
+  const then = (act: () => void) => () => {
+    onPen(false);
+    act();
+  };
   return (
     <div className="armada-sketch-pad__acts" role="group" aria-label="What you can draw">
-      <Button size="sm" disabled={disabled} onClick={() => onAdd(middle())}>
+      <Button
+        size="sm"
+        aria-pressed={pen}
+        disabled={disabled}
+        title={pen ? "Drag on the pad to draw. Press again to stop." : "Draw on the pad by hand."}
+        onClick={() => onPen(!pen)}
+      >
+        Draw
+      </Button>
+      <Button
+        size="sm"
+        disabled={disabled || !drawn}
+        title={drawn ? "Takes the last line you drew back." : "Nothing has been drawn by hand."}
+        onClick={onUndo}
+      >
+        Undo
+      </Button>
+      <Button size="sm" disabled={disabled} onClick={then(() => onAdd(middle()))}>
         Add a box
       </Button>
       <Button
         size="sm"
         disabled={disabled || !joinable}
         title={joinable ? undefined : "Pick two boxes to join them."}
-        onClick={() => onJoin(picked[0]!, picked[1]!)}
+        onClick={then(() => onJoin(picked[0]!, picked[1]!))}
       >
         Join
       </Button>
@@ -191,7 +389,7 @@ function Acts({
         size="sm"
         disabled={disabled || picked.length === 0}
         title={picked.length === 0 ? "Pick a box to take it off." : undefined}
-        onClick={() => onRemove(picked)}
+        onClick={then(() => onRemove(picked))}
       >
         Remove
       </Button>
@@ -237,13 +435,18 @@ function merged(
 }
 
 export function SketchPad(props: SketchPadProps) {
-  const { label, boxes, lines, onMove, onAdd, onRemove, onJoin, said, onSaid, from } = props;
+  const { label, boxes, lines, strokes, onMove, onAdd, onRemove, onJoin } = props;
+  const { onDraw, onUndo, said, onSaid, from } = props;
   const disabled = props.disabled ?? false;
   // Placement is the pad's to hold between moves, the way the whiteboard holds
   // it; the caller hears each one through `onMove` and keeps it in the draft.
   const [kept, setKept] = useState<PadNode[]>(() => boxes.map((box) => toPadNode(box, props)));
   const [picked, setPicked] = useState<readonly string[]>([]);
+  // Which of the two the pointer does. A mode the pad holds and never reports:
+  // it dies with the surface, and nothing outside it is a picture.
+  const [pen, setPen] = useState(false);
   const nodes = merged(boxes, kept, props);
+  const drawing = pen && !disabled;
 
   const onNodesChange = useCallback(
     (changes: NodeChange<PadNode>[]) => {
@@ -294,16 +497,22 @@ export function SketchPad(props: SketchPadProps) {
               onAdd={onAdd}
               onRemove={onRemove}
               onJoin={onJoin}
+              pen={drawing}
+              onPen={setPen}
+              drawn={strokes.length > 0}
+              onUndo={onUndo}
               disabled={disabled}
             />
           }
-        />
-        {/* A blank canvas under three controls says nothing about what it is
-            for, and this is the one moment with no picture to read instead. */}
-        {boxes.length > 0 ? null : (
+        >
+          <Ink strokes={strokes} pen={drawing} onDraw={onDraw} />
+        </GraphCanvas>
+        {/* A blank canvas under the controls says nothing about what it is for,
+            and this is the one moment with no picture to read instead. */}
+        {boxes.length > 0 || strokes.length > 0 ? null : (
           <p className="armada-sketch-pad__empty" role="note">
-            Nothing is drawn yet. Add a box, write what it is, and join the boxes that feed each
-            other.
+            Nothing is drawn yet. Add a box and write what it is, join the boxes that feed each
+            other, or draw on the pad by hand.
           </p>
         )}
       </div>
