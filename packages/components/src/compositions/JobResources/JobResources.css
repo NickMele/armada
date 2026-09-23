@@ -21,6 +21,15 @@
   min-width: 0;
 }
 
+/* The act and its `?`, held together so the space-between above keeps them at
+   the trailing edge rather than pushing the mark into the verdict. */
+.armada-holds__act {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 /* The sentence a person came for, read before any figure. Sans and body text:
    it is the one line here that is not machine-derived. */
 .armada-holds__verdict {

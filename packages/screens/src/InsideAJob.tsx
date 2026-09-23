@@ -7,6 +7,7 @@ import { ChevronRight, ChevronUp } from "lucide-react";
 import { Fragment, useCallback, useState } from "react";
 import {
   GuideMark,
+  GUIDE_MEMBER_LINK,
   GUIDE_STEP_BAR,
   RunTree,
   RunTreeSkeleton,
@@ -384,7 +385,14 @@ export function InsideAJob({
       {members === undefined ? null : (
         <div className="armada-inside__landing">
           <div className="armada-inside__region-head">
-            <Eyebrow>{membersLabel}</Eyebrow>
+            {/* The band and its `?`, the same pair the run's head carries.
+                What the three links are is true of a member that never ran,
+                so the cards say which one they have and this says what the
+                three mean — `#1602`. */}
+            <span className="armada-inside__region-name">
+              <Eyebrow>{membersLabel}</Eyebrow>
+              <GuideMark guide={GUIDE_MEMBER_LINK} />
+            </span>
           </div>
           {members}
         </div>

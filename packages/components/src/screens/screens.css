@@ -1749,6 +1749,8 @@
    every width. #1539. */
 .armada-workflow-tab__modes {
   display: flex;
+  align-items: center;
+  gap: var(--space-1);
   justify-content: flex-start;
   flex: none;
   padding-block-end: var(--space-2);

@@ -70,8 +70,6 @@ export type ImplementGroup = {
 export type ImplementBoardProps = {
   /** The step's own label — `Implement`, off the frozen workflow. */
   stepName: string;
-  /** One line above the groups: one group at a time, and what that forbids. */
-  orderSays: string;
   groups: readonly ImplementGroup[];
   /** Which groups are open, by id. */
   openGroups: readonly string[];
@@ -185,7 +183,6 @@ function Group({
 
 export function ImplementBoard({
   stepName,
-  orderSays,
   groups,
   openGroups,
   onOpenGroup,
@@ -194,11 +191,11 @@ export function ImplementBoard({
 }: ImplementBoardProps) {
   return (
     <section className="armada-implement" aria-label={`${stepName}, opened`}>
-      {/* The mark goes on the order line, not on a group head — that head is a
-          button, and a button inside a button is not markup a browser keeps.
-          What it explains is the rule the line is the only evidence of. */}
-      <p className="armada-implement__order" role="note">
-        {orderSays}
+      {/* Where the order line used to be, and the mark is all that is left of
+          it: the rule was true of a plan that had never run, so it is the
+          guide's. Not on a group head — that head is a button, and a button
+          inside a button is not markup a browser keeps. */}
+      <p className="armada-implement__order">
         <GuideMark guide={GUIDE_GROUP_ORDER} />
       </p>
       <ol className="armada-implement__groups" aria-label="The groups of this step, in the order they run">

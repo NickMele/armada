@@ -17,6 +17,8 @@
 import { expect, test, describe } from "vitest";
 import { page } from "vitest/browser";
 
+import { GUIDE_PLAN_ASKS } from "@armada/components";
+
 import { SCENARIOS, scenarioNamed } from "./scenario";
 import { mount, openBoard, rows, unmountAfterEach } from "./testing";
 
@@ -49,6 +51,12 @@ const groupCard = (ordinal: number) =>
 
 /** One task's row, by the name the board gives it. */
 const taskRow = (id: string) => page.getByRole("listitem", { name: new RegExp(`^${id} `) });
+
+/** The `?` over the group cards, which is all the board says about an ask. */
+const planAsksMark = () =>
+  page.getByRole("button", {
+    name: `Open guide ${GUIDE_PLAN_ASKS.number}, ${GUIDE_PLAN_ASKS.title}`,
+  });
 
 /** Every scenario the arc put in the picker, by name. */
 const ARC = SCENARIOS.filter((one) => one.name.startsWith("arc/")).map((one) => one.name);
@@ -360,9 +368,12 @@ describe("the plan", () => {
     await expect.element(asks.getByRole("button", { name: "Move up" })).toBeDisabled();
     await expect.element(asks.getByRole("button", { name: "Move down" })).toBeEnabled();
     await expect.element(asks.getByRole("button", { name: "Remove" })).toBeEnabled();
+    // The board says nothing about what an ask is. The `?` over the cards is
+    // where that went — #1602.
     await expect
       .element(page.getByRole("tabpanel", { name: "Plan" }))
-      .toHaveTextContent("The plan is the Drone's record");
+      .not.toHaveTextContent("The plan is the Drone's record");
+    await expect.element(planAsksMark()).toBeVisible();
   });
 
   test("arc/plan-revision-refused: moving a group past one that claims the same file warns before the ask goes out", async () => {
@@ -406,13 +417,11 @@ describe("the plan", () => {
     await expect.element(send).toBeEnabled();
   });
 
-  test("arc/planned: a plan already past its gate offers no changes at all", async () => {
+  test("arc/planned: a plan already past its gate offers no changes at all, and draws no mark about asking", async () => {
     await at("arc/planned", "Plan");
     await expect.element(page.getByRole("tabpanel", { name: "Plan" })).toBeVisible();
     expect(page.getByRole("group", { name: "Ask about group 1" }).elements()).toHaveLength(0);
-    await expect
-      .element(page.getByRole("tabpanel", { name: "Plan" }))
-      .not.toHaveTextContent("The plan is the Drone's record");
+    expect(planAsksMark().elements()).toHaveLength(0);
   });
 });
 

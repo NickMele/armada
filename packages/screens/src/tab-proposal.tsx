@@ -18,7 +18,6 @@ import type { GateBox, ProposalLandingValue } from "@armada/components";
 import type { JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 
 import { TAB_LABEL } from "./detail-tabs";
-import { FLEET_ALWAYS_LOOKS } from "./draft/proposal";
 import type { TierModels } from "./draft/proposal";
 import {
   completeChoices,
@@ -86,7 +85,6 @@ export function ProposalTab({ job, whole, edits, onEdits, models, stale }: Propo
                 }),
             }
           : {})}
-        alwaysLooks={FLEET_ALWAYS_LOOKS}
         tiers={proposal.tiers}
         {...(open
           ? {

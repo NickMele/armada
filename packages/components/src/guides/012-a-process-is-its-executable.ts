@@ -6,7 +6,7 @@ import type { Guide } from "./guide";
  * looking at Pulse and wondering where the command line went.
  */
 export const GUIDE_PROCESSES: Guide = {
-  number: 6,
+  number: 12,
   group: "machine",
   title: "A process is named by its executable",
   piece: "pulse.processes",

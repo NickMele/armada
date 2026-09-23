@@ -130,51 +130,13 @@
   text-wrap: pretty;
 }
 
-/* What the press sets off. A numbered list because the three are in order and
-   the order is the substance — an unordered run of three would read as three
-   things that might happen. */
-.armada-dispatch__next {
+/* The title and its `?`, so the header's own space-between keeps the close
+   control at the trailing edge. */
+.armada-dispatch__head {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--space-1);
   min-width: 0;
-  padding-top: var(--space-3);
-  border-top: var(--border-width) solid var(--border-subtle);
-}
-
-.armada-dispatch__next-head {
-  min-width: 0;
-  color: var(--fg-default);
-  font-size: var(--text-sm);
-  line-height: var(--leading-sm);
-  font-weight: var(--weight-medium);
-}
-
-/* The indent is the ordinal's own column, so every line wraps to the same edge
-   rather than under its number — which is what an indent set on the list could
-   not do once the number stopped being a marker. */
-.armada-dispatch__next-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-  margin: 0;
-  padding-inline-start: 0;
-}
-
-.armada-dispatch__next-line {
-  display: flex;
-  gap: var(--space-2);
-  align-items: baseline;
-  min-width: 0;
-}
-
-.armada-dispatch__next-said {
-  min-width: 0;
-  color: var(--fg-muted);
-  font-size: var(--text-xs);
-  line-height: var(--leading-xs);
-  text-wrap: pretty;
 }
 
 /* The wait, where Fleet has said nothing about the call — an older Fleet, or
@@ -412,16 +374,6 @@
   color: var(--fg-muted);
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
-}
-
-/* What approving does, and what it does not decide. Read once, under the list
-   it is about. */
-.armada-dispatch__gate {
-  min-width: 0;
-  color: var(--fg-muted);
-  font-size: var(--text-xs);
-  line-height: var(--leading-xs);
-  text-wrap: pretty;
 }
 
 /* Cancel-side first, the accent at the trailing edge where the reading ends —

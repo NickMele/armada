@@ -9,6 +9,8 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../prim
 import { Input } from "../../primitives/Input/Input";
 import { BranchPicker } from "../BranchPicker/BranchPicker";
 import type { BranchOption } from "../BranchPicker/BranchPicker";
+import { GuideMark } from "../GuideMark/GuideMark";
+import { GUIDE_DISPATCH } from "../../guides";
 import { MentionPopover, useMention } from "../../primitives/MentionPopover/MentionPopover";
 import { Tabs } from "../../primitives/Tabs/Tabs";
 import { Textarea } from "../../primitives/Textarea/Textarea";
@@ -370,19 +372,6 @@ const AT_THE_GATE = "awaiting_approval";
 /** What the field asks for, and the two things it takes. */
 const PLACEHOLDER = "Describe the work, or paste a link to a ticket.";
 
-/**
- * What pressing Dispatch sets off, in the order it happens.
- *
- * **Three lines, because three things happen and nobody is told any of them.**
- * The surface asked for a request and then went quiet about what it would do
- * with it — which is the whole of #1540.
- */
-const NEXT: string[] = [
-  "Armada reads the request, picks the workflow and names the Job.",
-  "You adjust what it decided and approve it. Nothing runs until you do.",
-  "A planning Drone splits the work into tasks, and a Judge reads what comes back.",
-];
-
 /** Said on both refusals, because it is the fact a person most needs. */
 const NOTHING_CREATED = "Nothing was created and the request is unchanged.";
 
@@ -463,7 +452,13 @@ export function DispatchRequest({
   return (
     <Card className="armada-dispatch">
       <CardHeader>
-        <CardTitle>Dispatch a job</CardTitle>
+        <span className="armada-dispatch__head">
+          <CardTitle>Dispatch a job</CardTitle>
+          {/* What pressing Dispatch sets off, what approving does, and what a
+              proposal freezes. On the title, because it is about the surface
+              rather than about any one control on it. */}
+          <GuideMark guide={GUIDE_DISPATCH} />
+        </span>
         {close}
       </CardHeader>
       <CardContent>
@@ -547,27 +542,10 @@ export function DispatchRequest({
                 onPickFile={() => fileInputRef.current?.click()}
               />
               {settings}
-              {/* What the press sets off, under the controls that set it off.
-                  Read once, and never after the answer has come back — by then
-                  the first of the three has happened and the list beside it
-                  says what is left. */}
-              <div className="armada-dispatch__next">
-                <span className="armada-dispatch__next-head">What happens next</span>
-                <ol className="armada-dispatch__next-list">
-                  {NEXT.map((line, index) => (
-                    <li className="armada-dispatch__next-line" key={line}>
-                      {/* The same ordinal the proposal's chain draws, because
-                          it is the same kind of thing one card down: a run
-                          whose order is the substance. Read rather than
-                          hidden — the chain's number restates a position its
-                          own `Waits on job 1` sentence already says, and
-                          nothing here says it twice. */}
-                      <span className="armada-dispatch__ordinal mono">{index + 1}</span>
-                      <span className="armada-dispatch__next-said">{line}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
+              {/* *What happens next* stood here — three numbered lines, true
+                  before anything was typed and still true of a job that never
+                  ran. #1540 put them on the screen and #1602 took them off:
+                  the `?` on the card's own title is where they live now. */}
             </>
           )}
 
@@ -589,10 +567,11 @@ export function DispatchRequest({
               <p className="armada-dispatch__unresolved-head">
                 No workflow fits this request. {NOTHING_CREATED}
               </p>
+              {/* The next move, and nothing about what a workflow is: that
+                  half was true before the refusal, so it is guide 3's. */}
               <p className="armada-dispatch__unresolved-body">
-                Nothing is assigned by default: the workflow is frozen into the job at creation
-                and becomes what the work is judged against. Edit the request and dispatch
-                again, or name the workflow yourself under Settings.
+                Edit the request and dispatch again, or name the workflow yourself under
+                Settings.
               </p>
             </div>
           ) : null}
@@ -1032,16 +1011,9 @@ function Answered({
         ))}
       </ol>
 
-      {/* The two sentences this surface exists to prevent being guessed at. */}
-      <p className="armada-dispatch__gate">
-        {several
-          ? "Each job is approved on its own, after the one before it completes. Nothing starts until you approve the first."
-          : "Approving it is what starts the work."}
-      </p>
-      <p className="armada-dispatch__gate">
-        The workflow, the name and the split are what you approve. No file is named yet — scope
-        is the workflow&rsquo;s first step.
-      </p>
+      {/* Two standing sentences stood here — what approving does, and what a
+          proposal is and is not. Both were true of a request nobody had sent,
+          so they are guide 3 and the `?` on this card's title (#1602). */}
     </div>
   );
 }

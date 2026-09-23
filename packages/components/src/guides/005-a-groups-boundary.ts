@@ -6,7 +6,7 @@ import type { Guide } from "./guide";
  * thing it does not know.
  */
 export const GUIDE_GROUP_BOUNDARY: Guide = {
-  number: 3,
+  number: 5,
   group: "plan",
   title: "A group's boundary",
   piece: "plan.group-boundary",

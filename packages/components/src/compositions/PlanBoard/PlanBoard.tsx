@@ -3,6 +3,8 @@ import { Button } from "../../primitives/Button/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../primitives/Card/Card";
 import { Clamped } from "../Clamped/Clamped";
 import { FactChip } from "../FactChip/FactChip";
+import { GuideMark } from "../GuideMark/GuideMark";
+import { GUIDE_PLAN_ASKS } from "../../guides";
 import { PathChip } from "../PathChip/PathChip";
 import { TaskMark, type TaskMarkState } from "../TaskMark/TaskMark";
 
@@ -112,8 +114,6 @@ export type PlanBoardClash = { path: string; says: string };
 export type PlanBoardProps = {
   /** The plan's own approach line, as the step recorded it. */
   approach: string;
-  /** How the groups run — one line, above the cards. */
-  orderSays: string;
   groups: readonly PlanBoardGroup[];
   /** Where the order contradicts the scopes. Empty draws nothing. */
   clashes?: readonly PlanBoardClash[];
@@ -121,11 +121,12 @@ export type PlanBoardProps = {
   openTaskId?: string;
   onOpenTask?: (taskId: string) => void;
   /**
-   * The line over the group controls, drawn once above the cards rather than
-   * on each. **It is what the controls mean, not what they do**: the plan is
-   * the Drone's record, so every one of them is a request it may refuse.
+   * The group controls are offered, so the board draws the `?` that says what
+   * they are. **Once above the cards rather than on each**: what it explains
+   * is true of the plan and not of any one group, and one mark per card is
+   * the noise a mark exists to replace.
    */
-  asksSay?: string;
+  askable?: boolean;
   /** A group ask was pressed and nothing has answered — every ask is off. */
   askPending?: boolean;
   onAsk?: (groupId: string, askId: string) => void;
@@ -329,12 +330,11 @@ function GroupCard({
 
 export function PlanBoard({
   approach,
-  orderSays,
   groups,
   clashes = [],
   openTaskId,
   onOpenTask,
-  asksSay,
+  askable = false,
   askPending = false,
   onAsk,
 }: PlanBoardProps) {
@@ -342,17 +342,15 @@ export function PlanBoard({
     <div className="armada-plan-board">
       <section className="armada-plan-board__approach" aria-label="The approach">
         <Clamped lines={3}>{approach}</Clamped>
-        <p className="armada-plan-board__order" role="note">
-          {orderSays}
-        </p>
-        {/* Once, above the cards. A sentence repeated on four group cards is
-            the surface explaining itself four times over, and what it says is
-            true of the plan rather than of any one group. */}
-        {asksSay === undefined ? null : (
-          <p className="armada-plan-board__asks-say" role="note">
-            {asksSay}
+        {/* Where the line saying what the controls are used to be. The cards
+            are numbered, so the order needs no sentence and takes no mark;
+            what a person cannot read off them is that every control below is
+            a request the Drone may refuse. */}
+        {askable ? (
+          <p className="armada-plan-board__asks-say">
+            <GuideMark guide={GUIDE_PLAN_ASKS} />
           </p>
-        )}
+        ) : null}
       </section>
       {clashes.length === 0 ? null : (
         <section className="armada-plan-board__clashes" aria-label="Two groups claim the same file">

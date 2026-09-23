@@ -132,7 +132,6 @@ export function DispatchSettings({
             tiers={tiers}
             onTiers={(chosen) => moved({ tiers: chosen })}
             models={models}
-            said="A planning Drone gives each task a tier, and the tier picks the model it runs on."
             disabled={disabled}
           />
 
