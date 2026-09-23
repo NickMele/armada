@@ -4,6 +4,7 @@ import { expect, fireEvent, fn, waitFor } from "storybook/test";
 import type { StagedAttachment } from "@armada/protocol";
 
 import { DispatchSettings } from "../DispatchSettings/DispatchSettings";
+import { GUIDE_DISPATCH } from "../../guides";
 import { DispatchRequest } from "./DispatchRequest";
 import type { Proposal } from "./DispatchRequest";
 
@@ -86,16 +87,17 @@ export const NothingTyped: Story = {
       await expect(args.onDispatch).not.toHaveBeenCalled();
     });
 
-    // The three are a sequence and the order is the substance, so each line
-    // carries its position where it is read rather than only in the markup.
-    // A run drawn with no numbers reads as three things that might happen,
-    // which is what it was before #1540's list got its ordinals.
-    await step("what happens next is numbered, in the order it happens", async () => {
-      const lines = canvas.getAllByRole("listitem");
-      await expect(lines).toHaveLength(3);
-      await expect(lines[0]).toHaveTextContent(/^1\s*Armada reads the request/);
-      await expect(lines[1]).toHaveTextContent(/^2\s*You adjust what it decided/);
-      await expect(lines[2]).toHaveTextContent(/^3\s*A planning Drone splits the work/);
+    // #1540 drew the three as a numbered run under the controls, because the
+    // order was the substance. Every one of them was true before anything was
+    // typed, so #1602 took all three off and the card's own `?` is what
+    // carries them — the whole of what this surface says about itself.
+    await step("the card asks for the work and explains nothing about it", async () => {
+      await expect(canvas.queryByText("What happens next")).toBeNull();
+      await expect(canvas.queryByText(/Armada reads the request/)).toBeNull();
+      await expect(canvas.queryAllByRole("listitem")).toHaveLength(0);
+      await expect(
+        canvas.getByRole("button", { name: `Open guide ${GUIDE_DISPATCH.number}, ${GUIDE_DISPATCH.title}` }),
+      ).toBeVisible();
     });
 
     await userEvent.type(canvas.getByRole("textbox", { name: "Request" }), "Fix the flicker");
