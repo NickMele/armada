@@ -40,6 +40,10 @@ export default defineConfig({
         test: {
           name: "renderer (browser)",
           include: ["src/renderer/**/*.test.tsx"],
+          // Every guide already met, so a card opening on a piece nobody has
+          // seen does not sit over the press a test about something else is
+          // making. `mock/guides-met.ts` carries the reasoning.
+          setupFiles: ["./src/renderer/src/mock/guides-met.ts"],
           browser: {
             enabled: true,
             headless: true,

@@ -893,7 +893,10 @@ describe("landing", () => {
     // row is named by the text it draws rather than by the title both share.
     const address = page.getByText("https://git.example/armada/pull/1604", { exact: true });
     await expect.element(address).toBeVisible();
-    await page.getByRole("button", { name: "Open" }).first().click();
+    // `exact`, because a role name given as a string matches a substring: the
+    // `?` beside the landing rule is named `Open guide 1, …` and sits earlier
+    // in the document, so `.first()` was pressing it — #1602.
+    await page.getByRole("button", { name: "Open", exact: true }).first().click();
     await expect.poll(() => opened).toHaveLength(1);
   });
 
