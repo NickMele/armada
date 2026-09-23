@@ -25,6 +25,18 @@ leaning on a rule.** A pattern with one instance behind it is a guess.
 A taxonomy is a promise the world breaks. Where you find yourself minting a
 word for a shape, draw the shape instead.
 
+> **The app shows facts. An explanation is something he chooses to see.**
+> `2026-09-23-facts-on-screen-guides-behind-a-mark.md` — *"I hate it, I just
+> want the app to show facts. Any hints or guides should be something I choose
+> to see."* An explanation goes behind a `?` beside the thing it explains, and
+> into a catalogue he can read later.
+
+This is the rule most often broken by agents writing screens, because prose
+explaining a design feels like care. It reads as noise. A sentence that reports
+what happened stays; a sentence that teaches the reader what a thing is moves
+behind the mark. If you cannot tell which one you have written, ask whether it
+would still be true on a Job that had never run.
+
 > **Remove the constraint rather than document it.**
 > `2026-09-22-helm-overlays.md` — three screens worked around the dock's 380px
 > and the proposal was a contract rule. He made the dock overlay instead, so
@@ -114,5 +126,5 @@ The register is the evidence; this file is only the reading of it.
 
 **A rule that gets contradicted is deleted, not hedged.** If he decides the
 other way, the decision file records both and the rule here goes or narrows.
-Nine rules from one day is a thin basis, and this file will read as more certain
+Ten rules from three days is a thin basis, and this file will read as more certain
 than it is.
