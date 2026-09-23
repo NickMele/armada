@@ -26,6 +26,38 @@ export type SketchShape = { id: string; x: number; y: number; body: string };
 /** One box joined to another, in the direction a person drew it. */
 export type SketchJoin = { id: string; from: string; to: string };
 
+/** One place on the pad, in the same coordinates a box's `x` and `y` are in. */
+export type SketchPoint = { x: number; y: number };
+
+/**
+ * One line drawn freehand, **kept as the line rather than as a picture of it**.
+ *
+ * A box says what a thing is and a join says what feeds it; a stroke is what
+ * neither can say — a circle round the part that matters, an arrow at an angle
+ * no join draws, a shape that is not a box. The owner asked for it on
+ * 23 Sep 2026, on a pad that only drew boxes.
+ *
+ * **Points, never a path string or an image.** The pad has to redraw a stroke
+ * when a person comes back to it, take the last one back, and scale the whole
+ * picture when they zoom — all three read the points. A flattened stroke can
+ * do none of them, which is the same argument `drawn` already makes against
+ * reopening the PNG.
+ */
+export type SketchStroke = { id: string; points: readonly SketchPoint[] };
+
+/**
+ * What is on the pad while a person is still drawing on it.
+ *
+ * **Held apart from the attachment, because it is the half that never
+ * crosses.** `SketchAttachment` is what goes out with the request; this is
+ * what the canvas draws and what every edit below folds over.
+ */
+export type Drawing = {
+  shapes: readonly SketchShape[];
+  joins: readonly SketchJoin[];
+  strokes: readonly SketchStroke[];
+};
+
 /** A picture attached to a prompt, with what produced it. */
 export type SketchAttachment = {
   /** Where Bridge wrote the PNG before the request. **Never read back.** */
@@ -50,7 +82,7 @@ export type SketchAttachment = {
    * is absent on a sketch that arrived as a frame — `sketchFromFrame` is
    * given a capture, which has no shapes behind it.
    */
-  drawn?: { shapes: readonly SketchShape[]; joins: readonly SketchJoin[] };
+  drawn?: Drawing;
 };
 
 /**
@@ -82,26 +114,24 @@ export function sketchFromFrame(
   return sketch;
 }
 
-/**
- * What is on the pad while a person is still drawing on it.
- *
- * **Held apart from the attachment, because it is the half that never
- * crosses.** `SketchAttachment` is what goes out with the request; this is
- * what the canvas draws and what every edit below folds over.
- */
-export type Drawing = { shapes: readonly SketchShape[]; joins: readonly SketchJoin[] };
-
 /** A pad with nothing on it. What Sketch opens on where no moment carries one. */
-export const NOTHING_DRAWN: Drawing = { shapes: [], joins: [] };
+export const NOTHING_DRAWN: Drawing = { shapes: [], joins: [], strokes: [] };
 
 /** What a sketch was drawn from, or an empty pad where it carries none. */
 export function drawingOf(sketch: SketchAttachment | undefined): Drawing {
   return sketch?.drawn ?? NOTHING_DRAWN;
 }
 
-/** Whether anything is on the pad. **What decides the chip** — an empty pad attaches nothing. */
+/**
+ * Whether anything is on the pad. **What decides the chip** — an empty pad
+ * attaches nothing.
+ *
+ * A stroke counts on its own: a pad somebody drew on and put no box on is a
+ * picture, and a chip that appeared only for boxes would drop it silently.
+ * A join still does not, because a join needs the two boxes it hangs on.
+ */
 export function isDrawn(drawing: Drawing): boolean {
-  return drawing.shapes.length > 0;
+  return drawing.shapes.length > 0 || drawing.strokes.length > 0;
 }
 
 /**
@@ -137,9 +167,49 @@ export function withShape(drawing: Drawing, shape: SketchShape): Drawing {
 export function withoutShapes(drawing: Drawing, ids: readonly string[]): Drawing {
   const going = new Set(ids);
   return {
+    ...drawing,
     shapes: drawing.shapes.filter((shape) => !going.has(shape.id)),
     joins: drawing.joins.filter((join) => !going.has(join.from) && !going.has(join.to)),
   };
+}
+
+/**
+ * The id the next stroke takes: the lowest `s<n>` nothing on the pad holds.
+ *
+ * **The same rule as a box's, and `s` rather than `b` so the two never
+ * collide** — a person who draws and undoes all afternoon does not end on
+ * `s214`, and nothing outside the pad keys on either.
+ */
+export function nextStrokeId(drawing: Drawing): string {
+  const held = new Set(drawing.strokes.map((stroke) => stroke.id));
+  let at = 1;
+  while (held.has(`s${String(at)}`)) at += 1;
+  return `s${String(at)}`;
+}
+
+/**
+ * A line drawn, put on top of what is already there.
+ *
+ * **A stroke of fewer than two points is not a line**, and the pad never
+ * reports one — a press with no travel is somebody clicking the pad, and a
+ * stroke with nothing to draw would sit in the picture invisibly and take a
+ * press of Undo to get rid of.
+ */
+export function withStroke(drawing: Drawing, stroke: SketchStroke): Drawing {
+  if (stroke.points.length < 2) return drawing;
+  return { ...drawing, strokes: [...drawing.strokes, stroke] };
+}
+
+/**
+ * The last line drawn, taken back. **The first thing anybody does with a pen
+ * is draw the wrong line**, so this is the act the pen is unusable without.
+ *
+ * It takes strokes and nothing else: a box comes off under Remove, where the
+ * box going is the one a person picked and can see.
+ */
+export function withoutLastStroke(drawing: Drawing): Drawing {
+  if (drawing.strokes.length === 0) return drawing;
+  return { ...drawing, strokes: drawing.strokes.slice(0, -1) };
 }
 
 /**
