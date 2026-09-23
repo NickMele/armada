@@ -69,7 +69,7 @@ where
         let refusing = Arc::clone(&self);
         let (server, fresh) = Fleet::hold_server(
             Arc::clone(&self),
-            crate::servers::Place::MainCheckout(served),
+            crate::servers::Place::Checkout(crate::checkouts::Checkout::main(served)),
             &asked.name,
             ipc::StartedBy::Person,
         )

@@ -14,6 +14,7 @@ use adapter_traits::RepositoryStanding;
 use api::{Next, Subscription};
 use ipc::{Event, ServerPhase, ServerState, StartedBy};
 
+use crate::checkouts::Checkout;
 use crate::servers::{Place, Unservable};
 use crate::tests::servers::{a_fleet_serving, serving};
 use crate::tests::tmp::TempDir;
@@ -60,7 +61,7 @@ async fn a_main_checkout_server_starts_level_with_the_checkout_it_serves() {
 
     let (started, _) = Arc::clone(&fleet)
         .hold_server(
-            Place::MainCheckout(fleet.first()),
+            Place::Checkout(Checkout::main(fleet.first())),
             "storybook",
             StartedBy::Person,
         )
@@ -84,7 +85,7 @@ async fn work_landing_tells_the_server_held_on_the_main_checkout() {
 
     let (started, _) = Arc::clone(&fleet)
         .hold_server(
-            Place::MainCheckout(fleet.first()),
+            Place::Checkout(Checkout::main(fleet.first())),
             "storybook",
             StartedBy::Person,
         )
@@ -155,7 +156,7 @@ async fn a_name_fleet_does_not_know_says_when_fleet_last_read_the_file() {
 
     let refused = Arc::clone(&fleet)
         .hold_server(
-            Place::MainCheckout(served.clone()),
+            Place::Checkout(Checkout::main(served.clone())),
             "mock",
             StartedBy::Person,
         )
@@ -175,13 +176,42 @@ async fn a_name_fleet_does_not_know_says_when_fleet_last_read_the_file() {
         refused: None,
     });
     let refused = Arc::clone(&fleet)
-        .hold_server(Place::MainCheckout(served), "mock", StartedBy::Person)
+        .hold_server(
+            Place::Checkout(Checkout::main(served)),
+            "mock",
+            StartedBy::Person,
+        )
         .await
         .expect_err("Fleet still holds no `mock`");
     assert!(matches!(refused, Unservable::NotAServer { .. }));
     let said = refused.to_string();
     assert!(said.contains("2026-09-22T11:04:00.000Z"), "{said}");
     assert!(said.contains("restart Fleet"), "{said}");
+}
+
+/// Every one of these servers, once each has been published as serving.
+async fn both_serving(watching: &mut Subscription, ids: [&str; 2]) -> Vec<ServerState> {
+    let mut up: Vec<ServerState> = Vec::new();
+    tokio::time::timeout(Duration::from_secs(30), async {
+        while up.len() < ids.len() {
+            match watching.next().await {
+                Some(Next::Send(delivered)) => match delivered.event {
+                    Event::ServerServing(state) if ids.contains(&state.id.as_str()) => {
+                        up.push(state);
+                    }
+                    Event::ServerExited(state) if ids.contains(&state.id.as_str()) => {
+                        panic!("it ended before serving: {state:?}")
+                    }
+                    _ => continue,
+                },
+                Some(_) => continue,
+                None => panic!("the stream closed"),
+            }
+        }
+        up
+    })
+    .await
+    .expect("both served")
 }
 
 /// This server's row, the next time it is published as serving.
@@ -203,4 +233,128 @@ async fn next_serving(watching: &mut Subscription, id: &str) -> ServerState {
     })
     .await
     .expect("the row was published again")
+}
+
+/// A real worktree of the fixture's repository, on a branch of its own.
+///
+/// **git's own, never a `.git` file this test wrote.** What the reader parses
+/// is git's on-disk contract, and a fabricated fixture would prove only that
+/// it agrees with itself.
+fn a_worktree_beside(home: &TempDir, branch: &str) -> String {
+    let root = home.path();
+    let git = |args: &[&str]| {
+        let done = std::process::Command::new("git")
+            .args(["-c", "user.email=t@example.com", "-c", "user.name=T"])
+            .args(args)
+            .current_dir(root)
+            .output()
+            .expect("git is on PATH");
+        assert!(done.status.success(), "git {args:?}: {done:?}");
+    };
+    git(&["init", "--initial-branch=main", "."]);
+    git(&["commit", "--allow-empty", "-m", "the first commit"]);
+    let beside = root.join("beside").to_string_lossy().into_owned();
+    git(&["worktree", "add", "-b", branch, &beside]);
+    beside
+}
+
+/// **Two checkouts of one repository each take a span of their own, and both
+/// serve at once.** The Manifest names one number and it is the main
+/// checkout's; the worktree that bound it too is `#1577`'s whole failure.
+#[tokio::test]
+async fn two_checkouts_of_one_repository_serve_at_once_on_their_own_spans() {
+    let home = TempDir::new();
+    let events = api::Broadcaster::new();
+    let fleet = a_fleet_serving(&home, &events);
+    let beside = a_worktree_beside(&home, "looking");
+    let mut watching = events.subscribe();
+
+    let checkout = Checkout::beside(fleet.first(), &beside).expect("a worktree of this repository");
+    assert_eq!(checkout.branch(), Some("looking"));
+
+    let (here, _) = Arc::clone(&fleet)
+        .hold_server(
+            Place::Checkout(Checkout::main(fleet.first())),
+            "storybook",
+            StartedBy::Person,
+        )
+        .await
+        .expect("the main checkout's starts");
+    let (there, _) = Arc::clone(&fleet)
+        .hold_server(Place::Checkout(checkout), "storybook", StartedBy::Person)
+        .await
+        .expect("the worktree's starts");
+
+    assert_ne!(
+        here.ports.first().map(|one| one.port),
+        there.ports.first().map(|one| one.port),
+        "one number between two checkouts is the collision"
+    );
+    assert_eq!(
+        there.checkout.path,
+        std::fs::canonicalize(&beside)
+            .expect("it is there")
+            .to_string_lossy()
+    );
+    assert_eq!(there.checkout.branch.as_deref(), Some("looking"));
+
+    // **Both in one pass over the stream**, because two servers publish in
+    // whichever order their `ready` passes: waiting for one and then the other
+    // consumes the second's event while waiting for the first.
+    for up in both_serving(&mut watching, [&here.id, &there.id]).await {
+        let port = up.ports.first().expect("a declared port").port;
+        assert!(
+            std::net::TcpStream::connect(("127.0.0.1", port)).is_ok(),
+            "both answer at once"
+        );
+    }
+
+    fleet.stopped_every_server().await;
+}
+
+/// **A path that is not a checkout of this repository is refused before
+/// anything spawns**, and a Job's worktree is refused by name rather than
+/// given a second span beside the one the Job already holds.
+#[tokio::test]
+async fn a_path_that_is_not_this_repositorys_checkout_is_refused() {
+    let home = TempDir::new();
+    let events = api::Broadcaster::new();
+    let fleet = a_fleet_serving(&home, &events);
+    a_worktree_beside(&home, "looking");
+    let job = crate::tests::servers::a_running_job(&fleet, &home).await;
+
+    let nowhere = Checkout::beside(fleet.first(), "/not/a/directory/at/all");
+    assert!(
+        matches!(
+            nowhere,
+            Err(crate::checkouts::NotACheckout::Elsewhere { .. })
+        ),
+        "a directory that is not there"
+    );
+
+    let elsewhere = Checkout::beside(fleet.first(), "/tmp");
+    assert!(
+        matches!(
+            elsewhere,
+            Err(crate::checkouts::NotACheckout::Elsewhere { .. })
+        ),
+        "a directory that is not a checkout of anything"
+    );
+
+    let spec = adapter_traits::WorktreeSpec::for_job(fleet.first().root(), &job.handle())
+        .expect("the Job's own");
+    let jobs = Checkout::beside(fleet.first(), &spec.worktree_path());
+    let Err(why) = jobs else {
+        panic!("a Job's worktree is not reachable by path");
+    };
+    assert!(
+        matches!(why, crate::checkouts::NotACheckout::AJobs { .. }),
+        "{why:?}"
+    );
+    assert!(why.to_string().contains("name the Job instead"), "{why}");
+
+    // The root itself is the main checkout, answered rather than refused.
+    let root = Checkout::beside(fleet.first(), fleet.first().root()).expect("the root");
+    assert_eq!(root.path(), fleet.first().root());
+    assert_eq!(root.branch(), None);
 }

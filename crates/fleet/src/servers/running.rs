@@ -33,6 +33,8 @@ const ONE_ASK: Duration = Duration::from_secs(30);
 
 /// Everything the task needs, decided before it was spawned.
 pub(crate) struct Plan {
+    /// How a record left behind by a crashed Fleet says whose server this was.
+    pub(crate) whose: String,
     pub(crate) run: Option<String>,
     pub(crate) serve: String,
     pub(crate) ready: Option<String>,
@@ -205,17 +207,10 @@ where
         let Some(group) = served.group() else {
             return;
         };
-        let (id, whose) = {
-            let state = plan.now.borrow();
-            let whose = match &state.job_id {
-                Some(job) => format!("job {}", job.as_str()),
-                None => String::from("main-checkout"),
-            };
-            (state.id.clone(), whose)
-        };
+        let id = plan.now.borrow().id.clone();
         let started = tokio::task::spawn_blocking(move || crate::process::holder_of(group)).await;
         if let Ok(Ok(crate::process::Holder::Held(started))) = started {
-            let _ = super::left::recorded(&plan.dir, &id, &whose, group, &started);
+            let _ = super::left::recorded(&plan.dir, &id, &plan.whose, group, &started);
         }
     }
 

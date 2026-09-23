@@ -192,7 +192,9 @@ async fn a_command_is_not_a_server_and_a_server_is_not_a_run() {
         matches!(
             Arc::clone(&fleet)
                 .hold_server(
-                    crate::servers::Place::MainCheckout(fleet.first()),
+                    crate::servers::Place::Checkout(crate::checkouts::Checkout::main(
+                        fleet.first()
+                    )),
                     "fmt",
                     ipc::StartedBy::Person
                 )

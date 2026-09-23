@@ -112,7 +112,7 @@ fn the_main_checkout_gets_a_claim_of_its_own() {
     let mut store = open(&dir);
     store
         .claim_port_span(&PortClaim {
-            claimant: PortClaimant::MainCheckout(root()),
+            claimant: PortClaimant::Checkout(root()),
             base: 42000,
             width: 2,
             claimed_at: claimed_at(),
@@ -120,18 +120,18 @@ fn the_main_checkout_gets_a_claim_of_its_own() {
         .expect("the main checkout's claim is recorded");
 
     let read = store
-        .port_span_for_main_checkout(&root())
+        .port_span_for_checkout(&root())
         .expect("the read succeeds")
         .expect("a claim is there");
-    assert_eq!(read.claimant, PortClaimant::MainCheckout(root()));
+    assert_eq!(read.claimant, PortClaimant::Checkout(root()));
     assert_eq!(read.base, 42000);
 
     let all = store.every_port_claim().expect("every claim is read");
     assert_eq!(all.len(), 1, "one claim, naming the main checkout");
-    assert_eq!(all[0].claimant, PortClaimant::MainCheckout(root()));
+    assert_eq!(all[0].claimant, PortClaimant::Checkout(root()));
 
     store
-        .release_port_span(&PortClaimant::MainCheckout(root()))
+        .release_port_span(&PortClaimant::Checkout(root()))
         .expect("the main checkout's claim is released");
     assert!(
         store
@@ -150,14 +150,14 @@ fn a_second_claim_for_the_main_checkout_is_refused() {
     let mut store = open(&dir);
     store
         .claim_port_span(&PortClaim {
-            claimant: PortClaimant::MainCheckout(root()),
+            claimant: PortClaimant::Checkout(root()),
             base: 42000,
             width: 2,
             claimed_at: claimed_at(),
         })
         .expect("the first claim is recorded");
     let refused = store.claim_port_span(&PortClaim {
-        claimant: PortClaimant::MainCheckout(root()),
+        claimant: PortClaimant::Checkout(root()),
         base: 42010,
         width: 2,
         claimed_at: claimed_at(),
@@ -188,7 +188,7 @@ fn a_job_and_the_main_checkout_never_overlap() {
         .expect("the job's span is claimed");
     store
         .claim_port_span(&PortClaim {
-            claimant: PortClaimant::MainCheckout(root()),
+            claimant: PortClaimant::Checkout(root()),
             base: 41004,
             width: 4,
             claimed_at: claimed_at(),
@@ -200,7 +200,7 @@ fn a_job_and_the_main_checkout_never_overlap() {
         .expect("read")
         .expect("a claim");
     let main_read = store
-        .port_span_for_main_checkout(&root())
+        .port_span_for_checkout(&root())
         .expect("read")
         .expect("a claim");
     assert_ne!(
@@ -397,7 +397,7 @@ fn a_job_the_main_checkout_and_the_fleet_listener_are_three_separate_claims() {
             claimed_at: claimed_at(),
         },
         PortClaim {
-            claimant: PortClaimant::MainCheckout(root()),
+            claimant: PortClaimant::Checkout(root()),
             base: 41004,
             width: 4,
             claimed_at: claimed_at(),
@@ -425,7 +425,7 @@ fn a_job_the_main_checkout_and_the_fleet_listener_are_three_separate_claims() {
     );
     assert_eq!(
         store
-            .port_span_for_main_checkout(&root())
+            .port_span_for_checkout(&root())
             .expect("read")
             .expect("a claim")
             .base,
@@ -449,7 +449,7 @@ fn two_repositories_main_checkouts_hold_separate_claims() {
     let mut store = open(&dir);
     let mailer = String::from("/repos/mailer");
     for (holder, base) in [(root(), 42_000), (mailer.clone(), 42_008)] {
-        let claimant = PortClaimant::MainCheckout(holder);
+        let claimant = PortClaimant::Checkout(holder);
         let claim = PortClaim {
             claimant,
             base,
@@ -462,14 +462,14 @@ fn two_repositories_main_checkouts_hold_separate_claims() {
     }
     let base_of = |store: &Store, at: &str| {
         store
-            .port_span_for_main_checkout(at)
+            .port_span_for_checkout(at)
             .expect("read")
             .map(|claim| claim.base)
     };
     assert_eq!(base_of(&store, &root()), Some(42_000));
     assert_eq!(base_of(&store, &mailer), Some(42_008));
     store
-        .release_port_span(&PortClaimant::MainCheckout(mailer.clone()))
+        .release_port_span(&PortClaimant::Checkout(mailer.clone()))
         .expect("released");
     assert_eq!(
         (base_of(&store, &root()), base_of(&store, &mailer)),
