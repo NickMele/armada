@@ -131,6 +131,23 @@ function sketch(): SketchAttachment {
         { id: "b1-b2", from: "b1", to: "b2" },
         { id: "b2-b3", from: "b2", to: "b3" },
       ],
+      // A ring round the two boxes the panel is made of, which is the thing no
+      // box and no join says: these two are one surface.
+      strokes: [
+        {
+          id: "s1",
+          points: [
+            { x: -40, y: 146 },
+            { x: 300, y: 128 },
+            { x: 608, y: 152 },
+            { x: 624, y: 234 },
+            { x: 300, y: 268 },
+            { x: -30, y: 250 },
+            { x: -46, y: 180 },
+            { x: -40, y: 146 },
+          ],
+        },
+      ],
     },
   };
 }
