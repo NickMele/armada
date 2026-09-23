@@ -22,6 +22,7 @@
 //! [`SERVED`] is [`served`](mod@served)'s, having moved there when this file
 //! crossed the 900-line rule; the gate reads the two halves as one text.
 
+use axum::middleware::from_fn_with_state;
 use axum::routing::{get, post};
 use axum::Router;
 
@@ -84,8 +85,19 @@ pub use served::{Route, SERVED};
 /// **The surface is built twice on purpose.** The agent's door makes every
 /// tool call against it rather than against the daemon, and a router that held
 /// itself is not a value — so it is handed its own copy of the same table.
+///
+/// **This is the only way to build a served router, and the refusal is on it.**
+/// [`surface`] is private and the door's copy is reachable only through the
+/// door, so there is no arrangement of this crate's parts that puts a route on
+/// the listener with no [`crate::callers::refuse_a_page`] in front of it. The
+/// door's own calls carry no `Origin` — they are built here, not forwarded —
+/// so a tool call passes exactly as a Bridge request does.
 pub fn router<D: Daemon>(served: Served<D>) -> Router {
-    surface(served.clone()).merge(crate::door::mounted::<D>(served.clone(), surface(served)))
+    let refusing_a_page =
+        from_fn_with_state(served.run_id().clone(), crate::callers::refuse_a_page);
+    surface(served.clone())
+        .merge(crate::door::mounted::<D>(served.clone(), surface(served)))
+        .layer(refusing_a_page)
 }
 
 /// The HTTP surface and the Drone's endpoint: every route but the door.
