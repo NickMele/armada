@@ -33,7 +33,8 @@ each went to, so the owner knows it is not lost. Group what is left by
 | Field | What it tells you |
 |---|---|
 | `text` | What the owner wants. The only field he wrote |
-| `component`, `owners` | Search for these names first. `ownersFrom: "parent"` (Bridge under `pnpm dev`) is the tree it sits in, not who rendered it — walk it outward until a name is a component this repository defines |
+| `source` | The file and line of the JSX that drew the element, from the repository root. **Open this first** — it is the exact line, where the layer had it. A note left in Bridge under `pnpm dev` has no `source`: only the mock's build stamps it |
+| `component`, `owners` | Search for these names where there is no `source`. `ownersFrom: "parent"` (Bridge under `pnpm dev`) is the tree it sits in, not who rendered it — walk it outward until a name is a component this repository defines |
 | `element.text`, `selector` | Confirms you found the right instance, where a component draws in several places |
 | `screen`, `layer`, `scenario` | Where to look at it: `pnpm -C apps/desktop mock` with `?scenario=` reproduces a mock note exactly |
 

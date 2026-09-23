@@ -17,6 +17,14 @@ export const ANNOTATIONS_DIR = [".armada", "annotations"] as const;
 export const ANNOTATIONS_PATH = "/__armada/annotations";
 
 /**
+ * The attribute a development build stamps each element's own JSX onto, as
+ * `<path>:<line>` from the repository root. `annotations-source.ts` writes it
+ * and the layer reads it at pin time. Here because both ends of that are
+ * elsewhere, and neither may own the spelling alone.
+ */
+export const SOURCE_ATTRIBUTE = "data-armada-source";
+
+/**
  * The argument main passes the window when the app is not packaged. The
  * preload exposes `armadaDev` only when it sees it, so a packaged build has no
  * handler, no preload entry and no reason to load the layer's chunk.
@@ -38,6 +46,9 @@ export type Box = { x: number; y: number; width: number; height: number };
 /** The Job a note was sent to Fleet as, #1250. */
 export type Sent = { jobId: string; handle: string; at: string };
 
+/** Where an element's JSX is: a path from the repository root, and a line. #1584. */
+export type Source = { file: string; line: number };
+
 /**
  * One note. Written for the agent that reads it, so each field is something a
  * search for the code can start from.
@@ -52,6 +63,12 @@ export type Annotation = {
   text: string;
   /** The innermost React component under the click, or null if none was found. */
   component: string | null;
+  /**
+   * Where the JSX that drew the element is. Written by the build, read off the
+   * element — **absent, never guessed**, where nothing above it was stamped:
+   * the mock stamps and Bridge under `pnpm dev` does not.
+   */
+  source?: Source;
   /** The components above it, nearest first. */
   owners: string[];
   /**
@@ -110,6 +127,10 @@ const isNullableString = (v: unknown): v is string | null => v === null || isStr
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
+function isSource(v: unknown): v is Source {
+  return isRecord(v) && isString(v["file"]) && isNumber(v["line"]);
+}
+
 function isSent(v: unknown): v is Sent {
   return isRecord(v) && isString(v["jobId"]) && isString(v["handle"]) && isString(v["at"]);
 }
@@ -132,6 +153,7 @@ export function isAnnotation(value: unknown): value is Annotation {
     (value["sent"] === undefined || isSent(value["sent"])) &&
     isString(value["text"]) &&
     isNullableString(value["component"]) &&
+    (value["source"] === undefined || isSource(value["source"])) &&
     Array.isArray(value["owners"]) &&
     value["owners"].every(isString) &&
     (value["ownersFrom"] === "owner" || value["ownersFrom"] === "parent") &&
@@ -164,6 +186,7 @@ export function serializeAnnotation(note: Annotation): string {
     ...(note.sent === undefined ? {} : { sent: note.sent }),
     text: note.text,
     component: note.component,
+    ...(note.source === undefined ? {} : { source: note.source }),
     owners: note.owners,
     ownersFrom: note.ownersFrom,
     selector: note.selector,
@@ -200,6 +223,7 @@ export function requestOf(note: Annotation): string {
     `- Element: <${note.element.tag}>${note.element.text === "" ? "" : ` reading "${note.element.text}"`}`,
     `- Selector: ${note.selector}`,
   ];
+  if (note.source !== undefined) lines.push(`- Source: ${note.source.file}:${note.source.line}`);
   if (note.screen !== null) lines.push(`- Screen: ${note.screen}`);
   if (note.layer !== null) lines.push(`- Inside: ${note.layer}`);
   if (note.scenario !== null) lines.push(`- Mock scenario: ${note.scenario}`);
