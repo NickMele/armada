@@ -90,7 +90,7 @@ fn a_range_of_its_own() -> PortRange {
 }
 
 /// A Job whose worktree is cut and whose span is claimed, with a Drone on it.
-async fn a_running_job(fleet: &Fixture, home: &TempDir) -> Job {
+pub(super) async fn a_running_job(fleet: &Fixture, home: &TempDir) -> Job {
     let job = fleet
         .propose(a_proposal("show the components"))
         .await

@@ -5,6 +5,7 @@
 //! |---|---|
 //! | [`held`] | Which servers are up, by holder and name, and the last that ended |
 //! | [`left`] | The record on disk that finds a server a crashed Fleet left running |
+//! | [`moved`] | What a held server serves, once the checkout moved past it |
 //! | [`running`] | One server: `run`, `serve`, `ready`, the end |
 //! | [`unservable`] | Every refusal, and its code on the wire |
 //!
@@ -20,6 +21,7 @@
 
 mod held;
 pub(crate) mod left;
+mod moved;
 mod running;
 mod unservable;
 
@@ -104,6 +106,13 @@ where
                 None => Unservable::NotAServer {
                     name: name.to_string(),
                     servers: manifest.server_names(),
+                    last_read: served
+                        .repository()
+                        .reading()
+                        .map(|reading| unservable::LastRead {
+                            at: reading.at.as_str().to_string(),
+                            at_restart: reading.at_restart,
+                        }),
                 },
             });
         };
@@ -114,17 +123,23 @@ where
                 name: name.to_string(),
             });
         }
-        let (holder, job_id, worktree, ports, env, under) = match &place {
+        let (holder, job_id, worktree, ports, env, under, checkout) = match &place {
             Place::Job(job) => {
                 if job.status().is_terminal() {
                     return Err(Unservable::JobEnded);
                 }
-                let tree = WorktreeSpec::for_job(served.root(), &job.handle())
-                    .map(|spec| PathBuf::from(spec.worktree_path()))
+                let spec = WorktreeSpec::for_job(served.root(), &job.handle())
                     .map_err(|_| Unservable::NoWorktree)?;
+                let tree = PathBuf::from(spec.worktree_path());
                 if !tree.is_dir() {
                     return Err(Unservable::NoWorktree);
                 }
+                let checkout = ipc::ServerCheckout {
+                    path: spec.worktree_path(),
+                    branch: Some(spec.branch()),
+                    commit: None,
+                    behind: None,
+                };
                 (
                     Holder::Job(job.id().clone()),
                     Some(ipc::JobId::from(job.id())),
@@ -132,6 +147,7 @@ where
                     self.port_map(job).await,
                     self.port_env(job).await,
                     format!("jobs/{}", job.handle()),
+                    checkout,
                 )
             }
             Place::MainCheckout(_) => (
@@ -141,6 +157,13 @@ where
                 self.main_checkout_ports(&served).await,
                 self.main_checkout_port_env(&served).await,
                 String::from("main"),
+                ipc::ServerCheckout {
+                    path: served.root().to_string(),
+                    branch: None,
+                    commit: self.commit_serving_now(&served).await,
+                    // Nothing has landed since a server that has not started.
+                    behind: Some(0),
+                },
             ),
         };
         if let Some(up) = self.servers().running(&holder, name) {
@@ -168,6 +191,7 @@ where
             name: name.to_string(),
             job_id,
             manifest_id: Some(ipc::ManifestId::from(served.manifest().id())),
+            checkout,
             phase: ServerPhase::Starting,
             serve: resolved(server.serve()),
             ports: named_ports(&server, &ports),
@@ -189,10 +213,14 @@ where
             log: format!(".armada/servers/{under}/{id}/{}", records::LOG),
         };
         let (stop, stopped) = watch::channel(false);
-        let (now, watching) = watch::channel(state.clone());
+        // The sender is shared rather than owned by the task: where a server
+        // stands is written by the task on each phase, and by
+        // `crate::noticing` when a merge moves the checkout it serves out from
+        // under it.
+        let now = Arc::new(watch::channel(state.clone()).0);
         let feed = api::RunFeed::new();
         let live = Live {
-            now: watching,
+            now: Arc::clone(&now),
             stop: Arc::new(stop),
             feed: feed.clone(),
             dir: dir.clone(),

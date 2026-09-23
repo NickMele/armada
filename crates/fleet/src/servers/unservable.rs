@@ -15,11 +15,35 @@ const NO_SUCH_SERVER: &str = "fleet.no_such_server";
 /// Its directory would not write, or it did not end once stopped.
 const SERVER_FAULT: &str = "fleet.server_fault";
 
+/// What this Fleet's last read of `armada.yml` came to, carried on the one
+/// refusal that would otherwise name a list from boot as though it were
+/// current.
+///
+/// **The list is the untrustworthy part.** A Fleet holds the Manifest it
+/// resolved at startup, so a server added to `armada.yml` since is declared by
+/// the repository and unknown to Fleet — and `it declares a, b, c` reads as
+/// the repository's answer rather than as this process's memory of it. `#1564`.
+#[derive(Debug)]
+pub struct LastRead {
+    /// When Fleet read the file — not when it was saved.
+    pub at: String,
+    /// Sections that changed in that read and were **not** adopted, as
+    /// `armada.yml` spells them. `commands` is where a server is declared.
+    pub at_restart: Vec<String>,
+}
+
+/// Where a server is declared, so the one section this refusal cares about is
+/// named once.
+const COMMANDS: &str = "commands";
+
 #[derive(Debug)]
 pub enum Unservable {
     NotAServer {
         name: String,
         servers: Vec<String>,
+        /// Absent where this Fleet has not re-read the file since it started,
+        /// which is the ordinary case and says nothing either way.
+        last_read: Option<LastRead>,
     },
     IsACommand {
         name: String,
@@ -63,19 +87,29 @@ impl fmt::Display for Unservable {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Unservable::*;
         match self {
-            NotAServer { name, servers } if servers.is_empty() => write!(
+            NotAServer {
+                name,
+                servers,
+                last_read,
+            } if servers.is_empty() => write!(
                 out,
                 "`{name}` is not a server this project declares, and it declares none. A \
-                 server is a Command with `serve`"
+                 server is a Command with `serve`{}",
+                since(last_read.as_ref())
             ),
-            NotAServer { name, servers } => write!(
+            NotAServer {
+                name,
+                servers,
+                last_read,
+            } => write!(
                 out,
-                "`{name}` is not a server this project declares — it declares {}",
+                "`{name}` is not a server this project declares — it declares {}{}",
                 servers
                     .iter()
                     .map(|one| format!("`{one}`"))
                     .collect::<Vec<_>>()
-                    .join(", ")
+                    .join(", "),
+                since(last_read.as_ref())
             ),
             IsACommand { name } => write!(
                 out,
@@ -98,6 +132,29 @@ impl fmt::Display for Unservable {
             ),
             NotKept { why } => write!(out, "the server could not be kept: {why}"),
         }
+    }
+}
+
+/// What the list above is worth, in a clause. **Naming the read rather than
+/// only the list**, because a Fleet that has been up for days is answering
+/// from what it resolved at startup and the list alone does not say so — the
+/// twelve-day Fleet in `#1564` refused a server the repository declared and
+/// named four that it did not.
+fn since(last_read: Option<&LastRead>) -> String {
+    let Some(last_read) = last_read else {
+        return String::new();
+    };
+    let at = &last_read.at;
+    match last_read
+        .at_restart
+        .iter()
+        .any(|section| section == COMMANDS)
+    {
+        true => format!(
+            ". This Fleet read `armada.yml` at {at} and `{COMMANDS}` had changed, which it \
+             cannot take up while it runs — restart Fleet and ask again"
+        ),
+        false => format!(". This Fleet last read `armada.yml` at {at}"),
     }
 }
 

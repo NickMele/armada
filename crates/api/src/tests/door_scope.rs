@@ -213,6 +213,12 @@ fn server(id: &str, manifest_id: &str) -> ipc::ServerState {
         name: "web".to_string(),
         job_id: None,
         manifest_id: Some(ipc::ManifestId::carried(manifest_id)),
+        checkout: ipc::ServerCheckout {
+            path: "/repo".to_string(),
+            branch: None,
+            commit: None,
+            behind: None,
+        },
         phase: ipc::ServerPhase::Serving,
         serve: "serve".to_string(),
         ports: Vec::new(),
