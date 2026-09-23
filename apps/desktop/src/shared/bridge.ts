@@ -513,6 +513,7 @@ export const CHANNELS = {
   readHistory: "bridge:read-history",
   readEvidence: "bridge:read-evidence",
   readResources: "bridge:read-resources",
+  watchPulse: "bridge:watch-pulse",
   watchRunSheet: "bridge:watch-run-sheet",
   observeRun: "bridge:observe-run",
   startRun: "bridge:start-run",

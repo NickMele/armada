@@ -45,6 +45,7 @@ mod budget;
 mod carrying_on;
 mod check_output;
 mod checking;
+mod checkouts;
 /// One Manifest as Fleet resolved it, for the caller asking what a Job here
 /// will be held to.
 mod clearing;

@@ -99,7 +99,7 @@ export const NobodyHasAsked: Story = {
     figures: FIGURES,
     examined: null,
     age: "3s",
-    refreshed: "Taken again whenever this job moves.",
+    refreshed: "Taken again every 10s while open.",
     onExamine: () => {},
   },
 };
@@ -369,7 +369,7 @@ export const SeveralMembers: Story = {
       { label: "Judges", value: "1 out" },
     ],
     age: "4s",
-    refreshed: "Taken again whenever this job moves.",
+    refreshed: "Taken again every 10s while open.",
     examined: null,
     onExamine: () => {},
   },

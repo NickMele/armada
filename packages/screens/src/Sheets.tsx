@@ -31,6 +31,7 @@ import {
   type RunSheetProps,
 } from "@armada/components";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { usePulseWatch } from "./tab-pulse";
 
 import type {
   Diff,
@@ -161,6 +162,12 @@ export type DetailSheetProps = {
    */
   holds: Omit<JobHoldsSheetProps, "open" | "floor" | "onClose">;
   /**
+   * Hold Pulse's reading live while the holds sheet is the one open, and let it
+   * go otherwise. Same board and same poll as the Pulse tab, which is why it is
+   * the same prop — `tab-pulse.tsx`, `#1571`.
+   */
+  onNeedPulse: (jobId: string | null) => void;
+  /**
    * Which task the task sheet is reading, where one is open.
    *
    * **Named rather than handed the task.** `SheetReading` carries the id the
@@ -215,11 +222,16 @@ export function DetailSheet({
   onHold,
   onRedirect,
   holds,
+  onNeedPulse,
   settings,
   run,
   floor,
   onClose,
 }: DetailSheetProps) {
+  // Above the early returns, `filter`'s reason: a hook cannot be conditional.
+  // `null` for every other sheet, which is what stops the reading being polled
+  // for a board that is not drawn.
+  usePulseWatch(which === "holds" ? job.id : null, onNeedPulse);
   // **Which actor's lines to show.** Held here rather than by the panel: it is
   // a reading of one sheet and it should start over the next time the sheet is
   // opened, which is what a state on the component that mounts with the sheet

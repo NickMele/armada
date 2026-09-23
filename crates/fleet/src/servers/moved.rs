@@ -7,8 +7,9 @@
 //! publishes it.
 //!
 //! **Only the main checkout.** A Job's worktree is its own branch and does not
-//! gain the commits a merge puts on the base, so nothing lands under a Job's
-//! server in the sense this module means.
+//! gain the commits a merge puts on the base, and a worktree somebody cut by
+//! hand is not one Fleet brings forward — so neither gains commits in the
+//! sense this module means.
 
 use std::sync::Arc;
 
@@ -70,7 +71,7 @@ where
         if commits == 0 {
             return;
         }
-        let holder = Holder::MainCheckout(root.to_string());
+        let holder = Holder::Checkout(root.to_string());
         for state in self.servers().moved_on(&holder, commits) {
             // The whole row in the kind its phase is, because the three
             // `server.*` kinds each carry the whole `ServerState` and a reader

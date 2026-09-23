@@ -281,7 +281,7 @@ function OneJob(props: JobDetailProps) {
           onSaid={props.onSaid}
         />
       ) : (
-        <PulseTab holds={pulseOf(props, whole, job.id)} />
+        <PulseTab holds={pulseOf(props, whole, job.id)} jobId={job.id} onNeedPulse={props.onNeedPulse} />
       )}
     </div>
   );

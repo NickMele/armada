@@ -34,6 +34,7 @@ import { resolvedFolder } from "./locating";
 import { openArtifact } from "./open";
 import { openFindingIssue, openPullRequest, openRemarkLink, openStudioNode } from "./forge";
 import { RemarksPoll } from "./remarks-poll";
+import { ResourcesPoll } from "./resources-poll";
 import { openServerLink } from "./servers";
 import { frameStream, FRAME_SCHEME } from "./streaming";
 import { Attention, soundOf } from "./telling";
@@ -220,7 +221,13 @@ function createWindow(): BrowserWindow {
   // 20 s timer, and any of these bringing a window back on screen resumes it.
   // `closed` is here rather than left to `window-all-closed`, because on
   // macOS the app and the connection both outlive a closed window.
-  const tellVisibility = (): void => remarksPoll.shown(anyWindowShown());
+  // Pulse's 10 s timer, #1571, goes with it: a hidden window is not somebody
+  // reading a board, and its reading walks a process table per tick.
+  const tellVisibility = (): void => {
+    const shown = anyWindowShown();
+    remarksPoll.shown(shown);
+    resourcesPoll.shown(shown);
+  };
   window.on("show", tellVisibility);
   window.on("hide", tellVisibility);
   window.on("minimize", tellVisibility);
@@ -282,6 +289,19 @@ let published: BridgeState = NOTHING_YET;
 const remarksPoll = new RemarksPoll({
   port: () => (published.connection.state === "connected" ? published.connection.fleet.port : null),
   again: (port, jobId) => connection?.material.remarksChanged(port, jobId) ?? Promise.resolve(),
+});
+
+/**
+ * Pulse's 10 s timer, for whichever Job's board is on screen. #1571.
+ *
+ * **Built here for `remarksPoll`'s reason** — the port is read off `published`
+ * on every tick rather than held, because this exists long before a connection
+ * does. `again` is the same re-read every event naming the Job already takes,
+ * so a quiet Job and a moving one refresh through one path.
+ */
+const resourcesPoll = new ResourcesPoll({
+  port: () => (published.connection.state === "connected" ? published.connection.fleet.port : null),
+  again: (port, jobId) => connection?.resourcesAgain(port, jobId) ?? Promise.resolve(),
 });
 
 /** Every window's own `PickedView`, kept apart from `published` and from every other window's. */
@@ -703,6 +723,13 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.readResources, (_event, jobId: string | null) =>
     connection?.readResources(jobId),
   );
+  // Pulse's own 10 s timer, #1571 — the board says which Job it is drawing, and
+  // `null` when it stops. Nothing is read on this call itself: the reading is
+  // already open on `readResources` above, and this only decides whether it
+  // keeps being taken while the Job is quiet.
+  ipcMain.handle(CHANNELS.watchPulse, (_event, jobId: string | null) => {
+    resourcesPoll.watch(jobId);
+  });
   // The run sheet, Journey 9. Opened by the sheet rather than by the Job.
   // Every act below is `connection.rehearsal`'s — see `rehearsal.ts`.
   ipcMain.handle(CHANNELS.watchRunSheet, (_event, jobId: string | null) =>
