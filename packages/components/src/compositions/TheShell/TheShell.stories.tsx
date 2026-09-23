@@ -70,16 +70,16 @@ const shell: ComponentProps<typeof TheShell> = {
   },
 };
 
-export const Shell: Story = {
-  args: shell,
-  render: (args) => (
-    <div className="armada-screen">
-      <div className="armada-screen__window">
-        <TheShell {...args} />
-      </div>
+/** The window the app mounts the shell into, which every story here draws it in. */
+const inWindow = (args: ComponentProps<typeof TheShell>) => (
+  <div className="armada-screen">
+    <div className="armada-screen__window">
+      <TheShell {...args} />
     </div>
-  ),
-};
+  </div>
+);
+
+export const Shell: Story = { args: shell, render: inWindow };
 
 /**
  * The 48px icon rail, below the layout breakpoint — where the dock has taken
@@ -102,34 +102,22 @@ export const CollapsedRail: Story = {
 };
 
 /**
- * The rail asked for rather than imposed — #1591, `toggle_sidebar` built. The
- * column reaches the same 48px the breakpoint does, and the drag handle goes
- * with it: there is nothing to size at the rail, which is what `onResizeLeft`
- * already documents.
- *
- * What a rendering cannot show: the press moves one thing. The window is at
- * its resting width here, so the panel, the title row and the dock are the
- * same as `Shell`'s, and the column is the only difference between the two.
+ * The rail asked for rather than imposed — #1591. What a rendering cannot
+ * show: the press reaches the same 48px the breakpoint does, and takes the
+ * drag handle with it, there being nothing to size at the rail.
  */
 export const RailByChoice: Story = {
   args: { ...shell, onResizeLeft: () => {}, onCollapsedChange: () => {}, collapseBinding: "⌘\\" },
-  render: (args) => {
+  render: function RailByChoiceShell(args) {
     const [collapsed, setCollapsed] = useState(false);
-    return (
-      <div className="armada-screen">
-        <div className="armada-screen__window">
-          <TheShell {...args} collapsed={collapsed} onCollapsedChange={setCollapsed} />
-        </div>
-      </div>
-    );
+    return inWindow({ ...args, collapsed, onCollapsedChange: setCollapsed });
   },
   play: async ({ canvas, userEvent }) => {
-    await expect(canvas.getByRole("separator", { name: "Resize the left column" })).toBeInTheDocument();
-
+    const handle = () => canvas.queryByRole("separator", { name: "Resize the left column" });
+    await expect(handle()).toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "Collapse the left column" }));
     await expect(canvas.queryByText("pid")).toBeNull();
-    await expect(canvas.queryByRole("separator", { name: "Resize the left column" })).toBeNull();
-
+    await expect(handle()).toBeNull();
     await userEvent.click(canvas.getByRole("button", { name: "Expand the left column" }));
     await expect(canvas.getByText("pid")).toBeVisible();
   },

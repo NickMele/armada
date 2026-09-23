@@ -11,13 +11,10 @@ import { useShortcutReveal } from "../../shortcut-reveal";
  * surfaces, and no rule to draw one. `design-system.md` → Left column.
  *
  * **The rail never disappears.** 48px is cheap and losing navigation entirely
- * is worse than losing 48px, at any width. Below the breakpoint it collapses
- * to that rail; the ⌘-digit bindings reach every surface without labels, which
- * is what makes the collapsed state more usable than it looks.
- *
- * **A person can ask for the rail, too** — #1591. The toggle at the top of
- * this panel is `toggle_sidebar` built, and there is still one collapsed
- * state rather than two: it reaches the same 48px the breakpoint does.
+ * is worse, at any width. Below the breakpoint the column collapses to that
+ * rail; above it #1591's toggle, at the top of this panel, asks for the same
+ * 48px — one collapsed state, never two. ⌘-digit reaches every surface
+ * without a label, which is what makes it more usable than it looks.
  *
  * **The roster is Bridge's, never this component's.** A surface earns a place
  * where a journey needs one, so the list arrives as a prop.
