@@ -544,9 +544,16 @@ export function DispatchRequest({
               <div className="armada-dispatch__next">
                 <span className="armada-dispatch__next-head">What happens next</span>
                 <ol className="armada-dispatch__next-list">
-                  {NEXT.map((line) => (
+                  {NEXT.map((line, index) => (
                     <li className="armada-dispatch__next-line" key={line}>
-                      {line}
+                      {/* The same ordinal the proposal's chain draws, because
+                          it is the same kind of thing one card down: a run
+                          whose order is the substance. Read rather than
+                          hidden — the chain's number restates a position its
+                          own `Waits on job 1` sentence already says, and
+                          nothing here says it twice. */}
+                      <span className="armada-dispatch__ordinal mono">{index + 1}</span>
+                      <span className="armada-dispatch__next-said">{line}</span>
                     </li>
                   ))}
                 </ol>
