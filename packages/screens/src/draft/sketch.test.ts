@@ -9,7 +9,6 @@ import {
   drawingOf,
   isDrawn,
   nextShapeId,
-  nextStrokeId,
   sketchDrawn,
   sketchFromFrame,
   sketchOf,
@@ -106,15 +105,12 @@ function pad(): Drawing {
 }
 
 /** A line of three points, which is the smallest one worth curving. */
-function line(id: string): Drawing["strokes"][number] {
-  return {
-    id,
-    points: [
-      { x: 0, y: 0 },
-      { x: 40, y: 20 },
-      { x: 80, y: 0 },
-    ],
-  };
+function line(): Drawing["strokes"][number]["points"] {
+  return [
+    { x: 0, y: 0 },
+    { x: 40, y: 20 },
+    { x: 80, y: 0 },
+  ];
 }
 
 describe("what is on the pad", () => {
@@ -133,7 +129,7 @@ describe("what is on the pad", () => {
   });
 
   it("counts a line drawn by hand on its own, so a pad with no box still attaches", () => {
-    expect(isDrawn(withStroke(NOTHING_DRAWN, line("s1")))).toBe(true);
+    expect(isDrawn(withStroke(NOTHING_DRAWN, line()))).toBe(true);
   });
 
   it("keeps the drawing beside the staged path when the sketch goes out", () => {
@@ -194,18 +190,18 @@ describe("drawing on it", () => {
 
 describe("drawing by hand", () => {
   it("puts each line on top of the last, in the order they were drawn", () => {
-    const next = withStroke(withStroke(NOTHING_DRAWN, line("s1")), line("s2"));
+    const next = withStroke(withStroke(NOTHING_DRAWN, line()), line());
 
-    expect(next.strokes.map((one) => one.id)).toEqual(["s1", "s2"]);
+    expect(next.strokes.map((one) => one.points.length)).toEqual([3, 3]);
   });
 
   it("keeps no line of fewer than two points, which is a press that went nowhere", () => {
-    expect(withStroke(NOTHING_DRAWN, { id: "s1", points: [] })).toEqual(NOTHING_DRAWN);
-    expect(withStroke(NOTHING_DRAWN, { id: "s1", points: [{ x: 4, y: 4 }] })).toEqual(NOTHING_DRAWN);
+    expect(withStroke(NOTHING_DRAWN, [])).toEqual(NOTHING_DRAWN);
+    expect(withStroke(NOTHING_DRAWN, [{ x: 4, y: 4 }])).toEqual(NOTHING_DRAWN);
   });
 
   it("takes back the last line and no other", () => {
-    const two = withStroke(withStroke(NOTHING_DRAWN, line("s1")), line("s2"));
+    const two = withStroke(withStroke(NOTHING_DRAWN, line()), line());
 
     expect(withoutLastStroke(two).strokes.map((one) => one.id)).toEqual(["s1"]);
   });
@@ -215,16 +211,18 @@ describe("drawing by hand", () => {
   });
 
   it("leaves the boxes alone, and a box taken off leaves the lines", () => {
-    const drawn = withStroke(pad(), line("s1"));
+    const drawn = withStroke(pad(), line());
 
     expect(drawn.shapes).toEqual(pad().shapes);
-    expect(withoutShapes(drawn, ["b1", "b2"]).strokes.map((one) => one.id)).toEqual(["s1"]);
+    expect(withoutShapes(drawn, ["b1", "b2"]).strokes).toHaveLength(1);
   });
 
-  it("takes the first id free, so drawing and undoing does not count up forever", () => {
-    expect(nextStrokeId(NOTHING_DRAWN)).toBe("s1");
-    expect(nextStrokeId(withStroke(NOTHING_DRAWN, line("s1")))).toBe("s2");
-    expect(nextStrokeId(withoutLastStroke(withStroke(NOTHING_DRAWN, line("s1"))))).toBe("s1");
+  it("mints the first id free, so drawing and undoing does not count up forever", () => {
+    const one = withStroke(NOTHING_DRAWN, line());
+    const two = withStroke(one, line());
+
+    expect(two.strokes.map((each) => each.id)).toEqual(["s1", "s2"]);
+    expect(withStroke(withoutLastStroke(two), line()).strokes[1]?.id).toBe("s2");
   });
 });
 

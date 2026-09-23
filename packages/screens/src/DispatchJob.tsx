@@ -58,7 +58,6 @@ import {
   drawingOf,
   isDrawn,
   nextShapeId,
-  nextStrokeId,
   withBody,
   withJoin,
   withPlace,
@@ -386,9 +385,7 @@ export function DispatchJob({
             onMove={(id, at) => setDrawing((one) => withPlace(one, id, at))}
             onRemove={(ids) => setDrawing((one) => withoutShapes(one, ids))}
             onJoin={(from, to) => setDrawing((one) => withJoin(one, from, to))}
-            onDraw={(points) =>
-              setDrawing((one) => withStroke(one, { id: nextStrokeId(one), points }))
-            }
+            onDraw={(points) => setDrawing((one) => withStroke(one, points))}
             onUndo={() => setDrawing(withoutLastStroke)}
             disabled={disabled}
           />

@@ -180,7 +180,7 @@ export function withoutShapes(drawing: Drawing, ids: readonly string[]): Drawing
  * collide** — a person who draws and undoes all afternoon does not end on
  * `s214`, and nothing outside the pad keys on either.
  */
-export function nextStrokeId(drawing: Drawing): string {
+function nextStrokeId(drawing: Drawing): string {
   const held = new Set(drawing.strokes.map((stroke) => stroke.id));
   let at = 1;
   while (held.has(`s${String(at)}`)) at += 1;
@@ -190,14 +190,17 @@ export function nextStrokeId(drawing: Drawing): string {
 /**
  * A line drawn, put on top of what is already there.
  *
- * **A stroke of fewer than two points is not a line**, and the pad never
- * reports one — a press with no travel is somebody clicking the pad, and a
- * stroke with nothing to draw would sit in the picture invisibly and take a
- * press of Undo to get rid of.
+ * **This mints the id and a box's caller does not.** Nothing reads a stroke's
+ * id — the pad draws the points and Undo takes the last off — so asking a
+ * caller for one would be ceremony, where a box's id is what a join names.
+ *
+ * **A stroke of fewer than two points is not a line**: a press with no travel
+ * is somebody clicking the pad, and a line with nothing to draw would sit in
+ * the picture invisibly and take a press of Undo to get rid of.
  */
-export function withStroke(drawing: Drawing, stroke: SketchStroke): Drawing {
-  if (stroke.points.length < 2) return drawing;
-  return { ...drawing, strokes: [...drawing.strokes, stroke] };
+export function withStroke(drawing: Drawing, points: readonly SketchPoint[]): Drawing {
+  if (points.length < 2) return drawing;
+  return { ...drawing, strokes: [...drawing.strokes, { id: nextStrokeId(drawing), points }] };
 }
 
 /**
