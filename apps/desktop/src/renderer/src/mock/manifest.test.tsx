@@ -20,7 +20,7 @@ import {
 } from "./manifest-fleet";
 import type { Manifesting } from "./manifest-fleet";
 import { rootlessSheet, WEB_DEV_RUN } from "./manifest-rootless";
-import { mount, unmountAfterEach } from "./testing";
+import { entered, mount, unmountAfterEach } from "./testing";
 
 unmountAfterEach();
 
@@ -34,9 +34,17 @@ async function manifest(options: Manifesting = {}): Promise<void> {
  * Open one of the surface's two readings from the tab row — #1383, where both
  * stopped being resident panels. The name is a prefix because each act carries
  * its own headline after the word.
+ *
+ * **Open is not arrived**, so this waits for the travel — #1252's `entered`,
+ * and #1592's own failure. A sheet crosses 480px in `--duration-sheet`, and a
+ * press aimed at a button inside it while it is still crossing is aimed past
+ * the window's trailing edge: measured 23 Sep 2026, three runs in fifteen
+ * under load, the Verify button sat at x=1458 in a 1440px window and the
+ * press reached no element at all.
  */
 async function reading(which: "Drift" | "Verify"): Promise<void> {
   await page.getByRole("button", { name: new RegExp(`^${which}`) }).click();
+  await entered(page.getByRole("dialog", { name: which }));
 }
 
 /** What `fmt` rewrote, as `checkout_run.finished` reported it. */
