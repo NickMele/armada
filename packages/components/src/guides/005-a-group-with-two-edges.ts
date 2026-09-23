@@ -1,10 +1,11 @@
 import type { Guide } from "./guide";
 
 /**
- * How to read the workflow graph, which is a picture with a rule behind it:
- * `.claude/decisions/2026-09-23-one-node-two-edges.md`. The agent that built
- * the graph asked whether the plan step's card should say this; the answer was
- * no, because that is the prose the owner cut from every screen.
+ * How to read the workflow graph, which is a picture with a rule behind it —
+ * one node for a group, drawn where it originated, with a second edge from the
+ * step that worked it (the owner, 23 September 2026, `#1530`). The agent that
+ * built the graph asked whether the plan step's card should say this; the
+ * answer was no, because that is the prose the owner cut from every screen.
  *
  * **Its `?` is owed.** It goes beside the graph rather than beside a node —
  * what is being explained is how to read the picture — and the Workflow files

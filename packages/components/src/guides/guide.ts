@@ -1,9 +1,9 @@
 // What a guide is, and the groups the catalogue files them under.
 //
 // **A guide is data in its own file, never a sentence in JSX.** The app shows
-// facts; an explanation is something a person chooses to see, and it only
-// stays choosable if it has a home that can be listed, numbered, diffed and
-// read end to end — `.claude/decisions/2026-09-23-facts-on-screen-guides-behind-a-mark.md`.
+// facts; an explanation is something a person chooses to see (the owner, 23
+// September 2026, #1602), and it only stays choosable if it has a home that
+// can be listed, numbered, diffed and read end to end.
 //
 // The same knowledge for a reader of the repository is in `docs/concepts/`.
 // Every guide names the page it agrees with, so the two can be read against
