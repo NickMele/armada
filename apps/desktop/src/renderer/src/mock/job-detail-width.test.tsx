@@ -3,8 +3,15 @@
 // held its 380px, and the step panel took what was left, which at 1280 was
 // 192px of one-letter-a-line log.
 //
-// **A geometry test, so it lives here and not in a story.** The three widths
-// that matter are decided by the whole window — the left column, the dock's own
+// **#1583 took one of those three terms away.** The dock is a layer over the
+// work now rather than a column in it, so job detail has the whole window at
+// every dock state and the band this file used to measure — 1101 to 1279, the
+// left column at its rail paying for the dock — is gone. What is left is one
+// breakpoint, and a claim this file did not have before: the content is the
+// same width with Helm open and shut.
+//
+// **A geometry test, so it lives here and not in a story.** The widths that
+// matter are decided by the whole window — the left column, the dock's own
 // rules and the `--layout-breakpoint` the dock folds at — and a story drawing
 // one composition in a sized `div` cannot see any of them. `Layer.test.tsx` is
 // the precedent for driving the viewport in this project.
@@ -33,7 +40,8 @@ function floor(
   token:
     | "--w-run-column-min"
     | "--w-step-panel-min"
-    | "--window-fold-left"
+    | "--sidebar-default"
+    | "--layout-breakpoint"
     | "--sidebar-rail"
     | "--w-sheet",
 ): number {
@@ -79,6 +87,8 @@ function brokenWord(): { text: string; words: number; lines: number } | null {
 
 /**
  * App on the Job the owner had open, at `width`, with the layout settled.
+ * **Helm is shut**, which is how Bridge opens since #1583; `withHelm` is what
+ * puts it up.
  *
  * **It waits on the run and not on the inspector.** Under
  * `--layout-breakpoint` the inspector is a sheet that opens on a press, so a
@@ -92,38 +102,83 @@ async function atWidth(width: number): Promise<void> {
   await expect.poll(() => document.querySelector(".armada-inside__run") !== null).toBe(true);
 }
 
+/**
+ * Put Helm up. **`⌘J` rather than the title row's button**: it is the one way
+ * in that works at every width and from inside a field, and it is what a
+ * person presses.
+ */
+async function withHelm(): Promise<void> {
+  await userEvent.keyboard("{Meta>}j{/Meta}");
+  await expect.poll(() => document.querySelector(".armada-shell__dock-layer, .armada-sheet")).not.toBe(null);
+}
+
 /** Press a step in the run, which is what opens the folded inspector. */
 async function openInspector(): Promise<void> {
   await page.getByRole("button", { name: "Fix", exact: true }).first().click();
   await expect.poll(() => document.querySelector(".armada-inside__panel") !== null).toBe(true);
 }
 
-// 1280 is where the owner found it: wide enough for Helm's dock to sit beside
-// the content, narrow enough that what is left cannot hold both columns at
-// their drawn widths. The run column gives up 140px here and the panel keeps
-// its floor exactly.
-test("at 1280 with Helm's dock open, the step panel keeps its floor and the run column yields", async () => {
+// 1280 is where the owner found it. It was wide enough for Helm's dock to sit
+// beside the content and too narrow for what was left to hold both columns at
+// their drawn widths, so the run column gave up 140px. **Nothing yields here
+// any more** — the dock stopped taking the 412px, and the 1280 measurement
+// that #1428 landed is now the easy case rather than the hard one.
+test("at 1280 with Helm up, neither of job detail's columns yields", async () => {
   await atWidth(1280);
-  await expect.element(page.getByRole("button", { name: "Close" }).first()).toBeVisible();
+  await withHelm();
   // First, because it is the thing the owner photographed: with the panel at
   // 192px this reported `Extract selectColumnOrder into its own module`, six
   // words on forty lines.
   expect(brokenWord()).toBe(null);
   expect(boxOf(".armada-inside__panel").width).toBeGreaterThanOrEqual(floor("--w-step-panel-min"));
-  expect(boxOf(".armada-inside__run").width).toBeGreaterThanOrEqual(floor("--w-run-column-min"));
-  // The crush did not move across the gutter: the run column gave width up, it
-  // did not take the panel's place as the sliver.
-  expect(boxOf(".armada-inside__run").width).toBeLessThan(380);
+  expect(boxOf(".armada-inside__run").width).toBe(380);
 });
 
-// Above the band the dock is affordable and nothing has to yield at all — the
-// run column is still at its drawn width, which is what stops this fix reading
-// as "the run column got narrower".
+// The run column is still at its drawn width up here too, which is what stops
+// this reading as "the run column got narrower".
 test("at 1512 the run column is still at its drawn width", async () => {
   await atWidth(1512);
   expect(boxOf(".armada-inside__run").width).toBe(380);
   expect(boxOf(".armada-inside__panel").width).toBeGreaterThanOrEqual(floor("--w-step-panel-min"));
   expect(brokenWord()).toBe(null);
+});
+
+// ---- what #1583 claims, measured ------------------------------------------
+//
+// **Opening Helm changes nothing about the width of what is behind it.** The
+// issue's own definition of done, and the fact three screens each wrote their
+// own workaround around on 22 September. Measured on the shell's panel rather
+// than on job detail's columns, because it is true of every surface and job
+// detail is only the one with a fixture open in this file.
+
+const panelWidth = (): number => boxOf(".armada-shell__panel").width;
+
+test.each([2000, 1512, 1440, 1280, 1101])(
+  "at %i the content is the same width with Helm shut and open",
+  async (width) => {
+    await atWidth(width);
+    const shut = panelWidth();
+    await withHelm();
+    expect(panelWidth()).toBe(shut);
+    // And the run under it did not move either, which is the part a person sees.
+    expect(boxOf(".armada-inside__run").width).toBe(380);
+    // Shut again, by the one press the issue asks for — the dock's own Close,
+    // scoped to it, because job detail draws a Close of its own.
+    await page.getByRole("complementary", { name: "Helm" }).getByRole("button", { name: /^Close/ }).click();
+    await expect.poll(() => document.querySelector(".armada-shell__dock-layer")).toBe(null);
+    expect(panelWidth()).toBe(shut);
+  },
+);
+
+// Below the breakpoint the dock is a sheet rather than a panel, and the strip
+// that opens it is drawn whether or not it is open — so the claim holds there
+// too, and for a different reason worth measuring separately.
+test.each([1000, 768])("at %i the content is the same width with the sheet shut and open", async (width) => {
+  await atWidth(width);
+  const shut = panelWidth();
+  await withHelm();
+  await expect.element(page.getByRole("dialog", { name: "Helm" })).toBeVisible();
+  expect(panelWidth()).toBe(shut);
 });
 
 // ---- below `--layout-breakpoint`, where the inspector folds ---------------
@@ -183,20 +238,15 @@ test("at 1150 the log is not clipped against the card's edge", async () => {
   expect(brokenWord()).toBe(null);
 });
 
-// ---- the band, and what the left column does about it ---------------------
+// ---- the left column, and the band it used to collapse in -----------------
 //
-// The rule above kept the panel from clipping in the band but could not put
-// pixels in it: at 1150 the panel was 202px, degrading smoothly and far too
-// narrow to read. The pixels come from the left column collapsing to its rail
-// — #1435 removed the column outright and the owner corrected it on 18 Sep
-// 2026 — and these measure that it is the rail inside the band, that both
-// floors are met wherever 80px of rail pays for them, and that nothing outside
-// the band moved.
-//
-// **The rail costs 80 where the absence cost 16**, so the band does not close
-// completely: `RAIL_PAYS` is the width below which the step panel is still
-// short, and `spacing.css` has the sum.
-const RAIL_PAYS = 1128;
+// The column had two collapse points: `--layout-breakpoint`, and a second at
+// `--window-fold-left` where it fell to its 48px rail so Helm's dock could
+// keep its 380. #1435 removed the column outright there and the owner
+// corrected it on 18 Sep 2026 to the rail; **#1583 removed the reason**, so
+// the band is gone and the rail's 152px are not owed to anyone. What these
+// measure is the other half of the same claim: the column is where the window
+// puts it, and Helm cannot move it.
 
 const leftColumn = (): Element | null => document.querySelector(".armada-shell__left");
 
@@ -218,51 +268,33 @@ function bothFloorsHold(): void {
   expect(brokenWord()).toBe(null);
 }
 
-// The band, from the width where the rail's 80px first pay for both floors up
-// to the last width under `--window-fold-left`. 1128 is the sum in
-// `spacing.css`, measured here rather than asserted from it: at exactly that
-// width both columns sit on their floors to the pixel, which is what proves
-// the arithmetic rather than restating it.
-test.each([RAIL_PAYS, 1150, 1250, 1279])(
-  "at %i the left column is the rail and both of job detail's columns hold their floors",
+// The old band, end to end, with Helm up. Every one of these drew the rail
+// before and drew a step panel under its floor at the bottom of it; all four
+// are the ordinary case now.
+test.each([1101, 1150, 1250, 1279])(
+  "at %i the left column stands at width with Helm up, and both of job detail's columns hold",
   async (width) => {
     await atWidth(width);
-    await expect.element(page.getByRole("button", { name: "Close" }).first()).toBeVisible();
-    await expect.poll(leftColumn).not.toBe(null);
-    expect(leftColumnWidth()).toBe(floor("--sidebar-rail"));
+    await withHelm();
+    expect(leftColumnWidth()).toBe(floor("--sidebar-default"));
     bothFloorsHold();
   },
 );
 
-test("at 1128 exactly, both of job detail's columns are on their floors to the pixel", async () => {
-  await atWidth(RAIL_PAYS);
-  expect(leftColumnWidth()).toBe(floor("--sidebar-rail"));
-  expect(boxOf(".armada-inside__panel").width).toBe(floor("--w-step-panel-min"));
-  expect(boxOf(".armada-inside__run").width).toBe(floor("--w-run-column-min"));
-});
-
-// The bottom of the band, where the rail is not cheap enough. The owner took
-// the rail over the absence knowing this: the run column holds its floor, the
-// panel gives way on `.armada-inside`'s own `min()`, and 305px is what the
-// 202px that started all this became. Nothing clips and no word breaks, which
-// is the whole claim — the floor is missed, not the reading.
-test.each([1101, 1127])("at %i the rail is drawn and the step panel gives way without clipping", async (width) => {
-  await atWidth(width);
-  expect(leftColumnWidth()).toBe(floor("--sidebar-rail"));
-  expect(boxOf(".armada-inside__run").width).toBe(floor("--w-run-column-min"));
-  const panel = boxOf(".armada-inside__panel");
-  expect(panel.width).toBeLessThan(floor("--w-step-panel-min"));
-  expect(panel.width).toBeGreaterThan(300);
-  expect(panel.right).toBeLessThanOrEqual(Math.ceil(boxOf(".armada-inside").right));
-  expect(brokenWord()).toBe(null);
+// One pixel over the breakpoint, which is where the column now goes from rail
+// to width. Nothing between here and the top of the range is a special case.
+test("one pixel over --layout-breakpoint the column is at width, with Helm up", async () => {
+  await atWidth(floor("--layout-breakpoint") + 1);
+  await withHelm();
+  expect(leftColumnWidth()).toBe(floor("--sidebar-default"));
+  bothFloorsHold();
 });
 
 // The collapse is the window's arithmetic, so it is on every surface and not
-// only the one that needs it — the same way `--layout-breakpoint` collapses the
-// rail everywhere. Navigation, Stats and Fleet go together and all three are
-// still in the tree, which is the #1435 regression: they were not.
-test("in the band, Navigation, Stats and Fleet are at the rail rather than gone", async () => {
-  await atWidth(1150);
+// only the one that needs it. Navigation, Stats and Fleet go together and all
+// three are still in the tree, which is the #1435 regression: they were not.
+test("at the rail, Navigation, Stats and Fleet are there rather than gone", async () => {
+  await atWidth(1000);
   await expect.poll(leftColumn).not.toBe(null);
   expect(document.querySelector(".armada-shell__left-handle")).toBe(null);
   expect(document.querySelector(".armada-sidebar")).not.toBe(null);
@@ -270,8 +302,6 @@ test("in the band, Navigation, Stats and Fleet are at the rail rather than gone"
   // Stats and Fleet keep one status dot each, as named regions.
   await expect.element(page.getByRole("region", { name: "Stats" }).first()).toBeVisible();
   await expect.element(page.getByRole("region", { name: "Fleet" }).first()).toBeVisible();
-  // Helm's dock is what the band is paying for, and it is untouched.
-  await expect.element(page.getByLabelText("Helm").first()).toBeVisible();
 });
 
 // ---- Fleet's dot, in the title row and at the rail ------------------------
@@ -297,7 +327,7 @@ const SAID = fleetSaid(SHORT_LABEL[RUNNING]);
 // was silent until 18 Sep 2026 — an `aria-hidden` mark inside a region named
 // "Fleet" — so a person who cannot see the hue was told the panel's name and
 // never its state at the one width where the name is all there is.
-test.each([1150, 1000])("at %i both Fleet dots are named and toned", async (width) => {
+test.each([1000, 900])("at %i both Fleet dots are named and toned", async (width) => {
   await atWidth(width);
   expect(leftColumnWidth()).toBe(floor("--sidebar-rail"));
   // Found by accessible name, never by class: the name is the assertion, and
@@ -321,42 +351,41 @@ test("at 1512 the title row keeps its dot and the panel says it in words instead
   await expect.element(page.getByText("pid").first()).toBeVisible();
 });
 
-// `--window-fold-left` is the narrowest window that still fits, not the widest
-// that does not: at exactly 1280 the column is at its full width and the panel
-// is at its floor to the pixel, which is the measurement #1428 landed and this
-// must not move. One pixel narrower is the first rail. Two tests and not one,
+// `--layout-breakpoint` is the widest window the rail is drawn at, and one
+// pixel over it the column stands at its full width. Two tests and not one,
 // because `mount` puts a second App in the document rather than replacing it.
-test("at --window-fold-left the column still stands at width, on the floors exactly", async () => {
-  await atWidth(floor("--window-fold-left"));
-  expect(leftColumnWidth()).toBeGreaterThan(floor("--sidebar-rail"));
-  bothFloorsHold();
-  expect(boxOf(".armada-inside__panel").width).toBe(floor("--w-step-panel-min"));
-});
-
-test("one pixel under --window-fold-left the column is the rail", async () => {
-  await atWidth(floor("--window-fold-left") - 1);
+test("at --layout-breakpoint the column is the rail", async () => {
+  await atWidth(floor("--layout-breakpoint"));
   expect(leftColumnWidth()).toBe(floor("--sidebar-rail"));
+});
+
+test("one pixel over --layout-breakpoint the column is at its full width", async () => {
+  await atWidth(floor("--layout-breakpoint") + 1);
+  expect(leftColumnWidth()).toBe(floor("--sidebar-default"));
   bothFloorsHold();
 });
 
-// The dock is what takes the room, so a closed dock gives the column its width
-// back: it narrows at 1150 only while something is using the pixels.
-test("at 1150 with Helm's dock closed the left column is at its full width", async () => {
+// **Helm is not one of the terms.** This is the test that used to say the
+// opposite — at 1150 the column was the rail until ⌘J gave the pixels back,
+// which is the coupling #1583 ends. Both presses, so a width that only holds
+// while the dock has never been opened would fail here.
+test("at 1150 the left column does not move when Helm opens or closes", async () => {
   await atWidth(1150);
-  expect(leftColumnWidth()).toBe(floor("--sidebar-rail"));
-  // ⌘J rather than the dock's own Close: the binding is what a person presses
-  // to get the room back, and it is the one press that reaches the dock's state
-  // from outside it.
+  const width = leftColumnWidth();
+  expect(width).toBe(floor("--sidebar-default"));
   await userEvent.keyboard("{Meta>}j{/Meta}");
-  await expect.poll(leftColumnWidth).toBeGreaterThan(floor("--sidebar-rail"));
+  await expect.poll(() => document.querySelector(".armada-shell__dock-layer")).not.toBe(null);
+  expect(leftColumnWidth()).toBe(width);
+  await userEvent.keyboard("{Meta>}j{/Meta}");
+  await expect.poll(() => document.querySelector(".armada-shell__dock-layer")).toBe(null);
+  expect(leftColumnWidth()).toBe(width);
 });
 
-// Above the band nothing moved, and below it nothing moved: the column is
-// drawn at both ends, expanded at 1512 and collapsed to the rail at 1100.
-test.each([1512, 1440])("at %i the left column is still expanded", async (width) => {
+// Above the breakpoint nothing is at the rail, and below it everything is.
+test.each([1512, 1440, 1150, 1101])("at %i the left column is at its full width", async (width) => {
   await atWidth(width);
   await expect.poll(leftColumn).not.toBe(null);
-  expect(leftColumnWidth()).toBeGreaterThan(floor("--sidebar-rail"));
+  expect(leftColumnWidth()).toBe(floor("--sidebar-default"));
 });
 
 test.each([1100, 900, 768])("at %i the left column is still the rail", async (width) => {

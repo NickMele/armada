@@ -122,7 +122,7 @@ export function dormantIn(where: {
     // the binding is discovered, and it says what it needs.
     send_message: "type in a message box first",
     // #1435 briefly made this read "the column folds itself … it does hide
-    // now". It does not: under `--window-fold-left` the column collapses to
+    // now". It does not: under `--layout-breakpoint` the column collapses to
     // its 48px rail, which is what the owner asked for and what #1435 got
     // wrong. So nothing hides the column at any width, by hand or otherwise,
     // and this act is unbuilt in full rather than in half.

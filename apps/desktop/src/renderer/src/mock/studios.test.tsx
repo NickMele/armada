@@ -12,7 +12,7 @@ import { repository } from "@armada/screens/src/fixtures/build/base";
 
 import { mountApp, type Mounted } from "./mount";
 import { everyKind, studying } from "./studio-fleet";
-import { entered } from "./testing";
+import { entered, openHelm } from "./testing";
 
 const windows: { app: Mounted; host: HTMLElement }[] = [];
 
@@ -114,6 +114,7 @@ test("a Studio started, laid out, closed, reopened read-only, continued, and a r
   expect(page.getByRole("button", { name: /^Accept: / }).query()).toBeNull();
 
   // Helm's footer names the Studio, and the node selected on it.
+  await openHelm();
   await expect.element(page.getByText("Studios · Untitled Studio", { exact: true })).toBeVisible();
   node(/^Note: Drag me somewhere/).element().focus();
   await userEvent.keyboard("{Enter}");

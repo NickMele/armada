@@ -17,7 +17,7 @@ import { page } from "vitest/browser";
 import { MANIFEST_ID, repository, workflow } from "@armada/screens/src/fixtures/build/base";
 import { connected } from "./moment";
 import type { Scenario } from "./moment";
-import { mount, unmountAfterEach } from "./testing";
+import { mount, openHelm, unmountAfterEach } from "./testing";
 
 unmountAfterEach();
 
@@ -41,13 +41,10 @@ function talking(replying: boolean): Scenario {
 /** The sentence that stood for every unpointed state, and was true in one of them. */
 const ONCE_SAID = "No repository has a Manifest yet for Helm to answer about.";
 
-/** The dock beside the content — an `aside` of its own, labelled Helm. */
-const dock = () => page.getByRole("complementary", { name: "Helm" });
-
 test("repositories set up and Helm pointed at none: the dock counts them, and the switch that points it is there", async () => {
   // Two of this scenario's repositories are set up, and nothing has pointed Helm at either.
   mount("every-state");
-  await expect.element(dock()).toBeVisible();
+  await openHelm();
 
   await expect
     .element(page.getByText("Helm is not pointed at a repository. 2 are set up, so pick one to ask about it."))
@@ -68,7 +65,7 @@ test("one repository set up and Helm pointed at none: the dock names it, and the
   // the moment the sentence named an act with no control under it, because the composer
   // counted the repositories and one is nothing to switch between.
   mount("empty-store");
-  await expect.element(dock()).toBeVisible();
+  await openHelm();
 
   await expect
     .element(page.getByText("Helm is not pointed at a repository. Pick armada to ask about it."))
@@ -83,7 +80,7 @@ test("one repository set up and Helm pointed at none: the dock names it, and the
 test("nothing set up: the dock says so in the words the rail and Setup use, and names the way out", async () => {
   // `nothing-set-up` is two repositories served and neither of them set up.
   mount("nothing-set-up");
-  await expect.element(dock()).toBeVisible();
+  await openHelm();
 
   await expect
     .element(
@@ -106,7 +103,7 @@ test("nothing set up: the dock says so in the words the rail and Setup use, and 
 
 test("Start fresh sits in the dock's head, beside Close and above the conversation", async () => {
   mount(talking(false));
-  await expect.element(dock()).toBeVisible();
+  await openHelm();
 
   const fresh = page.getByRole("button", { name: "Start fresh" });
   await expect.element(fresh).toBeVisible();
@@ -128,7 +125,7 @@ test("Start fresh sits in the dock's head, beside Close and above the conversati
 
 test("a reply is being written: Start fresh is refused, in the head where it now lives", async () => {
   mount(talking(true));
-  await expect.element(dock()).toBeVisible();
+  await openHelm();
 
   const fresh = page.getByRole("button", { name: "Start fresh" });
   await expect.element(fresh).toBeDisabled();
