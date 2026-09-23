@@ -237,10 +237,16 @@
   /* A task inside a group takes the same --space-8 step down again, so the
      three depths read as nested at any zoom rather than as three widths. */
   --w-workflow-task-node: 196px;
-  /* The workflow canvas's floor. React Flow measures its own frame, so the
-     surface needs a height and not a flex basis of nothing. 420px holds a step
-     card and one group under it at zoom 1 inside Bridge's shortest window. */
+  /* A graph canvas's floor. React Flow measures its own frame, so the surface
+     needs a height and not a flex basis of nothing. 420px holds a step card
+     and one node under it at zoom 1 inside Bridge's shortest window, which is
+     what a wave of Jobs is. */
   --h-workflow-canvas: 420px;
+  /* A Job's own run needs more, because the whole plan hangs off it: 560px is
+     what a step and a three-group plan under it fit inside without dropping
+     below the scale a card is legible at. Under that the fit opens on less of
+     the run rather than shrinking it, which is the same rule one step on. */
+  --h-workflow-run-canvas: 560px;
   /* The narrowest a workflow canvas is worth drawing beside its inspector.
      Under two of these the inspector folds under the run instead — the canvas
      is the one region on that tab that cannot be read at half a column. */

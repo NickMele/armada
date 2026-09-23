@@ -358,17 +358,16 @@ function opensOn(
   worksAt: string | undefined,
   groups: readonly GroupView[],
 ): string[][] {
-  /** The groups a set of steps is joined to, by the edges those steps draw. */
-  const hanging = (named: readonly string[]): string[] => {
-    if (madeAt !== undefined && named.includes(madeAt)) {
-      return groups.map((group) => groupNodeId(group.id));
-    }
-    if (worksAt !== undefined && named.includes(worksAt)) {
-      return groups.filter(worked).map((group) => groupNodeId(group.id));
-    }
-    return [];
-  };
-  const widening = (named: readonly string[]): string[] => [...named.map(stepNodeId), ...hanging(named)];
+  // The plan belongs to both the step that wrote it and the step that works
+  // it, **worked or not** — which is why this is not the edge rule. A fit is a
+  // choice of what to look at, and from the working step what a person is
+  // looking for is the plan, including the groups their turn has not come to.
+  const holds = (named: readonly string[]): boolean =>
+    (madeAt !== undefined && named.includes(madeAt)) || (worksAt !== undefined && named.includes(worksAt));
+  const widening = (named: readonly string[]): string[] => [
+    ...named.map(stepNodeId),
+    ...(holds(named) ? groups.map((group) => groupNodeId(group.id)) : []),
+  ];
 
   const where = steps.findIndex((step) => step.step_id === at);
   if (where === -1) {

@@ -175,6 +175,9 @@ const SMALLEST_READABLE = 0.7;
 /** What `fitView` leaves around the run by default, as a factor on the scale. */
 const ROOM_TO_BREATHE = 0.9;
 
+/** The same room, as canvas units, where the viewport is set rather than fitted. */
+const INSET = 16;
+
 /**
  * Fit the run again whenever the frame changes size.
  *
@@ -214,8 +217,28 @@ function FitsTheFrame({
       return;
     }
     const narrower = opensOn.map((ids) => ids.map((id) => ({ id })));
-    const fits = narrower.find(reads) ?? narrower[narrower.length - 1];
-    void flow.fitView(fits === undefined ? options : { ...options, nodes: fits });
+    const fits = narrower.find(reads);
+    if (fits !== undefined) {
+      void flow.fitView({ ...options, nodes: fits });
+      return;
+    }
+    // Nothing narrow enough reads in this frame. **Open at the top of the
+    // narrowest rather than centred on it**: a fit centres, so a plan taller
+    // than its frame loses the step row off the top and its last groups off
+    // the bottom at once — and the step a person is on is the one thing that
+    // has to be in the picture.
+    const last = narrower[narrower.length - 1];
+    const found = (last ?? []).map((one) => placed.get(one.id)).filter((one) => one !== undefined);
+    if (found.length === 0) {
+      void flow.fitView(options);
+      return;
+    }
+    const bounds = getNodesBounds(found);
+    void flow.setViewport({
+      x: INSET - bounds.x * SMALLEST_READABLE,
+      y: INSET - bounds.y * SMALLEST_READABLE,
+      zoom: SMALLEST_READABLE,
+    });
   }, [flow, following, options, opensOn, width, height]);
   return null;
 }

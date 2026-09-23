@@ -90,6 +90,72 @@ function arc(name: string) {
   return { whole: watched.detail, groups: moment?.draft.groups ?? [] };
 }
 
+/**
+ * The density case the note names: twelve steps and four groups of three. No
+ * shipped workflow is that long, so it is built here rather than photographed.
+ */
+function dense() {
+  const { whole, groups } = arc("groupFailed");
+  const one = whole.steps[0]!;
+  const steps = Array.from({ length: 12 }, (_, at) => ({
+    ...one,
+    step_id: `s${at + 1}`,
+    label: `Step ${at + 1}`,
+    ordinal: at + 1,
+  }));
+  const spare = groups.flatMap((group) => group.tasks)[0]!;
+  const four = groups.slice(0, 4).map((group, at) => ({
+    ...group,
+    tasks: [0, 1, 2].map((k) => ({ ...spare, id: `D${at * 3 + k + 1}`, group: group.id })),
+  }));
+  return {
+    whole: {
+      ...whole,
+      steps,
+      job: { ...whole.job, current_step_id: "s7" },
+      work_plan: { ...whole.work_plan!, recorded_by: { by: "step" as const, step_id: "s1", attempt: 1 } },
+    },
+    groups: four,
+  };
+}
+
+describe("twelve steps and four groups of three", () => {
+  it("puts every node somewhere of its own, with each group's tasks between it and the next", () => {
+    const { whole, groups } = dense();
+    const run = workflowRunOf({ whole, groups });
+    expect(run.nodes).toHaveLength(12 + 4 + 12);
+    const where = run.nodes.map((node) => `${node.position.x},${node.position.y}`);
+    expect(new Set(where).size).toBe(where.length);
+
+    const at = (id: string) => run.nodes.find((node) => node.id === id)!.position;
+    const columns = { group: new Set<number>(), task: new Set<number>() };
+    for (const [j, group] of groups.entries()) {
+      const mine = at(groupNodeId(group.id));
+      columns.group.add(mine.x);
+      const below = groups[j + 1];
+      const floor = below === undefined ? Infinity : at(groupNodeId(below.id)).y;
+      for (const task of group.tasks) {
+        const node = at(taskNodeId(task.id));
+        columns.task.add(node.x);
+        expect(node.y).toBeGreaterThanOrEqual(mine.y);
+        expect(node.y).toBeLessThan(floor);
+      }
+    }
+    // One column of groups and one of tasks, the tasks to the right.
+    expect(columns.group.size).toBe(1);
+    expect(columns.task.size).toBe(1);
+    expect([...columns.task][0]!).toBeGreaterThan([...columns.group][0]!);
+  });
+
+  it("opens on the step you are on and its neighbours, with no plan hanging off them", () => {
+    const { whole, groups } = dense();
+    const run = workflowRunOf({ whole, groups });
+    // `s7` neither wrote the plan nor works it, so what opens is three steps.
+    expect(run.opensOn[0]).toEqual(["s6", "s7", "s8"].map(stepNodeId));
+    expect(run.opensOn[run.opensOn.length - 1]).toEqual([stepNodeId("s7")]);
+  });
+});
+
 describe("a group comes off where it was made and where it was worked", () => {
   it("hangs every group off the step that recorded the plan, and never on the spine", () => {
     const { whole, groups } = arc("executingSequential");
@@ -170,10 +236,12 @@ describe("a group comes off where it was made and where it was worked", () => {
       const before = run.opensOn[at - 1];
       if (before !== undefined) expect(before.length).toBeGreaterThan(choice.length);
     }
-    // The narrowest keeps the groups the step works — a frame too small for
-    // them draws a clipped plan rather than one card in an empty pane.
+    // The narrowest keeps the whole plan the step works, the groups whose turn
+    // has not come included — a frame too small for them draws a clipped plan
+    // rather than one card in an empty pane.
     const last = run.opensOn[run.opensOn.length - 1]!;
-    expect(last.filter((id) => id.startsWith("group:"))).toHaveLength(groups.filter(worked).length);
+    expect(last.filter((id) => id.startsWith("group:"))).toHaveLength(groups.length);
+    expect(groups.some((group) => !worked(group))).toBe(true);
   });
 
   it("marks the card a person has open and no other", () => {

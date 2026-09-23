@@ -9,8 +9,8 @@
 // caller's: this package holds no storage.
 //
 // **Narrow opens on where you are.** A whole plan fitted into 768px is cards
-// nobody can read, so the canvas opens on the step a person is on, its
-// neighbours, and the groups those steps made or worked.
+// nobody can read, so the canvas narrows onto the step a person is on and the
+// plan that step holds rather than shrinking the run.
 
 import { Tabs, WorkflowCanvas, WorkflowInspector, WorkflowStacked } from "@armada/components";
 import { useEffect, useRef, useState } from "react";
@@ -170,10 +170,18 @@ export function WorkflowTab({
     });
   const steering = steeringOf(job, whole);
   const label = `${job.title}, as its workflow's run`;
+  // Whether anything hangs off the run. A spine wants a shorter frame than a
+  // run carrying three depths, and a taller one around it would be void.
+  const plan = run.rows.some((row) => row.depth !== undefined);
 
   return (
     <div className="armada-detail-tab" role="tabpanel" aria-label={TAB_LABEL.workflow}>
-      <div className="armada-workflow-tab" data-view={view} data-narrow={narrow || undefined}>
+      <div
+        className="armada-workflow-tab"
+        data-view={view}
+        data-narrow={narrow || undefined}
+        data-plan={plan || undefined}
+      >
         <div className="armada-workflow-tab__surface">
           {/* Above the run rather than over it: drawn inside the canvas the
               toggle sat on top of the last step's card at every width. */}

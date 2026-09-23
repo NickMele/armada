@@ -1738,6 +1738,34 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* Folded to one column the destination scrolls, not the pane — Stacked's own
+   rule, for its own reason. The canvas has a floor and the column has less
+   than that, so a pane that scrolled drew a frame two thirds of its own
+   height, with the ordering rule under a fold nobody had a reason to reach
+   for and the inspector below that. */
+.armada-workflow-tab[data-narrow] {
+  flex: none;
+  align-items: start;
+}
+
+.armada-workflow-tab[data-narrow] .armada-workflow-tab__surface,
+.armada-workflow-tab[data-narrow] .armada-workflow-tab__inspector {
+  overflow: visible;
+}
+
+/* And the canvas takes a height rather than a share of one. `GraphCanvas`'s
+   frame is `height: 100%`, so in a column that sizes to its content that
+   resolves to nothing and React Flow measures a frame of zero: the run is
+   placed, and drawn inside a box no pixels high. */
+.armada-workflow-tab[data-narrow] .armada-workflow-tab__canvas {
+  flex: none;
+  height: var(--h-workflow-canvas);
+}
+
+.armada-workflow-tab[data-narrow][data-plan] .armada-workflow-tab__canvas {
+  height: var(--h-workflow-run-canvas);
+}
+
 .armada-workflow-tab__surface,
 .armada-workflow-tab__inspector {
   display: flex;
@@ -1748,11 +1776,18 @@
 }
 
 /* React Flow measures its own frame, so the canvas needs a height rather than
-   a flex basis of nothing. The floor is what keeps a four-step run legible
-   inside the shortest window Bridge lays out for. */
+   a flex basis of nothing. The floor is what keeps a run and the plan hanging
+   off it legible inside the shortest window Bridge lays out for. */
 .armada-workflow-tab__canvas {
   flex: 1;
   min-height: var(--h-workflow-canvas);
+}
+
+/* A run with a plan hanging off it needs more, because it carries three depths
+   rather than one. A run with no plan is a spine, and the taller frame would
+   be void above and below it. */
+.armada-workflow-tab[data-plan] .armada-workflow-tab__canvas {
+  min-height: var(--h-workflow-run-canvas);
 }
 
 /* The rule the graph cannot draw, under the run: the groups go in order, and a
