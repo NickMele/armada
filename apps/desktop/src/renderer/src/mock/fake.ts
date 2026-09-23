@@ -136,6 +136,9 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
       publish({
         resources: jobId === null ? nothing : (readsOf(jobId)?.resources ?? failed(jobId, "/resources")),
       }),
+    // The mock publishes once and never moves, so the poll has nothing to take
+    // again — what it has to be here for is that the board can ask.
+    watchPulse: async () => {},
     watchRunSheet: async (jobId) =>
       publish({ runSheet: jobId === null ? nothing : failed(jobId, "/runs/sheet") }),
     observeRun: async () => publish({ runFollowed: nothing }),

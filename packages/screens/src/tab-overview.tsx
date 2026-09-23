@@ -125,6 +125,7 @@ export function OverviewTab(props: OverviewTabProps) {
     onFrameSrc,
     onNeedMaterial,
     onNeedRemarks,
+    onNeedPulse,
     whole,
     render,
     watched,
@@ -713,6 +714,9 @@ export function OverviewTab(props: OverviewTabProps) {
               nothingToAsk: nothingToAsk(resources),
               onExamine: () => onExamine(job.id),
             }}
+            // The sheet draws the same board as the Pulse tab, so it holds the
+            // same poll open while it is the sheet on screen. #1571.
+            onNeedPulse={onNeedPulse}
             // Every setting a person can change on this Job, and what each sends.
             settings={{
               models, stale, acting, actingAct, onSetWhenBlocked, onSetWhenRefused, onSetModel, onSetReviewModel,

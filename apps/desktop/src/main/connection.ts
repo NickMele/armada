@@ -433,6 +433,11 @@ export class FleetConnection {
     await this.jobFocus.readResources(jobId);
   }
 
+  /** Pulse's 10 s tick, from `index.ts`. `resources-poll.ts`, `#1571`. */
+  async resourcesAgain(port: number, jobId: string): Promise<void> {
+    await this.jobFocus.resourcesAgain(port, jobId);
+  }
+
   async examineJob(jobId: string): Promise<void> {
     await this.jobFocus.examineJob(jobId);
   }

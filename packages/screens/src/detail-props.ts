@@ -256,6 +256,15 @@ export type JobDetailProps = {
    * reaches a record and this one reaches a forge.
    */
   onNeedRemarks: (jobId: string | null) => void;
+  /**
+   * Hold Pulse's reading live, or `null` to let it go. Stable for
+   * `onNeedMaterial`'s reason.
+   *
+   * **Said by whichever surface draws the board**, which is the Pulse tab or
+   * the holds sheet and never both — a poll that outlived the surface would be
+   * a process table walked every ten seconds forever. `#1571`.
+   */
+  onNeedPulse: (jobId: string | null) => void;
   /** Say this job failed in error, with the record attached. */
   onReport: (jobId: string, filing: FileReport) => Promise<Outcome>;
   /** Let this Job run. Sent on the press, with no confirmation. */

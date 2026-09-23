@@ -32,7 +32,7 @@ afterEach(async () => {
   await page.viewport(RESTING.width, RESTING.height);
 });
 
-/** The floors, as `spacing.css` declares them. Read, never retyped. */
+/** The floors and the hairline, as `spacing.css` declares them. Read, never retyped. */
 function floor(
   token:
     | "--w-run-column-min"
@@ -40,7 +40,8 @@ function floor(
     | "--sidebar-default"
     | "--layout-breakpoint"
     | "--sidebar-rail"
-    | "--w-sheet",
+    | "--w-sheet"
+    | "--border-width",
 ): number {
   const value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(token));
   if (!Number.isFinite(value)) throw new Error(`${token} is not declared`);
@@ -52,6 +53,26 @@ const boxOf = (selector: string): DOMRect => {
   if (element === null) throw new Error(`${selector} is not drawn`);
   return element.getBoundingClientRect();
 };
+
+/**
+ * **A `DOMRect` is a float and a token is an integer, so the two are never
+ * compared with `toBe` or a bare `>=`.** The same sheet measured
+ * 478.99993896484375 on a busy machine where a quiet one read 479, which sank
+ * an assertion sitting exactly on its bound — #1574, four times in about a
+ * dozen full runs. Half a pixel is the tolerance `toBeCloseTo(…, 0)` states
+ * and this restates, in one place rather than a `- 1` per line: widening the
+ * bound only moves the cliff, and a 4px regression fails either way.
+ *
+ * **Two rects measured in one layout keep `toBe`.** `panelWidth()` either side
+ * of `⌘J` is one element in one window, so #1583's claim is bit-for-bit and a
+ * tolerance would admit the shift it exists to refuse.
+ */
+const ROUNDING = 0.5;
+
+/** Measured at `bound` or above, give or take the rounding. */
+function atLeast(measured: number, bound: number): void {
+  expect(measured).toBeGreaterThanOrEqual(bound - ROUNDING);
+}
 
 /**
  * The worst text in the panel: the node drawn on the most lines per word it
@@ -127,16 +148,16 @@ test("at 1280 with Helm up, neither of job detail's columns yields", async () =>
   // 192px this reported `Extract selectColumnOrder into its own module`, six
   // words on forty lines.
   expect(brokenWord()).toBe(null);
-  expect(boxOf(".armada-inside__panel").width).toBeGreaterThanOrEqual(floor("--w-step-panel-min"));
-  expect(boxOf(".armada-inside__run").width).toBe(380);
+  atLeast(boxOf(".armada-inside__panel").width, floor("--w-step-panel-min"));
+  expect(boxOf(".armada-inside__run").width).toBeCloseTo(380, 0);
 });
 
 // The run column is still at its drawn width up here too, which is what stops
 // this reading as "the run column got narrower".
 test("at 1512 the run column is still at its drawn width", async () => {
   await atWidth(1512);
-  expect(boxOf(".armada-inside__run").width).toBe(380);
-  expect(boxOf(".armada-inside__panel").width).toBeGreaterThanOrEqual(floor("--w-step-panel-min"));
+  expect(boxOf(".armada-inside__run").width).toBeCloseTo(380, 0);
+  atLeast(boxOf(".armada-inside__panel").width, floor("--w-step-panel-min"));
   expect(brokenWord()).toBe(null);
 });
 
@@ -158,7 +179,7 @@ test.each([2000, 1512, 1440, 1280, 1101])(
     await withHelm();
     expect(panelWidth()).toBe(shut);
     // And the run under it did not move either, which is the part a person sees.
-    expect(boxOf(".armada-inside__run").width).toBe(380);
+    expect(boxOf(".armada-inside__run").width).toBeCloseTo(380, 0);
     // Shut again, by the one press the issue asks for — the dock's own Close,
     // scoped to it, because job detail draws a Close of its own.
     await page.getByRole("complementary", { name: "Helm" }).getByRole("button", { name: /^Close/ }).click();
@@ -197,10 +218,18 @@ test.each([1100, 1000, 900, 768])("at %i the run is the whole content and no ins
 // The sheet is the reading, so it is the sheet the broken-word walker reads.
 // At the floor it goes flush to both edges, which is `Sheet`'s own rule and is
 // why the expected width is the ground there rather than `--w-sheet`.
+//
+// **The panel is a hairline narrower than the sheet, and that was never slack.**
+// `Sheet`'s trailing side draws `border-left: var(--border-width)`, so the sheet
+// is `--w-sheet` to the pixel and the panel inside it is one less. The `- 1`
+// here read as tolerance and was arithmetic, which is how it came to sit exactly
+// on the bound a busy machine rounded under — #1574. Both are named now, each
+// against what declares it.
 test.each([1100, 1000, 900])("at %i pressing a step opens the inspector at --w-sheet, unbroken", async (width) => {
   await atWidth(width);
   await openInspector();
-  expect(boxOf(".armada-inside__panel").width).toBeGreaterThanOrEqual(floor("--w-sheet") - 1);
+  expect(boxOf(".armada-sheet").width).toBeCloseTo(floor("--w-sheet"), 0);
+  expect(boxOf(".armada-inside__panel").width).toBeCloseTo(floor("--w-sheet") - floor("--border-width"), 0);
   expect(brokenWord()).toBe(null);
 });
 
@@ -231,7 +260,7 @@ test("at 1150 the log is not clipped against the card's edge", async () => {
   const panel = boxOf(".armada-inside__panel");
   const inside = boxOf(".armada-inside");
   expect(panel.right).toBeLessThanOrEqual(Math.ceil(inside.right));
-  expect(boxOf(".armada-inside__run").width).toBeGreaterThanOrEqual(floor("--w-run-column-min"));
+  atLeast(boxOf(".armada-inside__run").width, floor("--w-run-column-min"));
   expect(brokenWord()).toBe(null);
 });
 
@@ -260,8 +289,8 @@ function leftColumnWidth(): number {
 
 /** Both floors met, at a width where they could not both be met before. */
 function bothFloorsHold(): void {
-  expect(boxOf(".armada-inside__panel").width).toBeGreaterThanOrEqual(floor("--w-step-panel-min"));
-  expect(boxOf(".armada-inside__run").width).toBeGreaterThanOrEqual(floor("--w-run-column-min"));
+  atLeast(boxOf(".armada-inside__panel").width, floor("--w-step-panel-min"));
+  atLeast(boxOf(".armada-inside__run").width, floor("--w-run-column-min"));
   expect(brokenWord()).toBe(null);
 }
 

@@ -297,6 +297,12 @@ const api: BridgeApi = {
   readResources: (jobId: string | null): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.readResources, jobId),
 
+  // The 10 s tick that keeps the reading above live while Pulse draws it, and
+  // stops when it does not. Scoped to the board rather than to the Job, so the
+  // process table is walked for somebody looking at it. #1571.
+  watchPulse: (jobId: string | null): Promise<void> =>
+    ipcRenderer.invoke(CHANNELS.watchPulse, jobId),
+
   // The run sheet — Journey 9. Opened by the sheet rather than by the Job,
   // `readDiff`'s reason: the Manifest a Job froze is read on the press that
   // draws it, not on every Job opened.

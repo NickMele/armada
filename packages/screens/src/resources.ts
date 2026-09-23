@@ -54,6 +54,7 @@ import type { LogRow } from "./story";
 import { entriesOf, hideUnread } from "./story";
 import { clock } from "./duration";
 import { notesOf } from "./notes";
+import { PULSE_INTERVAL_SAID } from "./pulse-poll";
 
 /**
  * What a failed look says, and it says nothing about the Job.
@@ -457,8 +458,11 @@ function spendFigure(whole: JobWhole | null): Figure | undefined {
 /**
  * What keeps the reading current, said beside its age.
  *
- * **What Bridge actually does, not a schedule.** `screen.ts` re-takes
- * `/jobs/:job_id/resources` on every event naming the open Job; nothing polls
- * it on a timer, and a line claiming one would be a reading nobody takes.
+ * **Built from the interval rather than spelled beside it.** `screen.ts`
+ * re-takes `/jobs/:job_id/resources` on every event naming the open Job, and
+ * since `#1571` `resources-poll.ts` takes it again on `PULSE_INTERVAL_MS` for
+ * as long as this board is drawn — so a Job sitting at a gate still moves.
+ * Moving the interval moves the sentence, which is what stops one promising
+ * what the other does not do.
  */
-export const PULSE_REFRESHES = "Taken again whenever this job moves.";
+export const PULSE_REFRESHES = `Taken again every ${PULSE_INTERVAL_SAID} while open.`;
