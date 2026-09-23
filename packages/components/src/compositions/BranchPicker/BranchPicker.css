@@ -7,6 +7,22 @@
 .armada-branch {
   position: relative;
   min-width: 0;
+  /* The rows read their own width rather than the window's: three fields share
+     a card that is the whole pane at one width and a third of it at another. */
+  container-type: inline-size;
+}
+
+/* Narrow enough that a branch name and a Job's title crush each other to
+   nothing, and the name is what a person is picking — so the title gives way
+   whole rather than clipping to `Fold the c…`, and the row's own tooltip keeps
+   it. The base and `new branch` stay: they are what the row is telling you.
+
+   armada-allow-off-contract: a container condition cannot read a custom property — measured, not assumed, same as @media
+   340px is where the two stop both fitting, read at 768, 1000, 1440 and 2000 — docs/contracts/design-system.md */
+@container (max-width: 340px) {
+  .armada-branch__on {
+    display: none;
+  }
 }
 
 /* Disclosure, and the same glyph `Select` draws for the same reason — a list of

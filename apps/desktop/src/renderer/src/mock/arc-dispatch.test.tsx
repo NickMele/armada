@@ -74,15 +74,13 @@ describe("dispatch", () => {
       await expect.element(landsIn).toBeVisible();
       await landsIn.click();
 
-      // The base leads and says it is the base; every other branch says which
-      // Job is sitting on it.
+      // The base leads and says it is the base. Which Job is on a branch is
+      // the row's own claim and the component's story asserts it — here the
+      // field's width decides whether it is drawn, so the name is what this
+      // reads.
       await expect.element(page.getByRole("option", { name: "main base" })).toBeVisible();
       await expect
-        .element(
-          page.getByRole("option", {
-            name: "armada/18-fold-the-capacity-read Fold the capacity read into one query",
-          }),
-        )
+        .element(page.getByRole("option", { name: /^armada\/18-fold-the-capacity-read/ }))
         .toBeVisible();
 
       // Typing a name nothing has cut is the whole of creating a branch: one
