@@ -167,8 +167,9 @@ export const Collapsed: Story = {
 
 /**
  * The left column at its 48px rail — the whole of Fleet, as one dot. That is
- * every width below `--window-fold-left` with Helm's dock beside the content
- * since 18 Sep 2026, rather than the rare width it used to be.
+ * every width below `--layout-breakpoint`. It covered a wider band while
+ * Helm's dock was taking width off the content; #1583 ended that, so the rail
+ * is the narrow window's reading again rather than a laptop's.
  *
  * What a rendering cannot show: that the dot is not silent. It was — an
  * `aria-hidden` mark inside a region named "Fleet", so nothing said which

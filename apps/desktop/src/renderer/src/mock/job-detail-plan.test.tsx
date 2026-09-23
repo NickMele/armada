@@ -21,7 +21,7 @@ import type { BridgeApi } from "../../../shared/api";
 import { commandOutstanding, runningWithSettings } from "./job-detail-fixtures";
 import type { FleetHandle, Scenario } from "./scenario";
 import { onJob } from "./scenario";
-import { entered, mount, unmountAfterEach } from "./testing";
+import { entered, mount, openHelm, unmountAfterEach } from "./testing";
 
 unmountAfterEach();
 
@@ -277,11 +277,16 @@ async function waitingInTheDock(answered: "clears" | "refused"): Promise<void> {
 
 test("answered in the dock, Job detail agrees: the band and the card both go", async () => {
   await waitingInTheDock("clears");
+  await openHelm();
   await page.getByRole("article").getByRole("button", { name: "Reject" }).click();
   await expect.poll(() => page.getByRole("article").query()).toBeNull();
   await expect.poll(() => page.getByRole("region", { name: "A question from the drone" }).query()).toBeNull();
 });
 
+// **Answered with the dock shut, which is how Bridge opens since #1583** — and
+// it has to be shut here for a second reason worth stating: the dock draws
+// over the content, so a control under it is not pressable until it is put
+// away. One press does that, which is the trade the overlay was taken for.
 test("answered on Job detail, the dock agrees", async () => {
   await waitingInTheDock("clears");
   const band = page.getByRole("region", { name: "A question from the drone" });
@@ -290,11 +295,14 @@ test("answered on Job detail, the dock agrees", async () => {
   reject.click();
   await band.getByRole("button", { name: "Send this answer" }).click();
   await expect.poll(() => page.getByRole("region", { name: "A question from the drone" }).query()).toBeNull();
+  // Then Helm, which never held the question either.
+  await openHelm();
   await expect.poll(() => page.getByRole("article").query()).toBeNull();
 });
 
 test("a refused answer stands on both, with the refusal said", async () => {
   await waitingInTheDock("refused");
+  await openHelm();
   await page.getByRole("article").getByRole("button", { name: "Reject" }).click();
   await expect.element(page.getByRole("alert").filter({ hasText: "Fleet is not connected. Nothing was sent." })).toBeVisible();
   await expect.element(page.getByRole("region", { name: "A question from the drone" })).toBeVisible();

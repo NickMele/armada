@@ -27,10 +27,10 @@ import { TabsWithCounts } from "../../primitives/TabsWithCounts/TabsWithCounts";
  *
  * **The open row is a sheet at every width, unlike the step inspector.** That
  * one pays for a column because the run tree beside it is drawn for 240px. Six
- * columns are not: at 1440 with Helm's dock open the table had 250px left and
- * broke a repository path one character to a line, which is the v1 defect the
- * fold exists to prevent. `floor.ts` also says the window measure answers for
- * the window and not for a component's box, and the dock is 320px of it.
+ * columns are not: at 768, and at 1440 while Helm's dock still took 380px off
+ * the content, the table had 250px left and broke a repository path one
+ * character to a line — the v1 defect the fold exists to prevent. #1583 gave
+ * 1440 back; the floor is the width the rule is really for.
  */
 
 /** Who ran a row, as the column reads it. */

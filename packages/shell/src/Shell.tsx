@@ -32,13 +32,12 @@
 // Overview's own tiles do. Not built here: `@armada/screens` already depends
 // on this package for `statementOf`, and the reverse import would be a cycle.
 //
-// **And under `--window-fold-left` with Helm's dock beside the content, all
-// three collapse to the 48px rail** — `useTight` below, which joins
-// `useNarrow` into one `collapsed`. Navigation keeps its glyphs, Stats and
-// Fleet keep one status dot each, and nothing leaves the screen. #1435 took
-// the column away outright in that band and the owner corrected it on 18 Sep
-// 2026; the pixels the rail does not give back are paid under 1128 by the
-// step panel, not by the column disappearing.
+// **And under `--layout-breakpoint` all three collapse to the 48px rail.**
+// Navigation keeps its glyphs, Stats and Fleet keep one status dot each, and
+// nothing leaves the screen. #1435 took the column away outright and the owner
+// corrected it on 18 Sep 2026. There was a second, wider band it collapsed in
+// to pay for Helm's dock; #1583 put the dock on a layer and the band went with
+// the bill.
 //
 // # The picker and Dispatch live in the title row, not here
 //
@@ -160,13 +159,11 @@ export function Shell({
 }: ShellProps) {
   const narrow = useNarrow();
   const dock = useDock(narrow);
-  const tight = useTight();
-  // The rail, from two bands rather than one. Under `--layout-breakpoint` it
-  // is the width alone. Between there and `--window-fold-left` it is the width
-  // *and* the dock actually taking the room — closed, or folded to its sheet,
-  // the window has the pixels and there is nothing to pay for. `useDock`
-  // decides `open` without reading this, so the two do not chase each other.
-  const collapsed = narrow || (tight && dock.open);
+  // One band, the window's own. It was two until #1583, the second being
+  // `--window-fold-left` *and* the dock beside the content — pixels the column
+  // gave up so the dock could hold its 380. The dock is a layer over the work
+  // now and asks for none, so opening Helm cannot move the column under it.
+  const collapsed = narrow;
   const [dockWidth, resizeDock] = useDockWidth();
   const [leftWidth, resizeLeft] = useLeftWidth();
   const live = connection.state === "connected";
@@ -303,44 +300,20 @@ function repositoryEntries(
   return entries;
 }
 
-/**
- * Whether the window is under `--window-fold-left`, the width at which the left
- * column *at its full width*, Helm's dock at rest and job detail's two columns
- * at their floors stop adding up. Under it the column collapses to its rail,
- * the same 48px `useNarrow` draws. **The bound is read from the token**, the
- * same way `useNarrow` reads `--layout-breakpoint` — the sum behind the number
- * is in `spacing.css` and is not repeated here.
- *
- * `width <` rather than `max-width:`, because the token names the narrowest
- * window that still fits rather than the widest that does not: at exactly 1280
- * both floors are met with the column at 200px, and `max-width` would collapse
- * it one pixel early and move a measurement that already landed.
- */
-function useTight(): boolean {
-  const [tight, setTight] = useState(false);
-
-  useEffect(() => {
-    const bound = getComputedStyle(document.documentElement).getPropertyValue("--window-fold-left").trim();
-    if (bound === "") return undefined;
-    const query = window.matchMedia(`(width < ${bound})`);
-    const read = (): void => setTight(query.matches);
-    read();
-    query.addEventListener("change", read);
-    return () => query.removeEventListener("change", read);
-  }, []);
-
-  return tight;
-}
-
 /** Helm's binding, read from the registry rather than retyped. */
 const HELM_KEY = ACTION.helm?.shortcut;
 
 /**
- * Helm's dock: beside the content until put away, a closed sheet when folded.
- * `⌘J` toggles whichever the width draws, from every surface and from inside a field.
+ * Helm's dock: a panel over the content, or a sheet when folded. `⌘J` toggles
+ * whichever the width draws, from every surface and from inside a field.
+ *
+ * **Shut on open, at every width** — the owner, 22 Sep 2026 (#1583). It stood
+ * open because it cost the layout nothing to leave it there once a person had
+ * arranged around it; over the content it covers what is being read, so Bridge
+ * opens with the screen and Helm is a press away.
  */
 function useDock(folded: boolean): { open: boolean; onOpen: (open: boolean) => void } {
-  const [beside, setBeside] = useState(true);
+  const [beside, setBeside] = useState(false);
   const [sheet, setSheet] = useState(false);
 
   // A sheet left open would cover the work again the next time the window narrows.

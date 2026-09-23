@@ -139,10 +139,10 @@
 
 /* #1435 kept a rule here for the column being absent — the work supplying the
    leading inset the column's own padding used to. The column is never absent:
-   under --window-fold-left it collapses to the rail above rather than leaving,
-   so its padding is always there and the rule was dead the moment the owner
-   corrected that on 18 Sep 2026. Removed rather than left as a `:not(:has())`
-   that can never match. */
+   under --layout-breakpoint it collapses to the rail above rather than
+   leaving, so its padding is always there and the rule was dead the moment the
+   owner corrected that on 18 Sep 2026. Removed rather than left as a
+   `:not(:has())` that can never match. */
 
 .armada-shell__panel {
   flex: 1;
@@ -463,9 +463,11 @@
    first panel, and between panels — the drawing's ~16px, not the wider
    `--gap-section` a screen uses to part unrelated regions.
 
-   **No right padding.** Helm's dock carries its own `--space-4` margin on
-   every side (`TheShell.css`), so padding this surface's right edge as well
-   doubled the gap between the content and the dock to 32px. **No top
+   **No right padding.** The panel carries its own `--space-4` trailing
+   margin (`TheShell.css`), so padding this surface's right edge as well
+   doubled the gap to 32px. It was Helm's dock that supplied that gap until
+   #1583 took the dock out of the flow; the number and the reason for it are
+   unchanged. **No top
    padding either**: `.armada-screen__mounted` keeps the gap under the title
    bar for every surface, and padding it here too doubled it the same way. */
 .armada-screen__overview {
@@ -789,15 +791,17 @@
      #1428    424   332   332   332   252   202   528   428   332   332
      now      424   332   332   332   332   332   528   428   332   332
 
-   1100 and below draw no dock, which is why those two columns do not move and
+   1100 and below drew no dock, which is why those two columns did not move and
    why the band was worst at exactly laptop width. The third row is what the
    token pair alone could do; the fourth is 1200 and 1150 getting their floor
-   back once the left column collapses to its rail there rather than holding
-   200px — remeasured on the same fixture after that landed.
+   back once the left column collapsed to its rail there rather than holding
+   200px. **The table is a record, not a reading**: since #1583 the dock takes
+   nothing, so every column of it is at least the fourth row's figure with the
+   left column still at 200px.
 
-   **1101-1127 is the one band still short**, by up to 27px, because the rail
-   costs 80px where #1435's absence cost 16. The rule below is what carries it:
-   305px measured at 1101, nothing clipped and no word broken.
+   **1101-1127 was the one band still short**, by up to 27px, because the rail
+   costs 80px where #1435's absence cost 16. It is not short any more, and the
+   left column does not go to its rail there at all.
 
    **Three tracks, and each says one thing.** `minmax(--w-run-column-min,
    --w-run-column)` is the run: it rests at 380 and gives up width down to its
@@ -807,15 +811,18 @@
    track is exactly the bug, since grid maximises the fixed track to its limit
    and hands the flexible one the remainder.
 
-   **The panel's floor is `min()`, not the token alone.** Below about 1280 with
-   the dock open the window cannot pay for both floors, and two hard minimums
-   there overflow this card and clip the log mid-word — which is the defect
-   again, wearing the other hat. `calc(100% - gutter - the run's floor)` is
-   what the grid can actually afford, so the panel keeps its floor wherever the
-   window has it and degrades smoothly where it does not, with the run column
-   holding 240 throughout. Nothing clips at any width, measured at every step
-   of the table above and at 1101. What is left wanting pixels is 1101-1127,
-   and what it wants is the dock, which is not this file's to move.
+   **The panel's floor is `min()`, not the token alone.** Two hard minimums in
+   a window that cannot pay for both overflow this card and clip the log
+   mid-word — which is the defect again, wearing the other hat. `calc(100% -
+   gutter - the run's floor)` is what the grid can actually afford, so the
+   panel keeps its floor wherever the window has it and degrades smoothly where
+   it does not, with the run column holding 240 throughout.
+
+   **Nothing is left wanting pixels above --layout-breakpoint.** 1101-1127 was,
+   and what it wanted was the dock: #1583 took Helm's 412px out of the layout,
+   so the whole range above the breakpoint pays for both floors with the left
+   column at its full width. The rule stays — a drag can still spend the room,
+   and that is what it degrades.
 
    The middle track is the rule between them. Half a gap either side, so the
    drawn 24px gutter still measures 24 with a hairline down the middle of it
@@ -1554,11 +1561,12 @@
    request is what a person is writing; the peers column is a rail, and a rail
    that widens with the window gives a list of two titles half the screen —
    `--w-run-column`'s own argument, one surface over. --w-dock is that width:
-   it is the column beside the content everywhere else in the app, and a token
+   it is the panel beside the content everywhere else in the app, and a token
    of its own here would be the same number under a second name. Reported.
 
-   The pane reads its own width rather than the window's, because the rail and
-   Helm's dock are both outside it. */
+   The pane reads its own width rather than the window's, because the left
+   column is outside it. Helm's dock was too, and since #1583 it takes no
+   width at all — the container query is right either way. */
 .armada-dispatch-pane {
   min-width: 0;
   container-type: inline-size;
@@ -1707,13 +1715,15 @@
    from the run column lays out the way it did there. */
 .armada-workflow-tab {
   display: grid;
-  /* **Two columns only where both can be read, and the grid decides.** The
-     Helm dock takes 380px out of the content at any window width, so a rule
-     written against the window gave the canvas 360px at 1440 with the dock
-     open — a four-step run drawn as four cards of noise, which is the v1
-     complaint `bridge.md` names. `auto-fit` folds the inspector under the run
-     instead, and it is the content's own width that decides rather than a
-     collapse point nothing else shares. */
+  /* **Two columns only where both can be read, and the grid decides.** Written
+     against Helm's dock, which took 380px out of the content at any window
+     width: a rule written against the window gave the canvas 360px at 1440
+     with the dock open, a four-step run drawn as four cards of noise, which is
+     the v1 complaint `bridge.md` names. #1583 ended that — the dock is a layer
+     now and the window's width is the content's — **and this stays**, because
+     measuring the content is still the better rule: the canvas shares its
+     track with an inspector whose width nothing outside this grid knows, and a
+     collapse point would be a third number to keep in step. */
   grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--w-workflow-canvas-min)), 1fr));
   gap: var(--space-4);
   align-items: stretch;

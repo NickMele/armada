@@ -265,9 +265,12 @@ export const LeftColumnCollapsedHasNoHandle: Story = {
 };
 
 /**
- * The band: under `--window-fold-left` with Helm's dock beside the content,
- * the column is the same 48px rail the story above draws — the surface passes
- * `collapsed` from two conditions rather than one, and there is no third width.
+ * The rail with Helm open over it. **The two are unrelated now** (#1583):
+ * the column is the rail because the window is under `--layout-breakpoint`,
+ * and the dock is a layer that asks it for nothing. Until 22 Sep 2026 this
+ * was a band of its own — `--window-fold-left`, where the column gave up its
+ * width so the dock could keep 380px — which is why the pair is still drawn
+ * together.
  *
  * **#1435 drew nothing here**, and the owner's correction on 18 Sep 2026 is
  * this story: the panels collapse into a single icon-size column, they are not
@@ -313,8 +316,8 @@ function WithResizableDock(args: ComponentProps<typeof TheShell>) {
   return <TheShell {...args} dock={dock} />;
 }
 
-/** At `--layout-breakpoint` and wider: Helm's dock beside the content, on every surface. */
-export const DockBesideTheContent: Story = {
+/** At `--layout-breakpoint` and wider: Helm's dock over the content, on every surface. */
+export const DockOverTheContent: Story = {
   args: { ...shell, dock: { open: true, binding: "⌘J", onOpen: () => {} } },
   render: (args) => (
     <div className="armada-screen">
@@ -327,17 +330,44 @@ export const DockBesideTheContent: Story = {
 
 /**
  * At `--layout-breakpoint` and wider, closed: no strip, no residue — #1094.
- * The title row's own Helm button is the only way back, and pressing it
- * reopens the dock beside the content.
+ * The title row's own Helm button is the only way back, and pressing it draws
+ * the dock over the content. **This is how Bridge opens** (#1583).
  */
 export const DockClosedAtWidth: Story = {
   args: { ...shell, dock: { open: false, binding: "⌘J", onOpen: () => {} } },
-  render: DockBesideTheContent.render,
+  render: DockOverTheContent.render,
   play: async ({ canvas, userEvent }) => {
     await expect(canvas.queryByLabelText("Helm")).not.toBeInTheDocument();
     await expect(canvas.queryByRole("button", { name: /Open Helm/ })).not.toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "Helm" }));
     await expect(canvas.getByLabelText("Helm")).toBeVisible();
+  },
+};
+
+/**
+ * **The whole of #1583, as an assertion**: the panel measures the same with
+ * Helm shut and open. It was 380px narrower with the dock open, and three
+ * screens grew a workaround around that in one day.
+ *
+ * A geometry claim, which `armada-components` says a `play` does not usually
+ * earn — this one is the issue's own definition of done, and nothing a reader
+ * looks at can tell 1192px from 812px without a second frame beside it.
+ */
+export const DockTakesNoWidthFromTheContent: Story = {
+  args: { ...shell, dock: { open: false, binding: "⌘J", onOpen: () => {} } },
+  render: DockOverTheContent.render,
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const panel = (): number => {
+      const element = canvasElement.querySelector(".armada-shell__panel");
+      if (element === null) throw new Error("the panel is not drawn");
+      return Math.round(element.getBoundingClientRect().width);
+    };
+    const shut = panel();
+    await userEvent.click(canvas.getByRole("button", { name: "Helm" }));
+    await expect(canvas.getByLabelText("Helm")).toBeVisible();
+    await expect(panel()).toBe(shut);
+    await userEvent.click(canvas.getByRole("button", { name: /^Close/ }));
+    await expect(panel()).toBe(shut);
   },
 };
 
@@ -389,13 +419,13 @@ export const DockWithQuestions: Story = {
       ),
     },
   },
-  render: DockBesideTheContent.render,
+  render: DockOverTheContent.render,
 };
 
 /**
  * The dock's leading edge, grabbable and keyboard-operable — dragged wider,
  * dragged to `--w-dock-min`, or nudged by the arrow keys the ARIA separator
- * pattern names. `onResize` absent draws no handle at all: `DockBesideTheContent`
+ * pattern names. `onResize` absent draws no handle at all: `DockOverTheContent`
  * above is that case.
  */
 export const DockResizable: Story = {
