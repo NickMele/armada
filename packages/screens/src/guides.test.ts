@@ -5,13 +5,22 @@
 // is arithmetic over a table, which is what the node project is for — and it
 // imports the real set, never a fixture of one.
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-
 import { GUIDES, GUIDE_GROUPS } from "@armada/components";
 import { describe, expect, test } from "vitest";
 
-const ROOT = resolve(import.meta.dirname, "../../..");
+/**
+ * Every page under `docs/concepts/`, read by the bundler rather than by node.
+ * This package's tests run through Vite with no node types, and a glob is what
+ * both halves of that allow — it is resolved at build time, so a page that
+ * does not exist is simply not in the set.
+ */
+const CONCEPTS = new Set(
+  Object.keys(
+    (import.meta as unknown as { glob: (pattern: string) => Record<string, unknown> }).glob(
+      "../../../docs/concepts/*.md",
+    ),
+  ).map((path) => path.replace("../../../", "")),
+);
 
 describe("the guides", () => {
   test("are numbered from one, in order, with nothing repeated", () => {
@@ -46,7 +55,7 @@ describe("the guides", () => {
     // in #1602 is.
     for (const guide of GUIDES) {
       if (guide.concept === undefined) continue;
-      expect(() => readFileSync(resolve(ROOT, guide.concept as string))).not.toThrow();
+      expect([...CONCEPTS]).toContain(guide.concept);
     }
   });
 

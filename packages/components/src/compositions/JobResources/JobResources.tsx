@@ -11,6 +11,9 @@ import type { ReactNode } from "react";
 import type { Finding, JobExamined, Look } from "@armada/protocol";
 import { Button } from "../../primitives/Button/Button";
 import { FigureList, type Figure } from "../FigureList/FigureList";
+import { GuideMark } from "../GuideMark/GuideMark";
+import { GUIDE_PROCESSES, GUIDE_WORKTREE_SIZE } from "../../guides";
+import type { Guide } from "../../guides/guide";
 import { Logs, Processes, Worktrees } from "./JobResources.lists";
 import type { PulseReading } from "./JobResources.lists";
 
@@ -125,10 +128,10 @@ export function JobResources({
         </p>
       ) : (
         <>
-          <Region label="Processes">
+          <Region label="Processes" guide={GUIDE_PROCESSES}>
             <Processes reading={reading} examined={examined} />
           </Region>
-          <Region label="Worktrees">
+          <Region label="Worktrees" guide={GUIDE_WORKTREE_SIZE}>
             <Worktrees worktrees={reading.worktrees} />
           </Region>
           <Region label="Logs">
@@ -164,10 +167,16 @@ function readAt(reading: PulseReading, age?: string, refreshed?: string): string
  * when it held nothing would make "no worktree on disk" and "this build does
  * not draw worktrees" the same screen.
  */
-function Region({ label, children }: { label: string; children: ReactNode }) {
+function Region({ label, guide, children }: { label: string; guide?: Guide; children: ReactNode }) {
   return (
     <section className="armada-holds__region" aria-label={label}>
-      <h3 className="armada-holds__band">{label}</h3>
+      {/* The `?` on the band, where the region's own word is. Two of the three
+          bands carry one: a log is a log, and a mark on it would be the noise
+          the rule about where a mark goes exists to refuse. */}
+      <div className="armada-holds__band-row">
+        <h3 className="armada-holds__band">{label}</h3>
+        {guide === undefined ? null : <GuideMark guide={guide} />}
+      </div>
       {children}
     </section>
   );

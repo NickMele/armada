@@ -280,6 +280,14 @@
 /* The band's name. The look rows' own label treatment, because the two are the
    same register — what this group of readings is — and a second one would be a
    heading competing with the verdict above. */
+/* The band and its `?`, on one line. */
+.armada-holds__band-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
 .armada-holds__band {
   margin: 0;
   font-family: var(--font-sans);

@@ -16,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
   FleetSettings,
+  GuidesSetting,
   MachineSettings,
   type FleetSettingsRow,
 } from "@armada/components";
@@ -44,6 +45,8 @@ export type BridgeSettingsProps = {
   /** `GET /health`, `#1127`'s reason: what Fleet resolved `this machine`'s own settings to. */
   health: HealthRead;
   onSave: (values: SaveLimits) => Promise<Outcome>;
+  /** Opens the guide catalogue. Navigation is the window's, so it arrives as a prop. */
+  onReadGuides?: () => void;
 };
 
 /** "Acting"/"Read-only", as `this machine` reads it — or absent, before `health` has answered. */
@@ -54,7 +57,7 @@ export function helmActionAuthorityValue(health: HealthRead): string | undefined
 
 const WORDS: Record<HelmActionAuthority, string> = { acting: "Acting", read_only: "Read-only" };
 
-export function BridgeSettings({ limits, live, health, onSave }: BridgeSettingsProps) {
+export function BridgeSettings({ limits, live, health, onSave, onReadGuides }: BridgeSettingsProps) {
   return (
     <div className="armada-screen__pane">
       <Card>
@@ -85,6 +88,15 @@ export function BridgeSettings({ limits, live, health, onSave }: BridgeSettingsP
               },
             ]}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Guides</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <GuidesSetting {...(onReadGuides === undefined ? {} : { onReadGuides })} />
         </CardContent>
       </Card>
     </div>

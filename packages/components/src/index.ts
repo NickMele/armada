@@ -377,3 +377,4 @@ export * from "./guidance";
 export * from "./compositions/GuideMark/GuideMark";
 export * from "./compositions/GuideCard/GuideCard";
 export * from "./compositions/GuideCatalogue/GuideCatalogue";
+export * from "./compositions/GuidesSetting/GuidesSetting";
