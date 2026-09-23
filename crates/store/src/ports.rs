@@ -110,18 +110,15 @@ CREATE UNIQUE INDEX port_claims_fleet_listener ON port_claims (fleet_listener) W
 /// Version 83 — `main_checkout` becomes `checkout_path`, because a claim is
 /// now held by any checkout of a repository and not only the one at its root.
 ///
-/// **A rename and not a rebuild.** [`V50`] and [`V57`] each rebuilt the table
+/// **A rename and not a rebuild.** [`V50`] and [`V57`] rebuilt the table
 /// because a `CHECK` cannot be altered in place; nothing about the rule
-/// changes here, only what the column is called, and SQLite carries a
-/// `RENAME COLUMN` into the `CHECK` expressions and the index definitions that
-/// name it. **Every row is kept at its base and width** — a main-checkout
-/// claim is a checkout claim whose path happens to be the repository root, so
-/// there is nothing to convert and a Fleet coming up on a migrated file finds
-/// the span it was already serving on.
+/// changes here, and SQLite carries a `RENAME COLUMN` into the `CHECK`
+/// expressions and the index definitions naming it. **Every row keeps its base
+/// and width** — a main-checkout claim is a checkout claim whose path is the
+/// repository root, so there is nothing to convert.
 ///
-/// The index is renamed the slow way, because SQLite renames the column inside
-/// an index and never the index itself, and an index still called
-/// `port_claims_main_checkout` would be the last place the old idea lived.
+/// The index is dropped and remade because SQLite renames the column inside an
+/// index and never the index itself.
 ///
 /// [`V57`]: crate::repositories::V57
 pub(crate) const V83: &str = r#"

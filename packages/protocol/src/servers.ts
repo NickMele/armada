@@ -80,12 +80,18 @@ export type ServerList = { servers: ServerState[] };
 
 /**
  * `POST /servers/start`'s body. A name, never a command line or a port. Which
- * repository's main checkout is `?manifest_id=`; absent, the one Fleet started in.
+ * repository is `?manifest_id=`; absent, the one Fleet started in.
  */
 export type StartServer = {
   name: string;
-  /** Absent: the main checkout, on its span. */
+  /** Absent: a checkout, on its span. */
   job_id?: string;
+  /**
+   * A checkout of that repository to serve, by its path — a worktree cut by
+   * hand to look at another branch. Absent: the main checkout. Ignored where
+   * `job_id` names a Job. Since protocol 18.2.
+   */
+  checkout?: string;
 };
 
 /** `POST /servers/stop`'s body. */

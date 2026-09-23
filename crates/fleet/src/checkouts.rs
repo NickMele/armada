@@ -206,8 +206,8 @@ mod tests {
     #[test]
     fn a_records_name_is_the_whole_path_below_the_root() {
         assert_eq!(
-            named("/repos/armada/.claude/worktrees/1577-span", "/repos/armada"),
-            "claude-worktrees-1577-span"
+            named("/repos/armada/.agent/worktrees/1577-span", "/repos/armada"),
+            "agent-worktrees-1577-span"
         );
     }
 
