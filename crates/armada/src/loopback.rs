@@ -68,18 +68,7 @@ impl Loopback {
         // **No read timeout, deliberately.** A tool call here can be a Check
         // that runs for minutes, and a deadline would cut it off with no answer
         // — which reads as a broken server rather than as a long call.
-        let mut head = format!(
-            "{method} {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\
-             Accept: application/json\r\n",
-            self.at
-        );
-        if let Some(body) = body {
-            head.push_str(&format!(
-                "Content-Type: application/json\r\nContent-Length: {}\r\n",
-                body.len()
-            ));
-        }
-        head.push_str("\r\n");
+        let head = self.head(method, path, body.map(<[u8]>::len));
 
         let mut raw = Vec::new();
         let sent = socket
@@ -92,6 +81,28 @@ impl Loopback {
             cause: cause.to_string(),
         })?;
         answered(&raw, self.at.port())
+    }
+
+    /// The request head this writes, whole.
+    ///
+    /// **A function so that a test can read it.** Fleet refuses any caller
+    /// that sends an `Origin`, which is how a page in a browser is kept off
+    /// the loopback port (`#1460`); what makes the CLI a caller rather than a
+    /// page is that these lines write none, and nothing on Fleet's side can
+    /// check that for us.
+    fn head(&self, method: &str, path: &str, length: Option<usize>) -> String {
+        let mut head = format!(
+            "{method} {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\
+             Accept: application/json\r\n",
+            self.at
+        );
+        if let Some(length) = length {
+            head.push_str(&format!(
+                "Content-Type: application/json\r\nContent-Length: {length}\r\n"
+            ));
+        }
+        head.push_str("\r\n");
+        head
     }
 }
 
@@ -180,3 +191,29 @@ impl std::fmt::Display for Unreachable {
 }
 
 impl std::error::Error for Unreachable {}
+
+#[cfg(test)]
+mod tests {
+    use super::Loopback;
+
+    /// **The CLI is not a page in a browser, and this is the line that says
+    /// so.** Fleet answers no request carrying an `Origin` (`api.from_a_page`,
+    /// `#1460`), so a header added here would take `armada check`, `armada mcp`
+    /// and the merge line's calls off Fleet at once — and the failure would
+    /// arrive as a 403 nobody expected rather than as a test.
+    #[test]
+    fn the_head_this_writes_carries_no_origin() {
+        let fleet = Loopback::at(4242);
+        let heads = [
+            fleet.head("GET", "/health", None),
+            fleet.head("POST", "/jobs", Some(2)),
+        ];
+
+        for head in heads {
+            assert!(
+                !head.to_ascii_lowercase().contains("\r\norigin:"),
+                "Fleet refuses a caller that sends one: {head}"
+            );
+        }
+    }
+}
