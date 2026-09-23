@@ -221,7 +221,7 @@
    --dot-idle — a mix percentage read inside color-mix(), not a colour
    --window-floor — the desktop window's bound, read by the main process and floor.ts
    --touch-floor — the narrowest touch client drawn; no window to bound
-   --window-fold-left — the window width the left column collapses to its rail under, read by Shell.tsx
+   --z-dock — a stacking order, not a scale value
    --z-menu — a stacking order, not a scale value
    --z-tooltip — a stacking order, not a scale value
    --z-modal — a stacking order, not a scale value
