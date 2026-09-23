@@ -317,6 +317,25 @@ Decisions.
 **Accepted cost:** the route table is hand-written, and a route typo is a
 runtime 500 rather than a compile error — measured.
 
+**Fleet answers no page in a browser.** A request or a WebSocket upgrade that
+carries an `Origin` header is refused with `api.from_a_page` and a 403, before
+any handler sees it. Loopback bounds the machine and not the machine's
+browsers: a page in any tab can open a loopback port, and a WebSocket upgrade
+is not subject to the same-origin policy, so until `#1460` the event stream was
+readable and the command routes were reachable by any page that found the port.
+
+**Presence is the refusal and there is no allowlist.** A browser sets `Origin`
+and a page cannot forge it, while anything that is not a browser sends whatever
+it likes — so naming trusted values would carry no weight, and absence is what
+every caller Fleet has sends. It is one layer over `api::router`, which is the
+only way to build a served router, rather than a check each handler makes: an
+upgrade is an ordinary request until its handler says otherwise, so both halves
+are closed by the same decision and a route added later inherits it.
+
+**What it assumes about the machine is unchanged**, and it is the assumption
+below: every *process* here is trusted. This closes the browser a person is
+already running, not a program written to reach Fleet.
+
 **Largest open risk:** axum's WebSocket sink is unbounded from the
 application side. Several Drones running against a minimised Bridge can
 outrun it, and nothing in the framework pushes back. Needs a bounded
@@ -356,7 +375,8 @@ why, with no tools.
 
 **It confers nothing.** The listener is loopback with no authentication in
 front of it, so every process on this machine was already inside that boundary
-and the relay adds no authority to one. What names a terminal agent is still
+and the relay adds no authority to one. A page in a browser is the one caller
+that is not — see *Fleet answers no page in a browser* above. What names a terminal agent is still
 open. Publishing the door in the repository is safe for a different reason: a
 Drone is spawned under `--strict-mcp-config` against a document of Armada's
 own, so it never reads the repository's.
