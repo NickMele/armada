@@ -4,8 +4,8 @@ use core_model::Timestamp;
 
 use crate::mcp::{answer, read, Answered, Incoming, ServerReport, SERVER_TOOL};
 use crate::{
-    decode, encode, Cursor, Delivered, Event, Instant, JobId, ManifestId, ServerLink, ServerPhase,
-    ServerPort, ServerState, StartServer, StartedBy, StreamMessage,
+    decode, encode, Cursor, Delivered, Event, Instant, JobId, ManifestId, ServerCheckout,
+    ServerLink, ServerPhase, ServerPort, ServerState, StartServer, StartedBy, StreamMessage,
 };
 
 fn at(text: &str) -> Instant {
@@ -18,6 +18,12 @@ fn serving() -> ServerState {
         name: "storybook".to_string(),
         job_id: Some(JobId::carried("01JOB")),
         manifest_id: Some(ManifestId::carried("01MF")),
+        checkout: ServerCheckout {
+            path: "/repos/armada/.armada/worktrees/01JOB".to_string(),
+            branch: Some("armada/01JOB".to_string()),
+            commit: None,
+            behind: None,
+        },
         phase: ServerPhase::Serving,
         serve: "storybook dev -p 41207".to_string(),
         ports: vec![ServerPort {

@@ -18,7 +18,7 @@ import { repository } from "@armada/screens/src/fixtures/build/base";
 import { onJob } from "./scenario";
 import type { Scenario } from "./scenario";
 import { EVERY_KIND_NAME, EVERY_KIND_STUDIO, everyKind } from "./studio-fleet";
-import { mount, unmountAfterEach } from "./testing";
+import { mount, openHelm, unmountAfterEach } from "./testing";
 
 unmountAfterEach();
 
@@ -73,6 +73,7 @@ test("Where things are names the Studio, beside the worktree", async () => {
 test("one press leaves the job and lands on that Studio, with the job's node picked", async () => {
   mount(dispatchedFromAStudio());
   await page.getByRole("button", { name: `Open ${EVERY_KIND_NAME}` }).click();
+  await openHelm();
   // **Helm's footer is what says where a person is**, and it names the node as
   // well as the Studio — the same reading `studios.test.tsx` asserts a pick by.
   // The job itself is gone: `goTo` clears it the way every destination does.

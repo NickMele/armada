@@ -52,6 +52,13 @@ impl fmt::Display for ServerReport {
             true => String::from("It offers no link"),
             false => format!("It is at {links}"),
         };
+        // **An address says which checkout answers it.** Two checkouts of one
+        // repository declare the same port, and a Drone reading `localhost` on
+        // a number has no way to tell its own build from the other's — `#1577`.
+        let serving = match &state.checkout.branch {
+            Some(branch) => format!(", serving {} on {branch}", state.checkout.path),
+            None => format!(", serving {}", state.checkout.path),
+        };
         match state.phase {
             ServerPhase::Serving => {
                 let whose = match (self.already_up, state.started_by) {
@@ -62,14 +69,14 @@ impl fmt::Display for ServerReport {
                 write!(
                     out,
                     "`{name}` is serving — {whose}, and this is the one instance for the \
-                     task. {at}. It stays up until the task ends; never start another \
-                     from your shell. Its output is in {}",
+                     task. {at}{serving}. It stays up until the task ends; never start \
+                     another from your shell. Its output is in {}",
                     state.log
                 )
             }
             ServerPhase::Starting => write!(
                 out,
-                "`{name}` has started and its readiness command has not passed yet. {at} \
+                "`{name}` has started and its readiness command has not passed yet. {at}{serving} \
                  once it does. Call `{SERVER_TOOL}` again to ask where it stands — it will \
                  not start a second one. Its output so far is in {}",
                 state.log

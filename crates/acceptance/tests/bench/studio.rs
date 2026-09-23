@@ -518,6 +518,12 @@ pub fn a_server_that_fell_over() -> ipc::ServerState {
         name: String::from("storybook_dev"),
         job_id: None,
         manifest_id: None,
+        checkout: ipc::ServerCheckout {
+            path: String::from("/repos/armada"),
+            branch: None,
+            commit: Some(String::from("cf4bcaea")),
+            behind: Some(3),
+        },
         phase: ipc::ServerPhase::Exited,
         serve: THE_SERVE.to_string(),
         ports: vec![ipc::ServerPort {

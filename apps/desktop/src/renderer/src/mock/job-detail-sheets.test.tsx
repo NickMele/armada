@@ -168,6 +168,7 @@ const SERVING: ServerState = {
   id: "srv-storybook",
   name: "storybook",
   job_id: JOB_ID,
+  checkout: { path: "/repos/armada/.armada/worktrees/12-storybook", branch: "armada/12-storybook" },
   phase: "serving",
   serve: "pnpm storybook",
   ports: [{ name: "PORT", port: 41207 }],

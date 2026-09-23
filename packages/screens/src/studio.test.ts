@@ -157,6 +157,7 @@ const holding = (over: Partial<Extract<StudioNode, { kind: "run" }>> = {}): Stud
 const SERVING: ServerState = {
   id: "sv1",
   name: "storybook_dev",
+  checkout: { path: "/repos/armada", commit: "cf4bcaea", behind: 0 },
   phase: "serving",
   serve: "pnpm storybook dev -p 41207",
   ports: [{ name: "storybook", port: 41207 }],

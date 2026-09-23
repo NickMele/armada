@@ -583,7 +583,9 @@ which is how one that fell over is read.
 
 `/events` carries a server's three lifecycle facts — `server.starting`,
 `server.serving`, `server.exited` — each with the whole instance, and never a
-line of its output, for the run socket's reason. A Job's servers publish
+line of its output, for the run socket's reason. **A row is replaced rather
+than patched**, which is why a server that goes behind its checkout is
+published again under the kind its phase is rather than under a fourth kind. A Job's servers publish
 `server.exited` before the Job's own terminal `job.state_changed`, because they
 are torn down before its span is released.
 
@@ -1651,6 +1653,23 @@ rather than leaving: a union member nothing can produce is a promise the system 
 approval of an hour earlier, which `CLAUDE.md` says is his call; he was asked and said remove it.
 
 **Nothing else moved.** `ran_unasked`, added in 17.4, stays. Minor resets to 0.
+
+## Protocol 18.1: a server says which checkout answers it
+
+`#1577` and `#1564`. One field added to `ServerState` — `checkout`, carrying the path the server
+runs in, the branch where there is one, the commit it came up on, and how many commits have landed
+in that checkout since. Additive: nothing renamed, nothing retyped, no field an older peer reads
+changed.
+
+**A new required field rather than an optional one, and it is still a minor.** What minor promises
+is that nothing an older peer already reads changes; a field it does not know is one it ignores.
+`ServerState` travels Fleet to Bridge only, so there is no direction in which an older Fleet is
+asked to produce it.
+
+**The three `server.*` kinds did not grow a fourth.** Each already carries the whole `ServerState`
+and a reader replaces a row rather than patching it, so a row that goes behind is published again
+under the kind its phase is. A fourth kind would have been a second way to say what one already
+says, and every reader of the stream would have had to learn it.
 
 ## Open questions
 

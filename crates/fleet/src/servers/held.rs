@@ -38,8 +38,11 @@ struct Book {
 
 /// One instance that is starting or serving.
 pub(crate) struct Live {
-    /// Where it stands. The task holds the sender and moves it on each phase.
-    pub(crate) now: watch::Receiver<ServerState>,
+    /// Where it stands. **The sender, not a receiver** — the task moves it on
+    /// each phase, and [`Servers::moved_on`] moves it from outside the task
+    /// when the checkout it serves gains commits. A receiver here would have
+    /// made that a fact only the task could ever write.
+    pub(crate) now: Arc<watch::Sender<ServerState>>,
     pub(crate) stop: Arc<watch::Sender<bool>>,
     /// Its output, held here so a viewer can subscribe. The task holds the
     /// other end; both going is what tells a viewer it ended.
@@ -62,7 +65,7 @@ impl Servers {
         self.book()
             .live
             .get(&(holder.clone(), name.to_string()))
-            .map(|live| live.now.clone())
+            .map(|live| live.now.subscribe())
     }
 
     /// This holder's instance of `name`: the live one, or the last that ended.
@@ -87,7 +90,7 @@ impl Servers {
         let key = (holder.clone(), name.to_string());
         let mut book = self.book();
         if let Some(up) = book.live.get(&key) {
-            return Err(up.now.clone());
+            return Err(up.now.subscribe());
         }
         book.ended.remove(&key);
         let dir = live.dir.clone();
@@ -107,7 +110,7 @@ impl Servers {
             .live
             .values()
             .find(|live| live.now.borrow().id == id)
-            .map(|live| (Arc::clone(&live.stop), live.now.clone()))
+            .map(|live| (Arc::clone(&live.stop), live.now.subscribe()))
     }
 
     /// Whether `id` is an instance that has ended.
@@ -157,7 +160,7 @@ impl Servers {
             .live
             .iter()
             .filter(|((whose, _), _)| holder.is_none_or(|holder| holder == whose))
-            .map(|(_, live)| (Arc::clone(&live.stop), live.now.clone()))
+            .map(|(_, live)| (Arc::clone(&live.stop), live.now.subscribe()))
             .collect()
     }
 
@@ -165,6 +168,32 @@ impl Servers {
     /// nothing left to show a server of.
     pub(crate) fn forget(&self, holder: &Holder) {
         self.book().ended.retain(|(whose, _), _| whose != holder);
+    }
+
+    /// `commits` landed in the checkout `holder` serves: every instance it
+    /// holds is that much further behind what it serves, and each moved row is
+    /// handed back for publishing.
+    ///
+    /// **Added, never set.** Two merges in a minute are two calls, and a
+    /// server started between them counts only the second — which is why the
+    /// count is carried on the row rather than recomputed from a commit it
+    /// would have to re-resolve.
+    ///
+    /// **Nothing is restarted here.** `docs/concepts/fleet.md`, *Servers*:
+    /// restarting under somebody mid-look is worse than telling them.
+    pub(crate) fn moved_on(&self, holder: &Holder, commits: u32) -> Vec<ServerState> {
+        let book = self.book();
+        let mut moved = Vec::new();
+        for ((whose, _), live) in book.live.iter() {
+            if whose != holder {
+                continue;
+            }
+            let mut state = live.now.borrow().clone();
+            state.checkout.behind = Some(state.checkout.behind.unwrap_or(0) + commits);
+            live.now.send_replace(state.clone());
+            moved.push(state);
+        }
+        moved
     }
 
     /// Every instance up, by id — what a sweep of old directories keeps.

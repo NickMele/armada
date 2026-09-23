@@ -14,6 +14,7 @@ const SERVING: ServerState = {
   id: "01SERVER",
   name: "web_dev",
   manifest_id: "01MANIFEST",
+  checkout: { path: "/repos/armada", commit: "cf4bcaea", behind: 0 },
   phase: "serving",
   serve: "pnpm dev --port 41207",
   ports: [{ name: "web", port: 41207 }],
