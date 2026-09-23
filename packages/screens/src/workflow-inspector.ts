@@ -1,9 +1,9 @@
 // What the Workflow tab's inspector reads for the step, group or task a person
 // has open. `#1539`.
 //
-// **What it cannot answer, it says.** Where the caller hands no cases, the
-// tests region draws the reason rather than an empty list that reads as "none
-// owed" — `draft/group.ts`, `cases_at_boundary`, on what the wire has.
+// **What it cannot answer, it says.** The cases a group owes are a draft shape
+// Fleet does not serve (`draft/group.ts`, `cases_at_boundary`), so the tests
+// region draws the reason rather than an empty list that reads as "none owed".
 
 import type {
   WorkflowInspectorCheck,
@@ -13,12 +13,10 @@ import type {
 import type { JobDetail as JobWhole, StepDetail } from "@armada/protocol";
 
 import { isSweepMarker, nameOf } from "./declared";
-import type { CaseView } from "./draft/cases";
 import type { GroupView } from "./draft/group";
 import { ordered } from "./facts";
 import { frozenBeneath } from "./frozen";
 import { activityOf, stateOf } from "./run";
-import { caseReads, dronesAtOnceSaid } from "./tab-plan-read";
 import { groupNodeId, stepNodeId, stepTheGroupsWereMadeAt } from "./workflow-canvas";
 
 /** What the inspector draws, less the two controls the tab wires itself. */
@@ -31,13 +29,6 @@ export type WorkflowReading = Omit<WorkflowInspectorProps, "redirect" | "stop"> 
 export const NO_CASES_SERVED =
   "Fleet does not serve the cases a boundary owes yet, so none is drawn. " +
   "What runs here is the Checks above.";
-
-/** The cases that run at a group's boundary, as the tests region draws them. */
-function testsOf(group: GroupView, cases: readonly CaseView[]) {
-  return cases
-    .filter((one) => one.groups.includes(group.id))
-    .map((one) => ({ id: one.id, title: one.spec, outcome: caseReads(one) }));
-}
 
 /** Why a step has no tasks: either no plan was recorded, or none of it lands here. */
 const NO_TASKS_RECORDED = "No plan has been recorded for this Job.";
@@ -90,14 +81,10 @@ function dronesOf(whole: JobWhole, tasks: GroupView["tasks"]): { id: string; lab
 export type WorkflowInspectorReading = {
   whole: JobWhole;
   groups: readonly GroupView[];
-  /** The cases the plan owes, for the tests at a group's boundary. */
-  cases?: readonly CaseView[];
   /** The node id a person has open — `step:…` or `group:…`. */
   selected: string | null;
   /** The step that works the groups, as `workflow-canvas.ts` computed it. */
   groupsUnder?: string;
-  /** How many Drones this Job may run at once, where the gate settled one. `#1550`. */
-  droneCap?: number;
 };
 
 /**
@@ -107,25 +94,22 @@ export type WorkflowInspectorReading = {
 export function workflowReadingOf({
   whole,
   groups,
-  cases = [],
   selected,
   groupsUnder,
-  droneCap,
 }: WorkflowInspectorReading): WorkflowReading | undefined {
   if (selected === null) return undefined;
 
   const group = groups.find((one) => groupNodeId(one.id) === selected);
   if (group !== undefined) {
     const step = ordered(whole).find((one) => one.step_id === groupsUnder);
-    const tests = testsOf(group, cases);
     return {
       name: `Group ${group.ordinal}`,
       kind: "group",
-      doing: doingOfGroup(group, droneCap),
+      doing: doingOfGroup(group),
       tasks: group.tasks.map(taskOf),
       checks: step === undefined ? [] : checksOf(step, group.checks_selected),
       checksAbsent: "No Check runs at this group's end.",
-      tests,
+      tests: [],
       testsAbsent: NO_CASES_SERVED,
       drones: dronesOf(whole, group.tasks),
     };
@@ -166,22 +150,12 @@ function doingOfStep(whole: JobWhole, step: StepDetail, groups: number, wrote: b
   return `This step is ${said}.${where}`;
 }
 
-/**
- * What the group is doing now. Its own word, which the step machine has none
- * of, and — where its tasks run at once — the Drone cap that bounds the fan
- * out, which is the one place on this screen that number decides anything
- * (`#1550`).
- */
-function doingOfGroup(group: GroupView, droneCap?: number): string {
+/** What the group is doing now. Its own word, which the step machine has none of. */
+function doingOfGroup(group: GroupView): string {
   const running = group.tasks.filter((task) => task.state === "working").length;
-  const cap = dronesAtOnceSaid(droneCap);
-  const together =
-    cap === undefined
-      ? `${group.tasks.length} tasks at the same time`
-      : `${group.tasks.length} tasks at the same time, and ${cap}`;
   const beside =
     group.concurrent && group.tasks.length > 1
-      ? together
+      ? `${group.tasks.length} tasks at the same time`
       : `${group.tasks.length} ${group.tasks.length === 1 ? "task" : "tasks"}, one after another`;
   const now = running === 0 ? "" : ` ${running} still running.`;
   return `${beside}. This group is ${group.state}.${now}`;

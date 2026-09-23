@@ -1726,8 +1726,12 @@
      collapse point would be a third number to keep in step. */
   grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--w-workflow-canvas-min)), 1fr));
   gap: var(--space-4);
-  align-items: stretch;
-  flex: 1;
+  /* **The destination scrolls, not the panes.** The canvas is a fixed frame a
+     person pans inside and the board under it is a page; a pane that scrolled
+     put the board under a fold nobody had a reason to reach for, with the
+     inspector drawn above it. Stacked's own rule since #1539, now the rule. */
+  flex: none;
+  align-items: start;
   min-width: 0;
   min-height: 0;
 }
@@ -1738,66 +1742,46 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* Folded to one column the destination scrolls, not the pane — Stacked's own
-   rule, for its own reason. The canvas has a floor and the column has less
-   than that, so a pane that scrolled drew a frame two thirds of its own
-   height, with the ordering rule under a fold nobody had a reason to reach
-   for and the inspector below that. */
-.armada-workflow-tab[data-narrow] {
-  flex: none;
-  align-items: start;
-}
-
-.armada-workflow-tab[data-narrow] .armada-workflow-tab__surface,
-.armada-workflow-tab[data-narrow] .armada-workflow-tab__inspector {
-  overflow: visible;
-}
-
-/* And the canvas takes a height rather than a share of one. `GraphCanvas`'s
-   frame is `height: 100%`, so in a column that sizes to its content that
-   resolves to nothing and React Flow measures a frame of zero: the run is
-   placed, and drawn inside a box no pixels high. */
-.armada-workflow-tab[data-narrow] .armada-workflow-tab__canvas {
-  flex: none;
-  height: var(--h-workflow-canvas);
-}
-
-.armada-workflow-tab[data-narrow][data-plan] .armada-workflow-tab__canvas {
-  height: var(--h-workflow-run-canvas);
-}
-
 .armada-workflow-tab__surface,
 .armada-workflow-tab__inspector {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  overflow-y: auto;
 }
 
-/* React Flow measures its own frame, so the canvas needs a height rather than
-   a flex basis of nothing. The floor is what keeps a run and the plan hanging
-   off it legible inside the shortest window Bridge lays out for. */
+/* React Flow measures its own frame, so the canvas takes a height and never a
+   share of one: `GraphCanvas`'s frame is `height: 100%`, and in a column that
+   sizes to its content that resolves to nothing — the run is placed, and drawn
+   inside a box no pixels high. */
 .armada-workflow-tab__canvas {
-  flex: 1;
-  min-height: var(--h-workflow-canvas);
+  flex: none;
+  height: var(--h-workflow-canvas);
 }
 
 /* A run with a plan hanging off it needs more, because it carries three depths
    rather than one. A run with no plan is a spine, and the taller frame would
    be void above and below it. */
 .armada-workflow-tab[data-plan] .armada-workflow-tab__canvas {
-  min-height: var(--h-workflow-run-canvas);
+  height: var(--h-workflow-run-canvas);
 }
 
-/* The rule the graph cannot draw, under the run: the groups go in order, and a
-   task reads done only once its own group has gone green. */
-.armada-workflow-tab__order {
+/* The step's own board, under the run it is inside. */
+.armada-workflow-tab__opened {
   flex: none;
-  padding-block-start: var(--space-2);
-  color: var(--fg-subtle);
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
+  padding-block-start: var(--space-4);
+}
+
+/* Beside a board of four groups the panel would otherwise be scrolled past,
+   and review and reply are one loop — the reply box has to stay with what a
+   press selected. Sticky only where it has a column of its own; folded, the
+   press scrolls it into view instead. */
+.armada-workflow-tab:not([data-narrow]) .armada-workflow-tab__inspector {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100vh;
+  overflow-y: auto;
 }
 
 /* The canvas/stacked toggle. Above the run rather than over it: drawn inside
@@ -1810,18 +1794,6 @@
   padding-block-end: var(--space-2);
 }
 
-/* Stacked is a page, not two panes. The canvas is a fixed frame a person pans
-   inside, so its column scrolls on its own; a column of step cards is read top
-   to bottom, and scrolling it inside a pane cut the last card in half at the
-   narrowest width. The destination scrolls instead. #1539. */
-.armada-workflow-tab[data-view="stacked"] {
-  flex: none;
-  align-items: start;
-}
-
-.armada-workflow-tab[data-view="stacked"] .armada-workflow-tab__surface,
-.armada-workflow-tab[data-view="stacked"] .armada-workflow-tab__inspector {
-  overflow: visible;}
 
 /* The wave a Job dispatched — the graph or the list, the loop it is on, and
    the two halves of what it is asking you. Appended, per the rule at the head

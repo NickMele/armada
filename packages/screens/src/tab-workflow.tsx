@@ -1,8 +1,10 @@
 // Workflow — the Job's run, drawn as the workflow it froze. `#1539`.
 //
-// **One graph, not a spine with a drawer** (owner, 23 Sep 2026): the steps,
-// the groups hanging off the step that wrote them, the tasks hanging off their
-// groups, and a second edge from the step that worked a group.
+// **A full canvas, not a spine** (owner, 23 Sep 2026): the steps, the groups
+// hanging off the step that wrote them, the tasks hanging off their groups,
+// and a second edge from the step that worked a group. The running step's
+// board stays under it — a node says where a group came from, the board says
+// what happened inside it, and neither says the other.
 //
 // **Canvas by default, stacked available, at every width** (#1530, 21 and 22
 // Sep). The toggle is remembered per viewer, and where it is kept is the
@@ -12,7 +14,7 @@
 // nobody can read, so the canvas narrows onto the step a person is on and the
 // plan that step holds rather than shrinking the run.
 
-import { Tabs, WorkflowCanvas, WorkflowInspector, WorkflowStacked } from "@armada/components";
+import { ImplementBoard, Tabs, WorkflowCanvas, WorkflowInspector, WorkflowStacked } from "@armada/components";
 import { useEffect, useRef, useState } from "react";
 import type { JobDetail as JobWhole, JobSummary, Turn } from "@armada/protocol";
 
@@ -22,10 +24,16 @@ import type { CaseView } from "./draft/cases";
 import { TAB_LABEL } from "./detail-tabs";
 import { taskGroupsOf, type GroupView } from "./draft/group";
 import { ACT_LABEL, HOLD_LABEL, HOLD_SAID } from "./copy";
-import { ORDER_WHILE_RUNNING } from "./implement";
+import { groupsThatOpen, implementBoardOf } from "./implement";
 import { taskReadingOf } from "./implement-task";
 import { steeringOf } from "./steering";
-import { stepThatWorksTheGroups, taskNodeId, taskOfNodeId, workflowRunOf } from "./workflow-canvas";
+import {
+  groupNodeId,
+  stepThatWorksTheGroups,
+  taskNodeId,
+  taskOfNodeId,
+  workflowRunOf,
+} from "./workflow-canvas";
 import { workflowReadingOf } from "./workflow-inspector";
 import { WORKFLOW_VIEWS, WORKFLOW_VIEW_LABEL, type WorkflowView } from "./workflow-view";
 
@@ -92,9 +100,11 @@ export function WorkflowTab({
   // centred on one card is a run with its other steps off screen.
   const [following, setFollowing] = useState(false);
   const [instruction, setInstruction] = useState("");
-  // The task a person has open, held apart because a task reads narrower than
-  // the group holding it and outranks it in the panel.
+  // The task a person has open, and which groups they have folded or unfolded.
+  // **`null` for the groups means nobody has chosen yet**, so the group that is
+  // moving opens itself — and a person's first press is what takes that over.
   const [openTask, setOpenTask] = useState<string | null>(null);
+  const [opened, setOpened] = useState<string[] | null>(null);
 
   // The panel, so a press on a task can bring it into view. **Review and reply
   // are one loop**: folded to one column the panel sits under the whole graph,
@@ -128,6 +138,8 @@ export function WorkflowTab({
 
   const groups = given ?? taskGroupsOf(whole);
   const groupsUnder = stepThatWorksTheGroups(whole);
+  const step = whole.steps.find((one) => one.step_id === groupsUnder);
+  const openGroups = opened ?? groupsThatOpen(groups);
   // The whole plan, as one graph. A press on a task card opens that task and
   // presses it again to close; a press on a step or a group takes the panel
   // off whichever task was open rather than leaving two selections live.
@@ -145,6 +157,26 @@ export function WorkflowTab({
       setOpenTask(null);
     },
   });
+  // The running step, opened under the graph — `#1536`. **The graph says where
+  // a group came from; the board says what happened inside it**: the commit it
+  // left, what its boundary came to, what stopping it holds back and the failed
+  // Check's own output handed to the next Drone. A node on a canvas carries
+  // none of that, which is why the two are not the same thing drawn twice.
+  const board = implementBoardOf({
+    whole,
+    groups,
+    cases,
+    step,
+    ...(droneCap === undefined ? {} : { droneCap }),
+    openGroups,
+    onOpenGroup: (id) => {
+      setOpened(openGroups.includes(id) ? openGroups.filter((one) => one !== id) : [...openGroups, id]);
+      setOpen(groupNodeId(id));
+      setOpenTask(null);
+    },
+    ...(openTask === null ? {} : { openTaskId: openTask }),
+    onOpenTask: (id) => setOpenTask(id === openTask ? null : id),
+  });
   // **The inspector lands on the step the Job is on**, so the panel is never a
   // blank column beside a full canvas. A person's own press then wins, and the
   // Job advancing does not take the panel off what they are reading. A task
@@ -160,14 +192,7 @@ export function WorkflowTab({
           watching,
           ...(groupsUnder === undefined ? {} : { stepId: groupsUnder }),
         })) ??
-    workflowReadingOf({
-      whole,
-      groups,
-      cases,
-      selected: open ?? run.running,
-      groupsUnder,
-      ...(droneCap === undefined ? {} : { droneCap }),
-    });
+    workflowReadingOf({ whole, groups, selected: open ?? run.running, groupsUnder });
   const steering = steeringOf(job, whole);
   const label = `${job.title}, as its workflow's run`;
   // Whether anything hangs off the run. A spine wants a shorter frame than a
@@ -201,12 +226,12 @@ export function WorkflowTab({
           ) : (
             <WorkflowStacked label={label} rows={run.rows} />
           )}
-          {/* The rule the graph cannot draw: the groups run in order, and a
-              task reads done only once its own group has gone green. */}
-          {groups.length === 0 ? null : (
-            <p className="armada-workflow-tab__order" role="note">
-              {ORDER_WHILE_RUNNING}
-            </p>
+          {/* What is inside the step the Job is on. The graph above says where
+              each group came from; this says what happened in it. `#1536`. */}
+          {board === undefined ? null : (
+            <div className="armada-workflow-tab__opened">
+              <ImplementBoard {...board} />
+            </div>
           )}
         </div>
 
