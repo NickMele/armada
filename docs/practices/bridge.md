@@ -274,6 +274,36 @@ surface for. If a review screen is ever designed where "leave feedback" is a
 separate route, tab, or modal from "look at the diff," that's the thing to
 push back on before it's built, not after.
 
+## A press waits for the surface to arrive
+
+**A browser test's press at a surface that animates in waits on `entered()`
+first** — `apps/desktop/src/renderer/src/mock/testing.ts`, which takes the
+layer's locator and waits for the layer's own animations to finish. Visible is
+true from a sheet's first frame, and a sheet's first frame is its whole width
+outside the window.
+
+Measured 23 Sep 2026 on #1592. The Manifest suite pressed the Verify button
+inside a sheet it had just opened, and about one full run in three on a loaded
+machine the spy behind that button never heard. Instrumented, the press reached
+no element at all: the sheet's travel was still running, the button's box sat at
+x=1458 in a 1440px viewport with 7px of it left to go, and no `mousedown`
+reached the document.
+
+**Playwright's own stability check does not catch it.** It compares the
+element's box across two animation frames and presses once the two agree; under
+load the main thread samples the same animation time twice, so a box that is
+moving reads as still.
+
+**Nothing retries a press, which is why the miss is silent.** The locator waited
+for what it could see and what it saw was right. A keystroke is worse: it has no
+locator at all, so a binding bound in an effect can miss one sent before React
+has committed — which is what `openHelm` waits on the window being drawn for.
+
+**Spell `entered()` at the press rather than folding it into a helper that
+settles every animation everywhere.** A press that ought to land at once, on a
+surface that does not animate, would start waiting for a reason nobody wrote
+down, and a test that tolerates a slow surface can no longer catch one.
+
 ## Everything else specific to this app
 
 **The build is three bundles from one config, not one.** `electron.vite.config.ts`
