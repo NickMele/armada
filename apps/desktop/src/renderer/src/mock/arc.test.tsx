@@ -177,12 +177,15 @@ describe("classifying", () => {
     async () => {
       mount("arc/proposing-review");
 
+      // The mark first, and not only because it is the claim: an assertion
+      // that something is absent passes against a window that has not drawn
+      // yet, so the negative below has to stand behind a positive.
+      await expect.element(markFor(GUIDE_ALWAYS_LOOKS)).toBeVisible();
       // The line that used to stand over the boxes is off the screen: it was
       // true of a Job nobody had approved, so it is guide 9 (#1602).
       await expect
         .element(page.getByText(/Fleet checks that the work stayed inside/))
         .not.toBeInTheDocument();
-      await expect.element(markFor(GUIDE_ALWAYS_LOOKS)).toBeVisible();
 
       // Every box off on a step, and the mark is still there — which is the
       // claim the sentence used to carry: it is not a summary of the ticks.

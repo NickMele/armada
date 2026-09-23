@@ -150,12 +150,14 @@ const markFor = (guide: { number: number; title: string }) =>
 
 test("the implement board draws no order line, and its mark is where the line was", async () => {
   await workflow();
+  // The mark first: an assertion that something is absent passes against a
+  // window that has not drawn yet, so a negative stands behind a positive.
+  await expect.element(markFor(GUIDE_GROUP_ORDER).last()).toBeVisible();
   // *One group at a time. No task of the next group starts…* stood over the
   // groups and was the only evidence of the rule. It is guide 4 now.
   await expect
     .element(page.getByText(/No task of the next group starts while this one is being checked/))
     .not.toBeInTheDocument();
-  await expect.element(markFor(GUIDE_GROUP_ORDER).last()).toBeVisible();
   // The board still reports: the groups are there, in the order they run.
   await expect
     .element(page.getByRole("list", { name: "The groups of this step, in the order they run" }).last())
