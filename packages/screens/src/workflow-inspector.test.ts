@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { ARC_MOMENTS } from "./fixtures/build/arc";
 import { KIND_FIXTURES } from "./fixtures/build/kinds";
 import { taskGroupsOf } from "./draft/group";
-import { groupNodeId, stepNodeId, stepTheGroupsHangUnder } from "./workflow-canvas";
+import { groupNodeId, stepNodeId, stepThatWorksTheGroups } from "./workflow-canvas";
 import { NO_CASES_SERVED, workflowReadingOf } from "./workflow-inspector";
 
 const executing = ARC_MOMENTS.find((moment) => moment.name === "executingSequential")!;
@@ -14,7 +14,7 @@ const watched = opened.watched;
 if (watched.state !== "read") throw new Error("the executing moment has no detail");
 const whole = watched.detail;
 const groups = taskGroupsOf(whole);
-const groupsUnder = stepTheGroupsHangUnder(whole);
+const groupsUnder = stepThatWorksTheGroups(whole);
 
 describe("nothing open", () => {
   it("reads nothing for no selection, and nothing for a node this Job has not", () => {

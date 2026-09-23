@@ -97,6 +97,18 @@ export const Group: Story = {
   },
 };
 
+/** A task inside the group, narrower again. Its id is the first fact. */
+export const Task: Story = {
+  args: {
+    kind: "task",
+    name: "Draw what is running, in four lists",
+    activity: "running",
+    said: "working",
+    facts: [{ value: "T5" }, { value: "1 file" }, { value: "14 turns" }],
+    onOpen: fn(),
+  },
+};
+
 /** The one being read. */
 export const Open: Story = {
   args: { ...Group.args, selected: true } as Story["args"],

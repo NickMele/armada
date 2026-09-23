@@ -1686,8 +1686,12 @@
      collapse point would be a third number to keep in step. */
   grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--w-workflow-canvas-min)), 1fr));
   gap: var(--space-4);
-  align-items: stretch;
-  flex: 1;
+  /* **The destination scrolls, not the panes.** The canvas is a fixed frame a
+     person pans inside and the board under it is a page; a pane that scrolled
+     put the board under a fold nobody had a reason to reach for, with the
+     inspector drawn above it. Stacked's own rule since #1539, now the rule. */
+  flex: none;
+  align-items: start;
   min-width: 0;
   min-height: 0;
 }
@@ -1704,25 +1708,22 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  overflow-y: auto;
 }
 
-/* React Flow measures its own frame, so the canvas needs a height rather than
-   a flex basis of nothing. The floor is what keeps a four-step run legible
-   inside the shortest window Bridge lays out for. */
+/* React Flow measures its own frame, so the canvas takes a height and never a
+   share of one: `GraphCanvas`'s frame is `height: 100%`, and in a column that
+   sizes to its content that resolves to nothing — the run is placed, and drawn
+   inside a box no pixels high. */
 .armada-workflow-tab__canvas {
-  flex: 1;
-  min-height: var(--h-workflow-canvas);
+  flex: none;
+  height: var(--h-workflow-canvas);
 }
 
-/* The same canvas, opened small. With a step opened under it the run is the
-   map and the board beneath is the reading, so the canvas stops taking the
-   column and the groups get the rest of it. Without this the board was under
-   the fold of a scroll nobody had a reason to make. #1536. */
-.armada-workflow-tab[data-opened] .armada-workflow-tab__canvas {
-  flex: none;
-  height: var(--h-workflow-canvas-opened);
-  min-height: var(--h-workflow-canvas-opened);
+/* A run with a plan hanging off it needs more, because it carries three depths
+   rather than one. A run with no plan is a spine, and the taller frame would
+   be void above and below it. */
+.armada-workflow-tab[data-plan] .armada-workflow-tab__canvas {
+  height: var(--h-workflow-run-canvas);
 }
 
 /* The step's own board, under the run it is inside. */
@@ -1731,24 +1732,11 @@
   padding-block-start: var(--space-4);
 }
 
-/* With a step opened the destination scrolls, not the pane — Stacked's own
-   rule, for its own reason. A pane that scrolled put the groups under a fold
-   nobody had a reason to reach for, with the inspector drawn above them. */
-.armada-workflow-tab[data-opened] {
-  flex: none;
-  align-items: start;
-}
-
-.armada-workflow-tab[data-opened] .armada-workflow-tab__surface,
-.armada-workflow-tab[data-opened] .armada-workflow-tab__inspector {
-  overflow: visible;
-}
-
 /* Beside a board of four groups the panel would otherwise be scrolled past,
    and review and reply are one loop — the reply box has to stay with what a
    press selected. Sticky only where it has a column of its own; folded, the
    press scrolls it into view instead. */
-.armada-workflow-tab[data-opened]:not([data-narrow]) .armada-workflow-tab__inspector {
+.armada-workflow-tab:not([data-narrow]) .armada-workflow-tab__inspector {
   position: sticky;
   top: 0;
   align-self: start;
@@ -1765,19 +1753,6 @@
   flex: none;
   padding-block-end: var(--space-2);
 }
-
-/* Stacked is a page, not two panes. The canvas is a fixed frame a person pans
-   inside, so its column scrolls on its own; a column of step cards is read top
-   to bottom, and scrolling it inside a pane cut the last card in half at the
-   narrowest width. The destination scrolls instead. #1539. */
-.armada-workflow-tab[data-view="stacked"] {
-  flex: none;
-  align-items: start;
-}
-
-.armada-workflow-tab[data-view="stacked"] .armada-workflow-tab__surface,
-.armada-workflow-tab[data-view="stacked"] .armada-workflow-tab__inspector {
-  overflow: visible;}
 
 /* The wave a Job dispatched — the graph or the list, the loop it is on, and
    the two halves of what it is asking you. Appended, per the rule at the head
