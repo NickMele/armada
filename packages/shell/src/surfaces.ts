@@ -18,6 +18,7 @@
 
 import { useEffect, useRef } from "react";
 import {
+  BookOpen,
   Briefcase,
   ClipboardList,
   FileCog,
@@ -38,6 +39,11 @@ import type { PaletteSurface } from "./Palette";
  * Kit is what he brings and Settings is what this machine is, so the machine
  * reads last.
  *
+ * **Guides joined last and moved nothing** (#1602). It is the tenth row, which
+ * is one past the digits the contract publishes, so it carries none — and
+ * every digit above is the one it was. Where it belongs in the rail is the
+ * thing here most likely to be pinned; moving it costs one line.
+ *
  * Two of the rest draw no row yet and they keep their place anyway. A rail
  * that renumbered as surfaces were built would move a learned key every time
  * — which is the thing moving Helm to `⌘6`, and then off the rail entirely
@@ -56,6 +62,7 @@ const RAIL = [
   "worktrees",
   "kit",
   "settings",
+  "guides",
 ] as const;
 
 type SurfaceId = (typeof RAIL)[number];
@@ -69,11 +76,22 @@ export const SURFACE = {
   kit: "kit",
   settings: "settings",
   studios: "studios",
+  guides: "guides",
 } as const satisfies Record<string, SurfaceId>;
 
-/** What reaches a surface: its place in the rail, spelled as the contract does. */
-function digitOf(id: SurfaceId): string {
-  return `⌘${RAIL.indexOf(id) + 1}`;
+/**
+ * What reaches a surface: its place in the rail, spelled as the contract does.
+ *
+ * **Nothing past the ninth, and Guides is the tenth.** The contract binds
+ * `⌘1–⌘9` to Bridge surfaces in rail order, so a tenth digit does not exist to
+ * hand out — and taking one off a surface that already publishes it would
+ * change a binding a person has learned. The tenth row is reached by name in
+ * the palette and by no key, which is the arrangement `Palette.tsx` already
+ * describes for a destination with no position.
+ */
+function digitOf(id: SurfaceId): string | undefined {
+  const at = RAIL.indexOf(id) + 1;
+  return at > 9 ? undefined : `⌘${at}`;
 }
 
 /**
@@ -143,6 +161,17 @@ export const SURFACES: readonly PaletteSurface[] = [
     // No alias: `fleet_settings` is the palette's own row, in its own
     // section, and it names an id rather than a word somebody already knows.
     icon: SettingsIcon,
+  },
+  {
+    id: SURFACE.guides,
+    label: "Guides",
+    // Nothing: it is the tenth row and `⌘1–⌘9` is what the contract publishes.
+    shortcut: digitOf(SURFACE.guides),
+    // What a person looking for this will type. "Help" is the word every other
+    // application uses for the place explanations live, and "guide" singular is
+    // what somebody types who met one card and wants the rest.
+    aliases: ["help", "guide", "explain"],
+    icon: BookOpen,
   },
 ];
 

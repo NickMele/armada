@@ -2,6 +2,8 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { FactChip } from "../FactChip/FactChip";
 import { GroupBoundary, type GroupBoundaryProps } from "../GroupBoundary/GroupBoundary";
+import { GuideMark } from "../GuideMark/GuideMark";
+import { GUIDE_GROUP_ORDER } from "../../guides";
 import { StepBar } from "../StepBar/StepBar";
 import { TaskMark, type TaskMarkState } from "../TaskMark/TaskMark";
 import type { PlanGroupState } from "../PlanBoard/PlanBoard";
@@ -192,8 +194,12 @@ export function ImplementBoard({
 }: ImplementBoardProps) {
   return (
     <section className="armada-implement" aria-label={`${stepName}, opened`}>
+      {/* The mark goes on the order line, not on a group head — that head is a
+          button, and a button inside a button is not markup a browser keeps.
+          What it explains is the rule the line is the only evidence of. */}
       <p className="armada-implement__order" role="note">
         {orderSays}
+        <GuideMark guide={GUIDE_GROUP_ORDER} />
       </p>
       <ol className="armada-implement__groups" aria-label="The groups of this step, in the order they run">
         {groups.map((group) => (

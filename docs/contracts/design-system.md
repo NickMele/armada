@@ -613,6 +613,20 @@ edge and its ground lifts one step at `--duration-fast`.
 `prefers-reduced-motion` every transition duration is zero and each
 state still reads from colour and label.
 
+**A layer nobody summoned does not enter.** The licence above is for chrome a
+person asked for, and it is the press that pays for it. A guide card opened by
+a `?` scales from 0.97 like any dialog; the same card opened because somebody
+met a piece for the first time is simply there. #1603.
+
+**Teaching borrows a game's motion and never its scoring.** Motion may show how
+pieces relate, where the relation is what is being learned — a task joining its
+group, a group's work becoming a commit, members landing in order. **There are
+no points, no streaks, no badges and no progress bar for its own sake**, and
+this sentence is here in as many words because the next person to read *learn
+from games* will reach for a badge. Whatever a relation is drawn as, it is
+drawn once: three animations of one relation, drawn three ways, is worse than
+none.
+
 **What animates on a loop is what is still working**, because a hue or a
 label can say *which* and only motion says *still*. Three things do: the
 running mark, a control waiting on Fleet, and the live phase's top edge.
@@ -1110,9 +1124,16 @@ These have no trigger, so flip and alignment do not apply to them.
 | Layer | Opens |
 | --- | --- |
 | Dialog | Centred in the window on both axes |
+| Guide card | Centred in the window on both axes |
 | Sheet | Full height, flush to one side edge, trailing by default |
 | Toast | Bottom trailing corner, inset `--space-6` |
 | Command palette | Horizontally centred, top-anchored |
+
+**A guide card is framed even though a `?` raised it.** It is the one layer
+that can also open with no trigger at all — the first time a person meets a
+piece — and a layer that anchored when it was pressed for and centred when it
+was not would be two layers wearing one name. It takes `--w-dialog-wide`,
+because a guide is three paragraphs and a picture.
 
 The palette's offset, and why it is not centred, are under Command palette.
 
@@ -2632,6 +2653,20 @@ Manifest "destructive-op list" setting governs Drone-initiated
 operations only, not your own clicks.
 
 ### Behaviour rules that shape copy
+
+**A screen reports. An explanation is something a person chooses to see.** The
+owner, 23 September 2026: *"I hate it, I just want the app to show facts. Any
+hints or guides should be something I choose to see."* A sentence that would
+still be true of a Job that had never run is an explanation, and it belongs in
+a guide rather than on the screen. #1602.
+
+**A guide is data, numbered, in `packages/components/src/guides/`.** One file
+each, one catalogue listing them in order, and a `?` beside the piece a guide
+explains. The mark goes where the vocabulary is Armada's own — a group
+boundary, a landing rule, how a graph is read — and never on every noun. The
+mark is the character `?` rather than a glyph: `circle-*` is reserved to Judge
+criterion verdicts, and the owner's own word for the control is a question
+mark. An empty state saying what would be here is a fact about now and stays.
 
 **A healthy state is stated, never implied.** "Fleet running" renders in
 the Fleet panel even when nothing is wrong, because an empty panel reads

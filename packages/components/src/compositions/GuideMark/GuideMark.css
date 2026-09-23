@@ -1,0 +1,40 @@
+/* The `?` beside a piece. A round ghost control at badge height, so it sits on
+   a heading's line without pushing it, and it recedes until it is wanted.
+
+   A character rather than a glyph. `circle-help` is refused by
+   packages/icons/icons.toml on two counts — `circle-*` is reserved to Judge
+   criterion verdicts, and a ring outline collides with `circle-dot` at 12px —
+   and the owner's own word for this control is a question mark. */
+.armada-guide-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--h-badge);
+  height: var(--h-badge);
+  padding: 0;
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-family: var(--font-sans);
+  /* --text-2xs against a 20px box: the mark reads as reference beside the
+     label it sits on, never as a second word in it. */
+  font-size: var(--text-2xs);
+  line-height: 1;
+  font-weight: var(--weight-medium);
+  /* Never --fg-subtle. The iconography contrast floor is about a mark nobody
+     can find, and a control nobody can find is the same defect. */
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+
+.armada-guide-mark:hover {
+  background: var(--bg-hover);
+  color: var(--fg-default);
+}
+
+.armada-guide-mark:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}

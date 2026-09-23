@@ -369,3 +369,12 @@ export * from "./compositions/WaveCanvas/WaveCanvas";
 // The two branch fields on the dispatch form: pick one, or type one that is
 // not there yet.
 export * from "./compositions/BranchPicker/BranchPicker";
+// The guidance system — #1602, #1603. The guides themselves are data, one file
+// each under `guides/`; the `?` is what asks for one, the card is what a
+// person reads, and the catalogue is every one of them in order.
+export * from "./guides";
+export * from "./guidance";
+export * from "./compositions/GuideMark/GuideMark";
+export * from "./compositions/GuideCard/GuideCard";
+export * from "./compositions/GuideCatalogue/GuideCatalogue";
+export * from "./compositions/GuidesSetting/GuidesSetting";

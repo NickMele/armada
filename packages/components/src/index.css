@@ -348,6 +348,12 @@
    not there yet. An @import after the first rule below is dropped, so the
    run of imports is where a new one is appended. */
 @import "./compositions/BranchPicker/BranchPicker.css";
+/* The guidance system — #1602, #1603. The `?` beside a piece, the card it
+   opens, and the catalogue every card is also in. */
+@import "./compositions/GuideMark/GuideMark.css";
+@import "./compositions/GuideCard/GuideCard.css";
+@import "./compositions/GuideCatalogue/GuideCatalogue.css";
+@import "./compositions/GuidesSetting/GuidesSetting.css";
 
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */

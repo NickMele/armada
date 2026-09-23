@@ -1,0 +1,108 @@
+/* The catalogue: one column, read top to bottom. A guide list in a game is a
+   numbered set of entries under section headings, and this is that shape with
+   this app's own type scale on it.
+
+   The measure is bounded, because a paragraph the width of a 2000px window is
+   a paragraph nobody finishes. 68ch is a reading measure and not a layout
+   value, which is why it is not a token. */
+.armada-guides {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-section);
+  min-width: 0;
+  max-width: 68ch;
+}
+
+.armada-guides__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.armada-guides__heading {
+  margin: 0;
+  font-size: var(--text-xl);
+  line-height: var(--leading-xl);
+  font-weight: var(--weight-heading);
+}
+
+.armada-guides__says {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-guides__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* The section band, on the eyebrow treatment the rest of the app uses for one:
+   caps at --text-2xs with the tracking the contract fixes. */
+.armada-guides__group-title {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  font-weight: var(--weight-medium);
+  color: var(--fg-subtle);
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-guides__entries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The number in its own column, so every title starts on one line and the
+   list reads as numbered without a marker glyph. */
+.armada-guides__entry {
+  display: grid;
+  grid-template-columns: var(--space-8) minmax(0, 1fr);
+  column-gap: var(--space-3);
+}
+
+.armada-guides__number {
+  font-size: var(--text-sm);
+  line-height: var(--leading-lg);
+  color: var(--fg-subtle);
+  text-align: right;
+}
+
+.armada-guides__entry-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-guides__title {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+  text-wrap: pretty;
+}
+
+.armada-guides__paragraph {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-wrap: pretty;
+}
+
+.armada-guides__picture {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--border-subtle);
+}

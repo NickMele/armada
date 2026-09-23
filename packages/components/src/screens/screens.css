@@ -1914,3 +1914,12 @@
   max-height: 66%;
   overflow-y: auto;
 }
+
+/* A region band beside its `?`. The head it sits in is space-between, so the
+   two have to be one child or the mark lands in the middle of the row. */
+.armada-inside__region-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}

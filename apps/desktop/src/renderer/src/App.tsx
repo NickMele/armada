@@ -24,7 +24,7 @@ import { useDockAnswering } from "./dock-answering";
 import { HelmDock, helmReplying } from "./HelmDock";
 import { chippedJobId, contextOf, cursorRowFor, dismissed, NO_CHIP, opened, screenOf } from "./helm-context";
 import type { ChipState } from "./helm-context";
-import { Button } from "@armada/components";
+import { Button, GuidanceProvider, GuideCatalogue } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
 import type { BridgeState } from "../../shared/bridge";
@@ -199,6 +199,10 @@ export function App({ draft }: AppProps = {}) {
   // Whether Kit is open — a rail surface since #1275, at `⌘8`. Machine-wide,
   // and the rail's pick is what names its second tier.
   const [kitting, setKitting] = useState(false);
+  // Whether the guide catalogue is open — a rail surface since #1602, and the
+  // last row, so it carries no digit. Every guide, numbered and grouped,
+  // readable without the screen that raised any of them.
+  const [guiding, setGuiding] = useState(false);
   // Whether the Manifest surface is open — Journey 9's *Running one*. **Its
   // own view, and it needs no Job to draw**: it is read off the file Fleet
   // already holds, which is what lets a person run this project's lint with
@@ -497,6 +501,7 @@ export function App({ draft }: AppProps = {}) {
     setOverviewing(surfaceId === SURFACE.overview);
     setSettingsShowing(surfaceId === SURFACE.settings);
     setKitting(surfaceId === SURFACE.kit);
+    setGuiding(surfaceId === SURFACE.guides);
     setStudying(surfaceId === SURFACE.studios);
     setOpenStudio(null);
     setStudioNode(null);
@@ -603,7 +608,10 @@ export function App({ draft }: AppProps = {}) {
   );
 
   return (
-    <>
+    /* The guidance system, over the whole window — #1602, #1603. It holds what
+       has been met, and the card it opens is a framed layer, so it belongs
+       above every surface rather than inside the one that raised it. */
+    <GuidanceProvider onReadAll={() => goTo(SURFACE.guides)}>
       <Shell
         connection={state.connection}
         repositories={repositories}
@@ -686,9 +694,11 @@ export function App({ draft }: AppProps = {}) {
                   ? SURFACE.settings
                   : kitting
                     ? SURFACE.kit
-                    : studying
-                      ? SURFACE.studios
-                      : SURFACE.board
+                    : guiding
+                      ? SURFACE.guides
+                      : studying
+                        ? SURFACE.studios
+                        : SURFACE.board
         }
         onSurface={goTo}
       >
@@ -1053,6 +1063,16 @@ export function App({ draft }: AppProps = {}) {
                 onSetManifestServerReach={setManifestServerReach}
               />
             </Boundary>
+          ) : guiding ? (
+            /* Every guide, numbered and grouped, read without the screen that
+               raised it — the catalogue half of #1602. It draws off the guide
+               table alone, so it needs nothing from Fleet and works
+               disconnected. */
+            <Boundary region="Guides" {...guarded}>
+              <div className="armada-screen__pane">
+                <GuideCatalogue />
+              </div>
+            </Boundary>
           ) : settingsShowing ? (
             <Boundary region="Settings" {...guarded}>
               <BridgeSettings
@@ -1060,6 +1080,7 @@ export function App({ draft }: AppProps = {}) {
                 live={live}
                 health={state.health}
                 onSave={commands.saveLimits}
+                onReadGuides={() => goTo(SURFACE.guides)}
               />
             </Boundary>
           ) : (
@@ -1165,6 +1186,6 @@ export function App({ draft }: AppProps = {}) {
 
       <CopiedToast copied={copied} />
       <SaidToast said={telling} />
-    </>
+    </GuidanceProvider>
   );
 }

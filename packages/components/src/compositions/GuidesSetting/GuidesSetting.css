@@ -1,0 +1,16 @@
+/* The one choice about guides, on Settings. A switch and the way to the
+   catalogue, stacked — the button goes under rather than beside, because the
+   switch already runs the full width of its card with its track at the
+   trailing edge. */
+.armada-guides-setting {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* Trailing, where a card's own action sits. */
+.armada-guides-setting__go {
+  display: flex;
+  justify-content: flex-end;
+}

@@ -75,6 +75,14 @@
   status = "Specified"
   notes = "Escalations interrupt, and the bell is the interrupt metaphor. Deliberately not octagon-alert, which belongs to stalled."
 
+[icons.book-open]
+  means = "Guides — two facing leaves meeting at a spine, which is the catalogue of guides held open"
+  group = "Navigation"
+  size = "16px"
+  status = "Specified"
+  reserved = "The Guides surface only. Never a document, a log, a transcript, a brief or an evidence bundle — those are the file-* family's, and never a workflow, which is `scroll-text`."
+  notes = "Minted 23 Sep 2026 with the guidance system (#1602, #1603), for the owner's catalogue of guides: a `?` beside a piece opens its card, and this rail row is where every card can be read again. Against the Navigation set it collides with none — `layout-dashboard` is a grid of panes, `clipboard-list` an upright board with a clip, `presentation` a board on legs, `hard-drive` a horizontal vessel, `briefcase` a case whose handle breaks its top edge, and `bell`, `stethoscope`, `file-cog` and `settings` are each an outline with something drawn on or inside it. Two leaves rising from a centre spine is none of those, and the spine is the silhouette rather than interior detail, so rule 3 holds at 16px. What was refused: `file-question-mark` reads exactly right and cannot be taken, because `file-*` means evidence throughout by its own reservation; `circle-help` is refused twice over, since `circle-*` is reserved to Judge criterion verdicts and a ring outline collides with `circle-dot`; `info` is the same ring with the same two problems and names a notice rather than a place; `scroll-text` already means the workflow a Job runs, so a rail row wearing it would say *workflow* where it means *guides*; `library` and a closed `book` are both rectangles at 16px, which is `file` and `archive` territory. **The objection to expect is `scroll-text`**, since a rolled sheet and an open book are both something authored — it passes rule 4 because the two are in different groups at different sizes, 16px Navigation against 12px Graph, and the contract admits collisions across those. The mark that opens one card is not a glyph at all: it is the character `?`, which is the owner's own word for the control."
+
 [icons.briefcase]
   means = "Kit — a case with a handle above its body, which is the tool set you bring"
   group = "Navigation"

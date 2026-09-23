@@ -3,6 +3,8 @@ import type { MouseEvent, ReactNode } from "react";
 import { useCallback } from "react";
 
 import { FigureList, type Figure } from "../FigureList/FigureList";
+import { GuideMark } from "../GuideMark/GuideMark";
+import { GUIDE_COMPLETION } from "../../guides";
 
 /**
  * Job outcome — what a finished Job produced, one row per part of it.
@@ -372,7 +374,14 @@ function Headline({ verb, count, says, criteria, completes }: JobOutcomeHeadline
           ))}
         </ol>
       )}
-      {completes === undefined ? null : <p className="armada-outcome__completes">{completes}</p>}
+      {completes === undefined ? null : (
+        <p className="armada-outcome__completes">
+          {completes}
+          {/* Which rule this Job carries is the fact. What a landing rule is,
+              and that there are four, is the guide. */}
+          <GuideMark guide={GUIDE_COMPLETION} />
+        </p>
+      )}
     </div>
   );
 }
