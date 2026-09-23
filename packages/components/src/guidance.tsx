@@ -97,6 +97,11 @@ export type GuidanceProviderProps = {
    * has already met.
    */
   remembered?: boolean;
+  /**
+   * Go to the catalogue. Navigation is the window's, so the card carries the
+   * control and the window answers it. Absent draws no control.
+   */
+  onReadAll?: () => void;
 };
 
 /**
@@ -108,7 +113,7 @@ export type GuidanceProviderProps = {
  * four; the rest keep their first contact for a later visit. Four uninvited
  * cards in a row is the noise the mark exists to replace.
  */
-export function GuidanceProvider({ children, remembered = true }: GuidanceProviderProps) {
+export function GuidanceProvider({ children, remembered = true, onReadAll }: GuidanceProviderProps) {
   const [memory, setMemory] = useState<GuidanceMemory>(() => (remembered ? readMemory() : NOTHING_MET));
   const [showing, setShowing] = useState<Showing | null>(null);
 
@@ -161,6 +166,14 @@ export function GuidanceProvider({ children, remembered = true }: GuidanceProvid
           invited={showing.invited}
           onClose={() => setShowing(null)}
           {...(showing.withSwitch ? { off: memory.off, onOff } : {})}
+          {...(onReadAll === undefined
+            ? {}
+            : {
+                onReadAll: () => {
+                  setShowing(null);
+                  onReadAll();
+                },
+              })}
         />
       )}
     </GuidanceContext.Provider>
