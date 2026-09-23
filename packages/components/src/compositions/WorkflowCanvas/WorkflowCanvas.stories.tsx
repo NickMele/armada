@@ -25,9 +25,9 @@ type Story = StoryObj<typeof WorkflowCanvas>;
 // `workflow-canvas.ts` computes.
 const STEP_X = 320;
 const GROUP_Y = 150;
-const GROUP_APART = 184;
+const GROUP_APART = 232;
 const TASK_X = 272;
-const TASK_APART = 80;
+const TASK_APART = 104;
 
 const steps: WorkflowCanvasNode[] = [
   {

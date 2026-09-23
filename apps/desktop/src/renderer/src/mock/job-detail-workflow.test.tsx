@@ -55,7 +55,7 @@ test("the canvas is still what opens at the narrowest window Bridge lays out for
 test("Stacked draws the same steps as a list, and the choice survives a relaunch", async () => {
   await workflow();
   await page.getByRole("tab", { name: "Stacked" }).last().click();
-  const run = page.getByRole("list", { name: /as its workflow's steps$/ }).last();
+  const run = page.getByRole("list", { name: /as its workflow's run$/ }).last();
   await expect.element(run).toBeVisible();
   for (const label of STEPS) await expect.element(card(label)).toBeVisible();
 
@@ -83,4 +83,56 @@ test("a step opens with its Checks and the tests at its boundary drawn apart", a
   await expect.element(page.getByRole("region", { name: "Tests at this boundary" }).last()).toBeVisible();
   // Review and reply are one loop, so the box is in the panel and not behind a dialog.
   await expect.element(page.getByRole("region", { name: "Redirect" }).last()).toBeVisible();
+});
+
+/**
+ * The moment with three groups worked and one not, so the claim below has both
+ * halves in one picture. `arc/group-failed` is the note's own scenario.
+ */
+async function failed(): Promise<void> {
+  mount("arc/group-failed");
+  await page.getByRole("tab", { name: /^Workflow/ }).last().click();
+}
+
+/** An edge, by what it says to somebody who cannot see the line. */
+const edge = (says: string) => page.getByLabelText(says).last();
+
+test("a group comes off the step that wrote it, and a worked one off the step that worked it", async () => {
+  await page.viewport(2000, 900);
+  await failed();
+  // One node per group, with the plan step's edge into each of the four.
+  for (const ordinal of [1, 2, 3, 4]) {
+    await expect.element(edge(`Plan the change made Group ${ordinal}`)).toBeInTheDocument();
+  }
+  // Three have been worked and carry the second edge into that same node.
+  for (const ordinal of [1, 2, 3]) {
+    await expect.element(edge(`Implement worked Group ${ordinal}`)).toBeInTheDocument();
+  }
+  // The fourth has not, so it has one edge and no other.
+  expect(await page.getByLabelText("Implement worked Group 4").elements()).toHaveLength(0);
+  // A task hangs off its own group, never off the step.
+  await expect.element(edge("Group 3 holds Draw what is running, in four lists")).toBeInTheDocument();
+  expect(await page.getByLabelText(/^Implement holds /).elements()).toHaveLength(0);
+});
+
+test("Stacked says what the graph says, in words", async () => {
+  await failed();
+  await page.getByRole("tab", { name: "Stacked" }).last().click();
+  // Every group and every task is a row, under the step that wrote them.
+  for (const ordinal of [1, 2, 3, 4]) {
+    await expect.element(card(`Group ${ordinal}`)).toBeVisible();
+  }
+  await expect.element(card("Draw what is running, in four lists")).toBeVisible();
+  // A column has no second edge to draw, so a worked group says which step
+  // worked it — three of the four, and the pending one says nothing.
+  expect(await page.getByText("worked at Implement").elements()).toHaveLength(3);
+});
+
+test("a press on a task opens that task, and a press on its group takes the panel back", async () => {
+  await page.viewport(2000, 900);
+  await failed();
+  await card("Open a Drone's Job from its row").click();
+  await expect.element(page.getByRole("region", { name: "T6 · Open a Drone's Job from its row, task" }).last()).toBeVisible();
+  await card("Group 3").click();
+  await expect.element(page.getByRole("region", { name: "Group 3, group" }).last()).toBeVisible();
 });
