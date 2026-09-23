@@ -1,8 +1,9 @@
 import { ChevronRight, ChevronUp } from "lucide-react";
-import type { WorkflowSummary } from "@armada/protocol";
+import type { LeftOutWorkflow, WorkflowSummary } from "@armada/protocol";
 
 import { Select } from "../../primitives/Select/Select";
 import { DroneCap } from "./DroneCap";
+import { sourceOf } from "./source";
 import { TierModels } from "./TierModels";
 import type { TierChoice } from "./TierModels";
 
@@ -27,6 +28,11 @@ export type DispatchSettingsProps = {
   onSettings: (settings: DispatchSettingsValue) => void;
   /** The workflows Fleet holds. **The only ones it will accept.** */
   workflows: readonly WorkflowSummary[];
+  /**
+   * The Kit and carried definitions Fleet runs without, each with why — #425.
+   * Named here because this is where a workflow is picked.
+   */
+  leftOut?: readonly LeftOutWorkflow[];
   /** The models a tier may name. Empty until the connection answers. */
   models: readonly string[];
   /**
@@ -53,6 +59,7 @@ export function DispatchSettings({
   settings,
   onSettings,
   workflows,
+  leftOut = [],
   models,
   machineCap,
   disabled = false,
@@ -92,21 +99,34 @@ export function DispatchSettings({
             Set any of these, or none. What you leave alone is decided when the Job is classified.
           </p>
 
-          <Select
-            label="Workflow"
-            value={settings.workflowId ?? ""}
-            disabled={disabled}
-            onChange={(event) =>
-              moved(event.target.value === "" ? { workflowId: undefined } : { workflowId: event.target.value })
-            }
-          >
-            <option value="">Armada picks it from the request</option>
-            {workflows.map((workflow) => (
-              <option key={workflow.id} value={workflow.id}>
-                {`${workflow.name} — ${workflow.steps.length} steps`}
-              </option>
-            ))}
-          </Select>
+          <div className="armada-dispatch-settings__workflow">
+            <Select
+              label="Workflow"
+              value={settings.workflowId ?? ""}
+              disabled={disabled}
+              onChange={(event) =>
+                moved(event.target.value === "" ? { workflowId: undefined } : { workflowId: event.target.value })
+              }
+            >
+              <option value="">Armada picks it from the request</option>
+              {workflows.map((workflow) => (
+                <option key={workflow.id} value={workflow.id}>
+                  {`${workflow.name} — ${workflow.steps.length} steps${sourceOf(workflow.source)}`}
+                </option>
+              ))}
+            </Select>
+            {/* A definition Fleet left out is named where a workflow is picked,
+                so a person who customised `bug` in Kit is not running Armada's
+                without knowing — #425. This is that place now: the form that
+                used to carry it is gone. */}
+            {leftOut.length === 0 ? null : (
+              <ul className="armada-dispatch-settings__left-out" aria-label="Workflows left out">
+                {leftOut.map((left) => (
+                  <li key={left.file}>{left.said}</li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           <TierModels
             tiers={tiers}
@@ -123,22 +143,34 @@ export function DispatchSettings({
             disabled={disabled}
           />
 
-          <Select
-            label="How it lands"
-            value={settings.lands ?? ""}
-            disabled={disabled}
-            onChange={(event) =>
-              moved(
-                event.target.value === ""
-                  ? { lands: undefined }
-                  : { lands: event.target.value as "auto" | "you_at_review" },
-              )
-            }
-          >
-            <option value="">The workflow decides</option>
-            <option value="auto">Auto</option>
-            <option value="you_at_review">Ask me at review only</option>
-          </Select>
+          {/* The three read as three answers to one question — does anybody
+              get asked — rather than as a decider beside a mode. `The workflow
+              decides` against `Auto` was two different kinds of answer in one
+              list, and the owner asked what the difference was: the first
+              names who, the second names what, and nothing said that leaving
+              it alone may land without asking anyway. */}
+          <div className="armada-dispatch-settings__lands">
+            <Select
+              label="How it lands"
+              value={settings.lands ?? ""}
+              disabled={disabled}
+              onChange={(event) =>
+                moved(
+                  event.target.value === ""
+                    ? { lands: undefined }
+                    : { lands: event.target.value as "auto" | "you_at_review" },
+                )
+              }
+            >
+              <option value="">Leave it to the workflow</option>
+              <option value="auto">Land it without asking me</option>
+              <option value="you_at_review">Stop and ask me at review</option>
+            </Select>
+            <p className="armada-dispatch-settings__said">
+              Left alone, the workflow&rsquo;s delivering step decides, and some workflows ask
+              you and some do not.
+            </p>
+          </div>
         </div>
       )}
     </section>

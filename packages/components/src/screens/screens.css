@@ -1555,46 +1555,6 @@
   position: relative;
 }
 
-/* Dispatch: the request beside what else is writing where it would. #1540.
-
-   **Two columns, and the one that grows is the one holding prose.** The
-   request is what a person is writing; the peers column is a rail, and a rail
-   that widens with the window gives a list of two titles half the screen —
-   `--w-run-column`'s own argument, one surface over. --w-dock is that width:
-   it is the panel beside the content everywhere else in the app, and a token
-   of its own here would be the same number under a second name. Reported.
-
-   The pane reads its own width rather than the window's, because the left
-   column is outside it. Helm's dock was too, and since #1583 it takes no
-   width at all — the container query is right either way. */
-.armada-dispatch-pane {
-  min-width: 0;
-  container-type: inline-size;
-}
-
-/* The grid is the child, because a container query never matches the element
-   that declares the container. */
-.armada-dispatch-pane__columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, var(--w-dock));
-  gap: var(--gap-section);
-  align-items: start;
-  min-width: 0;
-}
-
-/* --layout-breakpoint, where a two-column split stops fitting. Under it the
-   overlap reads below the request rather than in a column too narrow to hold
-   a path — and it is still on the surface, because it is a fact about what a
-   person is about to do.
-
-   armada-allow-off-contract: a container condition cannot read a custom property — measured, not assumed, same as @media
-   1100px is --layout-breakpoint, which a query cannot resolve — docs/contracts/design-system.md */
-@container (max-width: 1100px) {
-  .armada-dispatch-pane__columns {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 /* Plan — what the Job is held to, and the two acts at a plan gate. The board
    itself owns its own stylesheet; these two regions are the destination's.
    #1535. */

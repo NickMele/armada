@@ -35,7 +35,10 @@ One model call on the dispatch path. It reads the request a person dispatched �
 
 **So that dispatching is describing the work, not filling in a form.** A request arrives as a prompt or a ticket link. Someone has to decide what kind of work it is, which workflow fits, and whether it is one Job or several.
 
-Doing that by hand means knowing the workflow catalogue before you can ask for anything. Hand entry stays available and is the **override**, not the path.
+Doing that by hand means knowing the workflow catalogue before you can ask for anything.
+
+> **Rule.** There is no hand-entry form. Describing the work is the only way a person makes a Job from Bridge, and a decision the proposer would take is overridden on the dispatch card's own Settings block — the workflow among them.
+> Why: the owner, 23 September 2026 — *"I think with all of the settings, this is really not needed anymore."* This reverses the earlier reading that hand entry stays as the override. The form carried a title, a brief, a workflow, a model, an urgency and a land-as-one switch, and every decision in it but the title and the brief is now a field beside the request — which the proposer writes for you.
 
 ## What it proposes
 

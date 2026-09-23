@@ -165,7 +165,6 @@ export function proposingReview(): ArcMoment {
     opens: ARC_JOB_ID,
     draft: {
       prompt: before.draft.prompt,
-      peers: before.draft.peers,
       proposal: classified(),
       landing: ARC_LANDING,
       criteria: arcCriterionViews(),

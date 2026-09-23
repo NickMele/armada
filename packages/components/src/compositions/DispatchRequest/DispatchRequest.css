@@ -150,16 +150,26 @@
   font-weight: var(--weight-medium);
 }
 
+/* The indent is the ordinal's own column, so every line wraps to the same edge
+   rather than under its number — which is what an indent set on the list could
+   not do once the number stopped being a marker. */
 .armada-dispatch__next-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
   margin: 0;
-  padding-inline-start: var(--space-4);
+  padding-inline-start: 0;
 }
 
 .armada-dispatch__next-line {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.armada-dispatch__next-said {
   min-width: 0;
   color: var(--fg-muted);
   font-size: var(--text-xs);
@@ -332,20 +342,25 @@
   min-width: 0;
 }
 
-/* The position, and the whole of the graph: a proposal of several is a chain,
-   so the number is what says which waits on which. Mono, because it is a
-   machine reading, and set back so the title leads. */
+/* The position in a run whose order is the substance — the proposal's chain,
+   where the number says which waits on which, and the three lines of what
+   happens next. Mono, because it is a machine reading, and set back so the
+   words lead. One treatment, because it is one kind of thing. */
 .armada-dispatch__ordinal {
   flex: none;
-  /* Beside the title it numbers, not centred against a row whose height comes
-     from the two lines under it. The body's own line height is what puts it
-     there. */
-  align-self: start;
   width: var(--space-4);
   color: var(--fg-subtle);
   font-size: var(--text-xs);
-  line-height: var(--leading-sm);
   text-align: end;
+}
+
+/* On the chain, beside the title it numbers, not centred against a row whose
+   height comes from the two lines under it. The body's own line height is what
+   puts it there; the next list aligns on its baseline instead and needs
+   neither. */
+.armada-dispatch__job > .armada-dispatch__ordinal {
+  align-self: start;
+  line-height: var(--leading-sm);
 }
 
 .armada-dispatch__job-body {

@@ -8,7 +8,7 @@ import { STUDIO_PROMOTIONS } from "@armada/protocol";
 import { CHANNELS, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState, PickedView, Summons } from "../shared/bridge";
 import type { Outcome, StudioPromotion } from "@armada/protocol";
-import type { Draft, HelmContext, StagedAttachment } from "@armada/protocol";
+import type { HelmContext, StagedAttachment } from "@armada/protocol";
 import type { AddTask, DropTask, FileReport } from "@armada/protocol";
 import type {
   Artifact,
@@ -478,9 +478,6 @@ void app.whenReady().then(() => {
   });
   // Every act on a Job is reached through `commands` — see `command.ts`, which
   // holds them because they are HTTP and the connection is a socket.
-  ipcMain.handle(CHANNELS.proposeJob, (_event, draft: Draft) =>
-    connection?.commands.proposeJob(draft),
-  );
   // The other way a Job reaches the same gate. Its own channel and not a mode
   // on the one above: that one carries a workflow the person chose and this
   // one carries the sentence they wrote, and one channel taking which would
@@ -500,7 +497,7 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.stopProposal, () => connection?.commands.stopProposal());
   // Staging happens before a Job exists — there is no id yet to key storage
   // on, and one is minted at `propose` time. Fleet is not involved here at
-  // all; this only writes bytes to a temp file `proposeJob` later names.
+  // all; this only writes bytes to a temp file the request later names.
   ipcMain.handle(
     CHANNELS.stageAttachment,
     (_event, bytes: ArrayBuffer, filename: string, mimeType: string) =>
