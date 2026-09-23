@@ -31,7 +31,7 @@ function Card({ children }: { children: React.ReactNode }) {
 export const Unchecked: Story = {
   render: () => (
     <Card>
-      <Checkbox>Land as a convoy</Checkbox>
+      <Checkbox>Land as one pull request</Checkbox>
     </Card>
   ),
 };
@@ -60,7 +60,7 @@ export const Focused: Story = {
 export const Disabled: Story = {
   render: () => (
     <Card>
-      <Checkbox disabled>Land as a convoy</Checkbox>
+      <Checkbox disabled>Land as one pull request</Checkbox>
       <Checkbox disabled defaultChecked>
         Run Doctor before dispatch
       </Checkbox>

@@ -416,17 +416,18 @@ export const AtTheWidthFloor: StoryObj = {
 };
 
 /**
- * A Convoy has no single workspace, so its row **names its first write target
- * and counts the rest** — `+2` where three Workspaces are declared. Every
- * other row names a place in that column, so this one does too, and the folder
- * glyph keeps meaning a workspace. A bare "3 workspaces" was drawn and
- * rejected: it puts a count where the column holds an identifier.
+ * A Job that writes in several places has no single workspace, so its row
+ * **names its first write target and counts the rest** — `+2` where three
+ * Workspaces are declared. Every other row names a place in that column, so
+ * this one does too, and the folder glyph keeps meaning a workspace. A bare
+ * "3 workspaces" was drawn and rejected: it puts a count where the column
+ * holds an identifier.
  *
  * **No chip and no hue.** A bordered pill is a Job state and nothing else, so
  * shape reads as plain text. The Board computes it from `write_targets` and
  * `atomic` — nothing on Job stores a shape.
  */
-export const Convoy: Story = {
+export const SeveralWriteTargets: Story = {
   args: {
     ...Running.args,
     headline: "Retire the poke path across the fleet",
