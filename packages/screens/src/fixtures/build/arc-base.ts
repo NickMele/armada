@@ -36,7 +36,6 @@ import type {
   JobMembersView,
   LandingRule,
   LedgerRow,
-  PeerOverlapAnswer,
   ProposalView,
   PulseView,
   ScopeRevisionView,
@@ -101,7 +100,6 @@ export type ArcDraft = {
   /** The branches the two ref fields pick over. Absent draws them as plain fields. */
   branches?: BranchesAnswer;
   sketch?: SketchAttachment;
-  peers?: PeerOverlapAnswer;
   proposal?: ProposalView;
   landing?: LandingRule;
   criteria?: CriterionView[];

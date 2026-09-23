@@ -29,15 +29,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import {
-  DispatchRequest,
-  DispatchSettings,
-  SketchPad,
-  WhatElseIsRunning,
-} from "@armada/components";
+import { DispatchRequest, DispatchSettings, SketchPad } from "@armada/components";
 import type {
   DispatchSettingsValue,
-  PeerJob,
   Proposal,
   ProposalWatch,
   Refs,
@@ -51,7 +45,6 @@ import { howManySet } from "./draft/dispatch";
 import type { DispatchSettingsView } from "./draft/dispatch";
 import type { BranchesAnswer } from "./draft/branches";
 import type { LandingRule } from "./draft/landing";
-import type { PeerOverlapAnswer, PeerView } from "./draft/peers";
 import {
   drawingOf,
   isDrawn,
@@ -159,13 +152,6 @@ export type DispatchJobProps = {
    * ones they were. `draft/branches.ts` names the read it waits on.
    */
   branches: BranchesAnswer;
-  /**
-   * What else is writing where this work would. **`null` is nobody having
-   * looked**, which is every request at dispatch today — the read hangs off a
-   * Job and there is no Job yet. Drawing it as "nobody is there" would say
-   * something nothing has checked.
-   */
-  peers: PeerOverlapAnswer;
   /** The workflows Fleet holds, for the settings block's override. */
   workflows: readonly WorkflowSummary[];
   /**
@@ -216,7 +202,6 @@ export function DispatchJob({
   opensOn,
   landing,
   branches,
-  peers,
   workflows,
   leftOut,
   models,
@@ -327,107 +312,95 @@ export function DispatchJob({
       : proposal;
 
   return (
-    <div className="armada-dispatch-pane">
-      <div className="armada-dispatch-pane__columns">
-      <DispatchRequest
-        request={request}
-        onRequest={setRequest}
-        {...(repository === undefined ? {} : { repository })}
-        refs={refs}
-        onRefs={setRefs}
-        // Handed straight over: a `BranchView` and the control's own
-        // `BranchOption` are the same three fields under the same names, so a
-        // mapper here would be the seam `asChosen` is without the rename that
-        // earns one.
-        branches={branches}
-        links={links}
-        onAddLink={(address) =>
-          setLinks((current) => (current.includes(address) ? current : [...current, address]))
-        }
-        onRemoveLink={(address) => setLinks((current) => current.filter((one) => one !== address))}
-        settings={
-          <DispatchSettings
-            open={settingsOpen}
-            onOpenChange={setSettingsOpen}
-            settings={settings}
-            onSettings={setSettings}
-            workflows={workflows}
-            {...(leftOut === undefined ? {} : { leftOut })}
-            models={models}
-            machineCap={machineCap}
-            disabled={disabled}
-          />
-        }
-        mode={mode}
-        onMode={setMode}
-        sketchPad={
-          <SketchPad
-            label={PAD_LABEL}
-            boxes={drawing.shapes.map(asBox)}
-            lines={drawing.joins.map(asLine)}
-            said={said}
-            onSaid={setSaid}
-            {...(sketch?.produced_by === undefined ? {} : { from: sketch.produced_by })}
-            onAdd={(at) =>
-              setDrawing((one) =>
-                withShape(one, { id: nextShapeId(one), x: at.x, y: at.y, body: "" }),
-              )
-            }
-            onBody={(id, body) => setDrawing((one) => withBody(one, id, body))}
-            onMove={(id, at) => setDrawing((one) => withPlace(one, id, at))}
-            onRemove={(ids) => setDrawing((one) => withoutShapes(one, ids))}
-            onJoin={(from, to) => setDrawing((one) => withJoin(one, from, to))}
-            disabled={disabled}
-          />
-        }
-        // Nothing drawn is nothing attached: an empty pad is a mode somebody
-        // opened, not a picture.
-        {...(isDrawn(drawing)
-          ? {
-              sketch: {
-                name: SKETCH_NAME,
-                ...(sketch?.produced_by === undefined ? {} : { from: FROM_A_STUDIO }),
-              },
-            }
-          : {})}
-        attachments={attachments}
-        onStage={onStage}
-        onSearchFiles={onSearchFiles}
-        onAttach={(attachment) => setAttachments((current) => [...current, attachment])}
-        onRemoveAttachment={(path) =>
-          setAttachments((current) => current.filter((attachment) => attachment.path !== path))
-        }
-        onDispatch={() => void dispatch()}
-        close={close}
-        onReset={reset}
-        onOpen={onOpen}
-        onApprove={onApprove}
-        approving={approving}
-        // The two facts are joined here and nowhere else: the proposal is this
-        // screen's and the watch is the app's, and the component takes one value.
-        // A screen still `reading` with nothing published yet draws the wait
-        // without a reading, which is the sentence that was always there.
-        proposal={
-          proposal.at === "reading" && watching !== null
-            ? { at: "reading", watch: watching }
-            : (out ?? shown)
-        }
-        onStop={onStop}
-        slowAfterMs={PROPOSAL_IS_SLOW}
-        disabled={disabled}
-        disabledNote={disabledNote}
-        onCopied={onCopied}
-      />
-        {/* Beside the request, never over it. An overlap is a fact about
-            what is running and it decides nothing here, so it takes a column
-            of its own rather than a warning on the control that dispatches. */}
-        <WhatElseIsRunning
-          peers={peers === null ? null : peers.peers.map(rowOf)}
-          {...(peers === null ? {} : { pathsAsked: peers.paths_asked })}
-          onOpen={onOpen}
+    <DispatchRequest
+      request={request}
+      onRequest={setRequest}
+      {...(repository === undefined ? {} : { repository })}
+      refs={refs}
+      onRefs={setRefs}
+      // Handed straight over: a `BranchView` and the control's own
+      // `BranchOption` are the same three fields under the same names, so a
+      // mapper here would be the seam `asChosen` is without the rename that
+      // earns one.
+      branches={branches}
+      links={links}
+      onAddLink={(address) =>
+        setLinks((current) => (current.includes(address) ? current : [...current, address]))
+      }
+      onRemoveLink={(address) => setLinks((current) => current.filter((one) => one !== address))}
+      settings={
+        <DispatchSettings
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          settings={settings}
+          onSettings={setSettings}
+          workflows={workflows}
+          {...(leftOut === undefined ? {} : { leftOut })}
+          models={models}
+          machineCap={machineCap}
+          disabled={disabled}
         />
-      </div>
-    </div>
+      }
+      mode={mode}
+      onMode={setMode}
+      sketchPad={
+        <SketchPad
+          label={PAD_LABEL}
+          boxes={drawing.shapes.map(asBox)}
+          lines={drawing.joins.map(asLine)}
+          said={said}
+          onSaid={setSaid}
+          {...(sketch?.produced_by === undefined ? {} : { from: sketch.produced_by })}
+          onAdd={(at) =>
+            setDrawing((one) =>
+              withShape(one, { id: nextShapeId(one), x: at.x, y: at.y, body: "" }),
+            )
+          }
+          onBody={(id, body) => setDrawing((one) => withBody(one, id, body))}
+          onMove={(id, at) => setDrawing((one) => withPlace(one, id, at))}
+          onRemove={(ids) => setDrawing((one) => withoutShapes(one, ids))}
+          onJoin={(from, to) => setDrawing((one) => withJoin(one, from, to))}
+          disabled={disabled}
+        />
+      }
+      // Nothing drawn is nothing attached: an empty pad is a mode somebody
+      // opened, not a picture.
+      {...(isDrawn(drawing)
+        ? {
+            sketch: {
+              name: SKETCH_NAME,
+              ...(sketch?.produced_by === undefined ? {} : { from: FROM_A_STUDIO }),
+            },
+          }
+        : {})}
+      attachments={attachments}
+      onStage={onStage}
+      onSearchFiles={onSearchFiles}
+      onAttach={(attachment) => setAttachments((current) => [...current, attachment])}
+      onRemoveAttachment={(path) =>
+        setAttachments((current) => current.filter((attachment) => attachment.path !== path))
+      }
+      onDispatch={() => void dispatch()}
+      close={close}
+      onReset={reset}
+      onOpen={onOpen}
+      onApprove={onApprove}
+      approving={approving}
+      // The two facts are joined here and nowhere else: the proposal is this
+      // screen's and the watch is the app's, and the component takes one value.
+      // A screen still `reading` with nothing published yet draws the wait
+      // without a reading, which is the sentence that was always there.
+      proposal={
+        proposal.at === "reading" && watching !== null
+          ? { at: "reading", watch: watching }
+          : (out ?? shown)
+      }
+      onStop={onStop}
+      slowAfterMs={PROPOSAL_IS_SLOW}
+      disabled={disabled}
+      disabledNote={disabledNote}
+      onCopied={onCopied}
+    />
   );
 }
 
@@ -471,14 +444,4 @@ function asBox(shape: Drawing["shapes"][number]): SketchBox {
 
 function asLine(join: Drawing["joins"][number]): SketchLine {
   return { id: join.id, from: join.from, to: join.to };
-}
-
-/** One peer, as the panel draws it. */
-function rowOf(peer: PeerView): PeerJob {
-  return {
-    id: peer.job,
-    title: peer.title,
-    status: peer.status,
-    sharedPaths: peer.shared_paths,
-  };
 }

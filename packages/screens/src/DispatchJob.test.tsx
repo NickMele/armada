@@ -70,9 +70,8 @@ const PROPOSED: Answered = {
  * outstanding — which is the only state the guard exists for.
  */
 /**
- * What this screen is handed beside the request: where the work starts, who
- * else is writing there, and what the settings block may offer. **`peers` is
- * `null` on purpose** — nobody has looked, which is every dispatch today.
+ * What this screen is handed beside the request: where the work starts, and
+ * what the settings block may offer.
  */
 const HELD = {
   landing: {
@@ -84,7 +83,6 @@ const HELD = {
     complete_when: "delivered",
     land_together: [],
   },
-  peers: null,
   // Nothing has listed the repository's branches either, which is every
   // dispatch against a real Fleet — so the two ref fields draw plain.
   branches: null,

@@ -77,20 +77,20 @@ the `crates/ipc` module it is meant for. Nothing on the wire carries them yet,
 so a Job created today is classified as it always was and the schema lock is
 where they reach Fleet.
 
-### What else is running
+### What else is running, and why it is not here
 
-Beside the request at a wide window, under it at a narrow one: the Jobs already
-writing where this work would, each with the paths the two of them share and
-where that Job is.
+> **Rule.** The dispatch card draws nothing about what else is running. The
+> card is one column and the request is the whole of it.
+> Why: the owner, 23 September 2026, of the panel that stood beside it — *"How
+> are these jobs identified? I think its neat but also feels weird. If I have 10
+> jobs active, does it show all 10 jobs?"* Offered a cap, every running Job, a
+> count, or removal, he took removal. The overlap read happens anyway once the
+> Job has declared its paths, and the Job Board already says what is running.
 
-**It is a fact and never a verdict.** Nothing on the surface is greyed by it and
-nothing is refused; dispatching into a file another Job holds is the ordinary
-case, and the panel exists so it is done knowingly.
-
-**Nobody looked and nobody was found are two sentences.** Today's overlap read
-hangs off an existing Job and answers nothing until paths are claimed, so at
-dispatch nothing has been compared and the panel says so. The shape is draft —
-`packages/screens/src/draft/peers.ts`.
+**The cost was taken knowingly**: the warning is gone from the one moment a
+person could still change what they are asking for. A Job's own overlap is a
+different question and still has its draft — `packages/screens/src/draft/peers.ts`
+— which now derives from `JobDetail` alone.
 
 ### The sketch, and what of it reaches Fleet
 

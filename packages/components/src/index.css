@@ -329,10 +329,8 @@
 /* A Job whose members are Jobs — pull requests landing in order. #1543. */
 @import "./compositions/JobMembers/JobMembers.css";
 
-/* The dispatch form's optional settings, and what else is writing where a
-   request would. #1540. */
+/* The dispatch form's optional settings. #1540. */
 @import "./compositions/DispatchSettings/DispatchSettings.css";
-@import "./compositions/WhatElseIsRunning/WhatElseIsRunning.css";
 /* The picture a person draws beside the prompt, on GraphCanvas. #1547. */
 @import "./compositions/SketchPad/SketchPad.css";
 

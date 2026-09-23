@@ -2,7 +2,7 @@
 //
 // **Nothing here is a Job, and the fixtures on the Board are other people's
 // work.** What a person is holding lives in `draft` — the words, the picture,
-// the two refs, and what else is running where this would write.
+// the branches and the two refs.
 //
 // **`gates` is empty and that is the state, not a gap.** The workflow is
 // chosen by the proposer, and the gates lock at approval (#1530, 21 Sep), so
@@ -12,13 +12,7 @@ import type { ArcMoment } from "./arc-base";
 import { ARC_NOW, arcStep, featureWorkflow } from "./arc-base";
 import { ARC_TIERS } from "./arc-plan";
 import { lightFixture } from "./light";
-import type {
-  BranchesAnswer,
-  LandingRule,
-  PeerOverlapAnswer,
-  ProposalView,
-  SketchAttachment,
-} from "../../draft";
+import type { BranchesAnswer, LandingRule, ProposalView, SketchAttachment } from "../../draft";
 import type { JobFixture } from "../fixture";
 
 const PROMPT =
@@ -111,27 +105,6 @@ function peerJobs(): JobFixture[] {
   ];
 }
 
-/** Who else claims these paths. A fact, never a verdict — nothing is blocked. */
-function peers(): PeerOverlapAnswer {
-  return {
-    paths_asked: ["crates/api/src/", "crates/fleet/src/", "packages/screens/src/"],
-    peers: [
-      {
-        job: "01M2D3P0QW001CAPACITYREAD",
-        title: "Fold the capacity read into one query",
-        status: "running",
-        shared_paths: ["crates/api/src/"],
-      },
-      {
-        job: "01M2D3P0QW001RAILSCROLL0",
-        title: "Give the rail its own scroll",
-        status: "awaiting_review",
-        shared_paths: ["packages/screens/src/overview.ts"],
-      },
-    ],
-  };
-}
-
 /**
  * The picture, the Studio node it was made from, and the boxes behind it.
  *
@@ -168,7 +141,6 @@ export function dispatchTyping(): ArcMoment {
     draft: {
       prompt: PROMPT,
       branches: ARC_BRANCHES,
-      peers: peers(),
       proposal: arcProposal(),
       landing: ARC_LANDING,
     },
@@ -184,7 +156,6 @@ export function dispatchSketch(): ArcMoment {
       prompt: PROMPT,
       branches: ARC_BRANCHES,
       sketch: sketch(),
-      peers: peers(),
       proposal: arcProposal(),
       landing: ARC_LANDING,
     },

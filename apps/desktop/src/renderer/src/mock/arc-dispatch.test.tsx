@@ -13,28 +13,23 @@ unmountAfterEach();
 
 describe("dispatch", () => {
   test(
-    "arc/dispatch-typing: the prompt a person is typing stands beside the two Jobs already " +
-      "writing where this work would, each named with the path they share — and nothing is " +
-      "greyed out, because an overlap is a fact and not a refusal",
+    "arc/dispatch-typing: the prompt a person is typing is the whole of the surface — the " +
+      "card asks for the work and nothing beside it says what else is running",
     async () => {
       mount("arc/dispatch-typing");
 
       const field = page.getByRole("textbox", { name: "Request" });
       await expect.element(field).toHaveValue(expect.stringContaining("Drones 1 of 2"));
 
-      const beside = page.getByText("What else is running").first();
-      await expect.element(beside).toBeVisible();
+      // The panel that used to stand beside it is gone, the owner's call of
+      // 23 September 2026. The Board is what says what is running, and the
+      // overlap read happens once the Job has declared its paths.
+      await expect.element(page.getByText("What else is running")).not.toBeInTheDocument();
       await expect
         .element(page.getByText("Fold the capacity read into one query"))
-        .toBeVisible();
-      // The chip's title is the whole path, which is what a person reads on
-      // hover and what survives the directory's own clip.
-      await expect.element(page.getByTitle("crates/api/src/")).toBeVisible();
-      await expect.element(page.getByText("Give the rail its own scroll")).toBeVisible();
-      await expect.element(page.getByTitle("packages/screens/src/overview.ts")).toBeVisible();
+        .not.toBeInTheDocument();
 
-      // The claim the panel exists for: it says what is running and stops
-      // nothing. A greyed Dispatch would make the reading a refusal.
+      // Nothing was ever greyed by an overlap and nothing is now.
       await expect
         .element(page.getByRole("button", { name: "Dispatch", disabled: true }))
         .not.toBeInTheDocument();

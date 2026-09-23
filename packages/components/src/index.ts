@@ -347,10 +347,8 @@ export * from "./compositions/StudioFrameSheet/StudioFrameSheet";
 // above the runner. #1383.
 export * from "./compositions/DriftSheet/DriftSheet";
 export * from "./compositions/VerifySheet/VerifySheet";
-// The dispatch form's optional settings, and what else is writing where a
-// request would. #1540.
+// The dispatch form's optional settings. #1540.
 export * from "./compositions/DispatchSettings/DispatchSettings";
-export * from "./compositions/WhatElseIsRunning/WhatElseIsRunning";
 // The tier map and the Drone cap, which the dispatch form and the proposal
 // both set — one control drawn at two moments, never two. #1549, #1550.
 export * from "./compositions/DispatchSettings/TierModels";

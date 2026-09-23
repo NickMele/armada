@@ -109,9 +109,9 @@ export function Composing({
   const [typed, setTyped] = useState(false);
   // Whether the discard ask is up. While it is, the key below is the dialog's.
   const [asking, setAsking] = useState(false);
-  // What a mock moment already holds — the request half typed, who else is
-  // writing there, the two refs. `{}` in the app, where nothing serves any of
-  // it yet: `drafted.tsx` is the whole of that seam.
+  // What a mock moment already holds — the request half typed, the branches,
+  // the two refs. `{}` in the app, where nothing serves any of it yet:
+  // `drafted.tsx` is the whole of that seam.
   const drafted = useDrafted();
   /** The one act the control and the key share: leave, or ask first. */
   const leave = useCallback(() => {
@@ -203,9 +203,6 @@ export function Composing({
         // Manifest's declared base and the worktrees Fleet holds — are neither
         // of them read here. The two fields draw as the plain ones they were.
         branches={drafted.branches ?? null}
-        // `null` is nobody having looked, which is every request at dispatch:
-        // the overlap read hangs off a Job and there is no Job yet.
-        peers={drafted.peers ?? null}
         workflows={state.holds.workflows}
         // What Fleet ran without, named under the Workflow field — #425. On
         // All it is the answered repository's own read, since the pick stays
