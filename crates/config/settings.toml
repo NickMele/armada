@@ -301,7 +301,7 @@ merge_strategy = "REPLACE"
 peer_polarity = "Union (deny-shaped)"
 read_by = "verification"
 notes = """
-Split by destination, not by surface. No agent writes text that leaves Armada: Fleet composes PR descriptions and commit messages from the Job's record, so neither is linted. Judge summaries stay inside and draw a warning. The lint is not built. A gate here would need a correction round that does not consume the retry budget, or a style bounce spends retry_count and a Job can escalate as gate_failure over an em dash. Voice cannot widen or narrow this in either direction. A block wins over a warning across a Convoy's Manifests. Owner is empty on purpose: Agent Copy Contract is a Doc, not a Concept row, and the unit that enforces this is verification.
+Split by destination, not by surface. No agent writes text that leaves Armada: Fleet composes PR descriptions and commit messages from the Job's record, so neither is linted. Judge summaries stay inside and draw a warning. The lint is not built. A gate here would need a correction round that does not consume the retry budget, or a style bounce spends retry_count and a Job can escalate as gate_failure over an em dash. Voice cannot widen or narrow this in either direction. A block wins over a warning across a Job's several gating Manifests. Owner is empty on purpose: Agent Copy Contract is a Doc, not a Concept row, and the unit that enforces this is verification.
 """
 
 [settings.copy-lint-scope-which-surfaces-are-linted]
@@ -325,7 +325,7 @@ peer_polarity = "Intersect (allow-shaped)"
 owner = "Fleet"
 read_by = "fleet"
 notes = """
-Two-tier, explicit in brief. Documented on Kit; enforced by Fleet. Kit holds the default allowlist and a Manifest may extend or restrict it — in either direction. The row previously carried the opposite rule, that an allow-shaped list merges by intersection and a Manifest addition is rejected at config load; that was the config direction rule and it was withdrawn Aug 22 2026. Peer polarity is unchanged: across a Convoy's gating Manifests the allowlist still intersects, because a Drone must hold only what every declared Manifest granted. Open finding, filed separately: the allowlist's value was never prevention but the denial record in the approvals table, and nothing now stops a Manifest removing entries and with them the record.
+Two-tier, explicit in brief. Documented on Kit; enforced by Fleet. Kit holds the default allowlist and a Manifest may extend or restrict it — in either direction. The row previously carried the opposite rule, that an allow-shaped list merges by intersection and a Manifest addition is rejected at config load; that was the config direction rule and it was withdrawn Aug 22 2026. Peer polarity is unchanged: across a Job's several gating Manifests the allowlist still intersects, because a Drone must hold only what every declared Manifest granted. Open finding, filed separately: the allowlist's value was never prevention but the denial record in the approvals table, and nothing now stops a Manifest removing entries and with them the record.
 """
 
 [settings.destructive-op-list-confirm-before-drone-ops-only]
@@ -337,7 +337,7 @@ peer_polarity = "Union (deny-shaped)"
 owner = "Fleet"
 read_by = "fleet"
 notes = """
-Governs Drone-initiated operations that must stop and ask first (rm -rf, force-push, schema drops). Does not govern your own Bridge actions — those always confirm and are not configurable. Opposite polarity to Allowlist despite an identical Scope and an identical-looking strategy: here appending narrows and removing widens. Two rows that look the same in every column and resolve in opposite directions is why Peer polarity exists as a column. The row previously read that a Manifest may only add, which guaranteed a repo could never remove a confirmation Kit required; that was the config direction rule and it was withdrawn Aug 22 2026. Nothing now provides that guarantee — filed as an open finding. Peer polarity is unchanged: deny-shaped, so the list unions across a Convoy's gating Manifests.
+Governs Drone-initiated operations that must stop and ask first (rm -rf, force-push, schema drops). Does not govern your own Bridge actions — those always confirm and are not configurable. Opposite polarity to Allowlist despite an identical Scope and an identical-looking strategy: here appending narrows and removing widens. Two rows that look the same in every column and resolve in opposite directions is why Peer polarity exists as a column. The row previously read that a Manifest may only add, which guaranteed a repo could never remove a confirmation Kit required; that was the config direction rule and it was withdrawn Aug 22 2026. Nothing now provides that guarantee — filed as an open finding. Peer polarity is unchanged: deny-shaped, so the list unions across a Job's several gating Manifests.
 """
 
 [settings.branch-worktree-naming-convention]
@@ -860,7 +860,7 @@ peer_polarity = "Union (deny-shaped)"
 owner = "Judge"
 read_by = "verification"
 notes = """
-Added by the Aug 2026 config review. Judge is veto-only and blind to the Drone. The row previously read that a Manifest may add triggers and never remove them, because a repo that could remove them could opt out of semantic verification entirely while every other signal still reads green. That guarantee was the config direction rule and it was withdrawn Aug 22 2026 — a Manifest may now extend or restrict the trigger set. The risk the original wording named is real and now reachable; filed as an open finding rather than replaced with a new mechanism. Peer polarity is unchanged: across a Convoy's gating Manifests the set unions, because a trigger is a gate and adding one narrows.
+Added by the Aug 2026 config review. Judge is veto-only and blind to the Drone. The row previously read that a Manifest may add triggers and never remove them, because a repo that could remove them could opt out of semantic verification entirely while every other signal still reads green. That guarantee was the config direction rule and it was withdrawn Aug 22 2026 — a Manifest may now extend or restrict the trigger set. The risk the original wording named is real and now reachable; filed as an open finding rather than replaced with a new mechanism. Peer polarity is unchanged: across a Job's several gating Manifests the set unions, because a trigger is a gate and adding one narrows.
 """
 
 [settings.job-shape-classifier-model]
@@ -1012,7 +1012,7 @@ peer_polarity = "n/a — single layer"
 owner = "Fleet"
 read_by = "config, fleet"
 notes = """
-Resolves a workflow review step's manifest_rule:review_gate. Values: human_always (default) or auto_if_judge_passes. Built in #525, together with the auto-merge row this one's same-shape clause carries; `read_by` gained `config`, which reads the top-level `review_gate:` key. A step declaring this gate and no Judge criterion is legal and holds for a person however the policy resolved — see docs/concepts/manifest.md, *A judgeless step under `auto_if_judge_passes`*. Referenced by the Bug reference sample since it was written and had no row until Aug 21 2026, so the gate resolved against nothing. TIER UNRESOLVED as of Aug 22 2026. The Scope was set to Manifest only deliberately, to avoid the config direction rule: a per-repo override from human_always to auto_if_judge_passes loosens the rule, and the direction rule forbade a Manifest widening what Guild set. That rule is withdrawn, so the reason for the tiering is gone, and Workflow's own prose called this a Kit default with a per-repo override. Filed as an open item. Auto-merge policy rides with it by this row's own same-shape-for-the-same-reason clause. Peer resolution is unaffected: most-restrictive-wins across a Convoy's gating Manifests, human_always beating auto_if_judge_passes.
+Resolves a workflow review step's manifest_rule:review_gate. Values: human_always (default) or auto_if_judge_passes. Built in #525, together with the auto-merge row this one's same-shape clause carries; `read_by` gained `config`, which reads the top-level `review_gate:` key. A step declaring this gate and no Judge criterion is legal and holds for a person however the policy resolved — see docs/concepts/manifest.md, *A judgeless step under `auto_if_judge_passes`*. Referenced by the Bug reference sample since it was written and had no row until Aug 21 2026, so the gate resolved against nothing. TIER UNRESOLVED as of Aug 22 2026. The Scope was set to Manifest only deliberately, to avoid the config direction rule: a per-repo override from human_always to auto_if_judge_passes loosens the rule, and the direction rule forbade a Manifest widening what Guild set. That rule is withdrawn, so the reason for the tiering is gone, and Workflow's own prose called this a Kit default with a per-repo override. Filed as an open item. Auto-merge policy rides with it by this row's own same-shape-for-the-same-reason clause. Peer resolution is unaffected: most-restrictive-wins across a Job's several gating Manifests, human_always beating auto_if_judge_passes.
 """
 
 [settings.poke-limit-poke-limit]
@@ -1126,7 +1126,7 @@ peer_polarity = "n/a — single layer"
 owner = "Fleet"
 read_by = "fleet, store"
 notes = """
-The rounding unit a claim's width is raised to, giving a mid-Job widening headroom to extend in place. Machine-only knowingly against the tiering rule — a project-level version does parse, since a monorepo of compose stacks wants a larger granule than a repo of libraries, but the preference is unfelt: demand already drives width, and the headroom is spent on scope revision, which is rare. Recorded so it need not be re-derived if it moves: Convoy resolution is highest-wins, since most-restrictive would take the smallest granule, which is backwards for a floor. The signal to move it is a repo where mid-Job widenings routinely fail to extend in place and re-claim, changing port numbers under a running worktree.
+The rounding unit a claim's width is raised to, giving a mid-Job widening headroom to extend in place. Machine-only knowingly against the tiering rule — a project-level version does parse, since a monorepo of compose stacks wants a larger granule than a repo of libraries, but the preference is unfelt: demand already drives width, and the headroom is spent on scope revision, which is rare. Recorded so it need not be re-derived if it moves: resolution across a Job's several gating Manifests is highest-wins, since most-restrictive would take the smallest granule, which is backwards for a floor. The signal to move it is a repo where mid-Job widenings routinely fail to extend in place and re-claim, changing port numbers under a running worktree.
 """
 
 [settings.check-timeout]
