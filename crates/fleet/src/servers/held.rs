@@ -17,8 +17,10 @@ use tokio::sync::watch;
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Holder {
     Job(JobId),
-    /// The main checkout of the repository at this root.
-    MainCheckout(String),
+    /// A checkout, by its path — a repository's main checkout is the one at
+    /// its root. **One instance per checkout per name**, so two checkouts of
+    /// one repository each hold their own.
+    Checkout(String),
 }
 
 type Key = (Holder, String);

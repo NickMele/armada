@@ -1,8 +1,8 @@
-//! The span of ports a Job's worktree holds, the main checkout holds, or
-//! Fleet's own listener holds.
+//! The span of ports a Job's worktree holds, a checkout holds, or Fleet's own
+//! listener holds.
 //!
-//! `docs/concepts/fleet.md`, *Ports*: "A claim names a Job, the main checkout
-//! or Fleet's own listener, so who holds which span is a query rather than an
+//! `docs/concepts/fleet.md`, *Ports*: "A claim names a Job, a checkout or
+//! Fleet's own listener, so who holds which span is a query rather than an
 //! inspection of directories." [`PortClaimant`] is that one-of-three, answered
 //! by the type rather than by three nullable columns a caller could leave all
 //! set or all empty — the shape a `CHECK` would otherwise have to refuse at
@@ -107,16 +107,48 @@ CREATE UNIQUE INDEX port_claims_main_checkout ON port_claims (main_checkout) WHE
 CREATE UNIQUE INDEX port_claims_fleet_listener ON port_claims (fleet_listener) WHERE fleet_listener IS NOT NULL;
 "#;
 
+/// Version 83 — `main_checkout` becomes `checkout_path`, because a claim is
+/// now held by any checkout of a repository and not only the one at its root.
+///
+/// **A rename and not a rebuild.** [`V50`] and [`V57`] each rebuilt the table
+/// because a `CHECK` cannot be altered in place; nothing about the rule
+/// changes here, only what the column is called, and SQLite carries a
+/// `RENAME COLUMN` into the `CHECK` expressions and the index definitions that
+/// name it. **Every row is kept at its base and width** — a main-checkout
+/// claim is a checkout claim whose path happens to be the repository root, so
+/// there is nothing to convert and a Fleet coming up on a migrated file finds
+/// the span it was already serving on.
+///
+/// The index is renamed the slow way, because SQLite renames the column inside
+/// an index and never the index itself, and an index still called
+/// `port_claims_main_checkout` would be the last place the old idea lived.
+///
+/// [`V57`]: crate::repositories::V57
+pub(crate) const V83: &str = r#"
+ALTER TABLE port_claims RENAME COLUMN main_checkout TO checkout_path;
+
+DROP INDEX port_claims_main_checkout;
+CREATE UNIQUE INDEX port_claims_checkout_path ON port_claims (checkout_path) WHERE checkout_path IS NOT NULL;
+"#;
+
 /// Who a port span belongs to. **Exactly one of the three, and there is no
 /// fourth constructor that leaves it unstated.**
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PortClaimant {
     /// A Job's worktree, for the whole of the worktree's lifetime.
     Job(JobId),
-    /// A repository's main checkout, by its root, held for as long as Fleet
-    /// runs. What the proof run after a merge and a server started with no Job
-    /// draw their ports from — neither has a worktree to claim against.
-    MainCheckout(String),
+    /// A checkout, **by its path**, held for as long as Fleet runs. A
+    /// repository's main checkout is the one at its root — what the proof run
+    /// after a merge and a server started with no Job draw their ports from —
+    /// and a worktree somebody cut by hand is another, so two checkouts of one
+    /// repository never resolve `${port.NAME}` to the same number. `#1577`.
+    ///
+    /// **A path and never a root**, which is the whole of the widening: keying
+    /// on the repository root gave every checkout of it one span, and the
+    /// second server to bind took the first's port or quietly answered in its
+    /// place. Whether a path *is* a checkout of a served repository is
+    /// `fleet::checkouts`', because this crate cannot look.
+    Checkout(String),
     /// Fleet's own listener — the one port Bridge connects to, published in
     /// the runtime file. Claimed at startup before the bind and released when
     /// Fleet stops, so two Fleets on one machine never bind the same number.
@@ -151,19 +183,19 @@ impl Store {
     ///
     /// [`port_span_for_job`]: Store::port_span_for_job
     pub fn claim_port_span(&mut self, claim: &PortClaim) -> Result<(), WriteError> {
-        let (job_id, main_checkout, fleet_listener) = match &claim.claimant {
+        let (job_id, checkout_path, fleet_listener) = match &claim.claimant {
             PortClaimant::Job(job_id) => (Some(job_id.as_str()), None, None),
-            PortClaimant::MainCheckout(root) => (None, Some(root.as_str()), None),
+            PortClaimant::Checkout(path) => (None, Some(path.as_str()), None),
             PortClaimant::FleetListener => (None, None, Some(1_i64)),
         };
         self.conn
             .execute(
                 "INSERT INTO port_claims \
-                 (job_id, main_checkout, fleet_listener, base, width, claimed_at) \
+                 (job_id, checkout_path, fleet_listener, base, width, claimed_at) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 (
                     job_id,
-                    main_checkout,
+                    checkout_path,
                     fleet_listener,
                     i64::from(claim.base),
                     i64::from(claim.width),
@@ -193,9 +225,9 @@ impl Store {
                 "DELETE FROM port_claims WHERE job_id = ?1",
                 (job_id.as_str(),),
             ),
-            PortClaimant::MainCheckout(root) => self.conn.execute(
-                "DELETE FROM port_claims WHERE main_checkout = ?1",
-                (root.as_str(),),
+            PortClaimant::Checkout(path) => self.conn.execute(
+                "DELETE FROM port_claims WHERE checkout_path = ?1",
+                (path.as_str(),),
             ),
             PortClaimant::FleetListener => self.conn.execute(
                 "DELETE FROM port_claims WHERE fleet_listener IS NOT NULL",
@@ -213,7 +245,7 @@ impl Store {
         let found = self
             .conn
             .query_row(
-                "SELECT job_id, main_checkout, fleet_listener, base, width, claimed_at \
+                "SELECT job_id, checkout_path, fleet_listener, base, width, claimed_at \
                  FROM port_claims WHERE job_id = ?1",
                 (job_id.as_str(),),
                 |row| Ok(read_claim(row)),
@@ -230,32 +262,30 @@ impl Store {
         found.transpose().map_err(LoadJobError::Unreadable)
     }
 
-    /// The span claimed for this repository's main checkout, if one has been.
+    /// The span claimed for the checkout at `path`, if one has been. A
+    /// repository's main checkout is the one at its root.
     ///
     /// **Not a [`LoadJobError`]** — there is no Job to name if the read fails,
     /// so a database fault here is [`LoadAllError::Database`], the same
     /// reading [`every_port_claim`](Store::every_port_claim) gives one.
-    pub fn port_span_for_main_checkout(
-        &self,
-        root: &str,
-    ) -> Result<Option<PortClaim>, LoadAllError> {
+    pub fn port_span_for_checkout(&self, path: &str) -> Result<Option<PortClaim>, LoadAllError> {
         let found = self
             .conn
             .query_row(
-                "SELECT job_id, main_checkout, fleet_listener, base, width, claimed_at \
-                 FROM port_claims WHERE main_checkout = ?1",
-                (root,),
+                "SELECT job_id, checkout_path, fleet_listener, base, width, claimed_at \
+                 FROM port_claims WHERE checkout_path = ?1",
+                (path,),
                 |row| Ok(read_claim(row)),
             )
             .map(Some)
             .or_else(|why| match why {
                 rusqlite::Error::QueryReturnedNoRows => Ok(None),
                 other => Err(LoadAllError::Database(fault(
-                    "reading the main checkout's port span",
+                    "reading a checkout's port span",
                 )(other))),
             })?;
         found.transpose().map_err(|cause| {
-            LoadAllError::Database(fault("reading the main checkout's port span")(
+            LoadAllError::Database(fault("reading a checkout's port span")(
                 rusqlite::Error::InvalidColumnName(cause.to_string()),
             ))
         })
@@ -269,13 +299,13 @@ impl Store {
     /// the row says only that the last Fleet to hold it believed it was free.
     ///
     /// **Not a [`LoadJobError`]**, for
-    /// [`port_span_for_main_checkout`](Store::port_span_for_main_checkout)'s
-    /// reason — there is no Job to name if the read fails.
+    /// [`port_span_for_checkout`](Store::port_span_for_checkout)'s reason —
+    /// there is no Job to name if the read fails.
     pub fn port_span_for_fleet_listener(&self) -> Result<Option<PortClaim>, LoadAllError> {
         let found = self
             .conn
             .query_row(
-                "SELECT job_id, main_checkout, fleet_listener, base, width, claimed_at \
+                "SELECT job_id, checkout_path, fleet_listener, base, width, claimed_at \
                  FROM port_claims WHERE fleet_listener IS NOT NULL",
                 (),
                 |row| Ok(read_claim(row)),
@@ -294,9 +324,9 @@ impl Store {
         })
     }
 
-    /// Every span currently claimed, Job spans before the two that have no
-    /// Job — the main checkout's and Fleet's own listener's — and each in
-    /// claim order.
+    /// Every span currently claimed, Job spans before the two kinds that have
+    /// no Job — a checkout's and Fleet's own listener's — and each in claim
+    /// order.
     ///
     /// **What Fleet reads before it picks a candidate span.** One pass rather
     /// than a query per attempt, the same shape as
@@ -307,9 +337,9 @@ impl Store {
         let mut asked = self
             .conn
             .prepare(
-                "SELECT job_id, main_checkout, fleet_listener, base, width, claimed_at \
+                "SELECT job_id, checkout_path, fleet_listener, base, width, claimed_at \
                  FROM port_claims \
-                 ORDER BY job_id IS NULL, job_id, main_checkout, fleet_listener, claimed_at",
+                 ORDER BY job_id IS NULL, job_id, checkout_path, fleet_listener, claimed_at",
             )
             .map_err(fault("preparing the port claim read"))
             .map_err(LoadAllError::Database)?;
@@ -333,28 +363,28 @@ impl Store {
 }
 
 /// One row, narrowed. **The claimant is refused rather than guessed** — a row
-/// holding more or fewer than one of `job_id`, `main_checkout` and
+/// holding more or fewer than one of `job_id`, `checkout_path` and
 /// `fleet_listener` is a row the `CHECK` should have stopped, and reading it
 /// as one of them would be this crate deciding the shape the database already
 /// refused to hold.
 fn read_claim(row: &rusqlite::Row<'_>) -> Result<PortClaim, RowError> {
     let job_id: Option<String> = row.get("job_id").map_err(column(TABLE, "job_id"))?;
-    let main_checkout: Option<String> = row
-        .get("main_checkout")
-        .map_err(column(TABLE, "main_checkout"))?;
+    let checkout_path: Option<String> = row
+        .get("checkout_path")
+        .map_err(column(TABLE, "checkout_path"))?;
     let fleet_listener: Option<i64> = row
         .get("fleet_listener")
         .map_err(column(TABLE, "fleet_listener"))?;
-    let claimant = match (job_id, main_checkout, fleet_listener) {
+    let claimant = match (job_id, checkout_path, fleet_listener) {
         (Some(job_id), None, None) => PortClaimant::Job(JobId::carried(Ulid::carried(job_id))),
-        (None, Some(root), None) => PortClaimant::MainCheckout(root),
+        (None, Some(path), None) => PortClaimant::Checkout(path),
         (None, None, Some(_)) => PortClaimant::FleetListener,
         _ => {
             return Err(RowError::MalformedColumn {
                 table: TABLE,
                 column: "job_id",
-                detail: "a port claim names exactly one of a Job, the main checkout or Fleet's \
-                         own listener, and this row does not"
+                detail: "a port claim names exactly one of a Job, a checkout or Fleet's own \
+                         listener, and this row does not"
                     .to_string(),
             })
         }

@@ -143,9 +143,18 @@ pub struct ServerList {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StartServer {
     pub name: String,
-    /// The Job whose worktree and span it runs in. Absent: the main checkout.
+    /// The Job whose worktree and span it runs in. Absent: a checkout.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub job_id: Option<JobId>,
+    /// A checkout of that repository to serve, by its path — a worktree
+    /// somebody cut by hand to look at another branch. Absent: the main
+    /// checkout. Ignored where `job_id` names a Job, whose worktree is its
+    /// own. **Since 18.2.**
+    ///
+    /// **A path and never a port**, the field above's rule: what it changes is
+    /// which span `${port.NAME}` resolves against, not the number.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checkout: Option<String>,
 }
 
 /// `stop_server`'s body: which instance.

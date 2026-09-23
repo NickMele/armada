@@ -71,8 +71,8 @@ where
         }
         // Before anything else: a main-checkout claim a crashed Fleet left
         // behind is re-probed before this process trusts it. See
-        // `crate::ports::Fleet::reconciled_main_checkout_ports`.
-        self.reconciled_main_checkout_ports().await;
+        // `crate::ports::Fleet::reconciled_checkout_ports`.
+        self.reconciled_checkout_ports().await;
         // A scout does not outlive the Fleet reading it. `crate::scouting`.
         self.scouts_left_gathering().await;
         // Before any Studio is read: the Links this build reads as an Issue, a

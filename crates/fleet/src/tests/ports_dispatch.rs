@@ -227,7 +227,7 @@ async fn the_main_checkouts_span_is_released_on_shutdown() {
     let claimed = fleet.main_checkout_ports(&fleet.first()).await;
     assert!(!claimed.is_empty(), "a span was claimed");
 
-    fleet.released_main_checkout_ports().await;
+    fleet.released_checkout_ports().await;
 
     assert!(
         fleet

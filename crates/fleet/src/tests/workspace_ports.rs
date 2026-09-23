@@ -149,7 +149,7 @@ async fn the_workspace_wins_a_shared_name_and_an_undeclared_one_stays_literal() 
     };
     assert_eq!(
         root.claimant,
-        PortClaimant::MainCheckout(fleet.first().root().to_string())
+        PortClaimant::Checkout(fleet.first().root().to_string())
     );
     let (web, api, docs) = (port(&seen[0]), port(&seen[1]), port(&seen[2]));
     assert_eq!(docs, root.base, "`docs` is the root's: {seen:?}");
@@ -213,7 +213,7 @@ async fn shutdown_releases_a_workspace_span_left_behind() {
         .claim_port_span(&left)
         .expect("a leftover row");
 
-    fleet.released_main_checkout_ports().await;
+    fleet.released_checkout_ports().await;
     assert!(claims(&fleet).await.is_empty(), "released at shutdown");
 }
 
@@ -249,7 +249,7 @@ async fn a_repository_served_at_a_workspace_keeps_its_span_through_that_verify()
     let held = |claims: Vec<PortClaim>| {
         claims
             .into_iter()
-            .find(|claim| claim.claimant == PortClaimant::MainCheckout(served.root().to_string()))
+            .find(|claim| claim.claimant == PortClaimant::Checkout(served.root().to_string()))
     };
     let kept = held(claims(&fleet).await).expect("its own span");
 

@@ -438,7 +438,15 @@ where
                     .await
                     .map_err(|why| self.refusal(why))?,
             ),
-            None => crate::servers::Place::MainCheckout(self.served_named(manifest_id.as_ref())?),
+            None => {
+                let served = self.served_named(manifest_id.as_ref())?;
+                let checkout = match asked.checkout.as_deref() {
+                    Some(path) => crate::checkouts::Checkout::beside(served, path)
+                        .map_err(|why| self.checkout_refusal(why))?,
+                    None => crate::checkouts::Checkout::main(served),
+                };
+                crate::servers::Place::Checkout(checkout)
+            }
         };
         let refusing = std::sync::Arc::clone(&self);
         Fleet::hold_server(self, place, &asked.name, ipc::StartedBy::Person)

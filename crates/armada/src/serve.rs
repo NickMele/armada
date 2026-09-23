@@ -614,7 +614,7 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // `docs/concepts/fleet.md`, *Servers* — the main checkout's span is held
     // for as long as Fleet runs, and released once, here.
     fleet_for_shutdown.stopped_every_server().await;
-    fleet_for_shutdown.released_main_checkout_ports().await;
+    fleet_for_shutdown.released_checkout_ports().await;
     // Fleet's own listener port, given back beside the main checkout's span
     // and at the same moment. A release that does not happen — a crash — is
     // not a port lost: the next start reads the row and takes the port up
