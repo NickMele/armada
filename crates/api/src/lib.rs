@@ -29,6 +29,9 @@ mod amending;
 mod answers;
 /// The four reads that narrow the Board rather than drawing it.
 mod attention;
+/// Who the listener answers at all: a page in a browser is refused before any
+/// handler runs. **The seam's one rule about callers**, and `#1460`.
+mod callers;
 mod commands;
 /// One repository's Helm conversation, on a socket of its own — never `/events`.
 mod conversing;

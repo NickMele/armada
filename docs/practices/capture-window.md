@@ -281,9 +281,10 @@ the person's app from its own dependency tree.
 logged-in app carry that app's data into a Studio nothing expires, on the
 person's own machine.
 
-**Fleet's loopback surface is reachable from any browser on this machine.** Its
-routes take a body as bytes and decode it themselves — `crates/api/src/studios.rs`
-and every route beside it — so no content type is required and a cross-origin
-`POST` is a request a browser sends without asking first. A page that finds the
-port has that reach in Safari today; this window neither widens it nor narrows
-it, and closing it is Fleet's work rather than this window's.
+**Fleet's loopback surface was reachable from any browser on this machine, and
+is not now.** `#1460` refuses any request or WebSocket upgrade carrying an
+`Origin` header, which is what a browser puts on one and a page cannot forge —
+`docs/contracts/system-architecture.md`, *Fleet answers no page in a browser*.
+This window neither widened that reach nor narrowed it; closing it was Fleet's
+work, and it is done. The page loaded here is still a page, so it is refused by
+the same rule as any other.

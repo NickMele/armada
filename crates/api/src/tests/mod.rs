@@ -9,6 +9,9 @@
 
 /// The agent's door, over the router: a tool call reaches the route that
 /// serves the operation.
+/// Who the listener answers at all: a page in a browser, and everything that
+/// is not one.
+mod callers;
 mod conversing;
 mod door;
 mod door_scope;

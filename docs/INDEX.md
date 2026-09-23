@@ -193,6 +193,10 @@ approximations.
   — which of `packages/screens/src/draft/`'s shapes Fleet already serves, which
   changes are major bumps and why, what each unserved field would cost, and the
   questions the wire lock cannot be written without. A reading, not a lock.
+- [`spikes/021-does-the-drones-mcp-client-send-an-origin.md`](spikes/021-does-the-drones-mcp-client-send-an-origin.md)
+  — the nine headers an agent CLI's HTTP MCP client sends, measured against a
+  logging server, and why refusing a request that carries an `Origin` cannot
+  refuse a Drone submitting evidence.
 
 Raw transcripts sit beside each record. A negative result is a result and stays.
 
