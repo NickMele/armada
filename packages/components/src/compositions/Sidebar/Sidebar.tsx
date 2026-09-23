@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { KbdCmd } from "../../primitives/Kbd/Kbd";
 import { useShortcutReveal } from "../../shortcut-reveal";
@@ -11,9 +11,10 @@ import { useShortcutReveal } from "../../shortcut-reveal";
  * surfaces, and no rule to draw one. `design-system.md` → Left column.
  *
  * **The rail never disappears.** 48px is cheap and losing navigation entirely
- * is worse than losing 48px, at any width. Below the breakpoint it collapses
- * to that rail; the ⌘-digit bindings reach every surface without labels, which
- * is what makes the collapsed state more usable than it looks.
+ * is worse, at any width. Below the breakpoint the column collapses to that
+ * rail; above it #1591's toggle, at the top of this panel, asks for the same
+ * 48px — one collapsed state, never two. ⌘-digit reaches every surface
+ * without a label, which is what makes it more usable than it looks.
  *
  * **The roster is Bridge's, never this component's.** A surface earns a place
  * where a journey needs one, so the list arrives as a prop.
@@ -57,8 +58,19 @@ export type SidebarProps = {
   appName?: ReactNode;
   /** Anything beneath the app name — the scope picker on M1's shell. */
   header?: ReactNode;
-  /** 48px icon rail. Auto below the breakpoint, and toggled by ⌘\ above it. */
+  /** 48px icon rail. Auto below the breakpoint, and asked for by ⌘\ above it. */
   collapsed?: boolean;
+  /**
+   * Collapses the column to its rail, and brings it back — the press half of
+   * `collapsed`, which stays controlled. **Absent draws no control at all**,
+   * the shell's own handle reasoning: a button that looks pressable and does
+   * nothing is worse than none. That is what the shell passes below
+   * `--layout-breakpoint`, where the rail is the only width there is and
+   * there is no choice to offer.
+   */
+  onCollapsedChange?: (collapsed: boolean) => void;
+  /** `toggle_sidebar`'s binding, in the control's tooltip. Read from the registry, never retyped. */
+  collapseBinding?: string;
   /**
    * A CSS length: a resting width inside the 160–320px drag range, or `100%`
    * where a column already holds the width, which is what the shell passes.
@@ -119,6 +131,45 @@ function Item({
   );
 }
 
+/**
+ * The column's own collapse control — #1591, `toggle_sidebar` built.
+ *
+ * **It says which state it is in**, in three channels rather than one:
+ * `panel-left-close` while the column is open and `panel-left-open` while it
+ * is at the rail, `aria-expanded` for a reader, and the verb in the tooltip
+ * and the accessible name. The registry carries both glyphs as a pair; a
+ * single mark for both states makes a person press it to find out which way
+ * it goes, which at 48px is the only chrome they have left.
+ *
+ * `title` rather than the `Tooltip` primitive, following
+ * `.armada-shell__strip` — the same one-line hint with the same binding in
+ * it, and one control's hover is not worth a second layer in the column.
+ */
+function CollapseToggle({
+  collapsed,
+  binding,
+  onCollapsedChange,
+}: {
+  collapsed: boolean;
+  binding?: string;
+  onCollapsedChange: (collapsed: boolean) => void;
+}) {
+  const said = collapsed ? "Expand the left column" : "Collapse the left column";
+  const Glyph = collapsed ? PanelLeftOpen : PanelLeftClose;
+  return (
+    <button
+      type="button"
+      className="armada-sidebar__collapse"
+      aria-label={said}
+      aria-expanded={!collapsed}
+      title={binding === undefined ? said : `${said} — ${binding}`}
+      onClick={() => onCollapsedChange(!collapsed)}
+    >
+      <Glyph size={NAV_ICON} strokeWidth={NAV_STROKE} aria-hidden />
+    </button>
+  );
+}
+
 export function Sidebar({
   surfaces,
   sectionLabel = "Bridge",
@@ -128,6 +179,8 @@ export function Sidebar({
   collapsed = false,
   width,
   onSelect,
+  onCollapsedChange,
+  collapseBinding,
 }: SidebarProps) {
   return (
     <nav
@@ -136,6 +189,17 @@ export function Sidebar({
       style={{ width: collapsed ? "var(--sidebar-rail)" : (width ?? "var(--sidebar-default)") }}
     >
       {appName ? <div className="armada-sidebar__chrome">{appName}</div> : null}
+      {/* Above the surfaces, at the column's trailing edge open and centred at
+          the rail — the one place that is the same place in both states. */}
+      {onCollapsedChange === undefined ? null : (
+        <div className="armada-sidebar__tools">
+          <CollapseToggle
+            collapsed={collapsed}
+            {...(collapseBinding === undefined ? {} : { binding: collapseBinding })}
+            onCollapsedChange={onCollapsedChange}
+          />
+        </div>
+      )}
       {!collapsed && header ? <div className="armada-sidebar__header">{header}</div> : null}
 
       {!collapsed && sectionLabel ? (

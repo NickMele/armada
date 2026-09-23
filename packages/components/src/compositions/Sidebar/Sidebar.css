@@ -67,6 +67,52 @@
   color: var(--fg-subtle);
 }
 
+/* The collapse control's row — #1591. Trailing-aligned while the column is
+   open, which is the edge the drag handle is on and the edge the column
+   leaves from; centred at the rail below, where it is the only thing on the
+   row and an off-centre one reads as misplaced, the same rule __chrome takes.
+
+   No gap of its own: the nav's own --space-1 holds it off the first surface,
+   and the button's 28px matches a row's chip so the two line up vertically. */
+.armada-sidebar__tools {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 var(--space-1);
+}
+
+/* 28px, the chip's geometry from iconography.md → Navigation, but bare: the
+   chip's accent fill is what marks a place you can go to, and this goes
+   nowhere. It is chrome, so it rests at --fg-muted and lifts to --fg-default
+   on --bg-hover, exactly as a nav row's own label does.
+
+   NO TOKEN FOR 28px. --space-6 plus --space-1, as the chip above spells it. */
+.armada-sidebar__collapse {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--space-6) + var(--space-1));
+  height: calc(var(--space-6) + var(--space-1));
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.armada-sidebar__collapse:hover {
+  background: var(--bg-hover);
+  color: var(--fg-default);
+}
+
+.armada-sidebar__collapse:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--border-width) * -2);
+}
+
 .armada-sidebar__group {
   display: flex;
   flex-direction: column;
@@ -195,6 +241,11 @@
    an off-centre one reads as misplaced beside a centred column. */
 .armada-sidebar[data-collapsed] .armada-sidebar__chrome {
   display: flex;
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.armada-sidebar[data-collapsed] .armada-sidebar__tools {
   justify-content: center;
   padding-inline: 0;
 }

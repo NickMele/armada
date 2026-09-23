@@ -39,6 +39,11 @@
 // to pay for Helm's dock; #1583 put the dock on a layer and the band went with
 // the bill.
 //
+// **A person can also ask for that rail, at any width** — #1591, and
+// `toggle_sidebar` built. `useLeftCollapsed` remembers the answer and the
+// breakpoint still overrides it, so there is one collapsed state with two ways
+// in rather than a second narrow one.
+//
 // # The picker and Dispatch live in the title row, not here
 //
 // #1087 moved the repository picker out of the rail and put a second
@@ -77,6 +82,7 @@ import { useDockWidth } from "./dock-width";
 // folds to a sheet at the same bound. One reader, in `floor.ts`, so the two
 // cannot answer a resize a pixel apart.
 import { useNarrow } from "./floor";
+import { useLeftCollapsed } from "./left-collapsed";
 import { useLeftWidth } from "./left-width";
 import { ALL_REPOSITORIES } from "./RepositoryOptions";
 import { repositoryLabel } from "./repository-label";
@@ -159,11 +165,14 @@ export function Shell({
 }: ShellProps) {
   const narrow = useNarrow();
   const dock = useDock(narrow);
-  // One band, the window's own. It was two until #1583, the second being
-  // `--window-fold-left` *and* the dock beside the content — pixels the column
-  // gave up so the dock could hold its 380. The dock is a layer over the work
-  // now and asks for none, so opening Helm cannot move the column under it.
-  const collapsed = narrow;
+  // One band, the window's own, and one press. It was two bands until #1583,
+  // the second being `--window-fold-left` *and* the dock beside the content —
+  // pixels the column gave up so the dock could hold its 380. The dock is a
+  // layer over the work now and asks for none, so opening Helm cannot move the
+  // column under it, and #1591 put the choice back where a person makes it.
+  const [chosen, chooseCollapsed] = useLeftCollapsed();
+  const collapsed = narrow || chosen;
+  useToggleSidebar(narrow, () => chooseCollapsed(!chosen));
   const [dockWidth, resizeDock] = useDockWidth();
   const [leftWidth, resizeLeft] = useLeftWidth();
   const live = connection.state === "connected";
@@ -212,6 +221,10 @@ export function Shell({
       activeId={showing}
       onSelect={onSurface}
       collapsed={collapsed}
+      // No control under the breakpoint: there the rail is the only width
+      // there is, and a toggle that cannot expand is a press that does nothing.
+      {...(narrow ? {} : { onCollapsedChange: chooseCollapsed })}
+      {...(SIDEBAR_KEY === undefined ? {} : { collapseBinding: SIDEBAR_KEY })}
       leftWidth={leftWidth}
       onResizeLeft={resizeLeft}
       repositoryPicker={
@@ -302,6 +315,34 @@ function repositoryEntries(
 
 /** Helm's binding, read from the registry rather than retyped. */
 const HELM_KEY = ACTION.helm?.shortcut;
+
+/** The left column's own, `toggle_sidebar` — `⌘\`. Same registry, same rule. */
+const SIDEBAR_KEY = ACTION.toggle_sidebar?.shortcut;
+
+/**
+ * `⌘\` collapses the left column to its rail and brings it back — #1591.
+ *
+ * **Inert under `--layout-breakpoint`**, where the column is at the rail
+ * whatever anyone chose. Moving the remembered choice there would change a
+ * state nothing on screen could show, and the person would find out on the
+ * next resize.
+ */
+function useToggleSidebar(narrow: boolean, toggle: () => void): void {
+  const press = useRef(toggle);
+  press.current = toggle;
+
+  useEffect(() => {
+    if (SIDEBAR_KEY === undefined || narrow) return undefined;
+    function pressed(event: KeyboardEvent): void {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.repeat) return;
+      if (`⌘${event.key.toUpperCase()}` !== SIDEBAR_KEY) return;
+      event.preventDefault();
+      press.current();
+    }
+    window.addEventListener("keydown", pressed);
+    return () => window.removeEventListener("keydown", pressed);
+  }, [narrow]);
+}
 
 /**
  * Helm's dock: a panel over the content, or a sheet when folded. `⌘J` toggles

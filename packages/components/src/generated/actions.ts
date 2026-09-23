@@ -23,7 +23,7 @@
 // person presses and gets nothing from, which is worse than one that is
 // absent.
 
-import { ChevronRight, CornerUpRight, Eye, FileDiff, Filter, MessageSquare, Plus, Power, RotateCw, Search, Stamp, Terminal, X } from "lucide-react";
+import { ChevronRight, CornerUpRight, Eye, FileDiff, Filter, MessageSquare, PanelLeftClose, Plus, Power, RotateCw, Search, Stamp, Terminal, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /** Whether the row is an act or a movement of the cursor. */
@@ -133,8 +133,8 @@ export const ACTIONS: readonly Action[] = [
     kind: "Action",
     tier: "Global",
     verb: "Toggle sidebar",
-    icon: null,
-    iconAbsent: "undecided",
+    icon: PanelLeftClose,
+    iconAbsent: null,
     shortcut: "⌘\\",
     scope: "anywhere",
     destructive: false,

@@ -121,12 +121,12 @@ export function dormantIn(where: {
     // focus, and opening the palette took that focus away. The row is drawn so
     // the binding is discovered, and it says what it needs.
     send_message: "type in a message box first",
-    // #1435 briefly made this read "the column folds itself … it does hide
-    // now". It does not: under `--layout-breakpoint` the column collapses to
-    // its 48px rail, which is what the owner asked for and what #1435 got
-    // wrong. So nothing hides the column at any width, by hand or otherwise,
-    // and this act is unbuilt in full rather than in half.
-    toggle_sidebar: "the column collapses itself when space is short; nothing hides it by hand",
+    // Built by #1591, and a wiring gap like Helm's above rather than a
+    // missing act: the column's own toggle and `⌘\` both live in
+    // `Shell.tsx`'s state, which `App` holds no handle to. It collapses to
+    // the 48px rail and never hides — #1435 read those as the same thing and
+    // was corrected.
+    toggle_sidebar: "⌘\\ collapses the column to its rail; not reachable from the palette yet",
     history: "no back and forward yet",
   };
 }

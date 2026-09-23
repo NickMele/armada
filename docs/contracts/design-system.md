@@ -776,6 +776,8 @@ default     200px
 drag range  160-320px
 collapsed   48px icon rail — Navigation's own form; Stats and Fleet
             collapse to one centred status dot at the same width
+control     a toggle in Navigation's head, and ⌘\, at any width above
+            --layout-breakpoint; drawn in both states, saying which it is in
 persistence width and collapsed state survive app restart
 ```
 
@@ -795,16 +797,29 @@ one handle per panel, and never three panels each resolving their own width.
 nothing else — Helm left it for the dock (#948), so there is no second tier
 beneath it any more.
 
-**The column never disappears. It reaches the rail at one width, and stops
-there.** 48px is cheap, and losing Navigation, Stats and Fleet entirely is
-worse than losing 48px at any width.
+**The column never disappears. It reaches the rail, and stops there.** 48px is
+cheap, and losing Navigation, Stats and Fleet entirely is worse than losing
+48px at any width.
 
 > **Rule.** The left column collapses to its 48px rail below
-> `--layout-breakpoint`, and at no other width. It is drawn at every width,
-> never absent, and **Helm's dock is not one of the terms**.
-> Why: the collapse pays for the two columns job detail draws, which is a fact
-> about the window alone. A collapse that also read the dock's state made
-> opening Helm *widen* the content, which is the defect #1583 names.
+> `--layout-breakpoint`, and above it when a person asks — the toggle in
+> Navigation's own head, or `⌘\`. **There is one collapsed state and two ways
+> in**, never a second narrow width. It is drawn at every width, never absent,
+> and **Helm's dock is not one of the terms**.
+> Why: the automatic collapse pays for the two columns job detail draws, which
+> is a fact about the window alone; a collapse that also read the dock's state
+> made opening Helm *widen* the content, which is the defect #1583 names. What
+> the person's press answers is the other half — a wide table or a diagram
+> wants the 200px back, and the window cannot know that.
+
+> **Rule.** The person's choice is remembered per viewer and survives a
+> restart, and below `--layout-breakpoint` the column is a rail whatever was
+> chosen, returning to the choice above it. The control and `⌘\` are both
+> inert there.
+> Why: a collapsed column that forgets itself on every reload is worse than no
+> control, and below the breakpoint there is no room and so no choice to
+> offer. The choice is stored, never the drawn state — otherwise a window
+> narrowed once comes back wide with the column shut and nothing to say why.
 
 **There was a second band, and it is gone with the reason for it.** #1428 gave
 job detail's two columns their floors, and with the dock taking 380px out of
@@ -857,8 +872,10 @@ rail dot is the reading at 48px.
 
 **The cost, taken knowingly.** A surface that resizes on its own is
 disorienting the first time, and at the rail Stats and Fleet are a dot each
-rather than their rows. `⌘\` (`toggle_sidebar`) is registered and stays
-unbuilt; nothing hides the column by hand, and nothing hides it at all.
+rather than their rows. `⌘\` (`toggle_sidebar`) is what answers the first
+half — #1591 built it, so the rail is a person's to ask for as well as the
+window's to impose. Nothing hides the column by hand, and nothing hides it at
+all.
 
 **Nav items do not carry escalation or approval counts.** Stats already
 carries both, as its own rows. Duplicating them in Navigation creates two
@@ -957,7 +974,7 @@ floors at 390px, which leaves 358px between its gutters.
 
 | | ≥ 1100px | < 1100px | Touch client |
 | --- | --- | --- | --- |
-| Left column | Expanded, user-resizable — Navigation, Stats and Fleet together | Auto-collapses to the 48px rail; Stats and Fleet each keep one status dot | A bottom tab bar |
+| Left column | Expanded or at its rail, whichever the person last chose — user-resizable, Navigation, Stats and Fleet together | Auto-collapses to the 48px rail whatever was chosen; Stats and Fleet each keep one status dot | A bottom tab bar |
 | Job row | One shape at every width — a stacked row carrying the badge, the headline sentence and the labelled field run beneath | The same row. Nothing reshapes | The same row, field run wrapped |
 | Helm's dock | A layer over the content when open, taking none of its width; closed draws nothing, and the title row's Helm button opens it | An edge strip; open draws it as a sheet over the content instead | Not built |
 | Job detail's inspector | A column beside the run | **A sheet over the run**, opened by pressing a step and closed by `Esc`; flush to both edges at the floor | Not built |
@@ -1026,9 +1043,12 @@ and it was accepted deliberately: the Job Board and Alerts disagreeing
 about what a job looks like is what retired the two-shape version, and
 the row is the most repeated element in the app.
 
-Below 1100 the user may still expand the sidebar manually. It overlays
-the content in that case rather than compressing the table further — a
-720px table has no width to give back.
+Below 1100 the left column is its rail and there is nothing to expand — this
+paragraph read the other way round until #1591, promising a manual expansion
+that overlaid the content, which Left column above has refused since the
+owner's 18 Sep 2026 correction. The 720px table it was protecting is still the
+reason: there is no width to give back, so the choice is not offered rather
+than being offered and taken out of the table.
 
 **Validation:** the field set needs revisiting rather than the row where its
 leading facts cannot carry themselves at 720px on one line, or at 358px

@@ -611,6 +611,24 @@
     reserved = "Trailing the label of a control that opens another view or a sheet, and between a trail's segments. Never leading, never alone without a label, and never a control that expands in place."
     notes = "Carries no pair, because nothing closes a destination from the mark that reached it. 12px because it sits after text at the text's own size, as WhereRow's into act and Job detail's Details act draw it."
 
+[icons.panel-left-close]
+  means = "Put the left column away — a frame with its leading column divided off, and the caret leaving"
+  group = "Chrome"
+  size = "16px"
+  status = "Specified"
+  paired_with = "panel-left-open"
+  reserved = "Bridge's left column, and nothing else. Never a panel, a sheet, a drawer or a dock on the trailing edge — Helm's own strip and its Close carry that — and never a disclosure caret on a record or a tree, which is chevron-down's and chevron-right's."
+  notes = "Added 2026-09-22 for #1591, which gave toggle_sidebar (⌘\\) an act: the column collapses to its 48px rail on a press at any width, where before only --layout-breakpoint could do it. No registered glyph fits. The chevron family is the obvious reach and each of its three members is reserved to disclosure inside a record or a tree, which this is not — the column does not disclose, it changes width — and a bare chevron says nothing about what it would move. layout-dashboard is the nearest bounded shape and is Navigation's, a grid of panes rather than one frame with a column divided off; the hue groups differ anyway, which rule 4 admits. **The objection to expect is rule 3**, that meaning must not live inside the shape: the caret inside the frame is interior detail at 12px. It is answered by the size — this draws at 16px in chrome and nowhere near a badge — and by which half carries the meaning. The frame with its leading column divided off is the whole claim and is identical in both halves of the pair; the caret is direction alone, exactly what chevron-up survives rule 3 on. What the pair buys is the one thing the issue asks for in as many words: a control that says which state it is in, at a glance rather than only in a tooltip."
+
+[icons.panel-left-open]
+  means = "Bring the left column back — the same frame, the caret arriving"
+  group = "Chrome"
+  size = "16px"
+  status = "Specified"
+  paired_with = "panel-left-close"
+  reserved = "The collapsed half of the pair above, on Bridge's left column alone. Never a way in to a surface, which is a rail row, and never expand-in-place on a row of data."
+  notes = "Added with panel-left-close, for the same control in its other state. Two tables rather than one glyph and a tooltip: at the rail the button is the only chrome left in 48px, and a mark that reads the same collapsed as expanded makes a person press it to find out which way it goes."
+
 [conventions.step_activity_borrowing]
   glyphs = ["circle-dot", "eye", "rotate-cw", "check", "x", "power"]
   means = "Step activity, borrowed from the Job set"

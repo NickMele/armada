@@ -70,16 +70,16 @@ const shell: ComponentProps<typeof TheShell> = {
   },
 };
 
-export const Shell: Story = {
-  args: shell,
-  render: (args) => (
-    <div className="armada-screen">
-      <div className="armada-screen__window">
-        <TheShell {...args} />
-      </div>
+/** The window the app mounts the shell into, which every story here draws it in. */
+const inWindow = (args: ComponentProps<typeof TheShell>) => (
+  <div className="armada-screen">
+    <div className="armada-screen__window">
+      <TheShell {...args} />
     </div>
-  ),
-};
+  </div>
+);
+
+export const Shell: Story = { args: shell, render: inWindow };
 
 /**
  * The 48px icon rail, below the layout breakpoint — where the dock has taken
@@ -98,6 +98,28 @@ export const CollapsedRail: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getAllByRole("img", { name: `Fleet — ${shell.fleet.label}` })).toHaveLength(2);
     await expect(canvas.getByRole("region", { name: "Stats" })).toBeInTheDocument();
+  },
+};
+
+/**
+ * The rail asked for rather than imposed — #1591. What a rendering cannot
+ * show: the press reaches the same 48px the breakpoint does, and takes the
+ * drag handle with it, there being nothing to size at the rail.
+ */
+export const RailByChoice: Story = {
+  args: { ...shell, onResizeLeft: () => {}, onCollapsedChange: () => {}, collapseBinding: "⌘\\" },
+  render: function RailByChoiceShell(args) {
+    const [collapsed, setCollapsed] = useState(false);
+    return inWindow({ ...args, collapsed, onCollapsedChange: setCollapsed });
+  },
+  play: async ({ canvas, userEvent }) => {
+    const handle = () => canvas.queryByRole("separator", { name: "Resize the left column" });
+    await expect(handle()).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "Collapse the left column" }));
+    await expect(canvas.queryByText("pid")).toBeNull();
+    await expect(handle()).toBeNull();
+    await userEvent.click(canvas.getByRole("button", { name: "Expand the left column" }));
+    await expect(canvas.getByText("pid")).toBeVisible();
   },
 };
 

@@ -44,16 +44,28 @@ export type TheShellProps = {
   activeId?: string;
   /**
    * The 48px icon rail — the column's narrowest, and the narrowest it ever
-   * gets. The surface decides, from the window's width alone:
-   * `--layout-breakpoint`, at any dock state. **The dock's state was a term
-   * here until #1583** — a second bound collapsed the column while the dock
-   * was taking 380px off the content, so opening Helm made the content wider.
+   * gets. The surface decides, from two terms: the window is under
+   * `--layout-breakpoint`, or the person asked for it (#1591). **The dock's
+   * state is not one of them** and was until #1583 — a second bound collapsed
+   * the column while the dock was taking 380px off the content, so opening
+   * Helm made the content wider.
    *
    * **There is no third width.** #1435 added one — the column absent
    * altogether — and the owner corrected it on 18 Sep 2026: the panels
-   * collapse into an icon-size column, they are not hidden away.
+   * collapse into an icon-size column, they are not hidden away. A person's
+   * press reaches this same rail, never a second narrow state.
    */
   collapsed?: boolean;
+  /**
+   * The press that collapses the column and brings it back — drawn in
+   * Navigation's own head by `Sidebar`. **Absent draws no control**, which is
+   * what the shell's caller passes under `--layout-breakpoint`: the rail is
+   * the only width there, so there is no choice to offer. Remembering the
+   * answer across a restart is the caller's, as `leftWidth` already is.
+   */
+  onCollapsedChange?: (collapsed: boolean) => void;
+  /** `toggle_sidebar`'s binding, for that control's tooltip. */
+  collapseBinding?: string;
   onSelect?: (id: string) => void;
   /** The panel body. The one region that scrolls. No head above it: #1090
    *  ended the panel head every screen used to spend on its own name — the
@@ -142,6 +154,8 @@ export function TheShell({
   surfaces,
   activeId,
   collapsed,
+  onCollapsedChange,
+  collapseBinding,
   onSelect,
   children,
   dock,
@@ -179,6 +193,8 @@ export function TheShell({
               surfaces={surfaces}
               activeId={activeId}
               collapsed={collapsed}
+              {...(onCollapsedChange === undefined ? {} : { onCollapsedChange })}
+              {...(collapseBinding === undefined ? {} : { collapseBinding })}
               // The column holds the width. Left to its own 200px default, the
               // nav stayed put while Stats and Fleet followed a drag.
               width="100%"
