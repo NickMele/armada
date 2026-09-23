@@ -28,6 +28,7 @@ import type {
   WorkflowSummary,
 } from "@armada/protocol";
 import type {
+  BranchesAnswer,
   CaseRunView,
   CaseView,
   CriterionView,
@@ -35,7 +36,6 @@ import type {
   JobMembersView,
   LandingRule,
   LedgerRow,
-  PeerOverlapAnswer,
   ProposalView,
   PulseView,
   ScopeRevisionView,
@@ -97,8 +97,9 @@ export type ArcMoment = {
 export type ArcDraft = {
   /** What a person typed, before a Job exists to hold it. */
   prompt?: string;
+  /** The branches the two ref fields pick over. Absent draws them as plain fields. */
+  branches?: BranchesAnswer;
   sketch?: SketchAttachment;
-  peers?: PeerOverlapAnswer;
   proposal?: ProposalView;
   landing?: LandingRule;
   criteria?: CriterionView[];

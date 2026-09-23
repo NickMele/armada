@@ -66,7 +66,6 @@ export function fakeBridge(scenario: Scenario): BridgeApi {
     },
 
     // Accepted, and no Job appears: one Fleet made would carry an id and a plan invented here.
-    proposeJob: async () => OK,
     proposeFromRequest: async (request) => ({
       ok: false,
       why: "faulted",

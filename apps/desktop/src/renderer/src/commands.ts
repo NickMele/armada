@@ -35,7 +35,6 @@ import type { AddKitServer, ManifestReach, ReachesDrones } from "@armada/protoco
 import type {
   AddTask,
   Artifact,
-  Draft,
   DropTask,
   FileReport,
   Outcome,
@@ -304,10 +303,6 @@ export function useCommands(sending: Sending) {
     // replacement: neither leaves the pressed control on screen to answer.
     if (answer.ok && (act === "forget_job" || act === "redispatch")) return;
     setLastAnswer({ jobId, answered: { act, answer: answer.ok ? "accepted" : "refused" } });
-  }
-
-  async function propose(draft: Draft): Promise<void> {
-    setOutcome(await window.armada.proposeJob(draft));
   }
 
   /**
@@ -824,7 +819,6 @@ export function useCommands(sending: Sending) {
     setGivenBack,
     refreshing,
     sweeping,
-    propose,
     stopProposal,
     proposeFrom,
     approve,

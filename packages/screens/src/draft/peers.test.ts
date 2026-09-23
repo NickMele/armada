@@ -3,7 +3,7 @@
 import type { ScopeOverlap } from "@armada/protocol";
 import { describe, expect, it } from "vitest";
 
-import { peerOverlapAsked, peerOverlapOf } from "./peers";
+import { peerOverlapOf } from "./peers";
 import { sampleDetail } from "./sample";
 
 const overlap: ScopeOverlap = {
@@ -64,18 +64,5 @@ describe("what a peer row carries", () => {
     expect(peerOverlapOf(sampleDetail({ write_scope_overlaps: [overlap] }))?.paths_asked).toEqual(
       [],
     );
-  });
-});
-
-describe("the same answer at dispatch, before a Job exists", () => {
-  it("is null while nothing has been compared", () => {
-    expect(peerOverlapAsked(["crates/ipc"])).toBeNull();
-  });
-
-  it("carries the paths a person typed once a comparison has run", () => {
-    const view = peerOverlapAsked(["crates/ipc"], [overlap]);
-
-    expect(view?.paths_asked).toEqual(["crates/ipc"]);
-    expect(view?.peers).toHaveLength(1);
   });
 });

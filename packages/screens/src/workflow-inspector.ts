@@ -1,5 +1,5 @@
-// What the Workflow tab's inspector reads for the step or group a person has
-// open. `#1539`.
+// What the Workflow tab's inspector reads for the step, group or task a person
+// has open. `#1539`.
 //
 // **What it cannot answer, it says.** The cases a group owes are a draft shape
 // Fleet does not serve (`draft/group.ts`, `cases_at_boundary`), so the tests
@@ -17,7 +17,7 @@ import type { GroupView } from "./draft/group";
 import { ordered } from "./facts";
 import { frozenBeneath } from "./frozen";
 import { activityOf, stateOf } from "./run";
-import { groupNodeId, stepNodeId } from "./workflow-canvas";
+import { groupNodeId, stepNodeId, stepTheGroupsWereMadeAt } from "./workflow-canvas";
 
 /** What the inspector draws, less the two controls the tab wires itself. */
 export type WorkflowReading = Omit<WorkflowInspectorProps, "redirect" | "stop"> & {
@@ -58,7 +58,7 @@ function checksOf(step: StepDetail, only?: readonly string[]): WorkflowInspector
 /** One task, with what it has spent where its own agent has stopped. */
 function taskOf(task: GroupView["tasks"][number]): WorkflowInspectorTask {
   const facts: string[] = [];
-  if (task.scope.length > 0) facts.push(`${task.scope.length} files`);
+  if (task.scope.length > 0) facts.push(`${task.scope.length} ${task.scope.length === 1 ? "file" : "files"}`);
   if (task.turns !== undefined) facts.push(`${task.turns} turns`);
   if (task.cost_micros !== undefined) facts.push(`$${(task.cost_micros / 1_000_000).toFixed(2)}`);
   const row: WorkflowInspectorTask = { id: task.id, title: task.title, said: task.state, facts };
@@ -83,7 +83,7 @@ export type WorkflowInspectorReading = {
   groups: readonly GroupView[];
   /** The node id a person has open — `step:…` or `group:…`. */
   selected: string | null;
-  /** The step the groups hang under, as `workflow-canvas.ts` computed it. */
+  /** The step that works the groups, as `workflow-canvas.ts` computed it. */
   groupsUnder?: string;
 };
 
@@ -117,12 +117,17 @@ export function workflowReadingOf({
 
   const step = ordered(whole).find((one) => stepNodeId(one.step_id) === selected);
   if (step === undefined) return undefined;
-  const mine = step.step_id === groupsUnder ? groups : [];
+  // **The step that wrote the plan and the step that works it both hold the
+  // groups**, and each says which it is. A step that listed nothing here would
+  // be the one place on the screen the graph's two edges are not both drawn.
+  const wrote = step.step_id === stepTheGroupsWereMadeAt(whole);
+  const works = step.step_id === groupsUnder;
+  const mine = wrote || works ? groups : [];
   const tasks = mine.flatMap((one) => one.tasks);
   return {
     name: step.label,
     kind: "step",
-    doing: doingOfStep(whole, step, mine.length),
+    doing: doingOfStep(whole, step, mine.length, wrote),
     tasks: tasks.map(taskOf),
     tasksAbsent: whole.work_plan === undefined ? NO_TASKS_RECORDED : NO_TASKS_HERE,
     checks: checksOf(step),
@@ -134,11 +139,12 @@ export function workflowReadingOf({
 }
 
 /** What the step is doing now, as a sentence. Read off the record, never guessed. */
-function doingOfStep(whole: JobWhole, step: StepDetail, groups: number): string {
+function doingOfStep(whole: JobWhole, step: StepDetail, groups: number, wrote: boolean): string {
   const frozen = frozenBeneath(whole.job.status, step.state);
   const said = frozen?.word ?? stateOf(step);
   const activity = frozen?.activity ?? activityOf(step.state);
-  const where = groups > 0 ? ` It opens into ${groups} ${groups === 1 ? "group" : "groups"}.` : "";
+  const many = `${groups} ${groups === 1 ? "group" : "groups"}`;
+  const where = groups === 0 ? "" : wrote ? ` It wrote ${many}.` : ` It works ${many}.`;
   if (activity === "not_started") return `Nothing has entered this step yet.${where}`;
   if (activity === "awaiting_human") return `This step is ${said} — it is waiting on you.${where}`;
   return `This step is ${said}.${where}`;

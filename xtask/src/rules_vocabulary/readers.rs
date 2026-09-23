@@ -68,14 +68,26 @@ const GENERATED_DIR: &str = "/generated/";
 ///
 /// An entry here is refused once its symbol gains a reader, so the list shrinks
 /// on its own as the surfaces land rather than outliving them.
-const AHEAD_OF_ITS_SURFACE: &[(&str, &str)] = &[(
-    "GAPS",
-    "A report rather than a vocabulary: every variant the registry has no \
-     sanctioned verb, glyph or hue for. `reading.ts` and `badge.ts` each derive \
-     one variant's gaps at the point they render it, which is what a surface \
-     needs; nothing yet draws the whole list, and the surface that would is \
-     Doctor's, which is not built",
-)];
+const AHEAD_OF_ITS_SURFACE: &[(&str, &str)] = &[
+    (
+        "GAPS",
+        "A report rather than a vocabulary: every variant the registry has no \
+         sanctioned verb, glyph or hue for. `reading.ts` and `badge.ts` each derive \
+         one variant's gaps at the point they render it, which is what a surface \
+         needs; nothing yet draws the whole list, and the surface that would is \
+         Doctor's, which is not built",
+    ),
+    (
+        "URGENCIES",
+        "Behind its surface rather than ahead of it. The hand-entry form was the \
+         one field that set a Job's urgency, and the owner took that form out on \
+         23 September 2026; `ProposeFromRequest` carries no urgency, so Fleet's \
+         own default holds and nothing in Bridge offers the words. The registry \
+         is still authoritative — Fleet reads `urgency` as its scheduling \
+         tiebreak — and the surface that would draw it again is a fifth field on \
+         the dispatch card, which nobody has asked for",
+    ),
+];
 
 /// One exported binding of a generated module.
 struct Emitted {

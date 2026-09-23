@@ -15,11 +15,37 @@
   text-align: start;
 }
 
-/* A group sits inside a step and says so by being narrower. */
+/* A group sits inside a step and says so by being narrower. A task sits inside
+   a group and takes the same step down again, so depth reads at any zoom. */
 .armada-wf-card[data-kind="group"] {
   width: var(--w-workflow-group-node);
   padding: var(--space-2) var(--space-3);
   background: var(--bg-sunken);
+}
+
+.armada-wf-card[data-kind="task"] {
+  width: var(--w-workflow-task-node);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-sunken);
+}
+
+/* A task's name is a sentence where a step's is a label, so it takes two lines
+   rather than clipping the half that says what the task is. Two lines whatever
+   it says, never up to two: a node whose box changes with its words is what
+   raises Chromium's ResizeObserver loop notice off React Flow's per-node
+   observer — docs/spikes/019-what-raises-the-resize-loop-notice-on-a-studio.md.
+   The height is on the row and never on the clamp, which Chromium clamps to. */
+.armada-wf-card[data-kind="task"] .armada-wf-card__head {
+  align-items: flex-start;
+  height: calc(var(--leading-sm) * 2);
+}
+
+.armada-wf-card[data-kind="task"] .armada-wf-card__name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 /* The step the Job is on. An edge rather than a fill: the fill is what a

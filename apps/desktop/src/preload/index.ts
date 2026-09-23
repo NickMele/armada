@@ -14,7 +14,6 @@ import type {
   CheckOutputRead,
   FrameRead,
   ClearOutcome,
-  Draft,
   Outcome,
   Proposed,
   ReclaimOutcome,
@@ -85,13 +84,11 @@ const api: BridgeApi = {
     };
   },
 
-  proposeJob: (draft: Draft): Promise<Outcome> =>
-    ipcRenderer.invoke(CHANNELS.proposeJob, draft),
 
-  // Describing the work instead of naming a workflow. Its own entry beside
-  // `proposeJob` rather than a mode on it: one carries a workflow the person
-  // chose and the other carries the sentence they wrote, and a single
-  // capability taking which would read as one act and perform two.
+  // Describing the work, which is the only way a Job is made from this window
+  // since the hand form went (2026-09-23). `proposeJob` was the other entry
+  // and is gone with it: a capability the renderer cannot reach is one it can
+  // still be made to.
   //
   // `repository` is the root New job's ask answered on All, so the request
   // names it rather than the pick — #959. `null` where a repository was
@@ -104,9 +101,9 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.proposeFromRequest, request, attachments, repository),
   stopProposal: (): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.stopProposal),
 
-  // Bytes never round-trip through `proposeJob`'s JSON channel as base64 —
-  // this writes them to a staging file and hands back the path a later
-  // `proposeJob` call carries as a `staged_path`.
+  // Bytes never round-trip through the request's own JSON channel as base64 —
+  // this writes them to a staging file and hands back the path
+  // `proposeFromRequest` carries as a `staged_path`.
   stageAttachment: (bytes: ArrayBuffer, filename: string, mimeType: string): Promise<{ path: string }> =>
     ipcRenderer.invoke(CHANNELS.stageAttachment, bytes, filename, mimeType),
 

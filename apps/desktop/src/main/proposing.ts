@@ -33,17 +33,17 @@ import type { Picked } from "./picked";
  * Describe the work and let the Job proposer decide what it is: which workflow,
  * what to call it, and whether it is one Job or several.
  *
- * **The same 201 and the same approval gate as `proposeJob`** — what differs is
+ * **The same 201 and the same approval gate a hand-entered Job reached** — what differs is
  * who filled the workflow in, and that one request can be several Jobs. Nothing
  * here is running: every member comes back at `awaiting_approval` and each takes
  * its own approval in turn.
  *
  * Blank is refused before the request is sent, matching the 422 Fleet would
- * give it, and trimmed for the reason `proposeJob` trims a title: Fleet trims
+ * give it, and trimmed for the reason a title is trimmed: Fleet trims
  * before it reads, so padding makes what comes back on a refusal differ from
  * what was sent.
  *
- * **No in-flight guard, matching `proposeJob`.** Nothing here is an act on a
+ * **No in-flight guard.** Nothing here is an act on a
  * Job, so there is no id to key one on — a second dispatch is a second request,
  * and the form is what stops a double press.
  *
@@ -80,7 +80,7 @@ export async function proposeFromRequest(
   const body: JobRequest = {
     request: said,
     client_ref: clientRef,
-    // Sent unconditionally, even empty — matching `proposeJob`'s own
+    // Sent unconditionally, even empty — the same reading the hand form's
     // `ProposeJob.attachments`, which has no meaningful absent-vs-empty
     // reading for Fleet to fill in.
     attachments: attachments.map((attachment) => ({

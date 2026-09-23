@@ -23,13 +23,20 @@
   min-width: 0;
 }
 
-/* A group is inside its step, and the indent is what says so in a column. */
-.armada-workflow-stacked__row[data-under] {
+/* A group is inside its step and a task inside its group, and the indent is
+   what says so in a column. */
+.armada-workflow-stacked__row[data-depth="1"] {
   padding-inline-start: var(--space-6);
 }
 
-/* Where the step loops back to. A sentence, at the size of a gate's own word. */
-.armada-workflow-stacked__returns {
+.armada-workflow-stacked__row[data-depth="2"] {
+  padding-inline-start: var(--space-12);
+}
+
+/* Where the step loops back to, and which step worked this group. A sentence,
+   at the size of a gate's own word. */
+.armada-workflow-stacked__returns,
+.armada-workflow-stacked__worked {
   padding-inline-start: var(--space-4);
   color: var(--fg-subtle);
   font-size: var(--text-2xs);

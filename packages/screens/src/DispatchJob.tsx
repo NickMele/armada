@@ -1,10 +1,9 @@
-// Dispatch a job: describe the work, or fill the form in by hand.
+// Dispatch a job: describe the work, and that is the whole of it.
 //
-// **One surface with two ways through it, and they are not equal.** Describing
-// the work is the path — the Job proposer reads the request and answers the
-// title, the workflow and, where the work is several jobs, the order between
-// them. `docs/concepts/job-proposer.md` calls hand entry the override, and the
-// composer this swaps to is what hand entry became.
+// **One surface and one way through it.** The Job proposer reads the request
+// and answers the title, the workflow and, where the work is several jobs, the
+// order between them. The hand form this used to swap to is gone — the owner's
+// call of 2026-09-23, once the Settings block carried every decision it held.
 //
 // # The proposal is this screen's state, not the app's
 //
@@ -18,7 +17,7 @@
 //
 // There is no in-flight guard on the preload call, so two presses are two model
 // calls and two drafted plans — two of everything at the gate, and somebody
-// deleting one by hand. **The form is what stops it.**
+// deleting one by hand. **This screen is what stops it.**
 //
 // The control being off while a call is out is the first half and the one a
 // person sees. The second half is the ref: a press that arrives anyway sends
@@ -30,16 +29,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import {
-  Button,
-  DispatchRequest,
-  DispatchSettings,
-  SketchPad,
-  WhatElseIsRunning,
-} from "@armada/components";
+import { DispatchRequest, DispatchSettings, SketchPad } from "@armada/components";
 import type {
   DispatchSettingsValue,
-  PeerJob,
   Proposal,
   ProposalWatch,
   Refs,
@@ -48,12 +40,12 @@ import type {
   SketchLine,
   SketchStroke,
 } from "@armada/components";
-import type { StagedAttachment, WorkflowSummary } from "@armada/protocol";
+import type { LeftOutWorkflow, StagedAttachment, WorkflowSummary } from "@armada/protocol";
 
 import { howManySet } from "./draft/dispatch";
 import type { DispatchSettingsView } from "./draft/dispatch";
+import type { BranchesAnswer } from "./draft/branches";
 import type { LandingRule } from "./draft/landing";
-import type { PeerOverlapAnswer, PeerView } from "./draft/peers";
 import {
   drawingOf,
   isDrawn,
@@ -69,9 +61,6 @@ import {
 import type { Drawing, SketchAttachment } from "./draft/sketch";
 import type { Answered } from "./proposal";
 import { PROPOSAL_IS_SLOW } from "./proposal";
-
-/** What the control that goes back to describing is called. */
-const BACK = "Describe the work instead";
 
 /**
  * What the sketch's chip is called. **Numbered because a request may carry
@@ -125,8 +114,6 @@ export type DispatchJobProps = {
    * open, under a job already queued.
    */
   statusOf?: (jobId: string) => string | undefined;
-  /** Hand entry, built by the caller. The composer, and the override. */
-  byHand: ReactNode;
   /**
    * What Fleet says the call in flight is doing, or `null`.
    *
@@ -162,14 +149,20 @@ export type DispatchJobProps = {
    */
   landing: LandingRule;
   /**
-   * What else is writing where this work would. **`null` is nobody having
-   * looked**, which is every request at dispatch today — the read hangs off a
-   * Job and there is no Job yet. Drawing it as "nobody is there" would say
-   * something nothing has checked.
+   * The repository's branches, for the two ref fields to pick over. **`null`
+   * is nothing having listed them**, which is Bridge on a real Fleet — no
+   * operation asks a repository for its refs, so the fields draw as the plain
+   * ones they were. `draft/branches.ts` names the read it waits on.
    */
-  peers: PeerOverlapAnswer;
+  branches: BranchesAnswer;
   /** The workflows Fleet holds, for the settings block's override. */
   workflows: readonly WorkflowSummary[];
+  /**
+   * The Kit and carried definitions Fleet runs without, each with why — #425.
+   * Drawn under the Settings block's Workflow field, which is where a workflow
+   * is picked now that the hand form is gone.
+   */
+  leftOut?: readonly LeftOutWorkflow[];
   /** The models a tier may name. Empty until the connection answers. */
   models: readonly string[];
   /** How many Drones this machine runs across every Job. `null` before Fleet said. */
@@ -207,13 +200,13 @@ export function DispatchJob({
   onApprove,
   approving,
   statusOf,
-  byHand,
   close,
   repository,
   opensOn,
   landing,
-  peers,
+  branches,
   workflows,
+  leftOut,
   models,
   machineCap,
   settings: settingsOpenOn,
@@ -243,9 +236,6 @@ export function DispatchJob({
   const [mode, setMode] = useState<RequestMode>("write");
   const [drawing, setDrawing] = useState<Drawing>(() => drawingOf(sketch));
   const [said, setSaid] = useState(sketch?.said ?? "");
-  // Which of the two ways through this surface is open. Describing is the
-  // path, so it is what the surface opens on.
-  const [hand, setHand] = useState(false);
   // One request outstanding at a time. A ref rather than state because nothing
   // renders from it: it is the guard, not a reading, and a re-render between
   // the press and the answer would be a second chance to fire.
@@ -324,121 +314,99 @@ export function DispatchJob({
         }
       : proposal;
 
-  if (hand) {
-    return (
-      <div className="armada-screen__pane">
-        {/* The way back, above the form. Hand entry is the exception, so
-            leaving it is one press and never a dead end. */}
-        <div>
-          <Button variant="secondary" size="sm" onClick={() => setHand(false)}>
-            {BACK}
-          </Button>
-        </div>
-        {byHand}
-      </div>
-    );
-  }
-
   return (
-    <div className="armada-dispatch-pane">
-      <div className="armada-dispatch-pane__columns">
-      <DispatchRequest
-        request={request}
-        onRequest={setRequest}
-        {...(repository === undefined ? {} : { repository })}
-        refs={refs}
-        onRefs={setRefs}
-        links={links}
-        onAddLink={(address) =>
-          setLinks((current) => (current.includes(address) ? current : [...current, address]))
-        }
-        onRemoveLink={(address) => setLinks((current) => current.filter((one) => one !== address))}
-        settings={
-          <DispatchSettings
-            open={settingsOpen}
-            onOpenChange={setSettingsOpen}
-            settings={settings}
-            onSettings={setSettings}
-            workflows={workflows}
-            models={models}
-            machineCap={machineCap}
-            disabled={disabled}
-          />
-        }
-        mode={mode}
-        onMode={setMode}
-        sketchPad={
-          <SketchPad
-            label={PAD_LABEL}
-            boxes={drawing.shapes.map(asBox)}
-            lines={drawing.joins.map(asLine)}
-            strokes={drawing.strokes.map(asStroke)}
-            said={said}
-            onSaid={setSaid}
-            {...(sketch?.produced_by === undefined ? {} : { from: sketch.produced_by })}
-            onAdd={(at) =>
-              setDrawing((one) =>
-                withShape(one, { id: nextShapeId(one), x: at.x, y: at.y, body: "" }),
-              )
-            }
-            onBody={(id, body) => setDrawing((one) => withBody(one, id, body))}
-            onMove={(id, at) => setDrawing((one) => withPlace(one, id, at))}
-            onRemove={(ids) => setDrawing((one) => withoutShapes(one, ids))}
-            onJoin={(from, to) => setDrawing((one) => withJoin(one, from, to))}
-            onDraw={(points) => setDrawing((one) => withStroke(one, points))}
-            onUndo={() => setDrawing(withoutLastStroke)}
-            disabled={disabled}
-          />
-        }
-        // Nothing drawn is nothing attached: an empty pad is a mode somebody
-        // opened, not a picture.
-        {...(isDrawn(drawing)
-          ? {
-              sketch: {
-                name: SKETCH_NAME,
-                ...(sketch?.produced_by === undefined ? {} : { from: FROM_A_STUDIO }),
-              },
-            }
-          : {})}
-        attachments={attachments}
-        onStage={onStage}
-        onSearchFiles={onSearchFiles}
-        onAttach={(attachment) => setAttachments((current) => [...current, attachment])}
-        onRemoveAttachment={(path) =>
-          setAttachments((current) => current.filter((attachment) => attachment.path !== path))
-        }
-        onDispatch={() => void dispatch()}
-        onEnterByHand={() => setHand(true)}
-        close={close}
-        onReset={reset}
-        onOpen={onOpen}
-        onApprove={onApprove}
-        approving={approving}
-        // The two facts are joined here and nowhere else: the proposal is this
-        // screen's and the watch is the app's, and the component takes one value.
-        // A screen still `reading` with nothing published yet draws the wait
-        // without a reading, which is the sentence that was always there.
-        proposal={
-          proposal.at === "reading" && watching !== null
-            ? { at: "reading", watch: watching }
-            : (out ?? shown)
-        }
-        onStop={onStop}
-        slowAfterMs={PROPOSAL_IS_SLOW}
-        disabled={disabled}
-        disabledNote={disabledNote}
-        onCopied={onCopied}
-      />
-        {/* Beside the request, never over it. An overlap is a fact about
-            what is running and it decides nothing here, so it takes a column
-            of its own rather than a warning on the control that dispatches. */}
-        <WhatElseIsRunning
-          peers={peers === null ? null : peers.peers.map(rowOf)}
-          {...(peers === null ? {} : { pathsAsked: peers.paths_asked })}
-          onOpen={onOpen}
+    <DispatchRequest
+      request={request}
+      onRequest={setRequest}
+      {...(repository === undefined ? {} : { repository })}
+      refs={refs}
+      onRefs={setRefs}
+      // Handed straight over: a `BranchView` and the control's own
+      // `BranchOption` are the same three fields under the same names, so a
+      // mapper here would be the seam `asChosen` is without the rename that
+      // earns one.
+      branches={branches}
+      links={links}
+      onAddLink={(address) =>
+        setLinks((current) => (current.includes(address) ? current : [...current, address]))
+      }
+      onRemoveLink={(address) => setLinks((current) => current.filter((one) => one !== address))}
+      settings={
+        <DispatchSettings
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          settings={settings}
+          onSettings={setSettings}
+          workflows={workflows}
+          {...(leftOut === undefined ? {} : { leftOut })}
+          models={models}
+          machineCap={machineCap}
+          disabled={disabled}
         />
-      </div>
-    </div>
+      }
+      mode={mode}
+      onMode={setMode}
+      sketchPad={
+        <SketchPad
+          label={PAD_LABEL}
+          boxes={drawing.shapes.map(asBox)}
+          lines={drawing.joins.map(asLine)}
+          strokes={drawing.strokes.map(asStroke)}
+          said={said}
+          onSaid={setSaid}
+          {...(sketch?.produced_by === undefined ? {} : { from: sketch.produced_by })}
+          onAdd={(at) =>
+            setDrawing((one) =>
+              withShape(one, { id: nextShapeId(one), x: at.x, y: at.y, body: "" }),
+            )
+          }
+          onBody={(id, body) => setDrawing((one) => withBody(one, id, body))}
+          onMove={(id, at) => setDrawing((one) => withPlace(one, id, at))}
+          onRemove={(ids) => setDrawing((one) => withoutShapes(one, ids))}
+          onJoin={(from, to) => setDrawing((one) => withJoin(one, from, to))}
+          onDraw={(points) => setDrawing((one) => withStroke(one, points))}
+          onUndo={() => setDrawing(withoutLastStroke)}
+          disabled={disabled}
+        />
+      }
+      // Nothing drawn is nothing attached: an empty pad is a mode somebody
+      // opened, not a picture.
+      {...(isDrawn(drawing)
+        ? {
+            sketch: {
+              name: SKETCH_NAME,
+              ...(sketch?.produced_by === undefined ? {} : { from: FROM_A_STUDIO }),
+            },
+          }
+        : {})}
+      attachments={attachments}
+      onStage={onStage}
+      onSearchFiles={onSearchFiles}
+      onAttach={(attachment) => setAttachments((current) => [...current, attachment])}
+      onRemoveAttachment={(path) =>
+        setAttachments((current) => current.filter((attachment) => attachment.path !== path))
+      }
+      onDispatch={() => void dispatch()}
+      close={close}
+      onReset={reset}
+      onOpen={onOpen}
+      onApprove={onApprove}
+      approving={approving}
+      // The two facts are joined here and nowhere else: the proposal is this
+      // screen's and the watch is the app's, and the component takes one value.
+      // A screen still `reading` with nothing published yet draws the wait
+      // without a reading, which is the sentence that was always there.
+      proposal={
+        proposal.at === "reading" && watching !== null
+          ? { at: "reading", watch: watching }
+          : (out ?? shown)
+      }
+      onStop={onStop}
+      slowAfterMs={PROPOSAL_IS_SLOW}
+      disabled={disabled}
+      disabledNote={disabledNote}
+      onCopied={onCopied}
+    />
   );
 }
 
@@ -486,14 +454,4 @@ function asLine(join: Drawing["joins"][number]): SketchLine {
 
 function asStroke(stroke: Drawing["strokes"][number]): SketchStroke {
   return { id: stroke.id, points: stroke.points };
-}
-
-/** One peer, as the panel draws it. */
-function rowOf(peer: PeerView): PeerJob {
-  return {
-    id: peer.job,
-    title: peer.title,
-    status: peer.status,
-    sharedPaths: peer.shared_paths,
-  };
 }

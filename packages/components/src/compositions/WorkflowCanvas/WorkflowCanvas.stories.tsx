@@ -19,22 +19,26 @@ export default meta;
 
 type Story = StoryObj<typeof WorkflowCanvas>;
 
-// The four steps `feature.json` declares, with `implement` opened into the
-// four groups the arc's plan has under it. The placement is the caller's, and
-// the caller here writes the same numbers `workflow-canvas.ts` computes.
+// The four steps `feature.json` declares, with the arc's four groups hanging
+// off the step that wrote them and their tasks off the groups. The placement
+// is the caller's, and the caller here writes the numbers
+// `workflow-canvas.ts` computes.
 const STEP_X = 320;
 const GROUP_Y = 150;
+const GROUP_APART = 232;
+const TASK_X = 272;
+const TASK_APART = 104;
 
-const nodes: WorkflowCanvasNode[] = [
+const steps: WorkflowCanvasNode[] = [
   {
     id: "step:plan",
     position: { x: 0, y: 0 },
-    card: { kind: "step", name: "Plan the change", activity: "advanced", said: "advanced", ordinal: 1, facts: [{ value: "2 of 2 passed", named: "passed" }], onOpen: fn() },
+    card: { kind: "step", name: "Plan the change", activity: "advanced", said: "advanced", ordinal: 1, facts: [{ value: "4 groups" }, { value: "2 criteria" }], onOpen: fn() },
   },
   {
     id: "step:implement",
     position: { x: STEP_X, y: 0 },
-    card: { kind: "step", name: "Implement", activity: "running", said: "running", ordinal: 2, current: true, facts: [{ value: "4 groups" }, { value: "11 checks" }], onOpen: fn() },
+    card: { kind: "step", name: "Implement", activity: "running", said: "running", ordinal: 2, current: true, facts: [{ value: "11 checks" }], onOpen: fn() },
   },
   {
     id: "step:tests",
@@ -46,41 +50,87 @@ const nodes: WorkflowCanvasNode[] = [
     position: { x: STEP_X * 3, y: 0 },
     card: { kind: "step", name: "Review the change", activity: "not_started", said: "not started", ordinal: 4, gate: "a person answers", onOpen: fn() },
   },
-  {
-    id: "group:g1",
-    position: { x: STEP_X, y: GROUP_Y },
-    card: { kind: "group", name: "Group 1", activity: "advanced", said: "passed", facts: [{ value: "2 tasks" }, { value: "4 checks" }], onOpen: fn() },
-  },
-  {
-    id: "group:g2",
-    position: { x: STEP_X, y: GROUP_Y + 110 },
-    card: { kind: "group", name: "Group 2", activity: "advanced", said: "passed", facts: [{ value: "2 tasks" }], onOpen: fn() },
-  },
-  {
-    id: "group:g3",
-    position: { x: STEP_X, y: GROUP_Y + 220 },
-    card: { kind: "group", name: "Group 3", activity: "running", said: "checking", facts: [{ value: "2 tasks" }, { value: "7 checks" }], onOpen: fn() },
-  },
-  {
-    id: "group:g4",
-    position: { x: STEP_X, y: GROUP_Y + 330 },
-    card: { kind: "group", name: "Group 4", activity: "not_started", said: "pending", facts: [{ value: "2 tasks" }], onOpen: fn() },
-  },
 ];
 
-const edges: WorkflowCanvasEdge[] = [
-  { id: "plan>implement", source: "step:plan", target: "step:implement" },
-  { id: "implement>tests", source: "step:implement", target: "step:tests" },
-  { id: "tests>handoff", source: "step:tests", target: "step:handoff" },
-  { id: "implement>g1", source: "step:implement", target: "group:g1" },
-  { id: "g1>g2", source: "group:g1", target: "group:g2" },
-  { id: "g2>g3", source: "group:g2", target: "group:g3" },
-  { id: "g3>g4", source: "group:g3", target: "group:g4" },
+/** One group of the arc's plan, with its two tasks beside it. */
+const GROUPS: { id: string; ordinal: number; said: string; activity: "advanced" | "running" | "not_started"; worked: boolean; tasks: string[] }[] = [
+  { id: "g1", ordinal: 1, said: "passed", activity: "advanced", worked: true, tasks: ["Serve one read of everything running", "Send an event when what is running changes"] },
+  { id: "g2", ordinal: 2, said: "passed", activity: "advanced", worked: true, tasks: ["Reword the stat to one running beside the most", "Say the same words on the Board and in Settings"] },
+  { id: "g3", ordinal: 3, said: "checking", activity: "running", worked: true, tasks: ["Draw what is running, in four lists", "Open a Drone's Job from its row"] },
+  { id: "g4", ordinal: 4, said: "pending", activity: "not_started", worked: false, tasks: ["Say what holds the next Drone back", "Four stories: nothing out, one Drone, three at once, and the most"] },
 ];
 
-/** A feature Job mid-implement, with the step opened into its groups. */
+const under: WorkflowCanvasNode[] = GROUPS.flatMap((group, at) => [
+  {
+    id: `group:${group.id}`,
+    position: { x: 16, y: GROUP_Y + at * GROUP_APART },
+    card: {
+      kind: "group" as const,
+      name: `Group ${group.ordinal}`,
+      activity: group.activity,
+      said: group.said,
+      facts: [{ value: "2 tasks" }, { value: "7 checks" }],
+      onOpen: fn(),
+    },
+  },
+  ...group.tasks.map((title, k) => ({
+    id: `task:${group.id}-${k}`,
+    position: { x: TASK_X, y: GROUP_Y + at * GROUP_APART + k * TASK_APART },
+    card: {
+      kind: "task" as const,
+      name: title,
+      activity: group.worked ? ("advanced" as const) : ("not_started" as const),
+      said: group.worked ? "done" : "open",
+      facts: [{ value: `T${at * 2 + k + 1}` }, { value: "1 file" }],
+      onOpen: fn(),
+    },
+  })),
+]);
+
+const nodes: WorkflowCanvasNode[] = [...steps, ...under];
+
+const spine: WorkflowCanvasEdge[] = [
+  { id: "plan>implement", source: "step:plan", target: "step:implement", kind: "leads" },
+  { id: "implement>tests", source: "step:implement", target: "step:tests", kind: "leads" },
+  { id: "tests>handoff", source: "step:tests", target: "step:handoff", kind: "leads" },
+];
+
+const plan: WorkflowCanvasEdge[] = GROUPS.flatMap((group) => [
+  { id: `plan>${group.id}`, source: "step:plan", target: `group:${group.id}`, kind: "made" as const },
+  ...(group.worked
+    ? [{ id: `implement>${group.id}`, source: "step:implement", target: `group:${group.id}`, kind: "worked" as const }]
+    : []),
+  ...group.tasks.map((_, k) => ({
+    id: `${group.id}>t${k}`,
+    source: `group:${group.id}`,
+    target: `task:${group.id}-${k}`,
+    kind: "holds" as const,
+  })),
+]);
+
+const edges: WorkflowCanvasEdge[] = [...spine, ...plan];
+
+/**
+ * A feature Job mid-implement: the plan step's four groups, their tasks, and
+ * a second edge from the step working each group that has been worked.
+ *
+ * **A `play`, because a still cannot say which line is which.** Two lines meet
+ * group one and a picture cannot tell you what either claims; the edges'
+ * accessible names are where the graph says it, and they are the only place a
+ * reader who cannot see it is told at all.
+ */
 export const AFeatureRun: Story = {
-  args: { nodes, edges, label: "The run", running: "step:implement", following: true, onFollowing: fn() },
+  args: { nodes, edges, label: "The run", running: "step:implement", onFollowing: fn() },
+  play: async ({ canvas }) => {
+    // A group hangs off the step that wrote it, and its tasks off it.
+    await waitFor(() => expect(canvas.getByLabelText("Plan the change made Group 1")).toBeInTheDocument());
+    expect(canvas.getByLabelText("Group 1 holds Serve one read of everything running")).toBeInTheDocument();
+    // A worked group carries a second edge into the same node; an unworked
+    // group carries the first alone.
+    expect(canvas.getByLabelText("Implement worked Group 1")).toBeInTheDocument();
+    expect(canvas.getByLabelText("Plan the change made Group 4")).toBeInTheDocument();
+    expect(canvas.queryByLabelText("Implement worked Group 4")).toBeNull();
+  },
 };
 
 /**
@@ -93,18 +143,19 @@ export const AFeatureRun: Story = {
  */
 export const WithALoop: Story = {
   args: {
-    nodes: nodes.slice(0, 4),
+    nodes: steps,
     edges: [
-      ...edges.slice(0, 3),
-      { id: "tests>plan", source: "step:tests", target: "step:plan", returning: true, label: "up to 5 passes" },
+      ...spine,
+      { id: "tests>plan", source: "step:tests", target: "step:plan", kind: "returns", label: "up to 5 passes" },
     ],
     label: "The run",
   },
 };
 
 /**
- * Narrow opens on the step a person is on and its neighbours, rather than
- * fitting nine cards no one can read (`#1539`, revision of 22 Sep).
+ * Narrow opens on the step a person is on, its neighbours and the groups those
+ * steps made, rather than fitting a whole plan no one can read (`#1539`,
+ * revision of 22 Sep).
  *
  * **A `play`, because a still cannot say what the canvas was fitted to.** What
  * has to hold is that the step it opened on is legible — which is the whole
@@ -116,13 +167,15 @@ export const OpensOnWhereYouAre: Story = {
     edges,
     label: "The run",
     running: "step:implement",
-    opensOn: ["step:plan", "step:implement", "step:tests"],
+    opensOn: [
+      ["step:plan", "step:implement", "step:tests", "group:g1", "group:g2", "group:g3", "group:g4"],
+      ["step:implement", "group:g1", "group:g2", "group:g3"],
+    ],
   },
   play: async ({ canvas }) => {
     await waitFor(() => {
       const step = canvas.getByRole("button", { name: "Implement, running" });
-      expect(step.getBoundingClientRect().width).toBeGreaterThan(200);
+      expect(step.getBoundingClientRect().width).toBeGreaterThan(160);
     });
   },
 };
-

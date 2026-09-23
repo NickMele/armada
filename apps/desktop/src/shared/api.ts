@@ -16,7 +16,6 @@ import type {
   CommandAnswer,
   HelmCallAnswer,
   CommandExplainedRead,
-  Draft,
   DropTask,
   FileReport,
   Followed,
@@ -76,22 +75,19 @@ export type BridgeApi = {
   protocolVersion: () => ProtocolVersion;
   state: () => Promise<BridgeState>;
   subscribe: (onState: (state: BridgeState) => void) => () => void;
-  proposeJob: (draft: Draft) => Promise<Outcome>;
   /**
    * Describe the work and let the Job proposer decide what it is: which
    * workflow, what to call it, and whether it is one Job or several.
    *
-   * **The same gate as `proposeJob`, and this adds none.** Every Job comes back
-   * at `awaiting_approval` and each takes its own approval in turn — approving
-   * one of several accepts a plan and starts nothing else.
-   *
-   * `proposeJob` stays the override, not a fallback: a person who knows which
-   * workflow they want names it themselves and no model is asked.
+   * **The only way this window makes a Job.** Every one comes back at
+   * `awaiting_approval` and each takes its own approval in turn — approving
+   * one of several accepts a plan and starts nothing else. `proposeJob` was
+   * the hand form's entry and went with it on 2026-09-23; the workflow a
+   * person wants to name themselves is a Settings field on the same card.
    *
    * The two refusals are separate arms of `Proposed` because a person does
    * different things about them — a request nothing fits is said again
-   * differently or hand-entered, and a call that could not be made is simply
-   * asked again.
+   * differently, and a call that could not be made is simply asked again.
    *
    * `repository` is the root New job's ask answered on All. The Board stays
    * on All while composing (#959), so the request names what was answered
@@ -119,8 +115,8 @@ export type BridgeApi = {
   /**
    * Write pasted or picked bytes to a staging file before a Job exists —
    * there is no Job id yet to key storage on; one is minted at `propose`
-   * time. Returns the absolute path written, which the caller carries on
-   * `Draft.attachments` until `proposeJob` sends it as a `staged_path`.
+   * time. Returns the absolute path written, which the caller carries until
+   * `proposeFromRequest` sends it as a `staged_path`.
    */
   stageAttachment: (
     bytes: ArrayBuffer,
