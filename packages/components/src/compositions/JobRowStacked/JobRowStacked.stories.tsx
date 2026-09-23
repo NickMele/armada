@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Check, CircleDot, Clock, Cpu, Folder, GitBranch, Layers, OctagonAlert, Power, UserCheck, X } from "lucide-react";
+import { Check, CircleDot, Clock, Cpu, Folder, GitBranch, OctagonAlert, Power, ScrollText, UserCheck, X } from "lucide-react";
 import { expect, fn, waitFor } from "storybook/test";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { ActiveJobsList } from "../ActiveJobsList/ActiveJobsList";
@@ -599,7 +599,7 @@ export const HandlesInTheirOwnColumn: StoryObj = {
           onOpen={() => {}}
           onCopied={handleCopied}
           fields={[
-            { label: "Workflow", icon: Layers, value: "Bug, 6 steps" },
+            { label: "Workflow", icon: ScrollText, value: "Bug, 6 steps" },
             {
               label: "Progress",
               value: (

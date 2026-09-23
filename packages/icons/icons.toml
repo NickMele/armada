@@ -412,11 +412,15 @@
   notes = "Single arrow, distinct from refresh-cw. Also the proposed step-level retrying mark."
 
 [icons.scroll-text]
-  means = "Activity feed"
-  group = "Navigation"
-  size = "16px"
-  status = "Retired"
-  notes = "Retired 2026-08-31 with the surface. Finished Jobs are the Job Board filtered to what is over, so no feed exists to name. A log; history was rejected as a clock collision, and that reasoning holds for whoever takes it next."
+  means = "A sheet rolled at both ends with ruled lines across it — something authored, and read from the top down"
+  status = "Specified"
+  notes = "Read `means = \"Activity feed\"`, Navigation, 16px, `status = \"Retired\"` until 23 Sep 2026. Retired 2026-08-31 with that surface: finished Jobs are the Job Board filtered to what is over, so no feed exists to name. Its retirement note handed on one piece of reasoning — that `history` was rejected as a clock collision — and it does not bear on the use below. Taken back rather than left free: the rolled sheet is the only silhouette in the set depicting something written down in an order, which is what a workflow is."
+
+  [[icons.scroll-text.usage]]
+    means = "the workflow a Job runs, and how many steps it has"
+    group = "Graph"
+    size = "12px"
+    notes = "Added 23 Sep 2026 for #1556, because `layers` had been drawing the Board row's Workflow field and `layers` means how many places a Job writes — see `docs/contracts/iconography.md`, Blast radius, which bans it from a Board row outright. **The argument for a scroll is that a workflow is the one thing on the row that was written before the Job existed**: `crates/core-model/domain/workflows.toml` is an authored, ordered script, and no other glyph in the set depicts one. Against the two glyphs it shares the row's `--fg-muted` with it collides with neither: `folder` is a tab-topped box and `git-branch` is strands and dots. What was refused: `waypoints` is the Graph group's other row and is nodes on lines, which is `git-branch`'s silhouette in the same hue on the same row, so rule 4 stops it; `clipboard-list` is the Job Board's own rail glyph and would say *Board* inside a Board row; `activity`, the registry's other free row, is an ECG, means liveness rather than a recipe, and its own note says it does not read at 12px. **The objection to expect is the `file-*` family**, reserved to evidence, since a scroll and a page are cousins at 12px — it is admitted because the ruled lines are texture rather than the claim, the way `cpu`'s ticks and `file-diff`'s marks are, and because no evidence glyph is drawn in a Board row."
 
 [icons.search]
   means = "search"

@@ -77,7 +77,7 @@
 
 import { Button, JobRowStacked, SplitButton, StepBar } from "@armada/components";
 import type { JobRowField } from "@armada/components";
-import { Layers } from "lucide-react";
+import { ScrollText } from "lucide-react";
 
 import { JOB_LIFECYCLE } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
@@ -244,7 +244,7 @@ export function Row({
   const facts: JobRowField[] = [
     {
       label: "Workflow",
-      icon: Layers,
+      icon: ScrollText,
       value: workflowValue,
       mono: workflow === undefined,
       copyValue: job.workflow_id,
