@@ -9,17 +9,25 @@
   min-width: 0;
 }
 
-/* The `?` sits on this line, so the line is a flex row rather than a
-   paragraph with a control floating after its last word. */
+/* The groups' own head: the noun, and the `?` beside it. A flex row, so the
+   mark sits on the label rather than floating under it — which is what a bare
+   mark on a line of its own read as. */
 .armada-implement__order {
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  min-width: 0;
+}
+
+/* The label register the boundary's own bands use, so it reads as a band. */
+.armada-implement__order-title {
   margin: 0;
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
-  color: var(--fg-subtle);
-  text-wrap: pretty;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
 }
 
 .armada-implement__groups {

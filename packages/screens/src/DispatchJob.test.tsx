@@ -130,7 +130,7 @@ test("two presses in one task are one call", async () => {
   // them, so the second reaches the handler with the button still enabled in
   // the DOM — which is the whole case the ref exists for and the one a click
   // helper that waits for the control to settle can never produce.
-  const button = page.getByRole("button", { name: "Dispatch" }).element() as HTMLButtonElement;
+  const button = page.getByRole("button", { name: "Dispatch", exact: true }).element() as HTMLButtonElement;
   button.click();
   button.click();
 
@@ -155,15 +155,15 @@ test("the answer releases it", async () => {
   const { sent } = opened(() => next());
 
   await userEvent.fill(field(), REQUEST);
-  await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
+  await userEvent.click(page.getByRole("button", { name: "Dispatch", exact: true }));
   expect(sent).toEqual([REQUEST]);
 
   next = () => Promise.resolve(UNRESOLVED);
   first.answer(UNRESOLVED);
   // The refusal put the request back, so the second press has one to send.
-  await expect.element(page.getByRole("button", { name: "Dispatch" })).toBeEnabled();
+  await expect.element(page.getByRole("button", { name: "Dispatch", exact: true })).toBeEnabled();
 
-  await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
+  await userEvent.click(page.getByRole("button", { name: "Dispatch", exact: true }));
   expect(sent, "the answer did not release the guard").toEqual([REQUEST, REQUEST]);
 });
 
@@ -182,9 +182,9 @@ test("a call that threw gives the surface back", async () => {
   try {
     const { sent } = opened(() => Promise.reject(new Error("the preload has no proposer")));
     await userEvent.fill(field(), REQUEST);
-    await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
+    await userEvent.click(page.getByRole("button", { name: "Dispatch", exact: true }));
 
-    const dispatch = page.getByRole("button", { name: "Dispatch" });
+    const dispatch = page.getByRole("button", { name: "Dispatch", exact: true });
     await expect.element(dispatch).toBeEnabled();
     await userEvent.click(dispatch);
     expect(sent, "a throw left the surface unable to ask again").toEqual([REQUEST, REQUEST]);
@@ -197,7 +197,7 @@ test("a call that threw gives the surface back", async () => {
 test("whitespace is not a request", async () => {
   const { sent } = opened(() => Promise.resolve(UNRESOLVED));
   await userEvent.fill(field(), "   \t ");
-  await expect.element(page.getByRole("button", { name: "Dispatch" })).toBeDisabled();
+  await expect.element(page.getByRole("button", { name: "Dispatch", exact: true })).toBeDisabled();
   expect(sent).toEqual([]);
 });
 
@@ -211,7 +211,7 @@ test("whitespace is not a request", async () => {
 test("nothing offers a second way to make a Job", async () => {
   opened(() => Promise.resolve(UNRESOLVED));
   await userEvent.fill(field(), REQUEST);
-  await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
+  await userEvent.click(page.getByRole("button", { name: "Dispatch", exact: true }));
 
   await expect.element(page.getByText(/No workflow fits this request/)).toBeVisible();
   await expect.element(page.getByRole("button", { name: "Enter by hand" })).not.toBeInTheDocument();
@@ -245,7 +245,7 @@ test("the proposal is approved from here", async () => {
   );
 
   await userEvent.fill(field(), REQUEST);
-  await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
+  await userEvent.click(page.getByRole("button", { name: "Dispatch", exact: true }));
 
   await userEvent.click(
     page.getByRole("button", { name: "Approve Stop the board flickering on every event" }),
@@ -278,7 +278,7 @@ test("the row follows the board, not the answer", async () => {
   );
 
   await userEvent.fill(field(), REQUEST);
-  await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
+  await userEvent.click(page.getByRole("button", { name: "Dispatch", exact: true }));
 
   await expect
     .element(page.getByRole("button", { name: "Review Stop the board flickering on every event" }))

@@ -12,7 +12,7 @@ import type { Finding, JobExamined, Look } from "@armada/protocol";
 import { Button } from "../../primitives/Button/Button";
 import { FigureList, type Figure } from "../FigureList/FigureList";
 import { GuideMark } from "../GuideMark/GuideMark";
-import { GUIDE_PROCESSES, GUIDE_WORKTREE_SIZE } from "../../guides";
+import { GUIDE_LOOK, GUIDE_PROCESSES, GUIDE_WORKTREE_SIZE } from "../../guides";
 import type { Guide } from "../../guides/guide";
 import { Logs, Processes, Worktrees } from "./JobResources.lists";
 import type { PulseReading } from "./JobResources.lists";
@@ -109,10 +109,16 @@ export function JobResources({
             disabled**: a greyed control still says an act exists here and puts
             the reason on a person to work out. */}
         {nothingToAsk !== undefined ? null : (
-          <Button size="sm" onClick={onExamine} disabled={looking}>
-            <Search size={12} strokeWidth={2} aria-hidden="true" />
-            {looking ? "Looking" : "Look now"}
-          </Button>
+          <span className="armada-holds__act">
+            <Button size="sm" onClick={onExamine} disabled={looking}>
+              <Search size={12} strokeWidth={2} aria-hidden="true" />
+              {looking ? "Looking" : "Look now"}
+            </Button>
+            {/* What a look is, what it costs and what its three answers mean.
+                Beside the act rather than beside the verdict: the verdict is
+                this job's reading, and the act is the Armada word. */}
+            <GuideMark guide={GUIDE_LOOK} />
+          </span>
         )}
       </div>
 
@@ -151,12 +157,13 @@ export function JobResources({
  * **The second half is the caller's sentence.** How often a reading is taken
  * again is a fact about the app around this panel, and a panel that asserted
  * one would be claiming a schedule it cannot see.
+ *
+ * **Both halves are readings and neither explains one.** *A process can exit
+ * between the reading and this screen* used to ride here; it is true of a job
+ * that never ran, so it is the look's guide (#1602).
  */
 function readAt(reading: PulseReading, age?: string, refreshed?: string): string {
-  const said =
-    age === undefined
-      ? `Read at ${reading.readAt}.`
-      : `Read ${age} ago. A process can exit between the reading and this screen.`;
+  const said = age === undefined ? `Read at ${reading.readAt}.` : `Read ${age} ago.`;
   return refreshed === undefined ? said : `${said} ${refreshed}`;
 }
 
@@ -220,9 +227,7 @@ function Headline({
   }
   if (examined === null) {
     return (
-      <p className="armada-holds__verdict">
-        Nobody has asked whether this job is working. Looking costs no model call.
-      </p>
+      <p className="armada-holds__verdict">Nobody has asked whether this job is working.</p>
     );
   }
   return (

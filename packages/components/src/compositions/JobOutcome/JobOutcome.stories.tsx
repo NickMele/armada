@@ -190,7 +190,6 @@ export const TheLandBoard: Story = {
             meta: "972.8 MiB on disk",
           },
         ],
-        note: "Reclaiming the worktree takes the checkout back and leaves the branch and the record.",
       },
     ],
     steps: {

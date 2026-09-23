@@ -7,12 +7,12 @@ import type { Guide } from "./guide";
  * built the graph asked whether the plan step's card should say this; the
  * answer was no, because that is the prose the owner cut from every screen.
  *
- * **Its `?` is owed.** It goes beside the graph rather than beside a node —
- * what is being explained is how to read the picture — and the Workflow files
- * were another agent's while this landed.
+ * **Its `?` is on the canvas head and not on a node** — what is being explained
+ * is how to read the picture, and a mark on one group node would claim the
+ * rule belongs to that group.
  */
 export const GUIDE_GROUP_EDGES: Guide = {
-  number: 5,
+  number: 11,
   group: "workflow",
   title: "A group with two edges",
   piece: "workflow.group-edges",

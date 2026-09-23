@@ -6,7 +6,7 @@ import type { Guide } from "./guide";
  * still working, and where the work got to is a static fact.
  */
 export const GUIDE_STEP_BAR: Guide = {
-  number: 4,
+  number: 8,
   group: "run",
   title: "How a step's bar fills",
   piece: "run.step-bar",

@@ -90,8 +90,8 @@ function examined(found: JobExamined["found"], looks: Look[]): JobExamined {
  * **Nobody has pressed yet.** The figures are drawn and the question is not
  * answered, because looking walks a process table and a directory and an answer
  * that appeared unasked would be the automatic bound rather than the person's
- * half of it. The line says the act is free, since a person who thinks it costs
- * a model call will not press it.
+ * half of it. **The line says only that nobody has asked** — that a look is
+ * free, and what its three answers mean, is the `?` beside the act (#1602).
  */
 export const NobodyHasAsked: Story = {
   args: {
@@ -265,7 +265,8 @@ export const FleetIsNotAnswering: Story = {
     await expect(canvas.getByText(/Nothing here is a reading of this job/)).toBeVisible();
     // The whole point: no control that asks Fleet, disabled or otherwise.
     await expect(canvas.queryByRole("button", { name: /Look now/ })).toBeNull();
-    await expect(canvas.queryByText(/Looking costs no model call/)).toBeNull();
+    // The `?` goes with the act. Nothing to ask means nothing to explain.
+    await expect(canvas.queryByRole("button", { name: /^Open guide/ })).toBeNull();
   },
 };
 

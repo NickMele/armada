@@ -6,7 +6,7 @@ import type { Guide } from "./guide";
  * reclaiming one the act that gives the disk back.
  */
 export const GUIDE_WORKTREE_SIZE: Guide = {
-  number: 7,
+  number: 13,
   group: "machine",
   title: "Size on disk is a fact about a checkout",
   piece: "pulse.worktree-size",

@@ -6,7 +6,7 @@ import type { Guide } from "./guide";
  * makes it a guide rather than a line on the screen.
  */
 export const GUIDE_GROUP_ORDER: Guide = {
-  number: 2,
+  number: 4,
   group: "plan",
   title: "One group at a time",
   piece: "plan.group-order",

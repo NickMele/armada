@@ -81,7 +81,10 @@ const STATES: { what: string; open: () => Promise<Drawn> }[] = [
       await composing();
       await answered();
       const title = page.getByRole("heading", { name: "Dispatch a job" }).element();
-      return { frame: title.parentElement!, title };
+      // The header, by its own class rather than by the title's parent: the
+      // title now shares a wrapper with the `?` beside it (#1602), and the
+      // way out is that wrapper's sibling.
+      return { frame: title.closest(".armada-card-header")!, title };
     },
   },
 ];

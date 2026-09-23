@@ -8,7 +8,6 @@ import { arcGroups, arcCases } from "./fixtures/build/arc-plan";
 import { doneTouched, groupFailed, plannedMoment, planRevisionRefused } from "./fixtures/build/arc";
 import type { CaseView } from "./draft/cases";
 import {
-  ASKS_SAY,
   besideSaid,
   boundarySaid,
   caseReads,
@@ -284,9 +283,9 @@ describe("one task's inspector", () => {
 describe("a plan that may still be argued with", () => {
   const whole = wholeOf(planRevisionRefused());
 
-  test("a plan at its gate puts the same three controls on every card, and says once what they mean", () => {
+  test("a plan at its gate puts the same three controls on every card, and draws the one mark that says what they are", () => {
     const board = planBoardOf(whole, planRevisionRefused().draft, () => {}, undefined, true)!;
-    expect(board.asksSay).toBe(ASKS_SAY);
+    expect(board.askable).toBe(true);
     expect(board.groups.map((group) => group.asks?.map((ask) => ask.id))).toEqual([
       ["move_up", "move_down", "remove"],
       ["move_up", "move_down", "remove"],
@@ -295,9 +294,9 @@ describe("a plan that may still be argued with", () => {
     ]);
   });
 
-  test("a plan past its gate offers nothing and says nothing about asking", () => {
+  test("a plan past its gate offers nothing and draws no mark about asking", () => {
     const board = planBoardOf(whole, planRevisionRefused().draft, () => {})!;
-    expect(board.asksSay).toBeUndefined();
+    expect(board.askable).toBeUndefined();
     expect(board.groups.every((group) => group.asks === undefined)).toBe(true);
   });
 

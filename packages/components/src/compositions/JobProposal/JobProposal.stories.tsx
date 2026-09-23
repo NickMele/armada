@@ -63,10 +63,6 @@ const STEPS: ProposalGateRow[] = [
   },
 ];
 
-const ALWAYS_LOOKS =
-  "Whatever is ticked, Fleet checks that the work stayed inside what the plan declared, and " +
-  "looks for a Check that was gamed. No tick turns that off.";
-
 const CRITERIA = [
   {
     id: "a1",
@@ -91,7 +87,6 @@ const COMMON = {
   title: "Show what is running in the Drones stat",
   workflow: "feature",
   steps: STEPS,
-  alwaysLooks: ALWAYS_LOOKS,
   tiers: { difficult: "opus", medium: "sonnet", easy: null },
   models: ["haiku", "sonnet", "opus"],
   droneCap: 2,

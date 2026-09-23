@@ -6,6 +6,7 @@
 
 import { expect, test, describe } from "vitest";
 import { page } from "vitest/browser";
+import { GUIDE_DISPATCH } from "@armada/components";
 
 import { mount, unmountAfterEach } from "./testing";
 
@@ -152,6 +153,39 @@ describe("dispatch", () => {
 
       await page.getByRole("tab", { name: "Write" }).click();
       await expect.element(page.getByRole("textbox", { name: "Request" })).toHaveValue(before);
+    },
+  );
+
+  test(
+    "arc/dispatch-typing: the composer asks for the work and does not tell you what will " +
+      "happen to it — the `?` on its title is where that went",
+    async () => {
+      mount("arc/dispatch-typing");
+      await expect.element(page.getByRole("textbox", { name: "Request" })).toBeVisible();
+
+      // #1540 put three numbered lines under the controls. Every one was true
+      // before anything was typed, so all three are guide 3 now (#1602).
+      await expect.element(page.getByText("What happens next")).not.toBeInTheDocument();
+      await expect
+        .element(page.getByText(/Armada reads the request, picks the workflow and names the Job/))
+        .not.toBeInTheDocument();
+      await expect
+        .element(page.getByText(/You adjust what it decided and approve it/))
+        .not.toBeInTheDocument();
+
+      await expect
+        .element(
+          page.getByRole("button", {
+            name: `Open guide ${GUIDE_DISPATCH.number}, ${GUIDE_DISPATCH.title}`,
+          }),
+        )
+        .toBeVisible();
+      // The card still offers the one press. `exact`, because a role name
+      // given as a string matches a substring, case-insensitively — and the
+      // `?` is named `Open guide 3, What dispatch sets off`.
+      await expect
+        .element(page.getByRole("button", { name: "Dispatch", exact: true }).last())
+        .toBeVisible();
     },
   );
 });

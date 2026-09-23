@@ -58,6 +58,35 @@
   min-width: 0;
 }
 
+/* The groups and the head that names them, so the label sits with the cards
+   rather than a whole board gap above them. */
+.armada-plan-board__group-region {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The noun, and the `?` where the asks are offered. The label register the
+   clash warning already uses, so it reads as a band rather than as a sentence
+   somebody left behind. */
+.armada-plan-board__groups-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-plan-board__groups-title {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+}
+
 .armada-plan-board__groups {
   list-style: none;
   margin: 0;
@@ -246,16 +275,6 @@
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-muted);
-}
-
-/* What the group controls mean, once, above the cards. Subtle rather than a
-   notice: nothing is wrong, and this is the standing fact that a plan is a
-   record the Drone wrote. */
-.armada-plan-board__asks-say {
-  margin: 0;
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
-  color: var(--fg-subtle);
 }
 
 /* The asks on one group. Above the boundary rule, so they read as acts on the

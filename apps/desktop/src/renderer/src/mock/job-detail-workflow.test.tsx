@@ -8,6 +8,7 @@
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { page } from "vitest/browser";
 import { executingSequential } from "@armada/screens/src/fixtures/build/arc";
+import { GUIDE_GROUP_EDGES, GUIDE_GROUP_ORDER } from "@armada/components";
 
 import { mount, unmountAfterEach } from "./testing";
 
@@ -135,4 +136,47 @@ test("a press on a task opens that task, and a press on its group takes the pane
   await expect.element(page.getByRole("region", { name: "T6 · Open a Drone's Job from its row, task" }).last()).toBeVisible();
   await card("Group 3").click();
   await expect.element(page.getByRole("region", { name: "Group 3, group" }).last()).toBeVisible();
+});
+
+// # What this destination no longer says, and the two marks that carry it
+//
+// Two standing sentences: the implement board's order line, and — never on the
+// screen, because the mark was owed since #1607 — how a group gets its second
+// edge. Both are true of a Job that had never run, which is #1602's test.
+
+/** One guide's `?`, by the name `GuideMark` gives it. */
+const markFor = (guide: { number: number; title: string }) =>
+  page.getByRole("button", { name: `Open guide ${guide.number}, ${guide.title}` });
+
+test("the implement board heads its groups with the noun, and the mark hangs on that", async () => {
+  await workflow();
+  // The head first: an assertion that something is absent passes against a
+  // window that has not drawn yet, so a negative stands behind a positive.
+  const head = page.getByRole("heading", { name: "Groups", exact: true }).last();
+  await expect.element(head).toBeVisible();
+  // The noun and nothing else. *The groups, in the order they run* would be
+  // the sentence that came off wearing a hat.
+  await expect.element(head).toHaveTextContent(/^Groups$/);
+  await expect.element(markFor(GUIDE_GROUP_ORDER).last()).toBeVisible();
+  // *One group at a time. No task of the next group starts…* stood over the
+  // groups and was the only evidence of the rule. It is guide 4 now.
+  await expect
+    .element(page.getByText(/No task of the next group starts while this one is being checked/))
+    .not.toBeInTheDocument();
+  // The board still reports: the groups are there, in the order they run.
+  await expect
+    .element(page.getByRole("list", { name: "The groups of this step, in the order they run" }).last())
+    .toBeVisible();
+});
+
+test("the canvas head carries the mark for how a group is drawn, and Stacked does not", async () => {
+  await workflow();
+  await expect.element(markFor(GUIDE_GROUP_EDGES).last()).toBeVisible();
+
+  // Off on Stacked. A column draws no edges, so a mark about reading them
+  // would explain a picture that is not on screen — and mounting it is what
+  // would spend a person's one first contact on it.
+  await page.getByRole("tab", { name: "Stacked" }).last().click();
+  await expect.element(page.getByRole("list", { name: /as its workflow's run$/ }).last()).toBeVisible();
+  expect(markFor(GUIDE_GROUP_EDGES).elements()).toHaveLength(0);
 });
