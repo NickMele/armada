@@ -315,6 +315,7 @@ export function Layer({ sink }: { sink: Sink }) {
           <div className="armada-annotate__outline" data-held="" style={place(draftBox)} />
           <Card box={draftBox} view={view} label="New note">
             <p className="armada-annotate__meta">{chain(draft.note)}</p>
+            <Source note={draft.note} />
             <Textarea
               label="Note"
               autoFocus
@@ -336,6 +337,7 @@ export function Layer({ sink }: { sink: Sink }) {
       {openNote !== null && openBox !== null && (
         <Card box={openBox} view={view} label="Note">
           <p className="armada-annotate__meta">{chain(openNote)}</p>
+          <Source note={openNote} />
           <p className="armada-annotate__text">{openNote.text}</p>
           {openNote.sent !== undefined && (
             <p className="armada-annotate__meta">Sent to Fleet as {openNote.sent.handle}, waiting on approval on the Board</p>
@@ -450,6 +452,12 @@ function Card({
       {children}
     </div>
   );
+}
+
+/** The file and line the element's JSX is on, so it can be seen to have been captured. #1584. */
+function Source({ note }: { note: Annotation }) {
+  if (note.source === undefined) return null;
+  return <p className="armada-annotate__meta">{`${note.source.file}:${note.source.line}`}</p>;
 }
 
 /** `JobRowStacked ← ActiveJobsList ← Board`, then the selector, for the person checking what was picked. */

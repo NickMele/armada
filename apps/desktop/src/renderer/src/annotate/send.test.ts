@@ -62,6 +62,25 @@ describe("a note's request", () => {
   });
 });
 
+describe("a note's source", () => {
+  it("is written beside the component it names, and says where the code is in the request", () => {
+    const located = note({ source: { file: "packages/screens/src/Board.tsx", line: 88 } });
+    expect(Object.keys(JSON.parse(serializeAnnotation(located)) as object).slice(3, 6)).toEqual([
+      "component",
+      "source",
+      "owners",
+    ]);
+    expect(requestOf(located)).toContain("Source: packages/screens/src/Board.tsx:88");
+  });
+
+  it("is absent from a note written before the build stamped anything, which still reads", () => {
+    expect(isAnnotation(note())).toBe(true);
+    expect(Object.keys(JSON.parse(serializeAnnotation(note())) as object)).not.toContain("source");
+    expect(requestOf(note())).not.toContain("Source:");
+    expect(isAnnotation({ ...note(), source: { file: "packages/screens/src/Board.tsx" } })).toBe(false);
+  });
+});
+
 describe("a sent note", () => {
   it("is still a note, and keeps where it went just after its status", () => {
     const sent = note({ sent: { jobId: JOB.id, handle: JOB.handle, at: AT.toISOString() } });
