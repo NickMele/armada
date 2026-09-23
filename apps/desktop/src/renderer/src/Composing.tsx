@@ -199,6 +199,12 @@ export function Composing({
         // holds no `base` outside the Manifest editor's own read, and a branch
         // name invented here would be a value nobody chose.
         landing={drafted.landing ?? landingRuleOf()}
+        // `null` is nothing having listed this repository's branches, which is
+        // every dispatch against a real Fleet: no operation asks for a
+        // repository's refs, and the two reads `branchesOf` derives from — the
+        // Manifest's declared base and the worktrees Fleet holds — are neither
+        // of them read here. The two fields draw as the plain ones they were.
+        branches={drafted.branches ?? null}
         // `null` is nobody having looked, which is every request at dispatch:
         // the overlap read hangs off a Job and there is no Job yet.
         peers={drafted.peers ?? null}

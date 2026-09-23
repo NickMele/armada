@@ -7,6 +7,8 @@ import { Badge } from "../../primitives/Badge/Badge";
 import { Button } from "../../primitives/Button/Button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../primitives/Card/Card";
 import { Input } from "../../primitives/Input/Input";
+import { BranchPicker } from "../BranchPicker/BranchPicker";
+import type { BranchOption } from "../BranchPicker/BranchPicker";
 import { MentionPopover, useMention } from "../../primitives/MentionPopover/MentionPopover";
 import { Tabs } from "../../primitives/Tabs/Tabs";
 import { Textarea } from "../../primitives/Textarea/Textarea";
@@ -117,6 +119,15 @@ export type DispatchRequestProps = {
    */
   refs: Refs;
   onRefs: (refs: Refs) => void;
+  /**
+   * The repository's branches, for the two fields above to pick over.
+   *
+   * **`null` is nothing having listed them**, which draws the two plain fields
+   * they were — an empty picker would say the repository has no branches, and
+   * nothing has asked it. Nothing on the wire answers this today; the shape is
+   * `packages/screens/src/draft/branches.ts`.
+   */
+  branches?: readonly BranchOption[] | null;
   /**
    * Addresses attached beside the request — a ticket, a pull request, a page.
    *
@@ -383,6 +394,7 @@ export function DispatchRequest({
   repository,
   refs,
   onRefs,
+  branches = null,
   links = [],
   onAddLink,
   onRemoveLink,
@@ -464,6 +476,7 @@ export function DispatchRequest({
               {...(repository === undefined ? {} : { repository })}
               refs={refs}
               onRefs={onRefs}
+              branches={branches}
               disabled={reading || disabled}
             />
           )}
@@ -662,16 +675,22 @@ export function DispatchRequest({
  * are this form's, and both are drawn as fields even when they read the same
  * branch — a value only one of them could change would be the pair collapsed
  * back into one.
+ *
+ * **Both pick over the repository's branches, and only one of them makes
+ * one.** Where the work starts has to exist; where it lands may not, and
+ * naming a branch that is not there is how one gets made.
  */
 function Where({
   repository,
   refs,
   onRefs,
+  branches,
   disabled,
 }: {
   repository?: string;
   refs: Refs;
   onRefs: (refs: Refs) => void;
+  branches: readonly BranchOption[] | null;
   disabled: boolean;
 }) {
   return (
@@ -682,19 +701,20 @@ function Where({
           <span className="mono armada-dispatch__where-value">{repository}</span>
         </div>
       )}
-      <Input
+      <BranchPicker
         label="From"
-        mono
         value={refs.from}
+        onValue={(from) => onRefs({ ...refs, from })}
+        branches={branches}
         disabled={disabled}
-        onChange={(event) => onRefs({ ...refs, from: event.target.value })}
       />
-      <Input
+      <BranchPicker
         label="Lands in"
-        mono
         value={refs.target}
+        onValue={(target) => onRefs({ ...refs, target })}
+        branches={branches}
+        offerNew
         disabled={disabled}
-        onChange={(event) => onRefs({ ...refs, target: event.target.value })}
       />
     </div>
   );

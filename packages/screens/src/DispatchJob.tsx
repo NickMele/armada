@@ -51,6 +51,7 @@ import type { StagedAttachment, WorkflowSummary } from "@armada/protocol";
 
 import { howManySet } from "./draft/dispatch";
 import type { DispatchSettingsView } from "./draft/dispatch";
+import type { BranchesAnswer } from "./draft/branches";
 import type { LandingRule } from "./draft/landing";
 import type { PeerOverlapAnswer, PeerView } from "./draft/peers";
 import {
@@ -159,6 +160,13 @@ export type DispatchJobProps = {
    */
   landing: LandingRule;
   /**
+   * The repository's branches, for the two ref fields to pick over. **`null`
+   * is nothing having listed them**, which is Bridge on a real Fleet — no
+   * operation asks a repository for its refs, so the fields draw as the plain
+   * ones they were. `draft/branches.ts` names the read it waits on.
+   */
+  branches: BranchesAnswer;
+  /**
    * What else is writing where this work would. **`null` is nobody having
    * looked**, which is every request at dispatch today — the read hangs off a
    * Job and there is no Job yet. Drawing it as "nobody is there" would say
@@ -209,6 +217,7 @@ export function DispatchJob({
   repository,
   opensOn,
   landing,
+  branches,
   peers,
   workflows,
   models,
@@ -345,6 +354,11 @@ export function DispatchJob({
         {...(repository === undefined ? {} : { repository })}
         refs={refs}
         onRefs={setRefs}
+        // Handed straight over: a `BranchView` and the control's own
+        // `BranchOption` are the same three fields under the same names, so a
+        // mapper here would be the seam `asChosen` is without the rename that
+        // earns one.
+        branches={branches}
         links={links}
         onAddLink={(address) =>
           setLinks((current) => (current.includes(address) ? current : [...current, address]))

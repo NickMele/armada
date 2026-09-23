@@ -29,6 +29,11 @@ const meta: Meta<typeof DispatchRequest> = {
     onRequest: fn(),
     repository: "/Users/user/armada",
     refs: { from: "main", target: "main" },
+    branches: [
+      { name: "main", base: true },
+      { name: "armada/18-fold-the-capacity-read", job: "Fold the capacity read into one query" },
+      { name: "armada/19-give-the-rail-its-own-scroll", job: "Give the rail its own scroll" },
+    ],
     onRefs: fn(),
     links: [],
     onAddLink: fn(),

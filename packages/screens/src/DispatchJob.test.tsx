@@ -85,6 +85,9 @@ const HELD = {
     land_together: [],
   },
   peers: null,
+  // Nothing has listed the repository's branches either, which is every
+  // dispatch against a real Fleet — so the two ref fields draw plain.
+  branches: null,
   workflows: [],
   models: [],
   machineCap: null,

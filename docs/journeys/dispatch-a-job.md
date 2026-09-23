@@ -32,7 +32,7 @@ See Job Board for the full board mechanics — layout, status states, origin tag
 | On the card | What it is |
 | --- | --- |
 | Repository | A fact, answered before the card opens. Bridge dispatches into the workspace it is pointed at |
-| From, Lands in | Where the work starts and where it lands, as two fields. They differ when you start from an unmerged branch or land in a long-lived one |
+| From, Lands in | Where the work starts and where it lands, as two fields over the repository's branches. They differ when you start from an unmerged branch or land in a long-lived one |
 | Write, Sketch | Which of the two ways of saying it is open. Words or a picture, never both at once — the card is narrow, and the switch swaps the one block under it |
 | Request | Prose, or a link to a ticket. `@` opens the file mention popup |
 | Sketch | Boxes and the lines between them, on the canvas a Studio's whiteboard draws on. Beside it, what the picture is meant to show, and the Studio node it was made from where there was one |
@@ -42,6 +42,23 @@ See Job Board for the full board mechanics — layout, status states, origin tag
 
 **Hand entry stays.** `Enter by hand` is one press away and builds the Job
 itself — the [Job proposer](../concepts/job-proposer.md) calls it the override.
+
+### The two branch fields
+
+Both open on the Manifest's base and both offer the repository's branches, each
+row saying what it is: the base, or the Job whose worktree is sitting on it.
+
+**Only where it lands makes one.** Typing a name no branch carries offers it as
+a new branch, and taking that row is the whole of creating it — there is no
+second control. Where the work starts offers none, because you cannot begin on
+a branch that does not exist.
+
+**Both still take a name typed by hand**, because the list is a floor rather
+than the repository's own. The shape is draft —
+`packages/screens/src/draft/branches.ts` — and nothing on the wire lists a
+repository's refs, so against a real Fleet the list is absent and the two draw
+as plain fields. A branch Armada has never met is not a branch that is not
+there, and the field says which of the two it is looking at.
 
 ### Settings, and what absent means
 

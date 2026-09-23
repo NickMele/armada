@@ -12,12 +12,37 @@ import type { ArcMoment } from "./arc-base";
 import { ARC_NOW, arcStep, featureWorkflow } from "./arc-base";
 import { ARC_TIERS } from "./arc-plan";
 import { lightFixture } from "./light";
-import type { LandingRule, PeerOverlapAnswer, ProposalView, SketchAttachment } from "../../draft";
+import type {
+  BranchesAnswer,
+  LandingRule,
+  PeerOverlapAnswer,
+  ProposalView,
+  SketchAttachment,
+} from "../../draft";
 import type { JobFixture } from "../fixture";
 
 const PROMPT =
   "The rail says Drones 1 of 2 and nothing says what the 2 is. Make the stat say what is " +
   "running, and let a press on it list the Drone, its Job and its step.";
+
+/**
+ * The branches both ref fields pick over: the base, and the two Jobs already
+ * writing where this work would. What `branchesOf` derives from a Manifest and
+ * the worktrees Fleet holds — no read answers it yet, so the moment carries it.
+ */
+export const ARC_BRANCHES: BranchesAnswer = [
+  { name: "main", base: true },
+  {
+    name: "armada/18-fold-the-capacity-read",
+    base: false,
+    job: "Fold the capacity read into one query",
+  },
+  {
+    name: "armada/19-give-the-rail-its-own-scroll",
+    base: false,
+    job: "Give the rail its own scroll",
+  },
+];
 
 /** Where the work starts and where it lands. They differ, and both are drawn. */
 export const ARC_LANDING: LandingRule = {
@@ -142,6 +167,7 @@ export function dispatchTyping(): ArcMoment {
     fixtures: peerJobs(),
     draft: {
       prompt: PROMPT,
+      branches: ARC_BRANCHES,
       peers: peers(),
       proposal: arcProposal(),
       landing: ARC_LANDING,
@@ -156,6 +182,7 @@ export function dispatchSketch(): ArcMoment {
     fixtures: peerJobs(),
     draft: {
       prompt: PROMPT,
+      branches: ARC_BRANCHES,
       sketch: sketch(),
       peers: peers(),
       proposal: arcProposal(),
