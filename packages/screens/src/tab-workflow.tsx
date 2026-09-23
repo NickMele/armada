@@ -226,7 +226,9 @@ export function WorkflowTab({
               the rule belongs to that group. Owed since `#1607`; `#1602`. */}
           <div className="armada-workflow-tab__modes">
             {toggle}
-            <GuideMark guide={GUIDE_GROUP_EDGES} onScreen={view === "canvas"} />
+            {/* Not drawn on Stacked at all: a column has no edges, so a mark
+                about reading them would explain a picture that is not there. */}
+            {view === "canvas" ? <GuideMark guide={GUIDE_GROUP_EDGES} /> : null}
           </div>
           {view === "canvas" ? (
             <div className="armada-workflow-tab__canvas">

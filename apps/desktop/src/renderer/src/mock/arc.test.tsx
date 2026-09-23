@@ -17,7 +17,14 @@
 import { expect, test, describe } from "vitest";
 import { page } from "vitest/browser";
 
-import { GUIDE_PLAN_ASKS } from "@armada/components";
+import {
+  GUIDE_ALWAYS_LOOKS,
+  GUIDE_LOOK,
+  GUIDE_MEMBER_LINK,
+  GUIDE_PLAN_ASKS,
+  GUIDE_TIERS,
+} from "@armada/components";
+import type { Guide } from "@armada/components";
 
 import { SCENARIOS, scenarioNamed } from "./scenario";
 import { mount, openBoard, rows, unmountAfterEach } from "./testing";
@@ -52,11 +59,12 @@ const groupCard = (ordinal: number) =>
 /** One task's row, by the name the board gives it. */
 const taskRow = (id: string) => page.getByRole("listitem", { name: new RegExp(`^${id} `) });
 
+/** One guide's `?`, by the name `GuideMark` gives it. */
+const markFor = (guide: Guide) =>
+  page.getByRole("button", { name: `Open guide ${guide.number}, ${guide.title}` });
+
 /** The `?` over the group cards, which is all the board says about an ask. */
-const planAsksMark = () =>
-  page.getByRole("button", {
-    name: `Open guide ${GUIDE_PLAN_ASKS.number}, ${GUIDE_PLAN_ASKS.title}`,
-  });
+const planAsksMark = () => markFor(GUIDE_PLAN_ASKS);
 
 /** Every scenario the arc put in the picker, by name. */
 const ARC = SCENARIOS.filter((one) => one.name.startsWith("arc/")).map((one) => one.name);
@@ -164,36 +172,43 @@ describe("classifying", () => {
   );
 
   test(
-    "arc/proposing-review: one permanent line says Fleet checks the work stayed inside the " +
-      "plan, and no tick turns it off",
+    "arc/proposing-review: the gates region says what each step's gate is and nothing about " +
+      "what no tick turns off — that is behind its mark, whatever is ticked",
     async () => {
       mount("arc/proposing-review");
 
-      const said = page.getByText(/Fleet checks that the work stayed inside/);
-      await expect.element(said).toBeVisible();
+      // The line that used to stand over the boxes is off the screen: it was
+      // true of a Job nobody had approved, so it is guide 9 (#1602).
+      await expect
+        .element(page.getByText(/Fleet checks that the work stayed inside/))
+        .not.toBeInTheDocument();
+      await expect.element(markFor(GUIDE_ALWAYS_LOOKS)).toBeVisible();
 
-      // Every box off on a step, and the line is still there — which is the
-      // claim: it is not a summary of what is ticked.
+      // Every box off on a step, and the mark is still there — which is the
+      // claim the sentence used to carry: it is not a summary of the ticks.
       const judge = page.getByRole("checkbox", { name: "Judge on Plan the change" });
       await judge.click();
       await expect.element(judge).not.toBeChecked();
       await expect
         .element(page.getByRole("listitem", { name: "Plan the change" }))
         .toHaveTextContent("Nothing stops it.");
-      await expect.element(said).toBeVisible();
+      await expect.element(markFor(GUIDE_ALWAYS_LOOKS)).toBeVisible();
     },
   );
 
   test(
-    "arc/proposing-review: each of the three tiers names the model it resolves to, and the " +
-      "planner's tier is what picks it",
+    "arc/proposing-review: each of the three tiers names the model it resolves to, and what a " +
+      "tier is stays behind the mark on the label",
     async () => {
       mount("arc/proposing-review");
 
       await expect.element(page.getByRole("combobox", { name: "Difficult" })).toHaveValue("opus");
       await expect.element(page.getByRole("combobox", { name: "Medium" })).toHaveValue("sonnet");
       await expect.element(page.getByRole("combobox", { name: "Easy" })).toHaveValue("haiku");
-      await expect.element(page.getByText(/The planner marks each task/)).toBeVisible();
+      await expect
+        .element(page.getByText(/The planner marks each task/))
+        .not.toBeInTheDocument();
+      await expect.element(markFor(GUIDE_TIERS)).toBeVisible();
 
       // This Job's share of the machine, beside what the machine allows.
       await expect.element(page.getByRole("spinbutton", { name: "Drones at once" })).toHaveValue(2);
@@ -231,6 +246,10 @@ describe("classifying", () => {
       await expect.element(held).toHaveTextContent("from armada/1162");
       await expect.element(held).toHaveTextContent(/The issue has been edited since/);
       await expect.element(held).toHaveTextContent("The Job is held to the words above.");
+      // What a criterion is, and that a Judge answers per criterion, is not
+      // this Job's — it is guide 10 and the `?` on the heading (#1602).
+      await expect.element(held).not.toHaveTextContent(/The Judge marks against/);
+      await expect.element(held.getByRole("button", { name: /^Open guide/ })).toBeVisible();
     },
   );
 
@@ -438,8 +457,9 @@ describe("implement", () => {
       await expect.element(runGroup(2)).toHaveTextContent("7a2f0c5");
       await expect.element(runGroup(3)).toHaveTextContent("working");
       await expect.element(runGroup(4)).toHaveTextContent("not started");
-      // One group at a time is the rule, and this line is its only evidence.
-      await expect.element(page.getByText(/No task of the next group starts/)).toBeVisible();
+      // The rule that one group runs at a time is the board's no longer —
+      // `job-detail-workflow.test.tsx` holds the mark that carries it (#1602).
+      await expect.element(page.getByText(/No task of the next group starts/)).not.toBeInTheDocument();
     },
   );
 
@@ -731,6 +751,26 @@ describe("Pulse", () => {
     await expect.element(page.getByText(/Nothing has been written to this job's logs/)).toBeVisible();
     expect(document.body.textContent).not.toMatch(/convoy|train/i);
   });
+
+  test(
+    "arc/executing-sequential: Pulse says when it was read and what keeps it current, and " +
+      "nothing about what a look is — that is the mark beside the act",
+    async () => {
+      mount("arc/executing-sequential");
+      await onPulse();
+
+      // The two standing sentences that used to ride here. Both were true of a
+      // Job that never ran, and both are guide 14 now (#1602).
+      await expect
+        .element(page.getByText(/A process can exit between the reading and this screen/))
+        .not.toBeInTheDocument();
+      await expect.element(page.getByText(/Looking costs no model call/)).not.toBeInTheDocument();
+      // What stays is the reading: when, and how often it is taken again.
+      await expect.element(page.getByText(/^Read .* ago\. Taken again every 10s while open\.$/)).toBeVisible();
+      await expect.element(markFor(GUIDE_LOOK)).toBeVisible();
+      await expect.element(page.getByRole("button", { name: "Look now" })).toBeVisible();
+    },
+  );
 });
 
 /** The branch the arc's one Job works on — `arc-base.ts`'s own spelling. */
@@ -815,6 +855,11 @@ describe("landing", () => {
     await expect
       .element(page.getByText(".armada/worktrees/3-show-what-s-running-in-the-drones-stat"))
       .toBeVisible();
+    // What reclaiming a checkout does is true of a Job that never ran, so the
+    // section names what is there and says nothing about it — guide 13 (#1602).
+    await expect
+      .element(page.getByText(/Reclaiming the worktree takes the checkout back/))
+      .not.toBeInTheDocument();
   });
   test("members/stacked: three pull requests are drawn in the order they land — one merged, one waiting on you, one stacked on it — and nothing on screen names a shape", async () => {
     mount("members/stacked");
@@ -840,6 +885,26 @@ describe("landing", () => {
 
     expect(document.body.textContent).not.toMatch(/convoy|train|atomic/i);
   });
+
+  test(
+    "members/stacked: a card says which link it carries and never what the three links mean — " +
+      "that is the one mark over the band",
+    async () => {
+      mount("members/stacked");
+      await expect
+        .element(page.getByRole("list", { name: "Pull requests, in the order they land" }))
+        .toBeVisible();
+
+      // What `stacked` does while the branch under it is open was the second
+      // half of the card's own sentence. It is guide 2 now (#1602).
+      await expect
+        .element(page.getByText(/keeps working, and rebases when that branch lands/))
+        .not.toBeInTheDocument();
+      await expect.element(markFor(GUIDE_MEMBER_LINK)).toBeVisible();
+      // One mark for the band, not one per member: three cards carry links.
+      expect(markFor(GUIDE_MEMBER_LINK).elements()).toHaveLength(1);
+    },
+  );
 
   test("members/merged: the third member reads as merged into the one before it and parked as a draft, so nothing is asked of a reviewer yet", async () => {
     mount("members/merged");
