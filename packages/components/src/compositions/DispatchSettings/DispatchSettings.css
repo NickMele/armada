@@ -86,7 +86,8 @@
 
 .armada-dispatch-settings__tiers,
 .armada-dispatch-settings__cap,
-.armada-dispatch-settings__lands {
+.armada-dispatch-settings__lands,
+.armada-dispatch-settings__workflow {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -121,4 +122,20 @@
   .armada-dispatch-settings__tier-row {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* What Fleet ran without, under the picker it is about. Rows rather than
+   bullets, at the same set-back weight every other note in this block takes. */
+.armada-dispatch-settings__left-out {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--fg-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  text-wrap: pretty;
 }

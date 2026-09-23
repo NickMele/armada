@@ -12,7 +12,7 @@
 // rather than a `CardHeader`. That is a difference in markup and not in what a
 // person sees, which is why the place is asserted against each state's own
 // frame and title — past the title, at the trailing edge, level with the
-// title's first line — rather than against one shape for all three.
+// title's first line — rather than against one shape for both.
 
 import { expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
@@ -62,7 +62,10 @@ async function answered(): Promise<void> {
 /** What a state is once it is on screen: its own frame, and the title at the head of it. */
 type Drawn = { frame: Element; title: Element };
 
-/** Every state `Composing` draws, and how each is reached and read. */
+/**
+ * Every state `Composing` draws, and how each is reached and read. There were
+ * three: hand entry went with the form on 2026-09-23.
+ */
 const STATES: { what: string; open: () => Promise<Drawn> }[] = [
   {
     what: "The repository ask",
@@ -78,16 +81,6 @@ const STATES: { what: string; open: () => Promise<Drawn> }[] = [
       await composing();
       await answered();
       const title = page.getByRole("heading", { name: "Dispatch a job" }).element();
-      return { frame: title.parentElement!, title };
-    },
-  },
-  {
-    what: "Hand entry",
-    async open() {
-      await composing();
-      await answered();
-      await page.getByRole("button", { name: "Enter by hand" }).click();
-      const title = page.getByRole("heading", { name: "Propose a job" }).element();
       return { frame: title.parentElement!, title };
     },
   },
@@ -133,13 +126,16 @@ test.for(STATES)("$what: Escape closes the composer, which is what the control s
 });
 
 // The guard on the key, his call of 2026-09-17: an untouched composer closes at
-// once — the three tests above — and one carrying anything typed asks first,
+// once — the tests above — and one carrying anything typed asks first,
 // the way killing a Job does. The control and the key are one act, so both ask.
 
 /** The ask, by its own role and the title it is named by. */
 const ASKED = () => page.getByRole("dialog", { name: "Discard what you typed?" });
 
-/** Every state something can be typed into, and what typing in it leaves behind. */
+/**
+ * Every state something can be typed into, and what typing in it leaves
+ * behind. The hand form was the second and is gone with it.
+ */
 const TYPED: { what: string; type: () => Promise<() => string> }[] = [
   {
     what: "The request",
@@ -149,17 +145,6 @@ const TYPED: { what: string; type: () => Promise<() => string> }[] = [
       const field = page.getByLabelText("Request", { exact: true });
       await userEvent.type(field, "fix the flake in the board test");
       return () => (field.element() as HTMLTextAreaElement).value;
-    },
-  },
-  {
-    what: "The hand form",
-    async type() {
-      await composing();
-      await answered();
-      await page.getByRole("button", { name: "Enter by hand" }).click();
-      const field = page.getByLabelText("Title", { exact: true });
-      await userEvent.type(field, "Widen the search index");
-      return () => (field.element() as HTMLInputElement).value;
     },
   },
 ];

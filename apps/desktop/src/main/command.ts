@@ -18,7 +18,6 @@ import type { CommandExplainedRead } from "../shared/api";
 import type { BridgeState } from "../shared/bridge";
 import type {
   ClearOutcome,
-  Draft,
   FilesFound,
   Outcome,
   ReclaimOutcome,
@@ -26,7 +25,7 @@ import type {
   SavePreference,
   StagedAttachment,
 } from "@armada/protocol";
-import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, RestartRequested, TurnRaise } from "@armada/protocol";
+import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, Redirection, Redispatched, RestartRequested, TurnRaise } from "@armada/protocol";
 import type {
   AnswerCommand,
   AnswerHelmCall,
@@ -264,47 +263,10 @@ export class JobCommands {
   }
 
   // ------------------------------------------------------------- proposing
-  /** Draft a Job onto the approval gate. What comes back is not a running Job. */
-  async proposeJob(draft: Draft): Promise<Outcome> {
-    // Refused here and not only in the form, whose check is a courtesy.
-    if (draft.title.trim() === "") return { ok: false, why: "empty_title" };
-    if (draft.brief.trim() === "") return { ok: false, why: "empty_brief" };
-    // Ids Fleet holds. An empty one is an unfilled form, not a value to send.
-    if (draft.workflowId === "") return { ok: false, why: "no_workflow" };
-    if (draft.manifestId === "") return { ok: false, why: "no_manifest" };
-    const port = this.board.port();
-    if (port === null) return { ok: false, why: "not_connected" };
-
-    const proposal: ProposeJob = {
-      // Rust stores a trimmed `Title`, so padding makes what comes back
-      // differ from what was sent.
-      title: draft.title.trim(),
-      workflow_id: draft.workflowId,
-      owner_manifest_id: draft.manifestId,
-      origin: draft.origin,
-      urgency: draft.urgency,
-      atomic: draft.atomic,
-      // Omitted rather than sent empty: `""` reads like a value, and Fleet
-      // fills it from configuration.
-      ...(draft.model === "" ? {} : { model: draft.model }),
-      facts: draft.brief,
-      // Sent unconditionally, even empty: unlike `model` there is no
-      // meaningful absent-vs-empty reading for Fleet to fill in.
-      attachments: draft.attachments.map((attachment) => ({
-        staged_path: attachment.path,
-        filename: attachment.filename,
-        mime_type: attachment.mimeType,
-      })),
-    };
-    const answer = await ask(port, "POST", "/jobs", proposal);
-    if (answer.ok !== true) return answer.outcome;
-    this.board.fold(answer.body as JobSummary);
-    return { ok: true };
-  }
-
   /**
-   * The other way a Job reaches the same gate: describe the work, and the Job
-   * proposer reads it and fills the workflow in.
+   * How a Job reaches the approval gate: describe the work, and the Job
+   * proposer reads it and fills the workflow in. **The only way, since the
+   * hand form and the `proposeJob` command behind it went on 2026-09-23.**
    *
    * **Not `Outcome`, and not the shape `act` holds.** A plan is every Job the
    * request became, so there is no one row to fold and no one id to hand back —

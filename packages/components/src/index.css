@@ -49,7 +49,6 @@
 @import "./compositions/EvidenceTrail/EvidenceTrail.css";
 @import "./compositions/EvidenceCard/EvidenceCard.css";
 @import "./compositions/BoardEmptyState/BoardEmptyState.css";
-@import "./compositions/JobComposer/JobComposer.css";
 @import "./compositions/JobDetailHeaderActions/JobDetailHeaderActions.css";
 @import "./compositions/FailureNotice/FailureNotice.css";
 @import "./compositions/JobBrief/JobBrief.css";

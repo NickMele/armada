@@ -1,10 +1,9 @@
-// Dispatch a job: describe the work, or fill the form in by hand.
+// Dispatch a job: describe the work, and that is the whole of it.
 //
-// **One surface with two ways through it, and they are not equal.** Describing
-// the work is the path — the Job proposer reads the request and answers the
-// title, the workflow and, where the work is several jobs, the order between
-// them. `docs/concepts/job-proposer.md` calls hand entry the override, and the
-// composer this swaps to is what hand entry became.
+// **One surface and one way through it.** The Job proposer reads the request
+// and answers the title, the workflow and, where the work is several jobs, the
+// order between them. The hand form this used to swap to is gone — the owner's
+// call of 2026-09-23, once the Settings block carried every decision it held.
 //
 // # The proposal is this screen's state, not the app's
 //
@@ -18,7 +17,7 @@
 //
 // There is no in-flight guard on the preload call, so two presses are two model
 // calls and two drafted plans — two of everything at the gate, and somebody
-// deleting one by hand. **The form is what stops it.**
+// deleting one by hand. **This screen is what stops it.**
 //
 // The control being off while a call is out is the first half and the one a
 // person sees. The second half is the ref: a press that arrives anyway sends
@@ -31,7 +30,6 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
-  Button,
   DispatchRequest,
   DispatchSettings,
   SketchPad,
@@ -47,7 +45,7 @@ import type {
   SketchBox,
   SketchLine,
 } from "@armada/components";
-import type { StagedAttachment, WorkflowSummary } from "@armada/protocol";
+import type { LeftOutWorkflow, StagedAttachment, WorkflowSummary } from "@armada/protocol";
 
 import { howManySet } from "./draft/dispatch";
 import type { DispatchSettingsView } from "./draft/dispatch";
@@ -67,9 +65,6 @@ import {
 import type { Drawing, SketchAttachment } from "./draft/sketch";
 import type { Answered } from "./proposal";
 import { PROPOSAL_IS_SLOW } from "./proposal";
-
-/** What the control that goes back to describing is called. */
-const BACK = "Describe the work instead";
 
 /**
  * What the sketch's chip is called. **Numbered because a request may carry
@@ -123,8 +118,6 @@ export type DispatchJobProps = {
    * open, under a job already queued.
    */
   statusOf?: (jobId: string) => string | undefined;
-  /** Hand entry, built by the caller. The composer, and the override. */
-  byHand: ReactNode;
   /**
    * What Fleet says the call in flight is doing, or `null`.
    *
@@ -175,6 +168,12 @@ export type DispatchJobProps = {
   peers: PeerOverlapAnswer;
   /** The workflows Fleet holds, for the settings block's override. */
   workflows: readonly WorkflowSummary[];
+  /**
+   * The Kit and carried definitions Fleet runs without, each with why — #425.
+   * Drawn under the Settings block's Workflow field, which is where a workflow
+   * is picked now that the hand form is gone.
+   */
+  leftOut?: readonly LeftOutWorkflow[];
   /** The models a tier may name. Empty until the connection answers. */
   models: readonly string[];
   /** How many Drones this machine runs across every Job. `null` before Fleet said. */
@@ -212,7 +211,6 @@ export function DispatchJob({
   onApprove,
   approving,
   statusOf,
-  byHand,
   close,
   repository,
   opensOn,
@@ -220,6 +218,7 @@ export function DispatchJob({
   branches,
   peers,
   workflows,
+  leftOut,
   models,
   machineCap,
   settings: settingsOpenOn,
@@ -249,9 +248,6 @@ export function DispatchJob({
   const [mode, setMode] = useState<RequestMode>("write");
   const [drawing, setDrawing] = useState<Drawing>(() => drawingOf(sketch));
   const [said, setSaid] = useState(sketch?.said ?? "");
-  // Which of the two ways through this surface is open. Describing is the
-  // path, so it is what the surface opens on.
-  const [hand, setHand] = useState(false);
   // One request outstanding at a time. A ref rather than state because nothing
   // renders from it: it is the guard, not a reading, and a re-render between
   // the press and the answer would be a second chance to fire.
@@ -330,21 +326,6 @@ export function DispatchJob({
         }
       : proposal;
 
-  if (hand) {
-    return (
-      <div className="armada-screen__pane">
-        {/* The way back, above the form. Hand entry is the exception, so
-            leaving it is one press and never a dead end. */}
-        <div>
-          <Button variant="secondary" size="sm" onClick={() => setHand(false)}>
-            {BACK}
-          </Button>
-        </div>
-        {byHand}
-      </div>
-    );
-  }
-
   return (
     <div className="armada-dispatch-pane">
       <div className="armada-dispatch-pane__columns">
@@ -371,6 +352,7 @@ export function DispatchJob({
             settings={settings}
             onSettings={setSettings}
             workflows={workflows}
+            {...(leftOut === undefined ? {} : { leftOut })}
             models={models}
             machineCap={machineCap}
             disabled={disabled}
@@ -416,7 +398,6 @@ export function DispatchJob({
           setAttachments((current) => current.filter((attachment) => attachment.path !== path))
         }
         onDispatch={() => void dispatch()}
-        onEnterByHand={() => setHand(true)}
         close={close}
         onReset={reset}
         onOpen={onOpen}

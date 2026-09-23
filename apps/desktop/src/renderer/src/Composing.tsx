@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { LeftOutWorkflow, ManifestReading, ManifestSummary, RepositorySummary } from "@armada/protocol";
 import { Button, Dialog, KbdBinding } from "@armada/components";
-import { AskRepository, Composer, DispatchJob, watchOf } from "@armada/screens";
+import { AskRepository, DispatchJob, watchOf } from "@armada/screens";
 import { Boundary } from "@armada/shell";
 
 import { dispatchSettingsOf } from "@armada/screens/src/draft/dispatch";
@@ -100,21 +100,19 @@ export function Composing({
   // `leftOut` and the Manifest reading for the repository the ask answered —
   // #959. Read once the answer is in, since `state.holds.leftOut` is scoped
   // to the pick, which stays on All throughout. Off All, `state.holds`
-  // already carries the right one, so nothing here is asked.
+  // already carries the right one, so nothing here is asked. It reaches the
+  // Settings block's Workflow field, which is where a workflow is picked now.
   const [composingFor, setComposingFor] = useState(UNREAD);
-  // What closing would throw away, reported by the two surfaces that hold it:
-  // the request and its attachments, and the hand form's fields and choices.
-  // Held as two, because either can carry something the other does not — the
-  // request survives a swap to hand entry and back.
-  const [typedRequest, setTypedRequest] = useState(false);
-  const [typedForm, setTypedForm] = useState(false);
+  // What closing would throw away: the request, anything staged or linked
+  // against it, and any setting moved. One surface reports it, since the hand
+  // form that used to hold the other half is gone.
+  const [typed, setTyped] = useState(false);
   // Whether the discard ask is up. While it is, the key below is the dialog's.
   const [asking, setAsking] = useState(false);
   // What a mock moment already holds — the request half typed, who else is
   // writing there, the two refs. `{}` in the app, where nothing serves any of
   // it yet: `drafted.tsx` is the whole of that seam.
   const drafted = useDrafted();
-  const typed = typedRequest || typedForm;
   /** The one act the control and the key share: leave, or ask first. */
   const leave = useCallback(() => {
     if (typed) setAsking(true);
@@ -169,11 +167,11 @@ export function Composing({
   const guarded = { bridge: state.bridge, onCopied };
   return (
     <div className="armada-screen__pane">
-      {/* Describing the work is the path and the form is the override, so
-          the composer is what `Enter by hand` swaps to rather than what
-          opens. What Fleet holds is read over the one connection and not
-          scraped off the Jobs already on the board, which is what this
-          offered before `list_workflows` and `list_manifests` existed. */}
+      {/* Describing the work is the only way in since the owner took the hand
+          form out on 2026-09-23. What Fleet holds is read over the one
+          connection and not scraped off the Jobs already on the board, which
+          is what this offered before `list_workflows` and `list_manifests`
+          existed. */}
       <Boundary region="the job composer" {...guarded}>
       <DispatchJob
         // What the reading is read against is published state, so it is
@@ -209,6 +207,10 @@ export function Composing({
         // the overlap read hangs off a Job and there is no Job yet.
         peers={drafted.peers ?? null}
         workflows={state.holds.workflows}
+        // What Fleet ran without, named under the Workflow field — #425. On
+        // All it is the answered repository's own read, since the pick stays
+        // on All; off All the pick already scopes it.
+        leftOut={all ? composingFor.leftOut : state.holds.leftOut}
         models={state.holds.models?.models ?? []}
         // The machine's own cap. A moment carries its own, because `limits` is
         // a read and a scenario publishes none.
@@ -222,7 +224,7 @@ export function Composing({
         // way out of the same composer.
         close={<WayOut ground="card" onClose={leave} />}
         // What the request field and its attachments would lose.
-        onTyped={setTypedRequest}
+        onTyped={setTyped}
         // What Fleet says the call is doing, against the same `now`
         // every other elapsed figure on screen is drawn from.
         watching={watchOf(state.proposing, now)}
@@ -244,25 +246,6 @@ export function Composing({
         statusOf={(jobId) => state.jobs.find((job) => job.id === jobId)?.status}
         disabled={!live}
         onCopied={onCopied}
-        byHand={
-          <Composer
-            close={<WayOut ground="card" onClose={leave} />}
-            // What the hand form would lose. Its own, because swapping back to
-            // describing unmounts it and takes the fields with it.
-            onTyped={setTypedForm}
-            workflows={state.holds.workflows}
-            leftOut={all ? composingFor.leftOut : state.holds.leftOut}
-            onStage={stageAttachment}
-            onSearchFiles={searchFiles}
-            manifest={manifest}
-            models={state.holds.models}
-            disabled={!live}
-            onPropose={(draft) => {
-              void commands.propose(draft);
-              onClose();
-            }}
-          />
-        }
       />
       </Boundary>
       {/* The ask, and only where something would be lost. Every destructive

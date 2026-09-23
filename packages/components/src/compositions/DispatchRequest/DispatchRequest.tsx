@@ -22,12 +22,12 @@ import type { StagedAttachment } from "@armada/protocol";
  * Dispatch a job by describing the work. One field, one press, and the Job
  * proposer decides the rest.
  *
- * **Describing the work is the path; the form is the override.** A person types
- * what they want done, or pastes a link, and dispatches. They pick no workflow
- * and write no title — `../../../../../docs/concepts/job-proposer.md` says
- * both, and says why: doing it by hand means knowing the workflow catalogue
- * before you can ask for anything. Hand entry is one control away and is the
- * exception.
+ * **Describing the work is the only way in.** A person types what they want
+ * done, or pastes a link, and dispatches. They pick no workflow and write no
+ * title — `../../../../../docs/concepts/job-proposer.md` says both, and says
+ * why: doing it by hand means knowing the workflow catalogue before you can
+ * ask for anything. The form that let you is gone, and the Settings block is
+ * where a workflow, a model or a cap is overridden instead.
  *
  * # The wait says what the call is doing, and offers a way out of it
  *
@@ -61,8 +61,8 @@ import type { StagedAttachment } from "@armada/protocol";
  *
  * **No workflow resolved is Armada working.** Fleet answered, refused, and
  * returned the request unchanged — no Job was created. It takes no red and no
- * code: it is the surface saying what it will not send, and the two ways on are
- * to edit the request or to enter the job by hand.
+ * code: it is the surface saying what it will not send, and the way on is to
+ * edit the request, or to name the workflow in Settings.
  *
  * **The call not being made at all is Armada failing.** That is a fault, it
  * carries the code every error carries, and it renders in the error treatment
@@ -190,8 +190,6 @@ export type DispatchRequestProps = {
   onRemoveAttachment: (path: string) => void;
   /** Send it. Never called with a blank request — the control is off until one. */
   onDispatch: () => void;
-  /** Fill the form in by hand instead. The override, and one press away. */
-  onEnterByHand: () => void;
   /** Drop what came back and describe something else. */
   onReset: () => void;
   /**
@@ -410,7 +408,6 @@ export function DispatchRequest({
   onAttach,
   onRemoveAttachment,
   onDispatch,
-  onEnterByHand,
   onReset,
   close,
   onOpen,
@@ -595,7 +592,7 @@ export function DispatchRequest({
               <p className="armada-dispatch__unresolved-body">
                 Nothing is assigned by default: the workflow is frozen into the job at creation
                 and becomes what the work is judged against. Edit the request and dispatch
-                again, or enter the job by hand.
+                again, or name the workflow yourself under Settings.
               </p>
             </div>
           ) : null}
@@ -642,25 +639,22 @@ export function DispatchRequest({
             Dispatch another
           </Button>
         ) : (
-          <>
-            {/* The override. Secondary and leading, because it is the exception
-                and the accent is spent on the path. */}
-            <Button variant="secondary" onClick={onEnterByHand} disabled={reading}>
-              Enter by hand
-            </Button>
-            <Button
-              variant="primary"
-              pending={reading}
-              onClick={onDispatch}
-              disabled={disabled || empty}
-            >
-              {reading
-                ? "Reading the request"
-                : proposal.at === "faulted"
-                  ? "Dispatch again"
-                  : "Dispatch"}
-            </Button>
-          </>
+          /* One control, because there is one way through this surface. The
+             form `Enter by hand` opened is gone: the Settings block took every
+             decision it carried, and the owner's call of 2026-09-23 is that
+             with those there it is not needed any more. */
+          <Button
+            variant="primary"
+            pending={reading}
+            onClick={onDispatch}
+            disabled={disabled || empty}
+          >
+            {reading
+              ? "Reading the request"
+              : proposal.at === "faulted"
+                ? "Dispatch again"
+                : "Dispatch"}
+          </Button>
         )}
       </CardFooter>
     </Card>

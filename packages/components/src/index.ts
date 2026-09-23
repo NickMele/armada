@@ -53,7 +53,6 @@ export * from "./compositions/FailureNotice/FailureNotice";
 export * from "./compositions/FramesPaired/FramesPaired";
 export * from "./compositions/FramesShown/FramesShown";
 export * from "./compositions/GamingFlags/GamingFlags";
-export * from "./compositions/JobComposer/JobComposer";
 export * from "./compositions/JobDiffSheet/JobDiffSheet";
 export * from "./compositions/JobBrief/JobBrief";
 export * from "./compositions/JobDetailHeaderActions/JobDetailHeaderActions";
@@ -195,8 +194,8 @@ export * from "./foundations/Tokens/Tokens";
 export * from "./compositions/DroneBrief/DroneBrief";
 
 // Dispatch a job by describing the work. The Job proposer answers the title,
-// the workflow and the split, so the form behind `Enter by hand` is the
-// override rather than the path.
+// the workflow and the split, and it is the only way in — the hand form that
+// used to sit behind `Enter by hand` is gone.
 export * from "./compositions/DispatchRequest/DispatchRequest";
 
 // One worktree Fleet is holding, and the test it did not pass. The reasons are
