@@ -4,7 +4,7 @@
 // test asserts against is the window Bridge draws. `main.tsx` is not imported
 // because it mounts itself on import.
 
-import { StrictMode } from "react";
+import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { Boundary } from "@armada/shell";
 import { HapticsProvider } from "@armada/components";
@@ -18,7 +18,32 @@ import { scenarioNamed } from "./scenario";
 import type { Scenario } from "./scenario";
 
 /** What was mounted: the fake the window is talking to, and how to take it down. */
-export type Mounted = { api: BridgeApi; scenario: Scenario; unmount: () => void };
+export type Mounted = {
+  api: BridgeApi;
+  scenario: Scenario;
+  /**
+   * Resolved once React has drawn the window and run its effects — which is
+   * when the app's own key bindings exist.
+   *
+   * **`render` schedules the work rather than doing it**, so the line after
+   * `mountApp` runs against an empty host. A press with a locator waits that
+   * out on its own; a keystroke has none and nothing retries it, so it is
+   * simply lost. Measured 23 Sep 2026 on #1592: under load `⌘J` reached
+   * `window` with `#root` still empty, and Helm's dock never came up.
+   */
+  onScreen: Promise<void>;
+  unmount: () => void;
+};
+
+/**
+ * Says the window is up. **A sibling after `App` rather than a hook inside
+ * it**: effects run in tree order, so this one runs after everything the app
+ * mounted, this window's bindings included.
+ */
+function OnScreen({ say }: { say: () => void }) {
+  useEffect(() => say(), [say]);
+  return null;
+}
 
 /**
  * Install a fake `window.armada` on `scenario` and mount the app into `host`.
@@ -31,6 +56,10 @@ export function mountApp(scenario: string | Scenario, host: HTMLElement, shared?
   const api = shared ?? fakeBridge(chosen);
   window.armada = api;
   const root = createRoot(host);
+  let say = (): void => undefined;
+  const onScreen = new Promise<void>((resolve) => {
+    say = resolve;
+  });
   root.render(
     <StrictMode>
       <Boundary region="the window" usable={false} bridge={chosen.state.bridge}>
@@ -43,9 +72,10 @@ export function mountApp(scenario: string | Scenario, host: HTMLElement, shared?
           <DraftedFrom held={chosen.draft ?? {}}>
             <App {...(chosen.draft === undefined ? {} : { draft: chosen.draft })} />
           </DraftedFrom>
+          <OnScreen say={say} />
         </HapticsProvider>
       </Boundary>
     </StrictMode>,
   );
-  return { api, scenario: chosen, unmount: () => root.unmount() };
+  return { api, scenario: chosen, onScreen, unmount: () => root.unmount() };
 }

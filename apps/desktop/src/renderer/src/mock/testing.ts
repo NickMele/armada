@@ -31,13 +31,25 @@ export function mount(scenario: string | Scenario): Mounted {
   return app;
 }
 
+/** Every window mounted in this test is drawn, with its effects run. */
+export async function onScreen(): Promise<void> {
+  await Promise.all(mounted.map((one) => one.app.onScreen));
+}
+
 /**
  * Put Helm's dock up, and wait for it. **Bridge opens with it shut** since
  * #1583: the dock draws over the content rather than beside it, so leaving it
  * standing would cover whatever the window was opened to read. `⌘J` is the
  * way in that works at every width and from inside a field.
+ *
+ * **The window has to be up before the press, not after it.** `⌘J` is bound in
+ * an effect, and `mount` returns before React has run one — a keystroke aimed
+ * at a window that is not listening yet reaches `window`, matches nothing, and
+ * is gone, with no locator to have waited on and nothing to retry it. Measured
+ * 23 Sep 2026 on #1592, once in 25 full runs under load.
  */
 export async function openHelm(): Promise<void> {
+  await onScreen();
   await userEvent.keyboard("{Meta>}j{/Meta}");
   await expect.element(page.getByRole("complementary", { name: "Helm" })).toBeVisible();
 }
@@ -62,7 +74,11 @@ export function mountTwo(scenario: Scenario, labels: [string, string]): [HTMLEle
     mounted.push({ app, host });
     return host;
   });
-  mounted.push({ app: { api: api!, scenario, unmount: () => undefined }, host: row });
+  // The row is not a window of its own: both of its windows are already tracked above.
+  mounted.push({
+    app: { api: api!, scenario, onScreen: Promise.resolve(), unmount: () => undefined },
+    host: row,
+  });
   return hosts as [HTMLElement, HTMLElement];
 }
 
