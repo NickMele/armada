@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { ReactElement } from "react";
 import { cloneElement, useState } from "react";
-import { Check, CircleDot, Cpu, GitBranch, Layers, OctagonAlert, Power, UserCheck, X } from "lucide-react";
+import { Check, CircleDot, Cpu, GitBranch, OctagonAlert, Power, ScrollText, UserCheck, X } from "lucide-react";
 import { expect } from "storybook/test";
 import { Button } from "../../primitives/Button/Button";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
@@ -443,7 +443,7 @@ function TableAt({ width }: { width: string }) {
             handle={row.handle}
             onOpen={() => {}}
             fields={[
-              { label: "Workflow", icon: Layers, value: "Bug, 6 steps" },
+              { label: "Workflow", icon: ScrollText, value: "Bug, 6 steps" },
               {
                 label: "Progress",
                 value: (
@@ -553,7 +553,7 @@ export const EscalatedBadgeInTheTableAtTheWidthFloor: StoryObj = {
           handle="31-reconcile-orphaned-drones-fleet-start"
           onOpen={() => {}}
           fields={[
-            { label: "Workflow", icon: Layers, value: "Bug, 6 steps" },
+            { label: "Workflow", icon: ScrollText, value: "Bug, 6 steps" },
             {
               label: "Progress",
               value: (
@@ -650,7 +650,7 @@ const WITHOUT_REPOSITORY = EVERY_COLUMN.filter((name) => name !== "Repository");
 
 /** One row's facts, named so a list can draw whichever subset its columns name. */
 const EVERY_FACT: Record<string, JobRowStackedProps["fields"][number]> = {
-  Workflow: { label: "Workflow", icon: Layers, value: "Bug, 6 steps" },
+  Workflow: { label: "Workflow", icon: ScrollText, value: "Bug, 6 steps" },
   Progress: {
     label: "Progress",
     value: (

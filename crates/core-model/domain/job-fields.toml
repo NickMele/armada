@@ -148,8 +148,8 @@ nullable = "Yes"
 frozen_at = "Never"
 purpose = "DAG links — depends_on / blocks — sequencing peer Jobs."
 in_code = "Not yet"
-open_questions = ["Can a Convoy be a peer node in dependencies?"]
-notes = "Every edge gates identically on the upstream reaching a terminal status; edges carry no strength of their own, and what varies is carried by that outcome. A Convoy does not decompose but may be a peer here — it completes as one unit, so a dependent never observes a half-landed upstream. Linked-DAG membership is recorded here and only here, which is why the derived shape has no `linked_dag` value."
+open_questions = ["Can a Job that lands as several pull requests in order be a peer node in dependencies?"]
+notes = "Every edge gates identically on the upstream reaching a terminal status; edges carry no strength of their own, and what varies is carried by that outcome. A Job that lands as several pull requests in order does not decompose but may be a peer here — it completes as one unit, so a dependent never observes a half-landed upstream. Linked-DAG membership is recorded here and only here, which is why the derived shape has no `linked_dag` value."
 
 [fields.dispatched_by]
 type = "{job_id, step_id}"
@@ -425,7 +425,7 @@ nullable = "Yes"
 frozen_at = "Never"
 purpose = "What this Job is about. Neither sequencing nor provenance."
 in_code = "Not yet"
-notes = "A revert reads its subject's scope history rather than classifying afresh, which stops a linked-DAG revert of a Convoy leaving the intermediate state the Convoy existed to prevent. See the `completed_success` status row for how a wrong outcome is handled."
+notes = "A revert reads its subject's scope history rather than classifying afresh, which stops a linked-DAG revert of a Job that wrote in several places leaving the intermediate state that Job existed to prevent. See the `completed_success` status row for how a wrong outcome is handled."
 why = "Without this field, a revert, a Code Review's PR, or a Design Plan's target would have nowhere to point — none of them is sequenced against or spawned by what it concerns."
 
 [fields.title]

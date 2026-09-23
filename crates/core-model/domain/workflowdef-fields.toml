@@ -297,9 +297,9 @@ open_questions = ["Does exceeding max_context_size hard-fail or soft-warn?"]
 notes = """
 Fails closed rather than silently truncating, escalating to a human under its own reason, `evidence_too_large`, rather than hard-failing the step or warning past it. A loop workflow breaches it by construction unless prior-iteration context is trimmed — only the latest work product is carried forward, plus every prior verdict.
 
-Two things this does not settle: the cap is authored per step by someone who cannot know how wide a Convoy will be, and the config row is scoped to `verification` rather than to the Judge alone — deliberately ownerless, since the cap bounds all of verification, not just the Judge Check.
+Two things this does not settle: the cap is authored per step by someone who cannot know how many places a Job will write in, and the config row is scoped to `verification` rather than to the Judge alone — deliberately ownerless, since the cap bounds all of verification, not just the Judge Check.
 """
-why = "A hard fail would route to the retry flow, whose only re-scope for a combined diff is a smaller one, and a Convoy cannot be split — so retries would burn budget on something the Drone cannot fix. A soft warning would let the Judge grant on partial sight while the record showed an ordinary pass."
+why = "A hard fail would route to the retry flow, whose only re-scope for a combined diff is a smaller one, and a Job that writes in several places cannot be split — so retries would burn budget on something the Drone cannot fix. A soft warning would let the Judge grant on partial sight while the record showed an ordinary pass."
 
 [fields.mechanical_checks]
 type = "array"

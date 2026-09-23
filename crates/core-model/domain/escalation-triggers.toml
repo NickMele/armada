@@ -164,9 +164,9 @@ meaning = "Evidence exceeded max_context_size."
 in_code = "Not yet"
 open_questions = ["Does exceeding max_context_size hard-fail or soft-warn?"]
 notes = """
-Escalates rather than hard-failing the step or warning past it. A hard fail would route to the retry flow, whose only re-scope for a combined diff is a smaller one — and a Convoy cannot be split, so retries would burn budget on something the Drone cannot fix. A soft warning would let the Judge grant on partial sight, showing an ordinary pass in the record.
+Escalates rather than hard-failing the step or warning past it. A hard fail would route to the retry flow, whose only re-scope for a combined diff is a smaller one — and a Job that writes in several places cannot be split, so retries would burn budget on something the Drone cannot fix. A soft warning would let the Judge grant on partial sight, showing an ordinary pass in the record.
 
-Not fully closed: the cap is authored per step by someone who cannot know how wide a Convoy will be, and a loop workflow breaches it by construction unless prior-iteration context is trimmed.
+Not fully closed: the cap is authored per step by someone who cannot know how many places a Job will write in, and a loop workflow breaches it by construction unless prior-iteration context is trimmed.
 """
 
 [triggers.fan_out]

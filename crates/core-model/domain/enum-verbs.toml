@@ -1024,7 +1024,7 @@ icon = ""
 status_token = ""
 vocabulary = "Movement kind"
 in_code = ""
-notes = "A Drone arrived on a step or left it, and neither machine moved. Lowercase because it is countable, which is the casing rule the lexicon states for job, drone, convoy and workspace. Neither glyph nor token, for `status`'s reason."
+notes = "A Drone arrived on a step or left it, and neither machine moved. Lowercase because it is countable, which is the casing rule the lexicon states for job, drone and workspace. Neither glyph nor token, for `status`'s reason."
 
 [verbs.drone_presence.drone_spawned]
 verb = "a drone started"
