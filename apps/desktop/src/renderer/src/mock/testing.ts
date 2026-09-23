@@ -2,7 +2,7 @@
 // down after, and reach a surface the way a person does — by the rail.
 
 import { afterEach, expect } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 
 import { mountApp } from "./mount";
 import type { Mounted } from "./mount";
@@ -29,6 +29,17 @@ export function mount(scenario: string | Scenario): Mounted {
   const app = mountApp(scenario, host);
   mounted.push({ app, host });
   return app;
+}
+
+/**
+ * Put Helm's dock up, and wait for it. **Bridge opens with it shut** since
+ * #1583: the dock draws over the content rather than beside it, so leaving it
+ * standing would cover whatever the window was opened to read. `⌘J` is the
+ * way in that works at every width and from inside a field.
+ */
+export async function openHelm(): Promise<void> {
+  await userEvent.keyboard("{Meta>}j{/Meta}");
+  await expect.element(page.getByRole("complementary", { name: "Helm" })).toBeVisible();
 }
 
 /**

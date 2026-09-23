@@ -44,15 +44,14 @@ export type TheShellProps = {
   activeId?: string;
   /**
    * The 48px icon rail — the column's narrowest, and the narrowest it ever
-   * gets. The surface decides, from the window's width and from whether
-   * Helm's dock is taking the room: `--layout-breakpoint` at any dock state,
-   * and `--window-fold-left` while the dock is beside the content.
+   * gets. The surface decides, from the window's width alone:
+   * `--layout-breakpoint`, at any dock state. **The dock's state was a term
+   * here until #1583** — a second bound collapsed the column while the dock
+   * was taking 380px off the content, so opening Helm made the content wider.
    *
    * **There is no third width.** #1435 added one — the column absent
-   * altogether under `--window-fold-left` — and the owner corrected it on
-   * 18 Sep 2026: the panels collapse into a single icon-size column, they are
-   * not hidden away. Navigation, Stats and Fleet are on screen at every
-   * width, each reading down to a glyph or a dot.
+   * altogether — and the owner corrected it on 18 Sep 2026: the panels
+   * collapse into an icon-size column, they are not hidden away.
    */
   collapsed?: boolean;
   onSelect?: (id: string) => void;
@@ -88,15 +87,17 @@ export type TheShellProps = {
 };
 
 /**
- * Helm's dock (#948). **Closed draws nothing at all beyond the layout
- * breakpoint** — #1094 dropped the edge strip that used to sit there at any
- * width, since the title row's own Helm button (#1087) is already the way
- * back and a strip that says the same thing a second time is residue, not a
- * second door. Folded still keeps its strip: under the breakpoint the title
- * row has no room to carry the button, so the strip is the only way in.
+ * Helm's dock (#948). **Over the content, never a column in it** (#1583): the
+ * panel keeps its frame and its place on the trailing edge, and the screen
+ * underneath keeps the window's width open or shut. It starts shut.
+ *
+ * **Closed draws nothing at all beyond the layout breakpoint** — #1094 dropped
+ * the edge strip that used to sit there at any width, since the title row's
+ * own Helm button (#1087) is already the way back. Folded keeps its strip:
+ * under the breakpoint the title row has no room for the button.
  */
 export type TheShellDock = {
-  /** Beside the content, or the sheet when folded. */
+  /** The panel over the content, or the sheet when folded. */
   open: boolean;
   /** Below `--layout-breakpoint`. A prop, because a media query cannot read the token. */
   folded?: boolean;
@@ -106,8 +107,8 @@ export type TheShellDock = {
   binding?: string;
   onOpen: (open: boolean) => void;
   /**
-   * The resting width in px. Absent draws `--w-dock`. Read while beside the
-   * content; a folded dock is the `Sheet`'s own width, never a drag.
+   * The resting width in px. Absent draws `--w-dock`. Read while the panel is
+   * over the content; a folded dock is the `Sheet`'s own width, never a drag.
    */
   width?: number;
   /**
@@ -218,9 +219,12 @@ const DOCK_WIDTH_DEFAULT_FALLBACK = 380;
  * chrome around the dock that isn't the panel or the dock itself — the left
  * column's width, its margin, the gap, the handle's hit area and the dock's
  * own margin, four `--space-4` gutters and the left column between them, all
- * from `TheShell.css` — minus `--w-work-min`, the panel's own floor.
- * `leftWidth` is the column's actual width now that it resizes too; absent
- * falls back to `--sidebar-default`, what this always read before.
+ * from `TheShell.css` — minus `--w-work-min`. `leftWidth` is the column's
+ * actual width now that it resizes too; absent falls back to
+ * `--sidebar-default`, what this always read before.
+ *
+ * **The arithmetic did not move when the dock did** (#1583). `--w-work-min`
+ * was the panel's floor beside the dock; it is what stays uncovered under it.
  */
 function dockWidthBounds(availableWidth: number, leftWidth?: number): { min: number; max: number } {
   if (typeof document === "undefined") {
@@ -496,8 +500,12 @@ function Dock({
     // with. Clamping once here keeps every reader of `restingWidth` — the
     // aside's style included — looking at what is actually drawn.
     const restingWidth = clampDockWidth(width ?? defaultDockWidth(), availableWidth, leftWidth);
+    // **The handle rides on the layer with the dock, not in the flow beside
+    // it.** Left behind in `__work` it would still be a 16px track, so the
+    // content would move by that much on every open — the same defect as the
+    // dock's own 380, one order of magnitude down and harder to see.
     return (
-      <>
+      <div className="armada-shell__dock-layer">
         {onResize === undefined ? null : (
           <DockHandle width={restingWidth} availableWidth={availableWidth} leftWidth={leftWidth} onResize={onResize} />
         )}
@@ -517,7 +525,7 @@ function Dock({
           </div>
           <div className="armada-shell__dock-body">{body}</div>
         </aside>
-      </>
+      </div>
     );
   }
 

@@ -40,14 +40,49 @@
   min-height: 0;
 }
 
-/* Closed at width, #1094's `Dock` renders nothing, so the panel is this
-   container's only child and there is no sibling left for a gap to apply
-   against — the panel ran flush to the window's own right edge, unlike
-   every other edge of the shell. Every other arrangement here (the dock
-   open, or the folded strip) still supplies its own right-side margin, so
-   this only fires when nothing else will. #1125. */
-.armada-shell__work > .armada-shell__panel:only-child {
+/* The panel's own trailing gutter, at every dock state. #1125 gave it one
+   only while the panel was `:only-child`, because the dock and the handle
+   were siblings in the flow supplying the gap themselves. **Nothing follows
+   the panel in the flow any more** (#1583) — the dock and its handle are on
+   a layer over it — so the gutter is unconditional, and the panel measures
+   the same with Helm open and shut.
+
+   The folded strip is the one thing still in the flow beside it, and it
+   carries its own leading border flush to the panel. */
+.armada-shell__work > .armada-shell__panel {
   margin-right: var(--space-4);
+}
+
+.armada-shell__work:has(.armada-shell__strip) > .armada-shell__panel {
+  margin-right: 0;
+}
+
+/* Helm's dock, on a layer over the work rather than a track beside it. #1583:
+   opening Helm took 380px out of every screen, so any rule written against
+   the window was wrong by that much while it was open, and three screens grew
+   their own answer to it in one day. Now the screen under it keeps the
+   window's width whatever the dock is doing.
+
+   **It is the fold's mechanism, generalised, not a second one.** Below
+   `--layout-breakpoint` the dock already drew as a `Sheet` over `__work`;
+   this is the same region, at the widths where the panel is still the panel.
+
+   **No scrim, and no `aria-modal`.** The sheet is a layer you read *through*
+   and dismiss; this is one you work *beside* — a person reads a Job and asks
+   Helm about it, so the content under it stays live and reachable, and Close
+   or `⌘J` is one press away. `--z-dock` is what carries it over a card that
+   lifts itself while hovered, and under a dropdown opened in its own head.
+
+   Shrink-to-fit, so the layer is exactly the handle plus the dock and the
+   rest of the work takes its own presses. */
+.armada-shell__dock-layer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  z-index: var(--z-dock);
+  display: flex;
+  max-width: 100%;
 }
 
 /* A fixed width; the panel takes the slack.

@@ -11,7 +11,7 @@ import { boardJobs, boardWorkflows } from "@armada/screens/src/fixtures/build/bo
 
 import { onBoard } from "./scenario";
 import type { Scenario } from "./scenario";
-import { mount, rows, unmountAfterEach } from "./testing";
+import { mount, openHelm, rows, unmountAfterEach } from "./testing";
 
 unmountAfterEach();
 
@@ -115,12 +115,14 @@ test("Fleet unreachable with nothing held says so flatly", async () => {
   await expect.element(page.getByText("Fleet is not connected, so there is nothing to show.")).toBeVisible();
 });
 
-test("the Running panel beside Helm's dock keeps each row's facts and its action", async () => {
+test("the Running panel under Helm's dock keeps each row's facts and its action", async () => {
   await overview(onOverview(RUNNING_ONE_WITH_A_PLAN(), { repositories: [ARMADA, STOREFRONT] }));
-  await expect.element(page.getByRole("complementary", { name: "Helm" })).toBeVisible();
-  // In the DOM, not asserted visible: under 900px a card row gives up Run time,
-  // Repository and Tasks so its action stays reachable, by design —
-  // `JobRowStacked.narrow.css`. Beside the dock the Running panel is that narrow.
+  await openHelm();
+  // In the DOM rather than asserted visible: under 900px a card row gives up
+  // Run time, Repository and Tasks so its action stays reachable, by design —
+  // `JobRowStacked.narrow.css`. It was the dock's 380px that took the panel
+  // there; since #1583 the panel keeps the window's width and the dock lies
+  // over it, so which form the row takes is the window's business alone.
   await expect.poll(() => document.querySelector('[role="img"][aria-label="0 of 6 tasks"]')).not.toBeNull();
   await expect.element(page.getByRole("option", { name: /unanswered permission ask/ })).toBeVisible();
   await expect.element(page.getByRole("option", { name: /shows "queued"/ })).toBeVisible();
@@ -152,6 +154,7 @@ test("j and k move Overview's cursor across sections, Enter opens, x asks to kil
 
 test("the focused row is Overview's cursor, and Helm's footer names it", async () => {
   await overview(onOverview(JOBS()));
+  await openHelm();
   await expect.element(page.getByText("Overview", { exact: true }).last()).toBeVisible();
   rows()[0]!.focus();
   await expect.element(page.getByText(/^Overview · cursor on Job \d+$/)).toBeVisible();
@@ -188,11 +191,13 @@ const LIMITS: FleetLimits = {
   shipped: { concurrency: 2, memory_spare_percent: 15, disk_floor_gib: 10, checks_at_once: 4 },
 };
 
-test("Settings draws Fleet's limits and this machine's settings beside Helm's dock", async () => {
+test("Settings draws Fleet's limits and this machine's settings under Helm's dock", async () => {
   const scenario = onOverview(JOBS());
   mount({ ...scenario, state: { ...scenario.state, limits: LIMITS } });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect.element(page.getByRole("heading", { name: "Fleet" })).toBeVisible();
   await expect.element(page.getByRole("heading", { name: "This machine" })).toBeVisible();
-  await expect.element(page.getByRole("complementary", { name: "Helm" })).toBeVisible();
+  // The dock is on every surface, Settings included — and it reaches this one
+  // over the content rather than out of it.
+  await openHelm();
 });

@@ -11,7 +11,7 @@ import { page } from "vitest/browser";
 import { connected } from "./moment";
 import type { Scenario } from "./moment";
 import { MANIFEST_ID, repository, workflow } from "@armada/screens/src/fixtures/build/base";
-import { entered, mount, unmountAfterEach } from "./testing";
+import { entered, mount, openHelm, unmountAfterEach } from "./testing";
 
 unmountAfterEach();
 
@@ -50,8 +50,6 @@ function talking(): Scenario {
   };
 }
 
-const dock = () => page.getByRole("complementary", { name: "Helm" });
-
 test("one press in the dock copies the record, and the reading beside it is the same string", async () => {
   const written: string[] = [];
   // `navigator.clipboard` is a getter, so the write is replaced rather than the object.
@@ -60,7 +58,7 @@ test("one press in the dock copies the record, and the reading beside it is the 
     value: { writeText: (text: string) => (written.push(text), Promise.resolve()) },
   });
   mount(talking());
-  await expect.element(dock()).toBeVisible();
+  await openHelm();
 
   // One press, with no sheet in the way: this is reached when Helm has just
   // answered badly and somebody wants to carry it now.
@@ -93,7 +91,7 @@ test("one press in the dock copies the record, and the reading beside it is the 
 
 test("Helm pointed at no repository offers neither control, because there is no session to report", async () => {
   mount("empty-store");
-  await expect.element(dock()).toBeVisible();
+  await openHelm();
   expect(page.getByRole("button", { name: "Copy debug info" }).query()).toBeNull();
   expect(page.getByRole("button", { name: "Details" }).query()).toBeNull();
   // Not the caret either: with neither act there is no control to split.
