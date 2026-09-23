@@ -189,6 +189,10 @@ approximations.
   `ResizeObserver` loop notice where Armada's own observers never do, what the
   card's box was measured at before and after, and what on the board was ruled
   out.
+- [`spikes/020-what-fleet-can-serve-of-the-draft-schema.md`](spikes/020-what-fleet-can-serve-of-the-draft-schema.md)
+  — which of `packages/screens/src/draft/`'s shapes Fleet already serves, which
+  changes are major bumps and why, what each unserved field would cost, and the
+  questions the wire lock cannot be written without. A reading, not a lock.
 
 Raw transcripts sit beside each record. A negative result is a result and stays.
 
