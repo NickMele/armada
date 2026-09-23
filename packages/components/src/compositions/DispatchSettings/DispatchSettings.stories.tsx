@@ -48,7 +48,37 @@ export const ShutAndUnset: Story = {
 
 /** Open on four decisions nobody has taken. Every field names who takes it. */
 export const OpenAndUnset: Story = {
-  args: { ...HELD, open: true, settings: {} },
+  args: { ...HELD, open: true, settings: {}, onSettings: fn() },
+  /**
+   * How it lands offers three answers to one question — does anybody get asked
+   * — and the first of them is absence rather than a third value.
+   *
+   * **A `play`, because the reading and the value can disagree.** The option a
+   * person leaves alone has to report nothing at all: a `lands` set to `auto`
+   * by resting on the first option would send a decision nobody took, and the
+   * block's own count would say one was set. That is invisible in a rendering,
+   * which draws the same first row either way.
+   */
+  play: async ({ args, canvasElement }) => {
+    const block = within(canvasElement);
+    const lands = block.getByRole("combobox", { name: "How it lands" });
+    const offered = within(lands);
+
+    await expect(offered.getByRole("option", { name: "Leave it to the workflow" })).toBeInTheDocument();
+    await expect(offered.getByRole("option", { name: "Land it without asking me" })).toBeInTheDocument();
+    await expect(offered.getByRole("option", { name: "Stop and ask me at review" })).toBeInTheDocument();
+    // Scoped to this field, because the three tier selects each carry an `Auto`
+    // of their own — and that is the collision this note found. There, `Auto`
+    // is the option nobody set; here it was a value somebody did, spelled the
+    // same way one field apart.
+    await expect(offered.queryByRole("option", { name: "Auto" })).toBeNull();
+
+    await userEvent.selectOptions(lands, "auto");
+    await expect(args.onSettings).toHaveBeenCalledWith({ lands: "auto" });
+
+    await userEvent.selectOptions(lands, "");
+    await expect(args.onSettings).toHaveBeenLastCalledWith({ lands: undefined });
+  },
 };
 
 /** Open on four a person set, including a Job cap under the machine's own. */

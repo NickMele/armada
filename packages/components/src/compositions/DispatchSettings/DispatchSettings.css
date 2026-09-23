@@ -85,7 +85,8 @@
 }
 
 .armada-dispatch-settings__tiers,
-.armada-dispatch-settings__cap {
+.armada-dispatch-settings__cap,
+.armada-dispatch-settings__lands {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);

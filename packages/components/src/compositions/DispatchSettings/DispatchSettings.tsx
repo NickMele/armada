@@ -123,22 +123,34 @@ export function DispatchSettings({
             disabled={disabled}
           />
 
-          <Select
-            label="How it lands"
-            value={settings.lands ?? ""}
-            disabled={disabled}
-            onChange={(event) =>
-              moved(
-                event.target.value === ""
-                  ? { lands: undefined }
-                  : { lands: event.target.value as "auto" | "you_at_review" },
-              )
-            }
-          >
-            <option value="">The workflow decides</option>
-            <option value="auto">Auto</option>
-            <option value="you_at_review">Ask me at review only</option>
-          </Select>
+          {/* The three read as three answers to one question — does anybody
+              get asked — rather than as a decider beside a mode. `The workflow
+              decides` against `Auto` was two different kinds of answer in one
+              list, and the owner asked what the difference was: the first
+              names who, the second names what, and nothing said that leaving
+              it alone may land without asking anyway. */}
+          <div className="armada-dispatch-settings__lands">
+            <Select
+              label="How it lands"
+              value={settings.lands ?? ""}
+              disabled={disabled}
+              onChange={(event) =>
+                moved(
+                  event.target.value === ""
+                    ? { lands: undefined }
+                    : { lands: event.target.value as "auto" | "you_at_review" },
+                )
+              }
+            >
+              <option value="">Leave it to the workflow</option>
+              <option value="auto">Land it without asking me</option>
+              <option value="you_at_review">Stop and ask me at review</option>
+            </Select>
+            <p className="armada-dispatch-settings__said">
+              Left alone, the workflow&rsquo;s delivering step decides, and some workflows ask
+              you and some do not.
+            </p>
+          </div>
         </div>
       )}
     </section>
