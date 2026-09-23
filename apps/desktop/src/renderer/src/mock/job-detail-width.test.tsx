@@ -3,18 +3,15 @@
 // held its 380px, and the step panel took what was left, which at 1280 was
 // 192px of one-letter-a-line log.
 //
-// **#1583 took one of those three terms away.** The dock is a layer over the
-// work now rather than a column in it, so job detail has the whole window at
-// every dock state and the band this file used to measure — 1101 to 1279, the
-// left column at its rail paying for the dock — is gone. What is left is one
-// breakpoint, and a claim this file did not have before: the content is the
-// same width with Helm open and shut.
+// **#1583 took one of those three terms away.** The dock is a layer now, so
+// the band this file used to measure — 1101 to 1279, the left column at its
+// rail paying for it — is gone, and the claim is the one it did not have
+// before: the content is the same width with Helm open and shut.
 //
 // **A geometry test, so it lives here and not in a story.** The widths that
-// matter are decided by the whole window — the left column, the dock's own
-// rules and the `--layout-breakpoint` the dock folds at — and a story drawing
-// one composition in a sized `div` cannot see any of them. `Layer.test.tsx` is
-// the precedent for driving the viewport in this project.
+// matter are decided by the whole window, and a story drawing one composition
+// in a sized `div` cannot see any of them. `Layer.test.tsx` is the precedent
+// for driving the viewport in this project.
 
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
