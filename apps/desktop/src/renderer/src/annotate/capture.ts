@@ -1,6 +1,6 @@
 // What a note records about the element it was left on, read from the page.
 
-import { annotationId, type Annotation } from "../../../shared/annotations";
+import { annotationId, SOURCE_ATTRIBUTE, type Annotation, type Source } from "../../../shared/annotations";
 import { componentsOf, fiberOf } from "./fiber";
 import { selectorFor } from "./selector";
 
@@ -35,6 +35,21 @@ function layerOf(element: Element): string | null {
   return dialog.getAttribute("aria-label") ?? (named === null ? null : shortText(named.textContent)) ?? "dialog";
 }
 
+/**
+ * Where the element's JSX is, off the nearest ancestor the build stamped
+ * (`annotations-source.ts`). Undefined where nothing above it carries one —
+ * which is every element under `pnpm dev` — because a note that names the
+ * wrong file is worse than one that names none.
+ */
+export function sourceOf(element: Element): Source | undefined {
+  const value = element.closest(`[${SOURCE_ATTRIBUTE}]`)?.getAttribute(SOURCE_ATTRIBUTE) ?? null;
+  if (value === null) return undefined;
+  const cut = value.lastIndexOf(":");
+  const line = Number(value.slice(cut + 1));
+  if (cut <= 0 || !Number.isInteger(line) || line < 1) return undefined;
+  return { file: value.slice(0, cut), line };
+}
+
 /** The short selector when it finds this element first, and the whole chain when it does not. */
 function findableSelector(element: Element): string {
   const selector = selectorFor(element);
@@ -50,12 +65,14 @@ function findableSelector(element: Element): string {
 export function capture(element: Element, now: Date, win: Window = window): Annotation {
   const rect = element.getBoundingClientRect();
   const { component, owners, from } = componentsOf(fiberOf(element));
+  const source = sourceOf(element);
   const at = now.toISOString();
   return {
     id: annotationId(now),
     status: "open",
     text: "",
     component,
+    ...(source === undefined ? {} : { source }),
     owners,
     ownersFrom: from,
     selector: findableSelector(element),
