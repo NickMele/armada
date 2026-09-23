@@ -115,6 +115,12 @@ is allowed only as that light, and never where a person reads a state.
    **The workflow canvas carries a toggle to a stacked run**, canvas by
    default, because a narrow window reads a list better than a graph and
    the graph is still what the surface is for.
+   **Freehand is the sketch pad's alone, and it is still no second
+   library.** A line a person draws by hand is an SVG path in React
+   Flow's own viewport, so it pans and zooms with the boxes; it takes no
+   drawing tool and adds nothing to `GraphCanvas`, which every other
+   graph draws on. A surface that wants a pen mounts its own through the
+   canvas's `children`, or it does without one.
 
 ---
 

@@ -65,7 +65,14 @@ export function arcProposal(over: Partial<ProposalView> = {}): ProposalView {
   };
 }
 
-/** Two Jobs already writing where this one would. */
+/**
+ * Two Jobs on the Board behind the composer, each on a branch of its own.
+ *
+ * **They are the Board's rows and the branch list's, not a panel's.** The
+ * overlap panel that named them beside the request is gone; what they are
+ * still here for is a Board that is not empty, and the two branches
+ * `ARC_BRANCHES` offers under the base.
+ */
 function peerJobs(): JobFixture[] {
   return [
     lightFixture(
@@ -129,6 +136,23 @@ function sketch(): SketchAttachment {
         { id: "b1-b2", from: "b1", to: "b2" },
         { id: "b2-b3", from: "b2", to: "b3" },
       ],
+      // A ring round the two boxes the panel is made of, which is the thing no
+      // box and no join says: these two are one surface.
+      strokes: [
+        {
+          id: "s1",
+          points: [
+            { x: -40, y: 146 },
+            { x: 300, y: 128 },
+            { x: 608, y: 152 },
+            { x: 624, y: 234 },
+            { x: 300, y: 268 },
+            { x: -30, y: 250 },
+            { x: -46, y: 180 },
+            { x: -40, y: 146 },
+          ],
+        },
+      ],
     },
   };
 }
@@ -136,7 +160,7 @@ function sketch(): SketchAttachment {
 export function dispatchTyping(): ArcMoment {
   return {
     name: "dispatchTyping",
-    says: "Dispatch — the prompt half typed, and what else is writing there",
+    says: "Dispatch — the prompt half typed, over the repository's branches",
     fixtures: peerJobs(),
     draft: {
       prompt: PROMPT,

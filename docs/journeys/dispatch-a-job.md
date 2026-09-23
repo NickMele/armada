@@ -99,6 +99,34 @@ and the words typed under Write stay where they are while it is drawn. The chip
 takes no removal control: a picture is taken back on the pad, where the boxes
 going are visible.
 
+**The pad draws boxes and it draws by hand.** A box is words and a place and a
+join says what feeds what; a line drawn freehand is what neither says — a ring
+round the part that matters, an arrow at an angle no join draws. The owner
+asked for it on 23 September 2026, on a pad that drew boxes alone: *"The
+designs had this with more than just a box. We could do a free draw as well."*
+
+> **Rule.** The pen is a mode the pad opens out of, and any other act puts it
+> down. Undo takes back the last line drawn by hand and nothing else.
+> Why: with the pen down the pointer cannot change what is picked, so Join and
+> Remove would read a stale selection, and Add is a box somebody is about to
+> type in. Undo stops at strokes because a box comes off under Remove, where
+> the box going is the one a person picked and can see.
+
+> **Rule.** A line drawn by hand is kept as its points, beside the boxes, and
+> never as a picture of itself.
+> Why: the pad redraws it when somebody reopens the sketch, takes the last one
+> back, and scales it when they zoom — three things a flattened line cannot do.
+> It is the argument `drawn` already makes against reopening the PNG, one level
+> down.
+
+**A pad with a line and no box still attaches its picture**, because a person
+who drew and put down no box drew something. A join alone does not: it has
+nothing to hang on.
+
+**What a fit reads is still the boxes.** React Flow fits to its nodes, and ink
+drawn well outside them is off screen until somebody pans — the pad pans and
+zooms, so nothing is lost, but Fit does not promise to find it.
+
 **The picture is draft and the wire is unchanged** —
 `packages/screens/src/draft/sketch.ts`, which names the `crates/ipc` module it
 is meant for. An attachment on the wire carries a staged path, a filename and a

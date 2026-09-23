@@ -198,6 +198,26 @@ export const Pressed: Story = {
   ),
 };
 
+/**
+ * A toggle that is on, beside the same control off. `--accent-muted` is the
+ * contract's selected fill and `--accent` its edge; the two read apart at a
+ * glance, which `aria-pressed` used to say to a screen reader alone.
+ */
+export const On: Story = {
+  render: () => (
+    <Card>
+      <Button aria-pressed={false}>Draw</Button>
+      <Button aria-pressed>Draw</Button>
+      <Button size="sm" aria-pressed>
+        Stay on the running step
+      </Button>
+      <Button aria-pressed disabled>
+        Draw
+      </Button>
+    </Card>
+  ),
+};
+
 /** Pending, every variant: one rendering, `--bg-sunken`, with the line travelling. */
 export const PendingEveryVariant: Story = {
   render: () => (

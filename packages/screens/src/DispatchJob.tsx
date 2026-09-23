@@ -38,6 +38,7 @@ import type {
   RequestMode,
   SketchBox,
   SketchLine,
+  SketchStroke,
 } from "@armada/components";
 import type { LeftOutWorkflow, StagedAttachment, WorkflowSummary } from "@armada/protocol";
 
@@ -53,6 +54,8 @@ import {
   withJoin,
   withPlace,
   withShape,
+  withStroke,
+  withoutLastStroke,
   withoutShapes,
 } from "./draft/sketch";
 import type { Drawing, SketchAttachment } from "./draft/sketch";
@@ -348,6 +351,7 @@ export function DispatchJob({
           label={PAD_LABEL}
           boxes={drawing.shapes.map(asBox)}
           lines={drawing.joins.map(asLine)}
+          strokes={drawing.strokes.map(asStroke)}
           said={said}
           onSaid={setSaid}
           {...(sketch?.produced_by === undefined ? {} : { from: sketch.produced_by })}
@@ -360,6 +364,8 @@ export function DispatchJob({
           onMove={(id, at) => setDrawing((one) => withPlace(one, id, at))}
           onRemove={(ids) => setDrawing((one) => withoutShapes(one, ids))}
           onJoin={(from, to) => setDrawing((one) => withJoin(one, from, to))}
+          onDraw={(points) => setDrawing((one) => withStroke(one, points))}
+          onUndo={() => setDrawing(withoutLastStroke)}
           disabled={disabled}
         />
       }
@@ -432,7 +438,7 @@ function asDrafted(chosen: DispatchSettingsValue): DispatchSettingsView {
 }
 
 /**
- * The draft's boxes and joins as the pad holds them, and nothing else.
+ * The draft's boxes, joins and strokes as the pad holds them, and nothing else.
  *
  * **Two spellings of one shape, mapped in one function each** — the same seam
  * `asChosen` is, and for the same reason: the draft is wire-shaped because
@@ -444,4 +450,8 @@ function asBox(shape: Drawing["shapes"][number]): SketchBox {
 
 function asLine(join: Drawing["joins"][number]): SketchLine {
   return { id: join.id, from: join.from, to: join.to };
+}
+
+function asStroke(stroke: Drawing["strokes"][number]): SketchStroke {
+  return { id: stroke.id, points: stroke.points };
 }
