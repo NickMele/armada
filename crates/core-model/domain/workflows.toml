@@ -365,7 +365,7 @@ The case this exists for: *Job 412 broke staging, revert it* was ordinary work w
 
 It is not Bug with different words: there is no diagnose step, since the cause is known — it is the Job being undone — and no plan step, since there is nothing to plan. The Judge asks a different question, not "does this fix the stated cause" but "does this restore the prior state without taking anything else with it," against a yardstick that is another Job's landed state rather than an earlier step's evidence.
 
-Scope is inherited, not classified: a revert reads entry zero of its `subject`'s scope history and copies `write_targets` and `atomic` rather than running the classifier afresh. Without that, a revert of a Convoy could come back as separate Jobs and reintroduce the intermediate state the Convoy existed to prevent.
+Scope is inherited, not classified: a revert reads entry zero of its `subject`'s scope history and copies `write_targets` and `atomic` rather than running the classifier afresh. Without that, a revert of a Job that wrote in several places could come back as separate Jobs and reintroduce the intermediate state that Job existed to prevent.
 
 The only sample with two criteria splitting one question into halves — did you undo it, and did you touch anything else — since they fail differently and a refusal has to say which. It is also the only sample with `panel_size` above 1 on a working step: Feature raises it on `implement`, this raises it on the only step that produces anything, since a revert destroys work that already passed every gate — two criteria at panel size three is six calls, inside the twelve-call ceiling.
 

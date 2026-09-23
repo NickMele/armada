@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Check, CircleDot, Clock, Cpu, Folder, GitBranch, Layers, OctagonAlert, Power, UserCheck, X } from "lucide-react";
+import { Check, CircleDot, Clock, Cpu, Folder, GitBranch, OctagonAlert, Power, ScrollText, UserCheck, X } from "lucide-react";
 import { expect, fn, waitFor } from "storybook/test";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { ActiveJobsList } from "../ActiveJobsList/ActiveJobsList";
@@ -416,17 +416,17 @@ export const AtTheWidthFloor: StoryObj = {
 };
 
 /**
- * A Convoy has no single workspace, so its row **names its first write target
- * and counts the rest** — `+2` where three Workspaces are declared. Every
- * other row names a place in that column, so this one does too, and the folder
- * glyph keeps meaning a workspace. A bare "3 workspaces" was drawn and
- * rejected: it puts a count where the column holds an identifier.
+ * A Job writing in several places has no single workspace, so its row **names
+ * its first write target and counts the rest** — `+2` where three Workspaces
+ * are declared. Every other row names a place in that column, so this one does
+ * too, and the folder glyph keeps meaning a workspace. A bare "3 workspaces"
+ * was drawn and rejected: it puts a count where the column holds an identifier.
  *
  * **No chip and no hue.** A bordered pill is a Job state and nothing else, so
  * shape reads as plain text. The Board computes it from `write_targets` and
  * `atomic` — nothing on Job stores a shape.
  */
-export const Convoy: Story = {
+export const SeveralWriteTargets: Story = {
   args: {
     ...Running.args,
     headline: "Retire the poke path across the fleet",
@@ -598,7 +598,7 @@ export const HandlesInTheirOwnColumn: StoryObj = {
           onOpen={() => {}}
           onCopied={handleCopied}
           fields={[
-            { label: "Workflow", icon: Layers, value: "Bug, 6 steps" },
+            { label: "Workflow", icon: ScrollText, value: "Bug, 6 steps" },
             {
               label: "Progress",
               value: (
