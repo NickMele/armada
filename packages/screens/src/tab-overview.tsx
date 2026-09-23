@@ -51,7 +51,7 @@ import { CHECKS_CHAPTER } from "./checks";
 import { whileReading, whyUnreachable } from "./while-reading";
 import { runOf, whyNoSteps } from "./run";
 import { taskGroupsOf } from "./draft/group";
-import { stepTheGroupsHangUnder } from "./workflow-canvas";
+import { stepThatWorksTheGroups } from "./workflow-canvas";
 import { answeringOf, askingOf, commandOf, fieldsOf, noticeOf, questionOf, tasksField, waitingOf } from "./step";
 import { StepActs } from "./StepActs";
 import { refusedAsideOf, type Deciding } from "./flag-held";
@@ -613,7 +613,7 @@ export function OverviewTab(props: OverviewTabProps) {
   // How many of the open step's tasks are through, where it holds groups. The
   // same groups the Workflow tab's board opens, read for one line here.
   const stepTasks =
-    whole === null || open === undefined || open.step_id !== stepTheGroupsHangUnder(whole)
+    whole === null || open === undefined || open.step_id !== stepThatWorksTheGroups(whole)
       ? undefined
       : tasksField(props.draft?.groups ?? taskGroupsOf(whole));
   // The Jobs landing under this one. The mock hands the whole reading; against

@@ -21,8 +21,9 @@ import { GRAPH_CANVAS_SIDES, GraphCanvas, facingSides } from "../GraphCanvas/Gra
 import { WorkflowStepCard, type WorkflowStepCardProps } from "../WorkflowStepCard/WorkflowStepCard";
 
 /**
- * A Job's run, drawn as the workflow it froze — steps along a spine, a step's
- * groups hanging under it, and a loop returning above. `#1539`.
+ * A Job's run, drawn as the workflow it froze — the steps, the groups hanging
+ * off the step that wrote them, the tasks hanging off their groups, a second
+ * edge from the step that worked a group, and a loop returning above. `#1539`.
  *
  * **Placement is the caller's**, computed from step order, which is the whole
  * difference between this surface and a Studio's whiteboard. Nothing here
@@ -40,16 +41,32 @@ export type WorkflowCanvasNode = {
   card: WorkflowStepCardProps;
 };
 
+/**
+ * What one edge is. **Only `returns` is painted differently** — the two edges
+ * into a group are told apart by where they come from, which is the reading
+ * itself, and a second dash pattern would be a vocabulary nobody asked for.
+ */
+export type WorkflowCanvasEdgeKind = "leads" | "returns" | "made" | "worked" | "holds";
+
+/** What each kind is read as to somebody who cannot see the line. */
+const SAYS: Record<WorkflowCanvasEdgeKind, string> = {
+  leads: "leads to",
+  returns: "returns to",
+  made: "made",
+  worked: "worked",
+  holds: "holds",
+};
+
 export type WorkflowCanvasEdge = {
   id: string;
   source: string;
   target: string;
   /**
-   * A loop back to an earlier step. **Dashed, and drawn above the spine** — the
-   * run reads left to right, so a line returning along it would be read as
-   * another way forward.
+   * `returns` is a loop back to an earlier step — **dashed, and drawn above
+   * the spine**, because the run reads left to right and a line returning
+   * along it would be read as another way forward.
    */
-  returning?: boolean;
+  kind: WorkflowCanvasEdgeKind;
   /** What the edge says — a loop's cap, `up to 5 passes`. Absent on the spine. */
   label?: string;
 };
@@ -75,11 +92,13 @@ export type WorkflowCanvasProps = {
   following?: boolean;
   onFollowing?: (following: boolean) => void;
   /**
-   * Where to open when the whole run cannot be drawn and still be read — the
-   * step a person is on and its neighbours. A twelve-step spine is twelve
-   * cards of noise at any width, so this is not a narrow-window rule.
+   * Where to open when the whole run cannot be drawn and still be read,
+   * **widest first** — the first one that is readable in this frame wins.
+   * A twelve-step spine is twelve cards of noise at any width, so this is not
+   * a narrow-window rule, and a single fallback is not enough either: a run
+   * with a whole plan hanging off it clips on every side rather than shrinking.
    */
-  opensOn?: readonly string[];
+  opensOn?: readonly (readonly string[])[];
 };
 
 type CanvasNode = Node<{ card: WorkflowStepCardProps }, "workflow">;
@@ -130,6 +149,18 @@ const EDGE_TYPES = { workflow: EdgeView };
 /** A returning edge leaves and arrives on the top edge, which is what puts its arc above the spine. */
 const OVER_THE_SPINE = { sourceHandle: `s-${Position.Top}`, targetHandle: `t-${Position.Top}` };
 
+/**
+ * The two edges into a group leave the same side and arrive on different ones,
+ * which is what tells them apart at a glance without a second dash pattern.
+ * Neither arrives on the right: that side carries the group's own tasks.
+ *
+ * `made` comes in at the left, so a column of groups fans its drops out of the
+ * step rather than stacking one line down the middle of every card above the
+ * target — which reads as a chain, and a chain is the picture this replaced.
+ */
+const WAS_MADE = { sourceHandle: `s-${Position.Bottom}`, targetHandle: `t-${Position.Left}` };
+const WAS_WORKED = { sourceHandle: `s-${Position.Bottom}`, targetHandle: `t-${Position.Top}` };
+
 /** How far out a person may take the run by hand, to see its shape. */
 const FURTHEST_OUT = 0.2;
 
@@ -158,7 +189,7 @@ function FitsTheFrame({
   following,
 }: {
   options: FitViewOptions;
-  opensOn: readonly string[] | undefined;
+  opensOn: readonly (readonly string[])[] | undefined;
   following: boolean;
 }) {
   const flow = useReactFlow();
@@ -166,13 +197,25 @@ function FitsTheFrame({
   const height = useStore((state) => state.height);
   useEffect(() => {
     if (following || width === 0 || height === 0) return;
-    // Whether the whole run would still be legible in this frame. `fitView`
-    // clamps at `minZoom` and says nothing, so a run that does not fit is
-    // drawn clipped at both ends unless the fallback below is chosen first.
-    const whole = getNodesBounds(flow.getNodes());
-    const scale = Math.min(width / whole.width, height / whole.height) * ROOM_TO_BREATHE;
-    const readable = scale >= SMALLEST_READABLE || opensOn === undefined;
-    void flow.fitView(readable ? options : { ...options, nodes: opensOn.map((id) => ({ id })) });
+    const placed = new Map(flow.getNodes().map((node) => [node.id, node]));
+    // Whether some part of the run would still be legible in this frame.
+    // `fitView` clamps at `minZoom` and says nothing, so a run that does not
+    // fit is drawn cut off on every side unless something narrower is chosen
+    // first. **Narrow what is shown, never shrink it** — that is the
+    // legibility rule, one level down from the whole run.
+    const reads = (nodes: readonly { id: string }[]): boolean => {
+      const bounds = getNodesBounds(nodes.map((one) => placed.get(one.id)).filter((one) => one !== undefined));
+      const scale = Math.min(width / bounds.width, height / bounds.height) * ROOM_TO_BREATHE;
+      return scale >= SMALLEST_READABLE;
+    };
+    const all = flow.getNodes();
+    if (opensOn === undefined || reads(all)) {
+      void flow.fitView(options);
+      return;
+    }
+    const narrower = opensOn.map((ids) => ids.map((id) => ({ id })));
+    const fits = narrower.find(reads) ?? narrower[narrower.length - 1];
+    void flow.fitView(fits === undefined ? options : { ...options, nodes: fits });
   }, [flow, following, options, opensOn, width, height]);
   return null;
 }
@@ -226,16 +269,24 @@ export function WorkflowCanvas({
     const placed = new Map(nodes.map((node) => [node.id, node]));
     const named = new Map(given.map((entry) => [entry.id, entry.card.name]));
     return givenEdges.map((edge) => {
-      const returning = edge.returning === true;
+      const returning = edge.kind === "returns";
       const from = named.get(edge.source) ?? edge.source;
       const to = named.get(edge.target) ?? edge.target;
+      const sides =
+        edge.kind === "returns"
+          ? OVER_THE_SPINE
+          : edge.kind === "made"
+            ? WAS_MADE
+            : edge.kind === "worked"
+              ? WAS_WORKED
+              : facingSides(placed.get(edge.source), placed.get(edge.target));
       return {
         id: edge.id,
         source: edge.source,
         target: edge.target,
-        ...(returning ? OVER_THE_SPINE : facingSides(placed.get(edge.source), placed.get(edge.target))),
+        ...sides,
         type: "workflow" as const,
-        ariaLabel: returning ? `${from} returns to ${to}` : `${from} leads to ${to}`,
+        ariaLabel: `${from} ${SAYS[edge.kind]} ${to}`,
         markerEnd: { type: MarkerType.ArrowClosed },
         data: { returning, ...(edge.label === undefined ? {} : { label: edge.label }) },
       };

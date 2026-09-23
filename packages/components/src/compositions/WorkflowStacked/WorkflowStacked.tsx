@@ -2,22 +2,29 @@ import { WorkflowStepCard, type WorkflowStepCardProps } from "../WorkflowStepCar
 
 /**
  * The same run, stacked — one card per step, top to bottom, a step's groups
- * indented under it. The other half of the workflow canvas's toggle
- * (`#1530`, 22 Sep: canvas by default, stacked available, at every width).
+ * indented under it and their tasks indented again. The other half of the
+ * workflow canvas's toggle (`#1530`, 22 Sep: canvas by default, stacked
+ * available, at every width).
  *
  * **The same card as the canvas draws.** A toggle that changed what a step
  * says about itself would be two screens rather than two arrangements.
  *
- * **A loop is a line, not an arc.** There is nothing to arc over in a column,
- * so the step that loops says where it goes back to and what its cap is —
- * which is `WorkflowDiagram`'s own answer to the same problem.
+ * **A second edge is a line of words here**, since a column has nothing to
+ * draw an edge with: a group a later step worked says which step that was, and
+ * an unworked group says nothing because it has nothing to say yet.
+ *
+ * **A loop is a line, not an arc**, for the same reason.
  */
 
 export type WorkflowStackedRow = {
   id: string;
   card: WorkflowStepCardProps;
-  /** The step this row hangs under, where it is a group. */
+  /** The row this one hangs under — its step, or its group. */
   under?: string;
+  /** How deep it is: a group under a step, a task under a group. */
+  depth?: 1 | 2;
+  /** The step that worked this group, where one has. Absent until one does. */
+  worked?: string;
   /** Where this step loops back to, in words, and its cap. */
   returns?: { toName: string; label: string };
 };
@@ -33,8 +40,11 @@ export function WorkflowStacked({ label, rows }: WorkflowStackedProps) {
     <div className="armada-workflow-stacked">
       <ol className="armada-workflow-stacked__run" aria-label={label}>
         {rows.map((row) => (
-          <li className="armada-workflow-stacked__row" data-under={row.under === undefined ? undefined : ""} key={row.id}>
+          <li className="armada-workflow-stacked__row" data-depth={row.depth} key={row.id}>
             <WorkflowStepCard {...row.card} />
+            {row.worked === undefined ? null : (
+              <p className="armada-workflow-stacked__worked">worked at {row.worked}</p>
+            )}
             {row.returns === undefined ? null : (
               <p className="armada-workflow-stacked__returns">
                 back to {row.returns.toName} · {row.returns.label}

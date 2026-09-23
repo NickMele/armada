@@ -1,14 +1,18 @@
 // Workflow — the Job's run, drawn as the workflow it froze. `#1539`.
 //
+// **One graph, not a spine with a drawer** (owner, 23 Sep 2026): the steps,
+// the groups hanging off the step that wrote them, the tasks hanging off their
+// groups, and a second edge from the step that worked a group.
+//
 // **Canvas by default, stacked available, at every width** (#1530, 21 and 22
 // Sep). The toggle is remembered per viewer, and where it is kept is the
 // caller's: this package holds no storage.
 //
-// **Narrow opens on where you are.** A nine-step run fitted into 768px is nine
-// cards nobody can read, so the canvas opens on the step a person is on and
-// its neighbours instead.
+// **Narrow opens on where you are.** A whole plan fitted into 768px is cards
+// nobody can read, so the canvas opens on the step a person is on, its
+// neighbours, and the groups those steps made or worked.
 
-import { ImplementBoard, Tabs, WorkflowCanvas, WorkflowInspector, WorkflowStacked } from "@armada/components";
+import { Tabs, WorkflowCanvas, WorkflowInspector, WorkflowStacked } from "@armada/components";
 import { useEffect, useRef, useState } from "react";
 import type { JobDetail as JobWhole, JobSummary, Turn } from "@armada/protocol";
 
@@ -18,10 +22,10 @@ import type { CaseView } from "./draft/cases";
 import { TAB_LABEL } from "./detail-tabs";
 import { taskGroupsOf, type GroupView } from "./draft/group";
 import { ACT_LABEL, HOLD_LABEL, HOLD_SAID } from "./copy";
-import { groupsThatOpen, implementBoardOf } from "./implement";
+import { ORDER_WHILE_RUNNING } from "./implement";
 import { taskReadingOf } from "./implement-task";
 import { steeringOf } from "./steering";
-import { groupNodeId, stepTheGroupsHangUnder, workflowRunOf } from "./workflow-canvas";
+import { stepThatWorksTheGroups, taskNodeId, taskOfNodeId, workflowRunOf } from "./workflow-canvas";
 import { workflowReadingOf } from "./workflow-inspector";
 import { WORKFLOW_VIEWS, WORKFLOW_VIEW_LABEL, type WorkflowView } from "./workflow-view";
 
@@ -88,14 +92,12 @@ export function WorkflowTab({
   // centred on one card is a run with its other steps off screen.
   const [following, setFollowing] = useState(false);
   const [instruction, setInstruction] = useState("");
-  // The task a person has open, and which groups they have folded or unfolded.
-  // **`null` for the groups means nobody has chosen yet**, so the group that is
-  // moving opens itself — and a person's first press is what takes that over.
+  // The task a person has open, held apart because a task reads narrower than
+  // the group holding it and outranks it in the panel.
   const [openTask, setOpenTask] = useState<string | null>(null);
-  const [opened, setOpened] = useState<string[] | null>(null);
 
   // The panel, so a press on a task can bring it into view. **Review and reply
-  // are one loop**: folded to one column the panel sits under the whole board,
+  // are one loop**: folded to one column the panel sits under the whole graph,
   // and a press that moved a reply box nobody can see is two surfaces. An
   // effect because what it writes is scroll position, which is outside React.
   const panel = useRef<HTMLDivElement>(null);
@@ -125,37 +127,20 @@ export function WorkflowTab({
   }
 
   const groups = given ?? taskGroupsOf(whole);
-  const groupsUnder = stepTheGroupsHangUnder(whole);
-  const step = whole.steps.find((one) => one.step_id === groupsUnder);
-  const openGroups = opened ?? groupsThatOpen(groups);
-  // The implement step, opened under the run — `#1536`. The canvas above is
-  // where the step sits; this is what is inside it.
-  const board = implementBoardOf({
-    whole,
-    groups,
-    cases,
-    step,
-    ...(droneCap === undefined ? {} : { droneCap }),
-    openGroups,
-    onOpenGroup: (id) => {
-      setOpened(openGroups.includes(id) ? openGroups.filter((one) => one !== id) : [...openGroups, id]);
-      setOpen(groupNodeId(id));
-      setOpenTask(null);
-    },
-    ...(openTask === null ? {} : { openTaskId: openTask }),
-    onOpenTask: (id) => setOpenTask(id === openTask ? null : id),
-  });
-  // The run above the board. **Its groups hang on it only where nothing has
-  // opened them below** — the same groups drawn twice is what made the canvas
-  // too tall to fit once it was drawn small.
-  //
-  // A press on a card is a press on a step or a group, so it takes the panel
+  const groupsUnder = stepThatWorksTheGroups(whole);
+  // The whole plan, as one graph. A press on a task card opens that task and
+  // presses it again to close; a press on a step or a group takes the panel
   // off whichever task was open rather than leaving two selections live.
   const run = workflowRunOf({
     whole,
     groups,
-    opened: board !== undefined,
+    selected: openTask === null ? open : taskNodeId(openTask),
     onOpen: (id) => {
+      const task = taskOfNodeId(id);
+      if (task !== undefined) {
+        setOpenTask(task === openTask ? null : task);
+        return;
+      }
       setOpen(id);
       setOpenTask(null);
     },
@@ -174,17 +159,21 @@ export function WorkflowTab({
           turns,
           watching,
           ...(groupsUnder === undefined ? {} : { stepId: groupsUnder }),
-        })) ?? workflowReadingOf({ whole, groups, selected: open ?? run.running, groupsUnder });
+        })) ??
+    workflowReadingOf({
+      whole,
+      groups,
+      cases,
+      selected: open ?? run.running,
+      groupsUnder,
+      ...(droneCap === undefined ? {} : { droneCap }),
+    });
   const steering = steeringOf(job, whole);
+  const label = `${job.title}, as its workflow's run`;
 
   return (
     <div className="armada-detail-tab" role="tabpanel" aria-label={TAB_LABEL.workflow}>
-      <div
-        className="armada-workflow-tab"
-        data-view={view}
-        data-narrow={narrow || undefined}
-        data-opened={board === undefined ? undefined : true}
-      >
+      <div className="armada-workflow-tab" data-view={view} data-narrow={narrow || undefined}>
         <div className="armada-workflow-tab__surface">
           {/* Above the run rather than over it: drawn inside the canvas the
               toggle sat on top of the last step's card at every width. */}
@@ -194,7 +183,7 @@ export function WorkflowTab({
               <WorkflowCanvas
                 nodes={run.nodes}
                 edges={run.edges}
-                label={`${job.title}, as its workflow's steps`}
+                label={label}
                 running={run.running}
                 following={following}
                 onFollowing={setFollowing}
@@ -202,22 +191,21 @@ export function WorkflowTab({
               />
             </div>
           ) : (
-            <WorkflowStacked label={`${job.title}, as its workflow's steps`} rows={run.rows} />
+            <WorkflowStacked label={label} rows={run.rows} />
           )}
-          {/* The step the canvas draws as one card, opened. The run above is
-              the same canvas the destination has always used, drawn small so
-              what is inside the step has the room. `#1536`. */}
-          {board === undefined ? null : (
-            <div className="armada-workflow-tab__opened">
-              <ImplementBoard {...board} />
-            </div>
+          {/* The rule the graph cannot draw: the groups run in order, and a
+              task reads done only once its own group has gone green. */}
+          {groups.length === 0 ? null : (
+            <p className="armada-workflow-tab__order" role="note">
+              {ORDER_WHILE_RUNNING}
+            </p>
           )}
         </div>
 
         <div className="armada-workflow-tab__inspector" ref={panel}>
           {reading === undefined ? (
             <p className="armada-inside__absent" role="note">
-              Press a step or a group to read what it is doing.
+              Press a step, a group or a task to read what it is doing.
             </p>
           ) : (
             <WorkflowInspector
