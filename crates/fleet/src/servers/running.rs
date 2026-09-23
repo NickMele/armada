@@ -19,6 +19,7 @@ use verification::{Exit, NeverRan};
 
 use super::held::Held;
 use crate::daemon::Fleet;
+use crate::ports::PortProbe;
 use crate::rehearsing::records;
 
 /// How often `ready` is asked — `crate::showing`'s interval for the evidence
@@ -39,7 +40,10 @@ pub(crate) struct Plan {
     pub(crate) env: Vec<(String, String)>,
     pub(crate) dir: PathBuf,
     pub(crate) feed: api::RunFeed,
-    pub(crate) now: watch::Sender<ServerState>,
+    /// Where the server stands. **Shared with `super::held::Live`**, so a
+    /// merge that moved the checkout can write the row too — see
+    /// [`super::held::Servers::moved_on`].
+    pub(crate) now: std::sync::Arc<watch::Sender<ServerState>>,
 }
 
 struct End {
@@ -81,7 +85,14 @@ where
             Exit::Code(code) => Some(code),
             _ => None,
         };
-        state.ended = Some(said(&end.exit, end.stopped));
+        state.ended = Some(match answering_now(&state, &end).await {
+            Some(port) => format!(
+                "{}. Something else is answering on port {port} now, so the address still \
+                 opens and what it draws is not this",
+                said(&end.exit, end.stopped)
+            ),
+            None => said(&end.exit, end.stopped),
+        });
         state.stopped = end.stopped;
         held.ended(state.clone());
         self.noted_server(&state);
@@ -243,6 +254,29 @@ where
         }
         self.noted_in_the_log(&job, &envelope);
     }
+}
+
+/// The port this server's address is on, where something **else** is
+/// answering there now that it has gone.
+///
+/// **The failure `#1577` names is not the collision — it is that the address
+/// keeps answering, so nobody looks.** Another checkout of the same repository
+/// declares the same number, and the moment this one lets go the next binder
+/// takes it; the link a person is holding goes on opening, with somebody
+/// else's build behind it.
+///
+/// **Only for a server that fell over**, never one a person stopped: a stop is
+/// somebody letting the address go on purpose, and the probe would otherwise
+/// race this process group's own teardown on every stop.
+async fn answering_now(state: &ServerState, end: &End) -> Option<u16> {
+    if end.stopped || state.serving_since.is_none() {
+        return None;
+    }
+    let port = state.ports.first()?.port;
+    let taken = tokio::task::spawn_blocking(move || !crate::ports::BindConnectProbe.free(port))
+        .await
+        .ok()?;
+    taken.then_some(port)
 }
 
 /// Offer what the log has grown by, a pass every [`api::FOLLOW`], until the
