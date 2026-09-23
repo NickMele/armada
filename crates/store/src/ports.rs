@@ -140,11 +140,14 @@ pub enum PortClaimant {
     /// and a worktree somebody cut by hand is another, so two checkouts of one
     /// repository never resolve `${port.NAME}` to the same number. `#1577`.
     ///
-    /// **A path and never a root**, which is the whole of the widening: keying
-    /// on the repository root gave every checkout of it one span, and the
-    /// second server to bind took the first's port or quietly answered in its
-    /// place. Whether a path *is* a checkout of a served repository is
+    /// Whether a path *is* a checkout of a served repository is
     /// `fleet::checkouts`', because this crate cannot look.
+    ///
+    /// **One key here is not a path**: a Verify's workspace span rides under
+    /// `workspace:<path>`, which collides with no checkout because every
+    /// checkout's key is absolute. **One such key is a convention and two
+    /// would be a design** — a second is where this becomes a variant of its
+    /// own, and that is another table rebuild.
     Checkout(String),
     /// Fleet's own listener — the one port Bridge connects to, published in
     /// the runtime file. Claimed at startup before the bind and released when
