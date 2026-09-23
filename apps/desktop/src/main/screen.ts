@@ -73,16 +73,16 @@ type Reviewed = {
  * stale. A region added to a Job's screen belongs on the table or in this
  * paragraph.
  *
- * **The comments half of the row above has two triggers the table does not
- * carry.** `job.remarks_changed` (`#661`) re-takes the remarks alone, where
- * they are the ones open — `connection.ts` calls
- * `ReviewMaterial.remarksChanged` straight off that event rather than
- * routing it through an `Again` occasion here. `remarks-poll.ts`'s 20 s
- * timer (`#667`) calls the same method from `index.ts`, for as long as one
- * Job's panel is on screen. Both are narrower than every occasion above:
- * those classify a whole screen's worth of reads by what caused the moment,
- * and each of these is one route woken by one Job's pull request, which the
- * classification this file exists for has nothing to add to.
+ * **Three triggers the table does not carry, each narrower than an occasion.**
+ * `job.remarks_changed` (`#661`) re-takes the remarks alone, where they are the
+ * ones open — `connection.ts` calls `ReviewMaterial.remarksChanged` straight
+ * off that event rather than routing it through an `Again` occasion here.
+ * `remarks-poll.ts`'s 20 s timer (`#667`) calls the same method from
+ * `index.ts`, for as long as one Job's panel is on screen, and
+ * `resources-poll.ts`'s 10 s one (`#1571`) does the same for `resources` while
+ * Pulse draws it. An occasion classifies a whole screen's worth of reads by
+ * what caused the moment; each of these is one route woken by one open
+ * surface, which that classification has nothing to add to.
  */
 export type Screen = {
   detail: Region;
@@ -167,8 +167,9 @@ export async function takeAgain(port: number, again: Again, screen: Screen): Pro
     // A resync says nothing about the open Job's steps, and neither does an
     // event carrying only a Board row.
     mine(screen.detail.jobId) ? screen.detail.again(port) : undefined,
-    // The machine reading moves with the Job rather than on a clock of its own:
-    // a poll would pay a process table per tick.
+    // The machine reading also has a clock of its own, `resources-poll.ts` —
+    // the board's and not the Job's, so the process table is walked only while
+    // somebody is looking at it.
     mine(screen.resources.jobId) ? screen.resources.again(port) : undefined,
     // A history that is unfolded grows as the Job moves, so the move that was
     // just delivered is read back rather than left off the end of the list.

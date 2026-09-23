@@ -108,6 +108,8 @@ export const deleteBranchOne = (jobId: string, tip: string) => window.armada.del
 export const forgetOne = (jobId: string) => window.armada.forgetJob(jobId);
 export const readEvidence = (jobId: string | null): void => void window.armada.readEvidence(jobId);
 export const readRemarks = (jobId: string | null): void => void window.armada.readRemarks(jobId);
+/** Pulse's own 10 s tick, held open for as long as the board is drawn. #1571. */
+export const watchPulse = (jobId: string | null): void => void window.armada.watchPulse(jobId);
 export const readCall = (jobId: string, callId: string) => window.armada.readCall(jobId, callId);
 export const readCheckOutput = (jobId: string, kept: string) =>
   window.armada.readCheckOutput(jobId, kept);

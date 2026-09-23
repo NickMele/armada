@@ -490,6 +490,15 @@ export type BridgeApi = {
    * naming the Job, and this walks a process table and a directory.
    */
   readResources: (jobId: string | null) => Promise<void>;
+  /**
+   * Keep the reading above live while Pulse is drawing it, or `null` to stop.
+   *
+   * **The board's poll, not the Job's.** `readResources` opens with the Job and
+   * moves with its events; this is the 10 s tick that keeps the figures honest
+   * while the Job is quiet, and it runs only for as long as somebody has the
+   * board on screen. `resources-poll.ts`, `#1571`.
+   */
+  watchPulse: (jobId: string | null) => Promise<void>;
   /** Read the run sheet — Journey 9 — or `null` to stop. Opened by the sheet
    * and not by the Job, which is what `readDiff` no longer is. */
   watchRunSheet: (jobId: string | null) => Promise<void>;

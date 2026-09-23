@@ -50,11 +50,13 @@ export class JobFocus {
    * same rule `watched` follows and for the same reason: a figure that stopped
    * moving while a Job ran would be a panel claiming a stall that is not there.
    *
-   * **No timer.** Every reading walks a process table and a directory, and a
-   * poll would pay for that continuously to answer a question asked rarely —
-   * which is the cost the Fleet side already refuses. A Job that has genuinely
-   * wedged emits no events and so goes stale, which is why `read_at` is on the
-   * wire and why `examineJob` is the press that takes a fresh one.
+   * **And on a timer while Pulse is drawing it**, `resources-poll.ts` (#1571)
+   * through `resourcesAgain` below. Events alone left a Job sitting at a gate
+   * showing figures from whenever it last moved — the question Pulse answers is
+   * *is this working*, and a stalled Job is exactly when it is asked. The timer
+   * is the board's and not the Job's, which is what bounds the process table it
+   * walks; `read_at` still says how old the reading is, and `examineJob` is
+   * still the press that takes one now.
    */
   private readonly resources: JobReader<{ resources: JobResources }>;
   /**
@@ -164,6 +166,19 @@ export class JobFocus {
         ? { examination: { state: "found", jobId, examined: answer.body as JobExamined } }
         : { examination: { state: "failed", jobId, outcome: answer.outcome } },
     );
+    await this.resources.again(port);
+  }
+
+  /**
+   * Take the machine reading again on Pulse's own timer.
+   *
+   * **A no-op where the read has moved to another Job**, the rule `examineJob`
+   * follows two methods up: the tick was scheduled for the Job the board was
+   * drawing, and answering it under a different title is the defect, not the
+   * staleness it would fix.
+   */
+  async resourcesAgain(port: number, jobId: string): Promise<void> {
+    if (this.resources.jobId !== jobId) return;
     await this.resources.again(port);
   }
 

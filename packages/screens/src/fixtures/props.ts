@@ -84,6 +84,7 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     onFrameSrc: (jobId, kept) => `armada-frame://frame/${jobId}/${kept}`,
     onNeedMaterial: noop,
     onNeedRemarks: noop,
+    onNeedPulse: noop,
     onReport: async () => NOT_CONNECTED,
     onApprove: noop,
     onMergePullRequest: noop,

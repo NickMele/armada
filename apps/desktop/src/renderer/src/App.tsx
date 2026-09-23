@@ -105,6 +105,7 @@ import {
   readDiff,
   readEvidence,
   readRemarks,
+  watchPulse,
   deleteBranchOne,
   forgetOne,
   captureStudioNote,
@@ -748,6 +749,7 @@ export function App({ draft }: AppProps = {}) {
                 onFrameSrc={frameSrc}
                 onNeedMaterial={readEvidence}
                 onNeedRemarks={readRemarks}
+                onNeedPulse={watchPulse}
                 watched={state.watched}
                 workflows={state.holds.workflows}
                 manifests={state.holds.manifests}
