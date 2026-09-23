@@ -17,6 +17,28 @@ export type ServerLink = {
 /** A declared port a server's fields name, and the number it resolved to. */
 export type ServerPort = { name: string; port: number };
 
+/**
+ * Which checkout a server serves, and whether what it serves is still what
+ * that checkout stands at. Since protocol 18.1.
+ *
+ * A name and a port are not enough: two checkouts of one repository declare
+ * the same server under the same name, and the address answers either way.
+ */
+export type ServerCheckout = {
+  /** The checkout it runs in, absolute: a Job's worktree, or a main checkout. */
+  path: string;
+  /** The branch checked out there. Absent for a main checkout. */
+  branch?: string;
+  /** The commit the checkout stood at when the server started. */
+  commit?: string;
+  /**
+   * How many commits have landed in that checkout since. **Absent is not
+   * zero** — zero is nothing having landed, absent is Fleet never having
+   * been told.
+   */
+  behind?: number;
+};
+
 /** One instance. `list_servers`' row, and every `server.*` event's payload. */
 export type ServerState = {
   /** What `stop_server` and `observe_server` take. */
@@ -29,6 +51,8 @@ export type ServerState = {
    * checkout's. Absent only from a Fleet that predates it. Since protocol 13.17.
    */
   manifest_id?: string;
+  /** Which checkout answers on this server's address. Since protocol 18.1. */
+  checkout: ServerCheckout;
   /** `starting`, `serving` or `exited`. Only `serving` carries a live address. */
   phase: string;
   /** The `serve` line as it ran, `${port.NAME}` resolved. */

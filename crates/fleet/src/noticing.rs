@@ -288,6 +288,13 @@ where
             // a pull request that was closed put nothing on the base at all.
             (Landing::Merged { .. }, Some(base)) => {
                 let standing = self.caught_the_repository_up(job, base).await;
+                // **Before the proof run, because it costs nothing and the
+                // proof run is a process.** A person watching a preview while
+                // work lands is told here that what they are looking at is
+                // now behind — `#1564`. Nothing is restarted under them.
+                if let Ok(served) = self.served_by_id(job) {
+                    self.told_servers_the_checkout_moved(served.root(), &standing);
+                }
                 // **After the fast-forward and never instead of it**, because
                 // what is proved is the tree the fast-forward left: a standing
                 // that declined has no commit to hand over and cannot start a

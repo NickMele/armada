@@ -31,6 +31,7 @@ function instance(phase: string, jobId?: string): ServerState {
     id: "01M2E5KFWY0023WBZZF1GF7K48",
     name: "storybook_dev",
     ...(jobId === undefined ? {} : { job_id: jobId }),
+    checkout: { path: "/repos/armada", commit: "cf4bcaea", behind: 0 },
     phase,
     serve: "storybook dev -p 40000",
     ports: [],

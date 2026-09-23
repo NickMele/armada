@@ -503,6 +503,12 @@ impl Studios for FakeDaemon {
                     name: server.name.clone(),
                     job_id: None,
                     manifest_id: None,
+                    checkout: ipc::ServerCheckout {
+                        path: String::from("/repo"),
+                        branch: None,
+                        commit: None,
+                        behind: None,
+                    },
                     phase: ipc::ServerPhase::Serving,
                     serve: format!("serve {}", server.name),
                     ports: Vec::new(),

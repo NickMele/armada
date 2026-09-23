@@ -46,6 +46,7 @@ async function act(name: string): Promise<void> {
 const SERVING: ServerState = {
   id: "01SERVERSTORYBOOK000000000",
   name: "storybook_dev",
+  checkout: { path: "/repos/armada", commit: "cf4bcaea", behind: 0 },
   phase: "serving",
   serve: "pnpm -C packages/components exec storybook dev -p 41207 --no-open --ci",
   ports: [{ name: "storybook", port: 41207 }],
