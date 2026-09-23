@@ -29,8 +29,12 @@ import { TabsWithCounts } from "../../primitives/TabsWithCounts/TabsWithCounts";
  * one pays for a column because the run tree beside it is drawn for 240px. Six
  * columns are not: at 1440 with Helm's dock open the table had 250px left and
  * broke a repository path one character to a line, which is the v1 defect the
- * fold exists to prevent. `floor.ts` also says the window measure answers for
- * the window and not for a component's box, and the dock is 320px of it.
+ * fold exists to prevent.
+ *
+ * **The dock is no longer what makes it narrow** (#1583) — it draws over the
+ * table rather than beside it, so 1440 is 1440. The sheet stays: a column
+ * inspector was never affordable beside six columns at the floor, and that is
+ * the width the rule was really written for.
  */
 
 /** Who ran a row, as the column reads it. */

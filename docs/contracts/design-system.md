@@ -795,44 +795,33 @@ one handle per panel, and never three panels each resolving their own width.
 nothing else — Helm left it for the dock (#948), so there is no second tier
 beneath it any more.
 
-**The column never disappears. It reaches the rail in two bands, and stops
+**The column never disappears. It reaches the rail at one width, and stops
 there.** 48px is cheap, and losing Navigation, Stats and Fleet entirely is
-worse than losing 48px at any width. #1428 gave job detail's two columns their
-floors and left a band the window cannot pay for — between `--layout-breakpoint`
-and `--window-fold-left`, with Helm's dock beside the content, the column at
-its full width, both floors and the dock want more pixels than there are, and
-the step panel sat at 202px on a laptop. The owner ruled on 17 Sep 2026 that
-**the left column gives way before Helm's dock does**, automatically, and comes
-back when the window grows.
+worse than losing 48px at any width.
+
+> **Rule.** The left column collapses to its 48px rail below
+> `--layout-breakpoint`, and at no other width. It is drawn at every width,
+> never absent, and **Helm's dock is not one of the terms**.
+> Why: the collapse pays for the two columns job detail draws, which is a fact
+> about the window alone. A collapse that also read the dock's state made
+> opening Helm *widen* the content, which is the defect #1583 names.
+
+**There was a second band, and it is gone with the reason for it.** #1428 gave
+job detail's two columns their floors, and with the dock taking 380px out of
+the content between `--layout-breakpoint` and 1280px the step panel sat at
+202px on a laptop. The owner ruled on 17 Sep 2026 that **the left column gives
+way before Helm's dock does**; `--window-fold-left` was the arithmetic for it,
+and the rail's 80px against the full column's 232 still left 1101–1127 short.
+#1583 took the dock out of the layout instead, so the whole band is solvent and
+neither the token nor the 27px shortfall survives it.
 
 **The 17 Sep wording here said "folds away entirely", and that was wrong.**
 #1435 built it, and the owner corrected it on 18 Sep 2026: *"when I said
 collapse the left panel I didn't mean completely hide it. Thats where we got
 disconnected. yes Helm hides. But the left panels collapse into a single icon
-size column, not hidden away."* Giving way means reaching the rail, which is
-the form the column already takes below `--layout-breakpoint`. The paragraphs
-below are the corrected rule; the sentence they replace is recorded here rather
-than deleted, because the band and its arithmetic are the same and only what
-the column becomes in it changed.
-
-> **Rule.** The left column collapses to its 48px rail below
-> `--window-fold-left` while Helm's dock is beside the content, and below
-> `--layout-breakpoint` at any dock state. It is drawn at every width and
-> never absent.
-> Why: the threshold is arithmetic, not a preference — `--window-fold-left` is
-> the sum of the column at its full width, the dock at rest and job detail's
-> two floors, and `spacing.css` carries the addition. With the dock closed or
-> folded to its sheet the window has the room, so the column keeps its width.
-
-**The rail costs 80px against the full column's 232**, so collapsing returns
-152px rather than the 216px that removing the column returned. That is 27px
-short of what job detail's two floors want at the bottom of the band: **between
-`--layout-breakpoint` and 1128px the step panel is under `--w-step-panel-min`**,
-at 305px at the narrowest and reaching its floor at 1128. The band is real, it
-is named rather than papered over, and nothing clips in it — `.armada-inside`'s
-own `min()` is what degrades the panel smoothly there, and the run column holds
-`--w-run-column-min` throughout. 305px against the 202px that started this is
-the trade the owner took for keeping the column on screen.
+size column, not hidden away."* Giving way means reaching the rail. That
+correction still stands and is what the rule above says; only the second band
+it applied to has gone.
 
 **At 48px Stats and Fleet keep their one status dot each**, so a glance still
 says whether anything needs attention, and Navigation keeps its glyphs.
@@ -868,12 +857,8 @@ rail dot is the reading at 48px.
 
 **The cost, taken knowingly.** A surface that resizes on its own is
 disorienting the first time, and at the rail Stats and Fleet are a dot each
-rather than their rows. The two alternatives to collapsing at all were rejected
-on 17 Sep 2026: correcting `--w-work-min` would cut the dock's drag ceiling on
-a 1512px screen from 868px to about 580 against #1176, and folding the dock to
-its sheet earlier puts Helm behind a scrim at a width that has room for it.
-`⌘\` (`toggle_sidebar`) is registered and stays unbuilt; nothing hides the
-column by hand, and nothing hides it at all.
+rather than their rows. `⌘\` (`toggle_sidebar`) is registered and stays
+unbuilt; nothing hides the column by hand, and nothing hides it at all.
 
 **Nav items do not carry escalation or approval counts.** Stats already
 carries both, as its own rows. Duplicating them in Navigation creates two
@@ -885,11 +870,27 @@ places to check and two chances to disagree.
 Board and detail are separate destinations, and job detail's own inspector is
 inside the route rather than over it — below `--layout-breakpoint` it folds to
 a sheet flush to that route's edge, never to the window's. **Helm's dock is the
-one exception**: at `--layout-breakpoint` and wider it sits beside the content
+one exception**: at `--layout-breakpoint` and wider it draws over the content
 when open, because it answers questions about whatever is on screen rather
 than inspecting one Job, and draws nothing at all when closed — the title
 row's own Helm button is the one way back, since the edge strip that used to
-sit there at any width is gone. It never resizes the content beneath it.
+sit there at any width is gone.
+
+> **Rule.** Helm's dock is a layer over the content and never a column in it,
+> and Bridge opens with it shut. Opening it changes nothing about the width of
+> what is behind it, at any window width.
+> Why: the owner, 22 September 2026 — *"I like the panel it's in, but I think
+> it should overlay the contents of the screen. By default it's closed, and
+> when it opens it overlays instead of shrinking everything."* A dock that
+> took 380px made every rule written against the window wrong by that much
+> while it was open, and three screens each grew a private answer to it in one
+> day (#1583). It is the fold's own mechanism generalised: below
+> `--layout-breakpoint` the dock has always been a layer.
+
+**It takes no scrim and no modality**, unlike the sheet it folds to. A person
+reads a Job and asks Helm about it, so the screen underneath stays live and
+reachable, and one press on Close or `⌘J` puts it away. `--w-work-min` is what
+keeps a dock dragged wide from covering the thing being discussed.
 See Responsive behaviour, below, and [Helm](../concepts/helm.md).
 
 This follows from what a detail view actually holds: the escalation
@@ -952,23 +953,22 @@ floors at 390px, which leaves 358px between its gutters.
 > `packages/shell/src/floor.ts` answers whether the window is at it, and a
 > touch client has no window to bound.
 
-**One breakpoint at ~1100px, one collapse at ~1280px, and one client boundary
-at the desktop floor:**
+**One breakpoint at ~1100px, and one client boundary at the desktop floor:**
 
-| | ≥ 1280px | 1100–1280px, dock open | < 1100px | Touch client |
-| --- | --- | --- | --- | --- |
-| Left column | Expanded, user-resizable — Navigation, Stats and Fleet together | **Auto-collapses to the 48px rail**, and 152px go to the content; under 1128px the step panel is still short and gives way | Auto-collapses to the 48px rail; Stats and Fleet each keep one status dot | A bottom tab bar |
-| Job row | One shape at every width — a stacked row carrying the badge, the headline sentence and the labelled field run beneath | The same row | The same row. Nothing reshapes | The same row, field run wrapped |
-| Helm's dock | Beside the content when open; closed draws nothing, and the title row's Helm button reopens it | Beside the content, unmoved — it is what the middle column is paying for | An edge strip; open draws it as a sheet over the content instead | Not built |
-| Job detail's inspector | A column beside the run | A column beside the run; under 1128px it is short and gives way | **A sheet over the run**, opened by pressing a step and closed by `Esc`; flush to both edges at the floor | Not built |
+| | ≥ 1100px | < 1100px | Touch client |
+| --- | --- | --- | --- |
+| Left column | Expanded, user-resizable — Navigation, Stats and Fleet together | Auto-collapses to the 48px rail; Stats and Fleet each keep one status dot | A bottom tab bar |
+| Job row | One shape at every width — a stacked row carrying the badge, the headline sentence and the labelled field run beneath | The same row. Nothing reshapes | The same row, field run wrapped |
+| Helm's dock | A layer over the content when open, taking none of its width; closed draws nothing, and the title row's Helm button opens it | An edge strip; open draws it as a sheet over the content instead | Not built |
+| Job detail's inspector | A column beside the run | **A sheet over the run**, opened by pressing a step and closed by `Esc`; flush to both edges at the floor | Not built |
 
-The middle and right columns draw the same rail, and what differs is what the
-rail has to pay for: below 1100 the dock takes itself off screen and hands back
-more than the full column costs, so the window has room to spare, while in the
-middle band the dock is still there and the bottom 27px of that band is short.
-With the dock closed the middle column reads as the first.
+**There were three columns here until #1583**, the middle one being 1100–1280
+with the dock open — the band where the dock's 380px and job detail's two
+floors could not both be paid for and the left column went to its rail. The
+dock costs the layout nothing now, so that band reads as the first and the
+table is shorter by a column.
 
-The third column is a client and not a window width. Nothing between 390px and
+The last column is a client and not a window width. Nothing between 390px and
 768px is drawn, because the desktop window cannot get there and the touch
 client is not resized into it.
 
@@ -1109,6 +1109,7 @@ order is the order a person meets them.
 
 | Token | Layer | Why it sits here |
 | --- | --- | --- |
+| `--z-dock` | Helm's dock | Over the content, under anything opened from inside it |
 | `--z-menu` | Dropdown, popover, split-button menu | Opens over the surface |
 | `--z-tooltip` | Tooltip | Explains the thing a menu is over |
 | `--z-modal` | Dialog, sheet | Interrupts both |
@@ -1117,6 +1118,11 @@ order is the order a person meets them.
 
 A number meaning "above my sibling" means "under every other layer" the moment
 its layer resolves against the window rather than its parent.
+
+**The dock is the one layer a person works beside rather than through**, so it
+is the one with no scrim and the only one under `--z-menu`. It still needs a
+token: a card lifts itself a step while it is hovered, which is enough to paint
+over a layer left at `auto`.
 
 ### Placement resolves before paint
 

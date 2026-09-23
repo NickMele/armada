@@ -1,6 +1,6 @@
 # Helm
 
-**What it is:** A dock beside the content on every Bridge surface, holding the questions waiting on you and one running conversation per repository — not a Drone.
+**What it is:** A dock over the content on every Bridge surface, holding the questions waiting on you and one running conversation per repository — not a Drone.
 
 ---
 
@@ -28,7 +28,7 @@ Cross-Job reasoning covers every Job in the selected Manifest, not one Job at a 
 
 ## Placement
 
-**Helm is a dock, not a surface.** It sits beside the content on every Bridge screen at 1100px and wider, folding to an edge strip that opens as a sheet below that; `⌘J` toggles it from anywhere, including from inside a field. It carries no rail digit and does not appear in the sidebar. See `../contracts/design-system.md`, Two tiers, for the layout and `../concepts/job-board.md` for how a question on the Board relates to a question on the dock.
+**Helm is a dock, not a surface.** It draws over the content on every Bridge screen at 1100px and wider, folding to an edge strip that opens as a sheet below that; `⌘J` toggles it from anywhere, including from inside a field. **Bridge opens with it shut, and opening it takes no width off the screen behind it** (#1583, owner 22 Sep 2026) — the content under it stays live, and Close or `⌘J` is one press. It carries no rail digit and does not appear in the sidebar. See `../contracts/design-system.md`, Two tiers, for the layout and `../concepts/job-board.md` for how a question on the Board relates to a question on the dock.
 
 The dock's upper zone lists every question waiting on a person, from every repository Fleet serves — a Drone question, a held command, a Judge refusal — each card naming its own repository. Answering one there settles it on that Job's own detail too. The lower zone holds Helm's conversation.
 

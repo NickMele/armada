@@ -58,8 +58,8 @@
 
    overflow-wrap: anywhere is what keeps the table inside its column: a table
    is as wide as its longest unbreakable run, and a repository path has none —
-   so without it the Outcome column was pushed off the right edge at 768 and
-   at 1440 with the dock open. */
+   so without it the Outcome column was pushed off the right edge at 768, and
+   at 1440 while Helm's dock still took 380px off the content (#1583). */
 .armada-ledger__where,
 .armada-ledger__what,
 .armada-ledger__outcome {
@@ -68,9 +68,10 @@
 
 /* A path has no soft wrap opportunity in it, so a table holding one is as wide
    as that path whatever its column can pay for — which pushed Outcome off the
-   right edge at 768 and at 1440 with the dock open. Breaking a path mid-token
-   is ugly; a column off the screen is the v1 failure. Only the two columns
-   that carry paths, because it breaks a heading too. */
+   right edge at 768, and at 1440 while the dock still took width (#1583).
+   Breaking a path mid-token is ugly; a column off the screen is the v1
+   failure, and 768 still reaches it. Only the two columns that carry paths,
+   because it breaks a heading too. */
 .armada-ledger__what,
 .armada-ledger__outcome {
   overflow-wrap: anywhere;
