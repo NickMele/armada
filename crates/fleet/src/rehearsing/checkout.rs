@@ -47,7 +47,7 @@ where
             Some(served) => {
                 let manifest = served.manifest();
                 let (setup, checks, commands) = entries::declared(manifest).sheet(&[]);
-                let holder = crate::servers::Holder::MainCheckout(served.root().to_string());
+                let holder = crate::servers::Holder::Checkout(served.root().to_string());
                 let servers = self.declared_servers(&holder, manifest);
                 (
                     setup,

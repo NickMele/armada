@@ -119,7 +119,7 @@ where
     ///
     /// **Called once, at shutdown, after teardown** — the same moment and from
     /// the same place as
-    /// [`released_main_checkout_ports`](Fleet::released_main_checkout_ports),
+    /// [`released_checkout_ports`](Fleet::released_checkout_ports),
     /// the composition root, for the same reason: there is no Job whose
     /// transition would carry it.
     ///

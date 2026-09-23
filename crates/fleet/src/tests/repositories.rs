@@ -392,7 +392,7 @@ async fn two_repositories_main_checkouts_claim_separate_spans() {
     let second = fleet.main_checkout_ports(&second).await;
     assert!(first.get("web").is_some() && second.get("web").is_some());
     assert_ne!(first.get("web"), second.get("web"));
-    fleet.released_main_checkout_ports().await;
+    fleet.released_checkout_ports().await;
     assert!(fleet
         .store()
         .lock()

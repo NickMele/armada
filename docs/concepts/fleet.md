@@ -360,7 +360,13 @@ Fleet holds a Manifest's server Commands — the ones with `serve`, which [Manif
 > **Rule.** A Job's servers are stopped when the Job ends, before its span is released.
 > Why: release is gated on teardown, and a server is an in-tree process the group kill reaches.
 
-A server started with no Job runs in the main checkout of the repository `?manifest_id=` names, and uses that checkout's span. It stops on Stop, when it exits, or when Fleet stops; the span itself is released only when Fleet stops, after teardown.
+A server started with no Job runs in a checkout of the repository `?manifest_id=` names — its main checkout, or a worktree of it that `start_server`'s `checkout` names — and uses **that checkout's own span**. It stops on Stop, when it exits, or when Fleet stops; the span itself is released only when Fleet stops, after teardown.
+
+> **Rule.** A port span is claimed per checkout, never per repository.
+> Why: a repository has more than one checkout and each declares the same `ports:`, so one span between them is the number two servers bind. On 22 September 2026 a worktree took the main checkout's port and the address kept answering, with another branch's app behind it.
+
+> **Rule.** A Job's worktree is reachable by naming the Job, never by naming its path.
+> Why: a Job's server is held for the Job and stopped when it ends, which a path cannot say — and a second span beside the one the worktree already holds is the collision again, inside Armada.
 
 **Fleet holds its servers in memory, so a Job's servers stop when Fleet stops too.** A restarted Fleet holds none, and a server that outlived the process holding it would keep its port with nothing left to hand it to the next Drone or stop it with the Job. Beside each running server's log Fleet keeps a record of its process group, removed when the server stops.
 
@@ -369,7 +375,7 @@ A server started with no Job runs in the main checkout of the repository `?manif
 
 #### Which checkout answers, and how far behind it is
 
-Every answer that names a server says which checkout serves it — its path, and for a Job its branch. A name and a port are not enough: another checkout of the same repository declares the same number, and the address answers whichever bound first. On 22 September 2026 five agents were told to watch one address and one of them photographed another branch's app.
+Every answer that names a server says which checkout serves it — its path, and its branch where Fleet can read one. A name and a port are not enough: another checkout of the same repository declares the same number, and before each took a span of its own the address answered whichever bound first. On 22 September 2026 five agents were told to watch one address and one of them photographed another branch's app.
 
 > **Rule.** A held server carries the checkout it runs in on every answer and every event.
 > Why: the failure is not the collision — it is that the address keeps answering, so nobody looks.

@@ -530,28 +530,42 @@ where
     }
 
     /// The main checkout's own claimed span, resolved to a name-to-port map.
-    /// **Claimed on first need, and reused after that** — the proof run after
-    /// a merge draws from this, and so will a server started from the
-    /// Manifest surface with no Job, since neither has a worktree of its own
-    /// to claim against.
+    /// The checkout at the repository's root — [`checkout_ports`] is the
+    /// general shape, and what a server started on another checkout uses.
+    ///
+    /// [`checkout_ports`]: Fleet::checkout_ports
     pub(crate) async fn main_checkout_ports(
         &self,
         served: &crate::repositories::Served,
     ) -> BTreeMap<String, u16> {
-        if let Some(claim) = self.main_checkout_claim(served).await {
+        self.checkout_ports(served, served.root()).await
+    }
+
+    /// One checkout's own claimed span, resolved to a name-to-port map.
+    /// **Claimed on first need, and reused after that** — the proof run after
+    /// a merge draws from this, and so does a server started with no Job,
+    /// since neither has a worktree of its own to claim against.
+    ///
+    /// **A span per checkout and not per repository.** Two checkouts of one
+    /// repository each declare its `ports:`, and one span between them is the
+    /// number two servers bind — `#1577`. Whether `path` is a checkout of this
+    /// repository is settled before here, in `crate::checkouts`.
+    pub(crate) async fn checkout_ports(
+        &self,
+        served: &crate::repositories::Served,
+        path: &str,
+    ) -> BTreeMap<String, u16> {
+        if let Some(claim) = self.checkout_claim(path).await {
             return port_map(served.manifest(), &claim);
         }
         // First need: nothing to escalate and nobody to tell if this
-        // refuses, for `main_checkout_port_env`'s own reason — a proof run
+        // refuses, for `checkout_port_env`'s own reason — a proof run
         // with an unresolved `${port.NAME}` is diagnosable from its own log,
         // and there is no Job here to carry a `not_configurable`.
         let _ = self
-            .try_claim(
-                PortClaimant::MainCheckout(served.root().to_string()),
-                served.manifest(),
-            )
+            .try_claim(PortClaimant::Checkout(path.to_string()), served.manifest())
             .await;
-        match self.main_checkout_claim(served).await {
+        match self.checkout_claim(path).await {
             Some(claim) => port_map(served.manifest(), &claim),
             None => BTreeMap::new(),
         }
@@ -559,63 +573,72 @@ where
 
     /// Every variable the main checkout's claimed span sets:
     /// `ARMADA_PORT_<NAME>` and any declared `env`, for the proof run after a
-    /// merge and, later, a server started with no Job.
+    /// merge and for a server started with no Job.
     pub(crate) async fn main_checkout_port_env(
         &self,
         served: &crate::repositories::Served,
+    ) -> Vec<(String, String)> {
+        self.checkout_port_env(served, served.root()).await
+    }
+
+    /// Every variable one checkout's claimed span sets.
+    pub(crate) async fn checkout_port_env(
+        &self,
+        served: &crate::repositories::Served,
+        path: &str,
     ) -> Vec<(String, String)> {
         let names = match env_names(served.manifest()) {
             Ok(names) => names,
             Err(_) => return Vec::new(),
         };
-        let ports = self.main_checkout_ports(served).await;
+        let ports = self.checkout_ports(served, path).await;
         env_vars(&names, &ports)
     }
 
-    async fn main_checkout_claim(&self, served: &crate::repositories::Served) -> Option<PortClaim> {
+    async fn checkout_claim(&self, path: &str) -> Option<PortClaim> {
         self.store()
             .lock()
             .await
-            .port_span_for_main_checkout(served.root())
+            .port_span_for_checkout(path)
             .ok()
             .flatten()
     }
 
-    /// Release the main checkout's span. **Called once, at Fleet shutdown,
-    /// after teardown** — `docs/concepts/fleet.md`, *Servers*: unlike a Job's
-    /// span, the main checkout's is held for as long as Fleet runs rather
-    /// than per run, so nothing releases it between one proof run and the
-    /// next.
+    /// Release every checkout's span, the main one's and any worktree's a
+    /// server was held on. **Called once, at Fleet shutdown, after teardown**
+    /// — `docs/concepts/fleet.md`, *Servers*: unlike a Job's span, a
+    /// checkout's is held for as long as Fleet runs rather than per run, so
+    /// nothing releases it between one proof run and the next.
     ///
     /// **`pub`, and not `pub(crate)`** — every other release in this module
     /// happens from inside a Fleet method that already holds the Job whose
     /// span it is releasing; there is no such method for the main checkout,
     /// so the composition root calls this directly once the turn loop has
     /// drained. See `armada::serve`.
-    pub async fn released_main_checkout_ports(&self) {
-        for claim in self.main_checkout_claims().await {
+    pub async fn released_checkout_ports(&self) {
+        for claim in self.checkout_claims().await {
             let _ = self.store().lock().await.release_port_span(&claim.claimant);
         }
     }
 
-    /// Every repository's main-checkout claim, one per root.
-    async fn main_checkout_claims(&self) -> Vec<PortClaim> {
+    /// Every checkout claim, one per checkout path.
+    async fn checkout_claims(&self) -> Vec<PortClaim> {
         let every = self.store().lock().await.every_port_claim();
         let every = every.unwrap_or_default().into_iter();
         every
-            .filter(|claim| matches!(claim.claimant, PortClaimant::MainCheckout(_)))
+            .filter(|claim| matches!(claim.claimant, PortClaimant::Checkout(_)))
             .collect()
     }
 
-    /// At boot, confirm each main-checkout claim a crashed Fleet left behind is
+    /// At boot, confirm each checkout claim a crashed Fleet left behind is
     /// still good before this process reuses it. **The bind-and-connect
     /// probe rule applies here exactly as it does to a fresh claim** — a row
     /// on disk says nothing about whether the ports it names are still free,
     /// only that the last Fleet to hold them believed they were. A span that
     /// fails the probe is released rather than reused, so the next call to
-    /// [`main_checkout_ports`](Fleet::main_checkout_ports) claims a fresh one.
-    pub(crate) async fn reconciled_main_checkout_ports(&self) {
-        for claim in self.main_checkout_claims().await {
+    /// [`checkout_ports`](Fleet::checkout_ports) claims a fresh one.
+    pub(crate) async fn reconciled_checkout_ports(&self) {
+        for claim in self.checkout_claims().await {
             let top = claim.base.saturating_add(claim.width.saturating_sub(1));
             if !(claim.base..=top).all(|port| BindConnectProbe.free(port)) {
                 let _ = self.store().lock().await.release_port_span(&claim.claimant);

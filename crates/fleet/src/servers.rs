@@ -39,12 +39,16 @@ use ipc::{
 };
 use tokio::sync::watch;
 
+use crate::checkouts::Checkout;
 use crate::daemon::Fleet;
 use crate::rehearsing::records;
 use held::Live;
 pub(crate) use held::{Holder, Servers};
 use running::Plan;
 pub use unservable::Unservable;
+
+/// A path that is not a checkout of the repository a server was asked for.
+const NOT_A_CHECKOUT: &str = "fleet.not_a_checkout";
 
 /// How long a stop, or a Job's teardown, waits for a server to end. The group
 /// is ended with `SIGKILL`, so what is left is a reap and a publish.
@@ -59,8 +63,10 @@ const A_DRONE_WAITS: Duration = Duration::from_secs(120);
 pub(crate) enum Place {
     /// In the Job's worktree, on its span.
     Job(Job),
-    /// In this repository's main checkout, on the span it holds while Fleet runs.
-    MainCheckout(crate::repositories::Served),
+    /// In a checkout of this repository — its main checkout, or a worktree
+    /// somebody cut by hand — on the span that checkout holds while Fleet
+    /// runs. `crate::checkouts` is the only way to one.
+    Checkout(Checkout),
 }
 
 impl<H, V, W> Fleet<H, V, W>
@@ -92,11 +98,11 @@ where
             Place::Job(job) => self.served_by(job).map_err(|why| Unservable::NotKept {
                 why: why.to_string(),
             })?,
-            Place::MainCheckout(served) => served.clone(),
+            Place::Checkout(checkout) => checkout.served().clone(),
         };
         let manifest = match &place {
             Place::Job(job) => self.effective_manifest_in(&served, job).await.0,
-            Place::MainCheckout(_) => served.manifest().clone(),
+            Place::Checkout(_) => served.manifest().clone(),
         };
         let Some(server) = manifest.server(name).cloned() else {
             return Err(match manifest.command(name) {
@@ -150,16 +156,16 @@ where
                     checkout,
                 )
             }
-            Place::MainCheckout(_) => (
-                Holder::MainCheckout(served.root().to_string()),
+            Place::Checkout(checkout) => (
+                Holder::Checkout(checkout.path().to_string()),
                 None,
-                PathBuf::from(served.root()),
-                self.main_checkout_ports(&served).await,
-                self.main_checkout_port_env(&served).await,
-                String::from("main"),
+                PathBuf::from(checkout.path()),
+                self.checkout_ports(&served, checkout.path()).await,
+                self.checkout_port_env(&served, checkout.path()).await,
+                checkout.under(),
                 ipc::ServerCheckout {
-                    path: served.root().to_string(),
-                    branch: None,
+                    path: checkout.path().to_string(),
+                    branch: checkout.branch().map(str::to_string),
                     commit: self.commit_serving_now(&served).await,
                     // Nothing has landed since a server that has not started.
                     behind: Some(0),
@@ -235,6 +241,10 @@ where
         };
         self.publish(Event::ServerStarting(state.clone()));
         let plan = Plan {
+            whose: match &place {
+                Place::Job(job) => format!("job {}", job.id().as_str()),
+                Place::Checkout(checkout) => checkout.whose(),
+            },
             run: server.run().map(resolved),
             serve: state.serve.clone(),
             ready: server.ready().map(resolved),
@@ -380,7 +390,7 @@ where
 
     /// Stop every server Fleet holds, a Job's or the main checkout's. **Called
     /// once, as Fleet stops, before the main checkout's span is released** —
-    /// `pub` for `released_main_checkout_ports`' reason: the composition root
+    /// `pub` for `released_checkout_ports`' reason: the composition root
     /// is what calls it. See `armada::serve`.
     pub async fn stopped_every_server(&self) {
         stopped_and_waited(self.servers().held_by(None)).await;
@@ -394,6 +404,17 @@ where
         tokio::task::spawn_blocking(move || left::reaped(&root))
             .await
             .unwrap_or_default()
+    }
+
+    /// A path that is not a checkout of the repository asked about. **A 422**,
+    /// `NotAServer`'s shape: a name that names nothing rather than a conflict
+    /// with where things stand.
+    pub(crate) fn checkout_refusal(&self, why: crate::checkouts::NotACheckout) -> Refusal {
+        Refusal::Unacceptable(WireError::raised(
+            NOT_A_CHECKOUT,
+            why.to_string(),
+            self.run_id(),
+        ))
     }
 
     pub(crate) fn server_refusal(&self, why: Unservable, job: Option<&ipc::JobId>) -> Refusal {

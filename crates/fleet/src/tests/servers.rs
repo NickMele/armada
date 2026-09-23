@@ -19,6 +19,7 @@ use core_model::Job;
 use ipc::{Event, ServerLink, ServerPhase, ServerPort, ServerState, StartedBy};
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
+use crate::checkouts::Checkout;
 use crate::daemon::Fleet;
 use crate::ports::{BindConnectProbe, PortProbe, PortRange};
 use crate::servers::{Place, Unservable};
@@ -414,7 +415,7 @@ async fn a_server_with_no_job_uses_the_main_checkouts_span_and_stops_on_stop() {
 
     let (started, _) = Arc::clone(&fleet)
         .hold_server(
-            Place::MainCheckout(fleet.first()),
+            Place::Checkout(Checkout::main(fleet.first())),
             "storybook",
             StartedBy::Person,
         )
@@ -517,7 +518,7 @@ async fn a_jobs_servers_are_the_ones_it_froze() {
 
     let (main, _) = Arc::clone(&fleet)
         .hold_server(
-            Place::MainCheckout(fleet.first()),
+            Place::Checkout(Checkout::main(fleet.first())),
             "late",
             StartedBy::Person,
         )

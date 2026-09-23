@@ -539,7 +539,7 @@ notes = """
 
 **A Run node holds it**, and not a fifteenth kind: `docs/concepts/studio.md` says a Run node holds a Manifest command started from the Studio, and Run is one of only two kinds that may take status colour — which *starting* and *serving* need. The node's `held` says which of the two ids it carries; absent is a run in the checkout, which is every node written before 16.2.
 
-**One instance per checkout.** A name already serving is answered with the instance that is up and `already_up` true, and the node is still made — it records that this Studio asked for it, and it reads the live holder from then on. Ports come from the main checkout's own span, never from the Studio, and no workspace is named: a server is declared in the Manifest Fleet holds for the repository, which is `start_server`'s reason too.
+**One instance per checkout.** A name already serving is answered with the instance that is up and `already_up` true, and the node is still made — it records that this Studio asked for it, and it reads the live holder from then on. Ports come from the main checkout's own span, never from the Studio, and neither a workspace nor another checkout is named: a server is declared in the Manifest Fleet holds for the repository, and a Studio holds one on the checkout it is about. `start_server` is where a caller names another checkout, since `#1577`.
 
 **The server starts first and the node is written after it.** Every refusal `start_server` makes is made here — a name nothing declares, a Check, a Command that declares no `serve` — and a refused start leaves no node behind. `produced_by` names the node it was started from, and the Studio draws the `produced` edge.
 
@@ -2563,9 +2563,11 @@ transport = "HTTP"
 agent_access = "Yes"
 description = "Start a server the Manifest declares, for a Job or for the main checkout — or be handed the one already running"
 notes = """
-**A name, never a command line and never a port.** What runs is the Manifest's `run` then `serve`, with `${port.NAME}` resolved from the span it runs under: the Job's, or the main checkout's where the body names no Job. Which repository's main checkout is `?manifest_id=`, the one Fleet was started in where absent; a Job's is the Job's own. `serve` starts only if `run` exits zero, and the instance is `serving` once `ready` exits zero — polled, never a duration — or at once where there is no `ready`.
+**A name, never a command line and never a port.** What runs is the Manifest's `run` then `serve`, with `${port.NAME}` resolved from the span it runs under: the Job's, or the named checkout's where the body names no Job. Which repository is `?manifest_id=`, the one Fleet was started in where absent; a Job's is the Job's own.
 
-**One instance per Job per server.** A second request, from a person or through a Drone's `start_server` tool, is answered with the instance already starting or serving rather than a second one on the same port.
+**`checkout` names which checkout of that repository, by path.** Absent is its main checkout. A repository has more than one — somebody cuts a worktree to look at another branch — and each takes a span of its own, so two of them serve the same Manifest at once rather than one taking the other's number. A path that is not a worktree of this repository is `fleet.not_a_checkout`, and so is a Job's worktree, which says to name the Job instead. `#1577`. `serve` starts only if `run` exits zero, and the instance is `serving` once `ready` exits zero — polled, never a duration — or at once where there is no `ready`.
+
+**One instance per Job per server, and one per checkout per server.** A second request, from a person or through a Drone's `start_server` tool, is answered with the instance already starting or serving rather than a second one on the same port.
 
 It answers at once, `starting`; `server.serving` and `server.exited` follow on `/events`, and the output is `observe_server`'s. Refused where the name declares no server, where the Job's worktree is gone or the Job has ended.
 

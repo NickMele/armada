@@ -84,7 +84,7 @@ fn a_store_at_version_forty_nine_keeps_every_claim_through_the_rebuild() {
     let every = store.every_port_claim().expect("read");
     assert!(every
         .iter()
-        .all(|claim| !matches!(claim.claimant, PortClaimant::MainCheckout(_))));
+        .all(|claim| !matches!(claim.claimant, PortClaimant::Checkout(_))));
 
     // And the third claimant the rebuild exists for, which the old `CHECK`
     // could not have held.

@@ -161,12 +161,12 @@ impl Within {
     }
 }
 
-/// The key a workspace's span is kept under, beside the main checkouts' so boot
-/// reconciliation and shutdown find a row a crash left. **Not a path**: a served
-/// root is canonical and absolute, so no repository's key can equal it.
+/// The key a workspace's span is kept under, beside the checkouts' so boot
+/// reconciliation and shutdown find a row a crash left. **Not a path**: every
+/// checkout's key is canonical and absolute, so no checkout's can equal it.
 pub(crate) fn claimant(root: &str, dir: &str) -> PortClaimant {
     let at = Path::new(root).join(dir);
-    PortClaimant::MainCheckout(format!("{WORKSPACE_KEY}{}", at.to_string_lossy()))
+    PortClaimant::Checkout(format!("{WORKSPACE_KEY}{}", at.to_string_lossy()))
 }
 
 const WORKSPACE_KEY: &str = "workspace:";
@@ -191,14 +191,14 @@ where
     ) -> Within {
         let Workspace { dir, manifest } = workspace;
         let claimant = claimant(checkout.root(), &dir);
-        let PortClaimant::MainCheckout(key) = &claimant else {
-            unreachable!("built as a main checkout's just above");
+        let PortClaimant::Checkout(key) = &claimant else {
+            unreachable!("built as a checkout's just above");
         };
         let _ = self.store().lock().await.release_port_span(&claimant);
         // Nothing to escalate on a refusal: an unresolved `${port.NAME}` reads
         // off the run's own log, as the main checkout's does.
         let _ = self.try_claim(claimant.clone(), &manifest).await;
-        let claim = self.store().lock().await.port_span_for_main_checkout(key);
+        let claim = self.store().lock().await.port_span_for_checkout(key);
         let ports = match claim.ok().flatten() {
             Some(claim) => port_map(&manifest, &claim),
             None => BTreeMap::new(),
