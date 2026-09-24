@@ -26,9 +26,11 @@ export type GuideCatalogueProps = {
    * The guide open on arrival, by number. Absent opens the first, so the panel
    * is never empty.
    *
-   * **This is the deep link**: a card's `Read all guides` names the guide it
-   * was showing. Under `narrow` a named guide arrives with its sheet up —
-   * the press asked for that guide, not for the list.
+   * **Nothing in Bridge passes one yet.** It is the seam a deep link would
+   * take — a card's `Read all guides` naming the guide it was showing — and
+   * wiring it needs `GuidanceProvider.onReadAll` to carry the guide and `App`
+   * to hold it. Under `narrow` a named guide arrives with its sheet up: that
+   * press asked for a guide, not for the list.
    */
   arriveAt?: number;
   /** The window is under `--layout-breakpoint`: the guide folds to a sheet. */
