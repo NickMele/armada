@@ -98,10 +98,11 @@ export type GuidanceProviderProps = {
    */
   remembered?: boolean;
   /**
-   * Go to the catalogue. Navigation is the window's, so the card carries the
-   * control and the window answers it. Absent draws no control.
+   * Go to the catalogue, at the guide the card was showing. Navigation is the
+   * window's, so the card carries the control and the window answers it.
+   * Absent draws no control.
    */
-  onReadAll?: () => void;
+  onReadAll?: (guide: Guide) => void;
 };
 
 /**
