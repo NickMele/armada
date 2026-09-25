@@ -13,7 +13,7 @@ const meta: Meta<typeof GuideCatalogue> = {
       <div
         style={{
           display: "flex",
-          height: "560px",
+          height: "100vh",
           padding: "var(--space-6)",
           background: "var(--surface-canvas)",
         }}
@@ -105,7 +105,7 @@ export const Narrow: Story = {
         style={{
           display: "flex",
           width: "var(--layout-breakpoint-narrow)",
-          height: "560px",
+          height: "100vh",
           padding: "var(--space-6)",
           background: "var(--surface-canvas)",
         }}
