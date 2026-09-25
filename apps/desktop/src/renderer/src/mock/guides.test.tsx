@@ -85,12 +85,26 @@ test("the switch on the first card turns all of them off, and Settings is where 
   await expect.element(setting).not.toBeChecked();
 });
 
-test("the rail reaches the catalogue, and it lists every guide", async () => {
+test("the rail reaches the catalogue, every guide is in the list, and one is open", async () => {
   mount(onJob(running()));
   await closeCard();
 
   await page.getByRole("button", { name: "Guides", exact: true }).first().click();
+
+  // The catalogue draws a row per guide and opens one beside them, so a guide
+  // is reachable rather than already on screen — the list is the claim.
   for (const guide of GUIDES) {
-    await expect.element(page.getByRole("heading", { name: guide.title })).toBeVisible();
+    await expect.element(page.getByRole("button", { name: guide.title })).toBeVisible();
   }
+
+  // Arriving on an empty panel is the thing the list-and-panel arrangement
+  // must never do, so the first guide is open before anything is pressed.
+  const [first] = GUIDES;
+  if (first === undefined) throw new Error("no guides to draw");
+  await expect.element(page.getByRole("heading", { name: first.title })).toBeVisible();
+
+  const last = GUIDES[GUIDES.length - 1];
+  if (last === undefined) throw new Error("no guides to draw");
+  await page.getByRole("button", { name: last.title }).first().click();
+  await expect.element(page.getByRole("heading", { name: last.title })).toBeVisible();
 });
