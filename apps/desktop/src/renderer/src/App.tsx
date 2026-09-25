@@ -268,8 +268,6 @@ export function App({ draft }: AppProps = {}) {
   // Whether the window is at `--window-floor`, `JobDetail`'s own reading —
   // Fleet settings is the same trailing layer and takes it the same way.
   const floor = useAtFloor();
-  // Whether the window is under `--layout-breakpoint`. The catalogue's two
-  // columns fold on it, and a component cannot read the token itself.
   const narrow = useNarrow();
   // Where things are' own open choice — held locally so a press moves it at
   // once, `#927`'s round trip off the critical path of a toggle.
