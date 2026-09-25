@@ -42,6 +42,62 @@ export type GuidePicture = {
 };
 
 /**
+ * A drawing a guide can lead with or carry, by id rather than by path: it is
+ * built from tokens in `GuideFigure`, not a file the bundler resolves.
+ *
+ * **A relation is drawn once.** `docs/contracts/design-system.md`, *Teaching
+ * borrows a game's motion* — three animations of one relation, drawn three
+ * ways, is worse than none. So an id names one drawing, and both shapes below
+ * scale that same drawing rather than each having their own.
+ */
+export type GuideFigureId = "members-landing" | "completion-rules";
+
+/**
+ * The same guide written as something other than paragraphs — a **prototype**,
+ * so the owner can look at three shapes of one guide and choose one.
+ *
+ * The note this answers, 25 September 2026: *"I would prefer guides be
+ * animations or steps, not just a wall of text."* Both shapes here are real and
+ * both are switchable in the mock; the one he does not choose gets deleted,
+ * along with this field.
+ *
+ * **Absent means prose under every shape**, which is why it is an added field
+ * rather than a change to `body`: twelve of the fourteen guides are untouched,
+ * and the contrast between a rewritten guide and an untouched one is part of
+ * what is being looked at.
+ */
+export type GuideShapes = {
+  /**
+   * `steps`: a numbered sequence, **one line each and never a paragraph**.
+   *
+   * The figure is present only where a relation is the thing being learned. A
+   * guide with no relation to draw is the lines alone — no figure, and no frame
+   * held open where one would go.
+   */
+  steps: {
+    lines: readonly string[];
+    figure?: {
+      id: GuideFigureId;
+      /** The step it sits under, by its own number. The relation belongs to one line. */
+      at: number;
+    };
+  };
+  /**
+   * `figure`: the drawing leads, at size, and the words are its captions
+   * underneath — the No Man's Sky reading.
+   *
+   * **A figure is mandatory here, which is the shape's cost.** A guide whose
+   * subject is a rule rather than a relation has no honest picture, and this
+   * shape still makes it lead with one.
+   */
+  figure: {
+    id: GuideFigureId;
+    /** Under the drawing, subordinate to it. Each carries a fact `body` carries. */
+    captions: readonly string[];
+  };
+};
+
+/**
  * One guide: a number, a title, the piece it explains, a few short paragraphs,
  * and room for a picture.
  *
@@ -66,4 +122,10 @@ export type Guide = {
   picture?: GuidePicture;
   /** The `docs/concepts/` page holding the same knowledge for a reader of the repository. */
   concept?: string;
+  /**
+   * The same guide as steps and as a figure. **A prototype for one decision**,
+   * carried by two of the fourteen; the rest read as prose whatever the mock's
+   * `?guides=` says.
+   */
+  shapes?: GuideShapes;
 };

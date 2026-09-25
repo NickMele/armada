@@ -1,0 +1,232 @@
+/* A guide's drawing. Built from tokens and nothing else: no asset, no viewBox,
+   so every length here is a token or a percentage of the column it sits in.
+
+   MISSING TOKEN, named here and reported, the one Dialog and GuideCard both
+   name: --armada-hairline aliases --border-width, because packages/tokens
+   declares no border-width shorthand for an edge.
+
+   The drawing is framed and sunken, so it reads as a figure inside the reading
+   rather than as more chrome. Two scales, one drawing. */
+.armada-guide-figure {
+  --armada-hairline: var(--border-width);
+  /* The branch, two hairlines thick — the same arithmetic the activity
+     instrument uses to spell a rule without a px literal. */
+  --armada-figure-rule: calc(var(--border-width) * 2);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: var(--armada-hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+}
+
+/* Under one step: the mark is a badge's height and the labels are metadata,
+   because the step's own line is what is being read and this supports it. */
+.armada-guide-figure[data-scale="inline"] {
+  --armada-figure-mark: var(--h-badge);
+  padding: var(--space-4) var(--space-3);
+  gap: var(--space-3);
+}
+
+/* Leading the guide: the drawing is the thing on screen, so the mark is a
+   control's height and the labels step up one. */
+.armada-guide-figure[data-scale="lead"] {
+  --armada-figure-mark: var(--h-control);
+  padding: var(--space-6) var(--space-4);
+  gap: var(--space-4);
+}
+
+/* ---- members landing in order ---------------------------------------------
+
+   The branch runs left to right through the three marks and ends at main. Each
+   member owns one segment of it, so a segment drawing is that member landing.
+   Three equal columns and main at the end, sized by its own words. */
+.armada-guide-figure__landings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: start;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-guide-figure__landing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The segment and the mark on it. The segment spans the whole column, so
+   neighbouring segments meet and the branch is continuous once all three
+   have landed. */
+.armada-guide-figure__rung {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: var(--armada-figure-mark);
+}
+
+.armada-guide-figure__rail {
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: var(--armada-figure-rule);
+  background: var(--border-strong);
+  /* Drawn from the end the branch grows from, which is the left. */
+  transform-origin: left center;
+  transform: translateY(-50%);
+  animation: armada-guide-rail-in var(--duration-travel) var(--ease)
+    calc(var(--duration-travel) * var(--armada-landing-order)) both;
+}
+
+/* The member itself, sitting on its segment. Chrome tones and not a status
+   colour: this is a member in a drawing, not a job in a state. */
+.armada-guide-figure__mark {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--armada-figure-mark);
+  height: var(--armada-figure-mark);
+  border-radius: 50%;
+  border: var(--armada-hairline) solid var(--border-strong);
+  background: var(--bg-raised);
+  color: var(--fg-default);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  /* It arrives once its segment is most of the way drawn, so the reading is a
+     branch reaching a point rather than a point appearing on a branch. */
+  animation: armada-guide-mark-in var(--duration-travel) var(--ease)
+    calc(var(--duration-travel) * (var(--armada-landing-order) + 0.6)) both;
+}
+
+/* Which link this member carries. A word, so the three are told apart without
+   a legend and without a colour. */
+.armada-guide-figure__link {
+  min-width: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  text-align: center;
+  text-wrap: pretty;
+}
+
+.armada-guide-figure[data-scale="lead"] .armada-guide-figure__link {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.armada-guide-figure[data-scale="lead"] .armada-guide-figure__mark {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+/* Where the members are landing. It is already there and does not animate: main
+   is not one of the three things arriving. */
+.armada-guide-figure__base {
+  display: flex;
+  align-items: center;
+  height: var(--armada-figure-mark);
+}
+
+.armada-guide-figure__base-rail {
+  width: var(--space-4);
+  height: var(--armada-figure-rule);
+  background: var(--border-strong);
+}
+
+.armada-guide-figure__base-label {
+  padding-inline-start: var(--space-2);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* It runs once, when the guide opens. A loop would say *still working*, and a
+   guide is not working. */
+@keyframes armada-guide-rail-in {
+  from {
+    transform: translateY(-50%) scaleX(0);
+  }
+}
+
+@keyframes armada-guide-mark-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--space-4) * -1));
+  }
+}
+
+/* Held still, the drawing is the finished branch — every segment drawn, every
+   mark on it, every link named. Nothing was carried by the motion. */
+.armada-guide-figure[data-still] .armada-guide-figure__rail,
+.armada-guide-figure[data-still] .armada-guide-figure__mark {
+  animation: none;
+}
+
+/* ---- the four landing rules -----------------------------------------------
+
+   A rule is not a relation, so nothing here moves and nothing here connects.
+   It is the four rules as four boxes: weaker than the sentence, on purpose. */
+.armada-guide-figure__rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.armada-guide-figure__rule-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-guide-figure[data-scale="lead"] .armada-guide-figure__rule-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.armada-guide-figure__rule {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: var(--armada-hairline) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  color: var(--fg-muted);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  text-wrap: pretty;
+}
+
+/* The two ways a job stops. Completed and ended are job states, so the colour
+   is the state machine's rather than one chosen for the drawing. */
+.armada-guide-figure__ends {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: var(--armada-hairline) solid var(--border-subtle);
+}
+
+.armada-guide-figure__end {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+.armada-guide-figure__end[data-end="completed"] {
+  background: var(--status-completed-success-bg);
+  color: var(--status-completed-success);
+}
+
+.armada-guide-figure__end[data-end="ended"] {
+  background: var(--status-killed-bg);
+  color: var(--status-killed);
+}

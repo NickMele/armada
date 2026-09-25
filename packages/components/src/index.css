@@ -354,6 +354,10 @@
 @import "./compositions/GuideCard/GuideCard.css";
 @import "./compositions/GuideCatalogue/GuideCatalogue.css";
 @import "./compositions/GuidesSetting/GuidesSetting.css";
+/* A prototype beside the prose one: a guide as steps, and a guide as a figure
+   with captions. Only the mock asks for either — `src/guide-shape.tsx`. */
+@import "./compositions/GuideFigure/GuideFigure.css";
+@import "./compositions/GuideShaped/GuideShaped.css";
 
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */

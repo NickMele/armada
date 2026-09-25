@@ -2,7 +2,9 @@ import { useState } from "react";
 
 import { GUIDE_GROUPS, GUIDES } from "../../guides";
 import type { Guide, GuideGroupId } from "../../guides/guide";
+import { useGuideShape } from "../../guide-shape";
 import { Sheet } from "../../primitives/Sheet/Sheet";
+import { GuideShaped } from "../GuideShaped/GuideShaped";
 
 /**
  * Every guide: the list on the left, the one you chose open beside it.
@@ -108,7 +110,12 @@ export function GuideCatalogue({
 
       {/* Beside the list wherever the window can pay for both. */}
       {narrow || open === undefined ? null : (
-        <article className="armada-guides__panel">
+        <article
+          className="armada-guides__panel"
+          // Named by the guide it holds, the way the sheet it folds into is:
+          // without it the region beside the list is one nothing can name.
+          aria-label={open.title}
+        >
           <div className="armada-guides__panel-head">
             <p className="armada-guides__eyebrow">
               <span className="mono">Guide {open.number}</span>
@@ -117,7 +124,7 @@ export function GuideCatalogue({
             </p>
             <h2 className="armada-guides__panel-title">{open.title}</h2>
           </div>
-          <GuideBody guide={open} />
+          <GuideBody key={open.number} guide={open} />
         </article>
       )}
 
@@ -137,7 +144,7 @@ export function GuideCatalogue({
           onClose={() => setReading(false)}
         >
           <div className="armada-guides__folded">
-            <GuideBody guide={open} />
+            <GuideBody key={open.number} guide={open} />
           </div>
         </Sheet>
       ) : null}
@@ -154,6 +161,10 @@ export function GuideCatalogue({
  * that interrupted you carries the guide and the way out.
  */
 function GuideBody({ guide }: { guide: Guide }) {
+  // The mock's `?guides=`, for the shape comparison. Bridge provides no shape,
+  // so this is `prose` in the app and the rendering below is untouched.
+  const shape = useGuideShape();
+  const shaped = shape !== "prose" && guide.shapes !== undefined ? shape : undefined;
   return (
     <>
       {/* No frame is held for a picture that does not exist — the guide data's
@@ -161,11 +172,14 @@ function GuideBody({ guide }: { guide: Guide }) {
       {guide.picture === undefined ? null : (
         <img className="armada-guides__picture" src={guide.picture.src} alt={guide.picture.alt} />
       )}
-      {guide.body.map((paragraph) => (
-        <p key={paragraph} className="armada-guides__paragraph">
-          {paragraph}
-        </p>
-      ))}
+      {shaped !== undefined ? <GuideShaped guide={guide} shape={shaped} where="panel" /> : null}
+      {shaped !== undefined
+        ? null
+        : guide.body.map((paragraph) => (
+            <p key={paragraph} className="armada-guides__paragraph">
+              {paragraph}
+            </p>
+          ))}
       {/* A machine value carries a word naming it. Not a link: it names a file
           in the repository rather than an address, and no surface navigates. */}
       {guide.concept === undefined ? null : (

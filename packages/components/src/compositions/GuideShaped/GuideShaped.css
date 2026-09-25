@@ -1,0 +1,78 @@
+/* A guide read as steps, or as a figure with captions. One stylesheet for both
+   surfaces, so a shape reads the same in the catalogue panel and in the card. */
+.armada-guide-shaped {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* ---- steps ----------------------------------------------------------------
+
+   A numbered sequence, one line each. The number sits in its own column so
+   every line starts at one place and the list reads as numbered without a
+   marker glyph — the catalogue's own row does this. */
+.armada-guide-shaped__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-guide-shaped__step {
+  display: grid;
+  grid-template-columns: var(--space-6) minmax(0, 1fr);
+  column-gap: var(--space-3);
+  row-gap: var(--space-3);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.armada-guide-shaped__ordinal {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+  text-align: right;
+}
+
+/* One line, which is the shape's whole claim. It wraps at a narrow width rather
+   than being clipped — a step is a sentence, not a fixed row. */
+.armada-guide-shaped__line {
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-wrap: pretty;
+}
+
+/* The figure under the step it belongs to, in the line's own column so it sits
+   under the words rather than under the number. */
+.armada-guide-shaped__figure {
+  grid-column: 2;
+  min-width: 0;
+}
+
+/* ---- figure ---------------------------------------------------------------
+
+   The drawing leads and the words are its captions: smaller than a paragraph
+   and set off from each other, so they read as subordinate to what is above. */
+.armada-guide-shaped[data-shape="figure"] {
+  gap: var(--space-4);
+}
+
+.armada-guide-shaped__caption {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  text-wrap: pretty;
+}
+
+/* In the card the captions go one step quieter still. The drawing takes the
+   width a small layer has, and what is left has to stay readable under it. */
+.armada-guide-shaped[data-where="card"] .armada-guide-shaped__caption {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
