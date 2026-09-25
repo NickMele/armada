@@ -136,7 +136,7 @@ import { useCommandPalette } from "@armada/shell";
 import { copyDebugInfoFor } from "@armada/shell";
 import { Shell } from "@armada/shell";
 import { SURFACE, SURFACES, useSurfaceKeys } from "@armada/shell";
-import { useAtFloor } from "@armada/shell";
+import { useAtFloor, useNarrow } from "@armada/shell";
 import { watchUncaught } from "@armada/shell";
 import type { Uncaught } from "@armada/shell";
 
@@ -268,6 +268,7 @@ export function App({ draft }: AppProps = {}) {
   // Whether the window is at `--window-floor`, `JobDetail`'s own reading —
   // Fleet settings is the same trailing layer and takes it the same way.
   const floor = useAtFloor();
+  const narrow = useNarrow();
   // Where things are' own open choice — held locally so a press moves it at
   // once, `#927`'s round trip off the critical path of a toggle.
   const [whereOpen, pressWhereOpen] = useWhereOpen(state.preferences.where_things_are_open);
@@ -1064,14 +1065,13 @@ export function App({ draft }: AppProps = {}) {
               />
             </Boundary>
           ) : guiding ? (
-            /* Every guide, numbered and grouped, read without the screen that
-               raised it — the catalogue half of #1602. It draws off the guide
-               table alone, so it needs nothing from Fleet and works
-               disconnected. */
+            /* The list of guides and the one open beside it — the catalogue
+               half of #1602, rearranged. It draws off the guide table alone,
+               so it needs nothing from Fleet and works disconnected.
+               No pane: the two columns are the screen and each scrolls
+               itself, which is what lets the folded sheet be flush to it. */
             <Boundary region="Guides" {...guarded}>
-              <div className="armada-screen__pane">
-                <GuideCatalogue />
-              </div>
+              <GuideCatalogue narrow={narrow} floor={floor} />
             </Boundary>
           ) : settingsShowing ? (
             <Boundary region="Settings" {...guarded}>

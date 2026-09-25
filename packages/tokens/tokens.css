@@ -770,6 +770,23 @@
      prompt, the refs and the settings block. #1547. */
   --w-sketch-box: 240px;
   --h-sketch-pad: 300px;
+  /* The guide catalogue's list, beside the guide it opens. Its own name rather
+     than --w-run-column's 380 or --w-menu's 240: the run column holds a step
+     name beside an elapsed on one line, and a menu holds a command; this holds
+     a title that is allowed to wrap, so the three are free to move apart.
+
+     260px is what the longest title costs at --text-sm on two lines —
+     `How a member reaches the one before it`, 38 characters, with the number
+     column and the row's own padding taken off first. Wider and every other
+     title leaves half a line empty; narrower and that one takes three.
+
+     **No floor beside it, unlike the run column's pair.** The list is only a
+     column above --layout-breakpoint, where the narrowest content box is
+     1100 less the 48px rail — the guide beside it keeps 750px there, which is
+     past its own 68ch measure. Below the breakpoint there is no second column
+     to be crushed by: the list is the whole width and the guide is a layer
+     over it. */
+  --w-guide-list: 260px;
   --palette-width: 560px;
   --palette-max-height: 400px;
 
