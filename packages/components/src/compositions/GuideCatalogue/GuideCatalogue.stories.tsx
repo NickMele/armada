@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect, userEvent, within } from "storybook/test";
 
 import { GUIDES, GUIDE_GROUPS } from "../../guides";
-import { GuideCatalogue } from "./GuideCatalogue";
+import { defaultGuideListWidth, GuideCatalogue, type GuideCatalogueProps } from "./GuideCatalogue";
 
 /** The surface is bounded and each column scrolls itself, so the frame has a height. */
 const meta: Meta<typeof GuideCatalogue> = {
@@ -91,14 +92,66 @@ export const ArrivesOnOne: Story = {
   },
 };
 
+/** A caller holding the width, which is what Bridge's own `App` does with it. */
+function Resizing(args: GuideCatalogueProps) {
+  const [width, setWidth] = useState(args.listWidth ?? defaultGuideListWidth());
+  return <GuideCatalogue {...args} listWidth={width} onResizeList={setWidth} />;
+}
+
+/**
+ * **The list's inner edge is draggable, and the keyboard reaches the same
+ * range.** The owner asked for it on 25 September 2026. A pointer drag is the
+ * obvious half; what a rendering cannot show is the other one — that the edge
+ * is a `separator` a person can tab to, that the arrows move it, and that Home
+ * and End stop where the tokens say rather than anywhere the pointer went.
+ *
+ * Read off `aria-valuenow` rather than off a measured box: that attribute is
+ * the fact a screen reader is given, so a handle that moved the column while
+ * telling nobody would fail here.
+ */
+export const Resizable: Story = {
+  render: (args) => <Resizing {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const handle = canvas.getByRole("separator", { name: "Resize the list of guides" });
+    const at = () => Number(handle.getAttribute("aria-valuenow"));
+    const min = Number(handle.getAttribute("aria-valuemin"));
+    const max = Number(handle.getAttribute("aria-valuemax"));
+
+    // A press finds it, and the press that starts a drag leaves it focused —
+    // the keyboard is reachable straight after a pointer, not instead of it.
+    await userEvent.click(handle);
+    await expect(handle).toHaveFocus();
+    const resting = at();
+    await userEvent.keyboard("{ArrowRight}");
+    await expect(at()).toBeGreaterThan(resting);
+    await userEvent.keyboard("{ArrowLeft}");
+    await expect(at()).toBe(resting);
+
+    // The bounds are where a drag stops too — both read the one clamp.
+    await userEvent.keyboard("{End}");
+    await expect(at()).toBe(max);
+    await userEvent.keyboard("{ArrowRight}");
+    await expect(at()).toBe(max);
+    await userEvent.keyboard("{Home}");
+    await expect(at()).toBe(min);
+    await userEvent.keyboard("{ArrowLeft}");
+    await expect(at()).toBe(min);
+  },
+};
+
 /**
  * **Under `--layout-breakpoint` the list reaches the guide through a sheet.**
  * The list is what the surface arrives on, a press opens the guide over it,
  * and Close gives the list back — both halves reachable at a width that cannot
  * hold two columns.
+ *
+ * **The resize is wired and still draws no handle here**, which is the claim:
+ * the list is the whole content at this width, so there is no inner edge and a
+ * caller passing the props does not conjure one.
  */
 export const Narrow: Story = {
-  args: { narrow: true },
+  args: { narrow: true, onResizeList: () => {} },
   decorators: [
     (Story) => (
       <div
@@ -123,6 +176,8 @@ export const Narrow: Story = {
 
     // Arrives on the list: nothing is over it, and every row is pressable.
     await expect(canvas.queryByRole("dialog")).toBeNull();
+    // No edge to drag: one column has no inner edge, wired or not.
+    await expect(canvas.queryByRole("separator")).toBeNull();
     await userEvent.click(canvas.getByRole("button", rowFor(guide)));
 
     const sheet = canvas.getByRole("dialog", { name: guide.title });

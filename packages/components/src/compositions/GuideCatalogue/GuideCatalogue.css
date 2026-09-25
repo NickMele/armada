@@ -6,7 +6,10 @@
    reason the sheet stays inside the surface's corners. */
 .armada-guides {
   display: grid;
-  grid-template-columns: var(--w-guide-list) minmax(0, 1fr);
+  /* --armada-guide-list is what a drag sets, inline; the token is what the
+     column rests at. The fallback is the declaration, so a caller that wires
+     no width draws the resting one and nothing here has to know which. */
+  grid-template-columns: var(--armada-guide-list, var(--w-guide-list)) minmax(0, 1fr);
   column-gap: var(--space-6);
   align-items: stretch;
   flex: 1;
@@ -40,6 +43,50 @@
   /* Room under the last row for the same reason a pane keeps it: a scroller
      clips at its padding box and the last row otherwise ends flush. */
   padding-bottom: var(--space-6);
+}
+
+/* The list's inner edge, a third track drawn only where a caller wired the
+   width — the shell's own rule, an edge that looks grabbable and does nothing
+   being worse than none. The gutter is unchanged by it: the grid's own
+   --space-6 gives way to the handle's --space-2 hit area between two --space-2
+   margins, which is the same 24px. The grip is the shell's exactly — a short
+   --border-default pill at the vertical centre, visible at rest and brightening
+   to --border-strong on hover, focus or drag, so nothing appears from nothing. */
+.armada-guides:has(.armada-guides__handle) {
+  grid-template-columns: var(--armada-guide-list, var(--w-guide-list)) auto minmax(0, 1fr);
+  column-gap: 0;
+}
+
+.armada-guides__handle {
+  align-self: stretch;
+  position: relative;
+  width: var(--space-2);
+  margin: 0 var(--space-2);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.armada-guides__handle::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--border-width);
+  height: var(--space-8);
+  border-radius: var(--radius-sm);
+  background: var(--border-default);
+  transform: translateY(-50%);
+}
+
+.armada-guides__handle:hover::before,
+.armada-guides__handle:focus-visible::before,
+.armada-guides__handle[data-dragging="true"]::before {
+  background: var(--border-strong);
+}
+
+.armada-guides__handle:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--border-width) * -2);
 }
 
 .armada-guides__group {
