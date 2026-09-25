@@ -785,8 +785,31 @@
      1100 less the 48px rail — the guide beside it keeps 750px there, which is
      past its own 68ch measure. Below the breakpoint there is no second column
      to be crushed by: the list is the whole width and the guide is a layer
-     over it. */
-  --w-guide-list: 260px;
+     over it.
+
+     **286px since the owner asked for a tenth more**, 25 Sep 2026 — 260 plus
+     10%. The measurement above still holds at it: the four titles that wrap
+     take two lines and none takes three. */
+  --w-guide-list: 286px;
+  /* The drag range, since the same note asked for the edge to be draggable.
+     A pair rather than the single value --w-guide-list was, for the reason the
+     run column's own pair exists: a width a person moves needs somewhere to
+     stop.
+
+     220px is the floor, measured 25 Sep 2026 at 1101px — the narrowest window
+     that draws two columns at all. Under 212px the four longest titles take a
+     third line each and the list stops being a scannable index; 220 is the
+     next step on the 4px grid above that, with room for a title longer than
+     today's longest.
+
+     400px is the ceiling, from the same window: the catalogue's content box is
+     853px there, so with the --space-6 gutter between them the two columns are
+     even at 414px. Past that the index is wider than the guide it indexes,
+     which inverts the screen. 400 is the widest round value under it, and it
+     is already past the 320px where every title sits on one line — so the
+     ceiling costs a person nothing they could use. */
+  --w-guide-list-min: 220px;
+  --w-guide-list-max: 400px;
   --palette-width: 560px;
   --palette-max-height: 400px;
 

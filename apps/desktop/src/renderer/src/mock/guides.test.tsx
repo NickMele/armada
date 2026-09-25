@@ -8,7 +8,7 @@
 // arriving with it.
 
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { running } from "@armada/screens/src/fixtures/build/index";
 import { GUIDES, GUIDE_STEP_BAR } from "@armada/components";
 
@@ -21,8 +21,16 @@ unmountAfterEach();
 /** What `guidance.tsx` writes. Cleared either side, so no test inherits a memory. */
 const KEY = "armada.bridge.guides";
 
-beforeEach(() => window.localStorage.removeItem(KEY));
-afterEach(() => window.localStorage.removeItem(KEY));
+/** What `guide-list-width.ts` writes — the catalogue list's own remembered width. */
+const WIDTH_KEY = "armada.bridge.guide-list-width";
+
+function forget(): void {
+  window.localStorage.removeItem(KEY);
+  window.localStorage.removeItem(WIDTH_KEY);
+}
+
+beforeEach(forget);
+afterEach(forget);
 
 /** The card for one guide, wherever the provider drew it. */
 const cardFor = (guide: { number: number; title: string }) =>
@@ -107,4 +115,74 @@ test("the rail reaches the catalogue, every guide is in the list, and one is ope
   if (last === undefined) throw new Error("no guides to draw");
   await page.getByRole("button", { name: last.title }).first().click();
   await expect.element(page.getByRole("heading", { name: last.title })).toBeVisible();
+});
+
+/**
+ * The owner, 25 September 2026: *"Increase the default width of this panel by
+ * 10%. Also it would be nice if it was resizable."* The width the list rests
+ * at is a token, so it is read off `--w-guide-list` rather than typed here — a
+ * test restating the number would pass against its own copy of it.
+ */
+function resting(): number {
+  const value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--w-guide-list"));
+  if (!Number.isFinite(value)) throw new Error("--w-guide-list is not declared");
+  return value;
+}
+
+const handle = () => page.getByRole("separator", { name: "Resize the list of guides" });
+
+/** The column a drag moves, which is what a reader watching this would see change. */
+const listWidth = () =>
+  Math.round(document.querySelector(".armada-guides__list")?.getBoundingClientRect().width ?? 0);
+
+/**
+ * The catalogue, from a window that has just opened. The uninvited card is
+ * over the rail the first time the piece is met and never again, so `met` says
+ * whether there is one to close on the way.
+ */
+const openCatalogue = async (met = false) => {
+  if (!met) await closeCard();
+  await page.getByRole("button", { name: "Guides", exact: true }).first().click();
+  await expect.element(handle()).toBeVisible();
+};
+
+test("the list rests at its token's width, and its inner edge moves it", async () => {
+  mount(onJob(running()));
+  await openCatalogue();
+
+  await expect.element(handle()).toHaveAttribute("aria-valuenow", String(resting()));
+  expect(listWidth()).toBe(resting());
+
+  await handle().click();
+  await userEvent.keyboard("{ArrowRight}");
+  await expect.poll(listWidth).toBeGreaterThan(resting());
+  // Home is the floor, and the column goes there rather than to whatever the
+  // keys had reached — the clamp is the same one a drag reads.
+  await userEvent.keyboard("{Home}");
+  await expect.poll(listWidth).toBe(Number(handle().element().getAttribute("aria-valuemin")));
+});
+
+test("the width is remembered, so the catalogue opens at it next time", async () => {
+  // Its own host and its own teardown, `left-column-rail.test.tsx`'s pattern:
+  // this test reopens the window, and `unmountAfterEach` would take the first
+  // root down a second time.
+  const host = document.createElement("div");
+  host.id = "root";
+  document.body.append(host);
+  const first = mountApp(onJob(running()), host);
+  await openCatalogue();
+  await handle().click();
+  await userEvent.keyboard("{End}");
+  const widest = handle().element().getAttribute("aria-valuemax");
+  expect(window.localStorage.getItem(WIDTH_KEY)).toBe(widest);
+
+  // A remount is the window reopening: the state is gone and only what was
+  // written survives. A column that forgets a drag on every launch is the
+  // control not being worth having.
+  first.unmount();
+  host.remove();
+
+  mount(onJob(running()));
+  await openCatalogue(true);
+  await expect.element(handle()).toHaveAttribute("aria-valuenow", widest);
 });
