@@ -78,6 +78,16 @@ question is only what is convenient — see the next rule.
 Both of the last two rules are alive at once. Rigour about what is recorded,
 speed about what is shipped.
 
+> **He will trade a true picture for a readable screen.**
+> `2026-09-25-the-plans-graph-lives-on-plan.md` — told that moving the plan's
+> graph off Workflow kills the second edge he had asked for two days earlier, he
+> moved it anyway. `2026-09-22-helm-overlays.md` went the same way.
+
+This is not the opposite of *pay for the record being right*. Both are alive:
+rigour about what is **stored**, restraint about what is **drawn**. Where a
+drawing is complete and crowded, he takes the crowding out and accepts the gap.
+Where a record is convenient and lossy, he pays for the loss.
+
 > **Give the person the control; do not infer it from a rule.**
 > `2026-09-22-the-rail-is-a-choice.md` — the left column collapsed only because
 > Helm needed room, and his answer was that he should be able to collapse it
@@ -126,6 +136,7 @@ about the options themselves:
 | He rejects the frame outright when it is wrong | Twice in one session: the dock, and the rail. Leave room for that — an option list is not a cage |
 | He answers with a sentence when no option fits | *"I should be able to collapse it to a rail at any point or at the breakpoint."* Read the sentence, not the nearest option |
 | He takes a stated cost and holds to it | So state the cost plainly. A cost he was not told is a decision he did not make |
+| He asks to see two options built before choosing between them | 25 Sep, on what a guide is: *"I would like to see both options before deciding."* Where an option is a **shape he would look at** — a layout, a piece of copy, how a thing reads — offer to build both behind a switch in the mock rather than only describing them. Where the options differ in **cost or consequence** rather than appearance, he answers from the description |
 
 ## Keeping this honest
 
@@ -135,5 +146,5 @@ The register is the evidence; this file is only the reading of it.
 
 **A rule that gets contradicted is deleted, not hedged.** If he decides the
 other way, the decision file records both and the rule here goes or narrows.
-Eleven rules from three days is a thin basis, and this file will read as more certain
+Twelve rules from four days is a thin basis, and this file will read as more certain
 than it is.
