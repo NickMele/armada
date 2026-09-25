@@ -32,6 +32,7 @@ import {
 } from "./arc-base";
 import { ARC_LANDING } from "./arc-dispatch";
 import { arcCases, arcGroups, ARC_DRONES, withTask } from "./arc-plan";
+import { arcApproved } from "./arc-proposing";
 
 const PLAN_ENTERED = "2026-09-22T09:15:00Z";
 const PLAN_ENDED = "2026-09-22T09:21:00Z";
@@ -219,6 +220,10 @@ export function plannedMoment(): ArcMoment {
       groups,
       cases: arcCases(),
       criteria: arcCriterionViews(),
+      // What the press froze, which is what Overview draws at every moment
+      // after it — the plan is a destination of its own, not the first thing a
+      // person is shown about an approved Job.
+      proposal: arcApproved(),
       landing: ARC_LANDING,
       record: plannedRecord(),
     },
@@ -239,6 +244,9 @@ export function planRevisionRefused(): ArcMoment {
       groups,
       cases: casesAfterRevision(),
       criteria: arcCriterionViews(),
+      // Frozen at the press and unmoved by the revision: what a revision asks
+      // of the plan's Drone is not a second chance to choose a gate.
+      proposal: arcApproved(),
       landing: ARC_LANDING,
       record: refusedRecord(),
       scope_revisions: [
