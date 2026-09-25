@@ -147,7 +147,11 @@ export const GroupCounts: Story = {
     for (const group of GUIDE_GROUPS) {
       const section = canvas.getByRole("region", { name: group.title });
       const filed = GUIDES.filter((guide) => guide.group === group.id).length;
-      await expect(within(section).getByText(String(filed))).toBeVisible();
+      // The count and a guide's own number are both bare digits, so the query
+      // names the count itself rather than the first digit in the section.
+      await expect(
+        within(section).getByText(String(filed), { selector: ".armada-guides__count" }),
+      ).toBeVisible();
     }
   },
 };
