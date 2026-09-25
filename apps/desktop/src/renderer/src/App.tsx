@@ -131,6 +131,7 @@ import { useDrafted } from "./drafted";
 import { useWhereOpen } from "./where-open";
 import { useWorkflowView } from "./workflow-view";
 import { usePanelOpen } from "./panel-open";
+import { useGuideListWidth } from "./guide-list-width";
 import { statsOf, fleetPanelOf } from "./left-column";
 import { useCommandPalette } from "@armada/shell";
 import { copyDebugInfoFor } from "@armada/shell";
@@ -277,6 +278,8 @@ export function App({ draft }: AppProps = {}) {
   // The left column's own fold, remembered across a restart — Bridge/1088.
   const [statsOpen, setStatsOpen] = usePanelOpen("stats");
   const [fleetOpen, setFleetOpen] = usePanelOpen("fleet");
+  // The catalogue list's width, remembered the same way the shell's column is.
+  const [guideList, resizeGuideList] = useGuideListWidth();
 
   // The open Job, read out of the list rather than copied beside it. A Job that
   // leaves the list — superseded, or gone from a resync — closes its own detail
@@ -1069,9 +1072,11 @@ export function App({ draft }: AppProps = {}) {
                half of #1602, rearranged. It draws off the guide table alone,
                so it needs nothing from Fleet and works disconnected.
                No pane: the two columns are the screen and each scrolls
-               itself, which is what lets the folded sheet be flush to it. */
+               itself, which is what lets the folded sheet be flush to it.
+               The list's width is the window's to remember, the same way the
+               shell's own left column is — the note of 25 Sep 2026. */
             <Boundary region="Guides" {...guarded}>
-              <GuideCatalogue narrow={narrow} floor={floor} />
+              <GuideCatalogue narrow={narrow} floor={floor} listWidth={guideList} onResizeList={resizeGuideList} />
             </Boundary>
           ) : settingsShowing ? (
             <Boundary region="Settings" {...guarded}>

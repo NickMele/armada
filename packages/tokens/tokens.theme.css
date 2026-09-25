@@ -168,6 +168,8 @@
   --spacing-sketch-box: var(--w-sketch-box);
   --spacing-sketch-pad: var(--h-sketch-pad);
   --spacing-guide-list: var(--w-guide-list);
+  --spacing-guide-list-min: var(--w-guide-list-min);
+  --spacing-guide-list-max: var(--w-guide-list-max);
   --spacing-width: var(--palette-width);
   --spacing-max-height: var(--palette-max-height);
   --spacing-dialog: var(--w-dialog);
