@@ -1,18 +1,60 @@
 /* One step or group of a Job's workflow, read whole. A column of regions, the
    grammar the run column already uses — see `tab-record.tsx` on why two
-   segmented controls stacked read as one broken one. */
+   segmented controls stacked read as one broken one.
+
+   **A panel on the canvas, not a column of the canvas** (owner, 25 Sep 2026):
+   it drew on the canvas's own ground and blended into it. `armada-glass` is
+   the card treatment every panel that sits directly on the canvas takes
+   (`src/glass.css`) — the gradient, the top highlight, the --border-glass edge
+   and --shadow-card are what lift it off what is beneath. Beside this class on
+   the root, never copied into it.
+
+   **The radius is here and the placement is the caller's.** Helm's dock owns
+   its own --radius-lg and its layer sets where it sits; this panel does the
+   same, so `screens.css` says where the layer is and nothing about how the
+   panel reads. */
 .armada-wf-inspector {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
   min-width: 0;
+  min-height: 0;
+  border-radius: var(--radius-lg);
 }
 
+/* What the panel is, and the way out of it, on a row that holds still while
+   the regions under it scroll — `TheShell.css`'s `__dock-head`, with its own
+   padding and the same --border-subtle rule under it. */
 .armada-wf-inspector__head {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-wf-inspector__titles {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
+}
+
+/* The scroller, so a panel given a ceiling by its caller scrolls its regions
+   rather than its whole self — the dock's `__dock-body`. Where the caller
+   gives it no ceiling, as a story does, nothing here scrolls. */
+.armada-wf-inspector__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .armada-wf-inspector__name {

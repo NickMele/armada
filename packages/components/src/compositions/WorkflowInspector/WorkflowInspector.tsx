@@ -1,3 +1,4 @@
+import { Button } from "../../primitives/Button/Button";
 import { DroneMessageBox, type DroneMessageBoxProps } from "../DroneMessageBox/DroneMessageBox";
 import { FactChip, type FactChipNamed } from "../FactChip/FactChip";
 import { HoldButton, type HoldButtonProps } from "../../primitives/HoldButton/HoldButton";
@@ -113,6 +114,13 @@ export type WorkflowInspectorProps = WorkflowInspectorTaskReading & {
   redirect?: WorkflowInspectorRedirect;
   /** Hold to stop what is running here. Absent where nothing is running. */
   stop?: Pick<HoldButtonProps, "children" | "askLabel" | "description" | "onCommit" | "onAsk" | "disabled" | "pending">;
+  /**
+   * Take the panel off what it is reading. **Drawn where the caller draws this
+   * panel on a layer** — Helm's dock is closed by a Close in its own head, and
+   * a panel over a canvas is closed the same way. Absent where the panel is
+   * part of the flow and there is nothing to close it back to.
+   */
+  onClose?: () => void;
 };
 
 function Region({ name, children }: { name: string; children: React.ReactNode }) {
@@ -221,15 +229,28 @@ export function WorkflowInspector({
   failure,
   redirect,
   stop,
+  onClose,
   ...reading
 }: WorkflowInspectorProps) {
   return (
-    <div className="armada-wf-inspector" aria-label={`${name}, ${kind}`} role="region">
+    <div className="armada-wf-inspector armada-glass" aria-label={`${name}, ${kind}`} role="region">
+      {/* The head holds still and the regions under it scroll — Helm's dock's
+          own arrangement (`TheShell.css`, `__dock-head` and `__dock-body`), so
+          what this panel is, and the way out of it, stay on screen however far
+          down a log somebody has read. */}
       <header className="armada-wf-inspector__head">
-        <h3 className="armada-wf-inspector__name">{name}</h3>
-        <p className="armada-wf-inspector__doing">{doing}</p>
+        <div className="armada-wf-inspector__titles">
+          <h3 className="armada-wf-inspector__name">{name}</h3>
+          <p className="armada-wf-inspector__doing">{doing}</p>
+        </div>
+        {onClose === undefined ? null : (
+          <Button variant="secondary" size="sm" ground="card" onClick={onClose}>
+            Close
+          </Button>
+        )}
       </header>
 
+      <div className="armada-wf-inspector__body">
       {failure === undefined ? null : (
         <Region name="Why this boundary stopped">
           <p className="armada-wf-inspector__failed">{failure.says}</p>
@@ -339,6 +360,7 @@ export function WorkflowInspector({
           <HoldButton {...stop} />
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -66,15 +66,134 @@ test("Stacked draws the same steps as a list, and the choice survives a relaunch
   await expect.element(page.getByRole("tab", { name: "Stacked", selected: true }).first()).toBeVisible();
 });
 
-test("the inspector lands on the step the Job is on, and a press moves it", async () => {
-  // Wide enough that the whole run is fitted inside the canvas rather than
-  // half of it sitting under the rail, where a press would never land.
+// # The inspector is a layer over the canvas, and nothing is open until a press
+//
+// The owner's note of 25 Sep: *this panel should overlay the canvas. By default
+// it is not open, so the canvas spans the width of the page* — and it read as
+// part of the canvas, because it sat on the canvas's own ground. The claim has
+// three halves, and the geometry is the half a story cannot see: the canvas is
+// measured either side of the press, so a panel that went back to taking a grid
+// track would fail here rather than only look wrong.
+
+/** The canvas's frame, by the box it draws in. */
+function canvasBox(): DOMRect {
+  const frame = document.querySelectorAll<HTMLElement>(".armada-workflow-tab__canvas");
+  const last = frame[frame.length - 1];
+  if (last === undefined) throw new Error("the canvas is not drawn");
+  return last.getBoundingClientRect();
+}
+
+/** The inspector's own box, and `null` where no press has opened it. */
+function panelBox(): DOMRect | null {
+  const panels = document.querySelectorAll<HTMLElement>(".armada-wf-inspector");
+  const last = panels[panels.length - 1];
+  return last === undefined ? null : last.getBoundingClientRect();
+}
+
+test("nothing is open until a press, and the canvas spans the width of the tab", async () => {
   await page.viewport(2000, 900);
   await workflow();
-  // The panel is never a blank column beside a full canvas.
-  await expect.element(page.getByRole("region", { name: "Implement, step" }).last()).toBeVisible();
+  // The run is drawn, so the measurement below is of a laid-out canvas.
+  await expect.element(card("Implement")).toBeVisible();
+  // No panel, and no empty column holding a panel's place either: the reading
+  // that used to land on the running step is what would have drawn one.
+  expect(await page.getByRole("region", { name: "Implement, step" }).elements()).toHaveLength(0);
+  expect(panelBox()).toBeNull();
+  // The canvas reaches the trailing edge of the tab it is drawn in.
+  const tab = document.querySelectorAll<HTMLElement>(".armada-workflow-tab");
+  const frame = tab[tab.length - 1]!.getBoundingClientRect();
+  expect(canvasBox().right).toBeCloseTo(frame.right, 0);
+});
+
+test("a press opens the panel over the canvas, and the canvas does not reflow", async () => {
+  await page.viewport(2000, 900);
+  await workflow();
+  await expect.element(card("Implement")).toBeVisible();
+  const shut = canvasBox();
+
+  await card("Plan the change").click();
+  const panel = page.getByRole("region", { name: "Plan the change, step" }).last();
+  await expect.element(panel).toBeVisible();
+
+  // **Over it, not beside it.** One element, one window, either side of one
+  // press: bit-for-bit, so a tolerance cannot admit the 332px a column would
+  // have taken. `job-detail-width.test.tsx` carries the reasoning.
+  const open = canvasBox();
+  expect(open.width).toBe(shut.width);
+  expect(open.left).toBe(shut.left);
+
+  // And the panel is inside the canvas's own frame rather than after it.
+  const box = panelBox()!;
+  expect(box.left).toBeGreaterThan(open.left);
+  expect(box.right).toBeLessThanOrEqual(open.right + 0.5);
+});
+
+test("Close takes the panel off, and the canvas is back at full width with nothing open", async () => {
+  await page.viewport(2000, 900);
+  await workflow();
+  await expect.element(card("Implement")).toBeVisible();
+  const shut = canvasBox();
+
   await card("Plan the change").click();
   await expect.element(page.getByRole("region", { name: "Plan the change, step" }).last()).toBeVisible();
+  // Closed the way Helm's dock is closed: a Close in the panel's own head.
+  await page.getByRole("button", { name: "Close" }).last().click();
+
+  expect(await page.getByRole("region", { name: "Plan the change, step" }).elements()).toHaveLength(0);
+  expect(panelBox()).toBeNull();
+  expect(canvasBox().width).toBe(shut.width);
+});
+
+test("at the owner's own window the panel takes a ceiling, and the canvas is still read beside it", async () => {
+  // 1512 × 817 is the window the note was written in, where the panel measured
+  // 1347px tall. **The ceiling is the window and the regions scroll inside it**,
+  // so the panel is bounded by something other than how much this step has to
+  // say. What is above the destination — the title row, the Job's head and the
+  // tab strip — is not the panel's to subtract: `--layout` carries no token for
+  // it, and the panel is positioned against a destination that scrolls under
+  // all three. That was the rule before this change and it is unchanged by it.
+  await page.viewport(1512, 817);
+  await workflow();
+  await card("Implement").click();
+  await expect.element(page.getByRole("region", { name: "Implement, step" }).last()).toBeVisible();
+
+  const box = panelBox()!;
+  expect(box.height).toBeLessThanOrEqual(window.innerHeight);
+  // The regions are what scroll, not the panel: its head stays whatever a
+  // person reads, which is the dock's arrangement and the reason for the split.
+  const body = document.querySelectorAll<HTMLElement>(".armada-wf-inspector__body");
+  const last = body[body.length - 1]!;
+  expect(last.scrollHeight).toBeGreaterThan(last.clientHeight);
+
+  // And it is a panel over one side of the canvas, not a second canvas-wide
+  // surface: the run stays readable while somebody reads a node.
+  const canvas = canvasBox();
+  expect(box.width).toBeLessThan(canvas.width / 2);
+  expect(box.left).toBeGreaterThan(canvas.left + box.width);
+});
+
+test("the panel reads as a layer over the canvas rather than part of it", async () => {
+  await page.viewport(2000, 900);
+  await workflow();
+  await card("Implement").click();
+  const panels = document.querySelectorAll<HTMLElement>(".armada-wf-inspector");
+  const panel = panels[panels.length - 1]!;
+  const drawn = getComputedStyle(panel);
+  // The defect in the note's second paragraph: the panel had the canvas's own
+  // background and no edge, so it blended in. `armada-glass` is what lifts it —
+  // the card treatment's edge and --shadow-card, neither of which the canvas has.
+  // The edge is measured against the token that declares it, never a typed `1px`.
+  const hairline = getComputedStyle(document.documentElement).getPropertyValue("--border-width").trim();
+  expect(hairline).not.toBe("");
+  expect(drawn.borderTopWidth).toBe(hairline);
+  expect(drawn.boxShadow).not.toBe("none");
+  // The glass is a layer on `::before`, so the panel's own background stays off.
+  expect(getComputedStyle(panel, "::before").backgroundImage).not.toBe("none");
+  // Over the canvas, on the dock's own stacking token.
+  const layer = panel.closest<HTMLElement>(".armada-workflow-tab__inspector-layer");
+  expect(layer).not.toBeNull();
+  expect(getComputedStyle(layer!).position).toBe("absolute");
+  expect(getComputedStyle(layer!).zIndex).not.toBe("auto");
 });
 
 test("a step opens with its Checks and the tests at its boundary drawn apart", async () => {
