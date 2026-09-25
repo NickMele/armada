@@ -69,6 +69,24 @@ const planAsksMark = () => markFor(GUIDE_PLAN_ASKS);
 /** Every scenario the arc put in the picker, by name. */
 const ARC = SCENARIOS.filter((one) => one.name.startsWith("arc/")).map((one) => one.name);
 
+/**
+ * Every arc moment the approval press is behind, up to the merge.
+ *
+ * **`arc/landed` is not here**, and that is the one exception rather than an
+ * omission: a Job that is over is read for what it came to, so Land takes this
+ * destination. Every other moment past the press is a Job running on values
+ * nobody may move.
+ */
+const PAST_THE_PRESS = [
+  "arc/approved-frozen",
+  "arc/planned",
+  "arc/plan-revision-refused",
+  "arc/executing-sequential",
+  "arc/executing-concurrent",
+  "arc/group-failed",
+  "arc/done-touched",
+];
+
 // What can be claimed today: each moment loads, and the window draws rather
 // than blanking. The boards are what the todos below wait on.
 describe("every arc moment loads", () => {
@@ -101,6 +119,35 @@ describe("every arc moment loads", () => {
       .poll(() => rows().map((row) => row.dataset.jobId).sort())
       .toEqual(scenario.state.jobs.map((job) => job.id).sort());
   });
+});
+
+// What the first destination says, with nothing pressed. **The claims below
+// press a tab; this one refuses to**, because the defect it stands against was
+// invisible to every one of them: Overview is where a person lands, and a
+// moment that fell through to an older arrangement drew it without a single
+// claim noticing (the owner did, 25 Sep 2026).
+describe("what Overview opens on", () => {
+  test.for(PAST_THE_PRESS)(
+    "%s: Overview is the frozen board on arrival — what the Job is held to, and that nothing " +
+      "on it may be moved",
+    async (name) => {
+      expect(ARC, `${name} is not one of the arc's scenarios`).toContain(name);
+      mount(name);
+
+      // Named, not the first tabpanel on screen: the arrangement this replaced
+      // carried no tabpanel at all, so a positional locator would have read a
+      // sheet's panel and passed against the defect.
+      const overview = page.getByRole("tabpanel", { name: "Overview" });
+      await expect.element(overview).toBeVisible();
+      // The one sentence only a frozen board says. A Job with a Drone out
+      // cannot be asked to choose its workflow again.
+      await expect.element(overview).toHaveTextContent(/Frozen when you approved it\./);
+      // And what it is held to, which is the reading the whole board is for.
+      await expect
+        .element(overview.getByRole("region", { name: "Done when" }))
+        .toHaveTextContent("The rail's Drones stat reads one running beside the machine's most");
+    },
+  );
 });
 
 describe("classifying", () => {
