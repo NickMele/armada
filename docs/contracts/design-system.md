@@ -924,6 +924,19 @@ sit there at any width is gone.
 > day (#1583). It is the fold's own mechanism generalised: below
 > `--layout-breakpoint` the dock has always been a layer.
 
+> **Rule.** The workflow canvas's own inspector takes that same arrangement. A
+> press on a node opens it on a layer over the canvas; nothing is open until a
+> press; the canvas keeps the destination's full width at every state of it; and
+> Close, in the panel's own head, is the way back. It is a layer inside a route
+> and not one over a route, so the clause above stands.
+> Why: the owner, 25 September 2026 — *"This panel should overlay the canvas. By
+> default it is not open, so the canvas spans the width of the page and this
+> panel is opened when you click a node."* It reads as a layer because it takes
+> the card treatment every panel on the canvas takes; before that it carried the
+> canvas's own ground and blended into it. **Not Helm's indigo** — `--helm`
+> marks Helm's own chrome and nothing else (Tokens → Helm), and this panel sits
+> inside one Job.
+
 **It takes no scrim and no modality**, unlike the sheet it folds to. A person
 reads a Job and asks Helm about it, so the screen underneath stays live and
 reachable, and one press on Close or `⌘J` puts it away. `--w-work-min` is what
@@ -997,7 +1010,8 @@ floors at 390px, which leaves 358px between its gutters.
 | Left column | Expanded or at its rail, whichever the person last chose — user-resizable, Navigation, Stats and Fleet together | Auto-collapses to the 48px rail whatever was chosen; Stats and Fleet each keep one status dot | A bottom tab bar |
 | Job row | One shape at every width — a stacked row carrying the badge, the headline sentence and the labelled field run beneath | The same row. Nothing reshapes | The same row, field run wrapped |
 | Helm's dock | A layer over the content when open, taking none of its width; closed draws nothing, and the title row's Helm button opens it | An edge strip; open draws it as a sheet over the content instead | Not built |
-| Job detail's inspector | A column beside the run | **A sheet over the run**, opened by pressing a step and closed by `Esc`; flush to both edges at the floor | Not built |
+| Job detail's Overview inspector | A column beside the run | **A sheet over the run**, opened by pressing a step and closed by `Esc`; flush to both edges at the floor | Not built |
+| The Workflow canvas's inspector | A layer over the canvas, opened by pressing a node and closed by Close; nothing until a press | The same layer, at the width of the destination | Not built |
 
 **There were three columns here until #1583**, the middle one being 1100–1280
 with the dock open — the band where the dock's 380px and job detail's two
@@ -1156,7 +1170,7 @@ order is the order a person meets them.
 
 | Token | Layer | Why it sits here |
 | --- | --- | --- |
-| `--z-dock` | Helm's dock | Over the content, under anything opened from inside it |
+| `--z-dock` | Helm's dock, and the workflow canvas's inspector | Over the content, under anything opened from inside it |
 | `--z-menu` | Dropdown, popover, split-button menu | Opens over the surface |
 | `--z-tooltip` | Tooltip | Explains the thing a menu is over |
 | `--z-modal` | Dialog, sheet | Interrupts both |
@@ -1166,10 +1180,13 @@ order is the order a person meets them.
 A number meaning "above my sibling" means "under every other layer" the moment
 its layer resolves against the window rather than its parent.
 
-**The dock is the one layer a person works beside rather than through**, so it
-is the one with no scrim and the only one under `--z-menu`. It still needs a
-token: a card lifts itself a step while it is hovered, which is enough to paint
-over a layer left at `auto`.
+**`--z-dock` is the layer a person works beside rather than through**, so it is
+the one with no scrim and the only one under `--z-menu`. Two things take it, for
+one reason: Helm's dock over the content, and the workflow canvas's inspector
+over the canvas — a person reads a node and replies to its Drone, so what is
+under each stays live and one press away. It still needs a token: a card lifts
+itself a step while it is hovered, which is enough to paint over a layer left at
+`auto`.
 
 ### Placement resolves before paint
 

@@ -1668,42 +1668,32 @@
   color: var(--notice-caution);
 }
 
-/* Workflow — the canvas or the stacked run, with the inspector beside it.
-   Appended, per the rule at the head of `index.css`. #1539.
+/* Workflow — the canvas or the stacked run, with the inspector on a layer over
+   it. Appended, per the rule at the head of `index.css`. #1539.
 
-   The inspector takes the step panel's own floor, so a reading that moved here
-   from the run column lays out the way it did there. */
+   **The canvas is the width of the tab, and the inspector overlays it** (owner,
+   25 Sep 2026). It was a second grid track, so a run drew in half the page
+   whether or not anybody had opened a node, and an empty column held the other
+   half. This is the same move #1583 made for Helm — the dock stopped being a
+   column and became a layer — and it is that mechanism reused, not a second
+   one. `TheShell.css`, `__dock-layer`, is the one to read.
+
+   Positioned, because the layer resolves against this box: the canvas keeps the
+   tab's width at every state of the panel, so nothing reflows when it opens. */
 .armada-workflow-tab {
-  display: grid;
-  /* **Two columns only where both can be read, and the grid decides.** Written
-     against Helm's dock, which took 380px out of the content at any window
-     width: a rule written against the window gave the canvas 360px at 1440
-     with the dock open, a four-step run drawn as four cards of noise, which is
-     the v1 complaint `bridge.md` names. #1583 ended that — the dock is a layer
-     now and the window's width is the content's — **and this stays**, because
-     measuring the content is still the better rule: the canvas shares its
-     track with an inspector whose width nothing outside this grid knows, and a
-     collapse point would be a third number to keep in step. */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--w-workflow-canvas-min)), 1fr));
-  gap: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  position: relative;
   /* **The destination scrolls, not the panes.** The canvas is a fixed frame a
      person pans inside and the board under it is a page; a pane that scrolled
      put the board under a fold nobody had a reason to reach for, with the
      inspector drawn above it. Stacked's own rule since #1539, now the rule. */
   flex: none;
-  align-items: start;
   min-width: 0;
   min-height: 0;
 }
 
-/* Narrow gives the inspector the column under the run rather than beside it —
-   the same fold `.armada-inside` makes, for the same reason. */
-.armada-workflow-tab[data-narrow] {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.armada-workflow-tab__surface,
-.armada-workflow-tab__inspector {
+.armada-workflow-tab__surface {
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -1732,16 +1722,62 @@
   padding-block-start: var(--space-4);
 }
 
+/* The inspector's layer, over the run rather than a track beside it — Helm's
+   `__dock-layer`, at the one place this screen differs from it.
+
+   **No scrim and no `aria-modal`**, for the dock's own reason: this is a panel
+   a person works *beside*. They press a node, read what it is doing and reply
+   to its Drone, so the canvas under it stays live and one press away, and
+   `--z-dock` is the token for exactly that class of layer — over the content,
+   under anything opened from inside it. The panel's dropdown and the ask behind
+   `HoldButton` both open above it on their own tokens.
+
+   **`pointer-events` is the difference from the dock.** The dock fills its
+   layer top to bottom, so there is no part of it that is layer and not dock.
+   This layer has to run the height of the tab for the panel to stay with what a
+   press selected (below), which leaves the region beside the board covered by
+   nothing anybody can see. The layer takes no presses and the panel takes its
+   own, so a group on the board under it is still pressable. */
+.armada-workflow-tab__inspector-layer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  z-index: var(--z-dock);
+  display: flex;
+  max-width: 100%;
+  pointer-events: none;
+}
+
 /* Beside a board of four groups the panel would otherwise be scrolled past,
    and review and reply are one loop — the reply box has to stay with what a
-   press selected. Sticky only where it has a column of its own; folded, the
-   press scrolls it into view instead. */
-.armada-workflow-tab:not([data-narrow]) .armada-workflow-tab__inspector {
+   press selected. Sticky inside the layer, which is what the layer's full
+   height buys; the panel's own head and body carry the scroll from there
+   (`WorkflowInspector.css`).
+
+   The step panel's own floor as a width, so a reading that moved here from the
+   run column lays out the way it did there. The gutter is the dock's `margin`,
+   for the dock's reason: a panel held off the content, not chrome flush to it. */
+.armada-workflow-tab__inspector {
+  pointer-events: auto;
+  flex: none;
   position: sticky;
   top: 0;
   align-self: start;
+  display: flex;
+  flex-direction: column;
+  width: var(--w-step-panel-min);
+  max-width: 100%;
   max-height: 100vh;
-  overflow-y: auto;
+  margin: var(--space-4);
+  min-height: 0;
+}
+
+/* Narrow gives the panel the whole width of the tab, the way the dock folds to
+   a sheet over the work below the breakpoint rather than shrinking to a strip
+   nothing reads. Close is the way back to the canvas, as it is there. */
+.armada-workflow-tab[data-narrow] .armada-workflow-tab__inspector {
+  width: 100%;
 }
 
 /* The canvas/stacked toggle. Above the run rather than over it: drawn inside

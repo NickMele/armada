@@ -23,7 +23,7 @@ import {
   WorkflowInspector,
   WorkflowStacked,
 } from "@armada/components";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { JobDetail as JobWhole, JobSummary, Turn } from "@armada/protocol";
 
 import type { ConfirmableAct, HeldAct } from "./Acts";
@@ -51,7 +51,11 @@ export type WorkflowTabProps = {
   whole: JobWhole | null;
   /** Why there is no run to draw, where there is none. */
   absent?: string;
-  /** Whether the inspector has a column of its own. `useNarrow`'s answer. */
+  /**
+   * Whether the window is narrow enough that the inspector takes the whole
+   * width of the tab when it opens, rather than a panel's width over one side
+   * of the canvas. `useNarrow`'s answer.
+   */
   narrow: boolean;
   view: WorkflowView;
   onView: (view: WorkflowView) => void;
@@ -114,17 +118,12 @@ export function WorkflowTab({
   const [openTask, setOpenTask] = useState<string | null>(null);
   const [opened, setOpened] = useState<string[] | null>(null);
 
-  // The panel, so a press on a task can bring it into view. **Review and reply
-  // are one loop**: folded to one column the panel sits under the whole graph,
-  // and a press that moved a reply box nobody can see is two surfaces. An
-  // effect because what it writes is scroll position, which is outside React.
-  const panel = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (openTask === null) return;
-    const box = panel.current?.getBoundingClientRect();
-    if (box === undefined || (box.top >= 0 && box.top < window.innerHeight)) return;
-    panel.current?.scrollIntoView({ block: "nearest" });
-  }, [openTask]);
+  // **Nothing scrolls the panel into view any more, because it is never out of
+  // it.** Until 25 Sep the panel was a column that folded under the whole graph
+  // at a narrow window, so a press on a task moved a reply box nobody could
+  // see and an effect wrote scroll position to fix it. The panel is a layer
+  // over the canvas now and sticks to the top of the destination
+  // (`screens.css`), so review and reply stay one loop with no scrolling at all.
 
   const toggle = (
     <Tabs
@@ -185,10 +184,12 @@ export function WorkflowTab({
     ...(openTask === null ? {} : { openTaskId: openTask }),
     onOpenTask: (id) => setOpenTask(id === openTask ? null : id),
   });
-  // **The inspector lands on the step the Job is on**, so the panel is never a
-  // blank column beside a full canvas. A person's own press then wins, and the
-  // Job advancing does not take the panel off what they are reading. A task
-  // outranks both: it is the newest press and the narrowest reading.
+  // **Nothing is open until a press opens it** (owner, 25 Sep 2026). The panel
+  // used to land on the step the Job is on, so the column beside the canvas was
+  // never blank — there is no column now. The canvas has the tab's whole width
+  // and this is a layer over it, so a reading nobody asked for would be a panel
+  // covering the run it exists to explain. A task outranks a node: it is the
+  // newest press and the narrowest reading.
   const reading =
     (openTask === null
       ? undefined
@@ -199,8 +200,7 @@ export function WorkflowTab({
           turns,
           watching,
           ...(groupsUnder === undefined ? {} : { stepId: groupsUnder }),
-        })) ??
-    workflowReadingOf({ whole, groups, selected: open ?? run.running, groupsUnder });
+        })) ?? workflowReadingOf({ whole, groups, selected: open, groupsUnder });
   const steering = steeringOf(job, whole);
   const label = `${job.title}, as its workflow's run`;
   // Whether anything hangs off the run. A spine wants a shorter frame than a
@@ -254,42 +254,47 @@ export function WorkflowTab({
           )}
         </div>
 
-        <div className="armada-workflow-tab__inspector" ref={panel}>
-          {reading === undefined ? (
-            <p className="armada-inside__absent" role="note">
-              Press a step, a group or a task to read what it is doing.
-            </p>
-          ) : (
-            <WorkflowInspector
-              {...reading}
-              redirect={{
-                value: instruction,
-                onChange: setInstruction,
-                onSend: () => {
-                  onRedirect(job.id, instruction);
-                  setInstruction("");
-                },
-                drones: reading.drones,
-                disabled: steering.act === undefined,
-                disabledReason: NO_DRONE,
-                ...(steering.sent === undefined ? {} : { waiting: steering.sent }),
-              }}
-              {...(steering.act === undefined
-                ? {}
-                : {
-                    stop: {
-                      children: HOLD_LABEL.kill_drone,
-                      askLabel: ACT_LABEL.kill_drone,
-                      description: HOLD_SAID.kill_drone,
-                      disabled: acting && actingAct !== "kill_drone",
-                      pending: acting && actingAct === "kill_drone",
-                      onAsk: () => onAct("kill_drone", job.id),
-                      onCommit: () => onActHeld("kill_drone", job.id),
-                    },
-                  })}
-            />
-          )}
-        </div>
+        {/* Nothing until a press, and then a layer over the canvas rather than
+            a column beside it — the dock's own arrangement, `screens.css`. The
+            canvas keeps the tab's width either way. */}
+        {reading === undefined ? null : (
+          <div className="armada-workflow-tab__inspector-layer">
+            <div className="armada-workflow-tab__inspector">
+              <WorkflowInspector
+                {...reading}
+                onClose={() => {
+                  setOpen(null);
+                  setOpenTask(null);
+                }}
+                redirect={{
+                  value: instruction,
+                  onChange: setInstruction,
+                  onSend: () => {
+                    onRedirect(job.id, instruction);
+                    setInstruction("");
+                  },
+                  drones: reading.drones,
+                  disabled: steering.act === undefined,
+                  disabledReason: NO_DRONE,
+                  ...(steering.sent === undefined ? {} : { waiting: steering.sent }),
+                }}
+                {...(steering.act === undefined
+                  ? {}
+                  : {
+                      stop: {
+                        children: HOLD_LABEL.kill_drone,
+                        askLabel: ACT_LABEL.kill_drone,
+                        description: HOLD_SAID.kill_drone,
+                        disabled: acting && actingAct !== "kill_drone",
+                        pending: acting && actingAct === "kill_drone",
+                        onAsk: () => onAct("kill_drone", job.id),
+                        onCommit: () => onActHeld("kill_drone", job.id),
+                      },
+                    })}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
