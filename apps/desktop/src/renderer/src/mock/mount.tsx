@@ -7,7 +7,8 @@
 import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { Boundary } from "@armada/shell";
-import { HapticsProvider } from "@armada/components";
+import { GuideShapeProvider, HapticsProvider } from "@armada/components";
+import type { GuideShape } from "@armada/components";
 
 import "../styles/index.css";
 import type { BridgeApi } from "../../../shared/api";
@@ -48,8 +49,18 @@ function OnScreen({ say }: { say: () => void }) {
 /**
  * Install a fake `window.armada` on `scenario` and mount the app into `host`.
  * **Throws on a name no scenario has**, so a test never passes against a default.
+ *
+ * **`guides` is the mock's own, from `?guides=`, and `App` never sees it.** It
+ * is a shape to compare guides in, not a setting: `main.tsx` reads it beside
+ * `?scenario=`, this provider carries it, and the window under `pnpm dev` mounts
+ * no provider and reads the default. `packages/components/src/guide-shape.tsx`.
  */
-export function mountApp(scenario: string | Scenario, host: HTMLElement, shared?: BridgeApi): Mounted {
+export function mountApp(
+  scenario: string | Scenario,
+  host: HTMLElement,
+  shared?: BridgeApi,
+  guides: GuideShape = "prose",
+): Mounted {
   const chosen = typeof scenario === "string" ? scenarioNamed(scenario) : scenario;
   if (chosen === undefined) throw new Error(`no mock scenario named ${String(scenario)}`);
   // `shared` is a second window on the same main: both hear what either one's Fleet publishes.
@@ -63,17 +74,20 @@ export function mountApp(scenario: string | Scenario, host: HTMLElement, shared?
   root.render(
     <StrictMode>
       <Boundary region="the window" usable={false} bridge={chosen.state.bridge}>
-        {/* As `main.tsx` mounts it, so a test can read what a press asked the trackpad to play. */}
-        <HapticsProvider perform={(pattern) => api.tap(pattern)}>
-          {/* What this moment holds that Fleet cannot serve yet. The app's own
-              mount provides none, so every field is absent there. The context
-              is what a composer reads before a Job exists; the prop is what a
-              Job's own boards read. */}
-          <DraftedFrom held={chosen.draft ?? {}}>
-            <App {...(chosen.draft === undefined ? {} : { draft: chosen.draft })} />
-          </DraftedFrom>
-          <OnScreen say={say} />
-        </HapticsProvider>
+        {/* The shape comparison, and the mock is the only place it is provided. */}
+        <GuideShapeProvider shape={guides}>
+          {/* As `main.tsx` mounts it, so a test can read what a press asked the trackpad to play. */}
+          <HapticsProvider perform={(pattern) => api.tap(pattern)}>
+            {/* What this moment holds that Fleet cannot serve yet. The app's own
+                mount provides none, so every field is absent there. The context
+                is what a composer reads before a Job exists; the prop is what a
+                Job's own boards read. */}
+            <DraftedFrom held={chosen.draft ?? {}}>
+              <App {...(chosen.draft === undefined ? {} : { draft: chosen.draft })} />
+            </DraftedFrom>
+            <OnScreen say={say} />
+          </HapticsProvider>
+        </GuideShapeProvider>
       </Boundary>
     </StrictMode>,
   );
