@@ -19,6 +19,7 @@
 // and `Render` from their own modules.
 
 import type { ActAnswer, ActingAct, DecidingAct } from "./pending";
+import type { PlanView } from "./plan-view";
 import type { WorkflowView } from "./workflow-view";
 
 import type {
@@ -384,6 +385,13 @@ export type JobDetailProps = {
    */
   workflowView?: WorkflowView;
   onWorkflowView?: (view: WorkflowView) => void;
+  /**
+   * Which arrangement the Plan tab is in — graph or list, graph by default
+   * (owner, 25 Sep 2026). Kept by the caller for `workflowView`'s reason, and
+   * held apart from it: they are two readings of two different things.
+   */
+  planView?: PlanView;
+  onPlanView?: (view: PlanView) => void;
   /**
    * Open the composer — `n` in `actions.toml`, scope `anywhere`. **The Board's
    * own key, answered here too**: `new_job` is the one contextual act that

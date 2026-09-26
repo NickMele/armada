@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import { ARC_MOMENTS } from "./fixtures/build/arc";
 import { KIND_FIXTURES } from "./fixtures/build/kinds";
 import { taskGroupsOf } from "./draft/group";
-import { groupNodeId, stepNodeId, stepThatWorksTheGroups } from "./workflow-canvas";
+import { groupNodeId } from "./plan-canvas";
+import { stepNodeId, stepThatWorksTheGroups } from "./workflow-canvas";
 import { NO_CASES_SERVED, workflowReadingOf } from "./workflow-inspector";
 
 const executing = ARC_MOMENTS.find((moment) => moment.name === "executingSequential")!;

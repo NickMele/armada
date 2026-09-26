@@ -1,6 +1,10 @@
 // The run's placement and its edges, off the eight shipped workflows and the
 // arc's own moments. Arithmetic, so it is unit-tested here rather than in a
 // story paying a browser's price.
+//
+// **What the plan is made of moved to `plan-canvas.test.ts`** with the code it
+// tests (owner, 25 Sep 2026). What is left here is the run: the steps, and the
+// one Plan node the run draws of the plan.
 
 import { describe, expect, it } from "vitest";
 
@@ -8,12 +12,9 @@ import { ARC_MOMENTS } from "./fixtures/build/arc";
 import { KIND_FIXTURES, KIND_NAMES } from "./fixtures/build/kinds";
 import { taskGroupsOf } from "./draft/group";
 import {
-  groupNodeId,
+  PLAN_NODE_ID,
   stepNodeId,
   stepTheGroupsWereMadeAt,
-  stepThatWorksTheGroups,
-  taskNodeId,
-  worked,
   workflowRunOf,
 } from "./workflow-canvas";
 
@@ -66,17 +67,16 @@ describe("every shipped workflow draws", () => {
       expect(spine.filter((edge) => edge.kind === "returns")).toHaveLength(loops);
     });
 
-    it(`draws every group of ${fixture.job.handle} once, whatever its plan holds`, () => {
+    it(`draws at most one Plan node on ${fixture.job.handle}, and no group or task`, () => {
       const whole = wholeOf(fixture);
       const groups = taskGroupsOf(whole);
       const run = workflowRunOf({ whole, groups });
-      const drawn = run.nodes.filter((node) => node.id.startsWith("group:")).map((node) => node.id);
-      // A plan no step recorded has no node to come off, so its groups are
-      // left undrawn rather than hung somewhere they were not made.
-      const expected =
-        stepTheGroupsWereMadeAt(whole) === undefined ? [] : groups.map((group) => groupNodeId(group.id));
-      expect(drawn).toEqual(expected);
-      expect(new Set(drawn).size).toBe(drawn.length);
+      // A plan no step recorded has no node to come off, and a step that
+      // recorded none has nothing to summarise.
+      const draws = stepTheGroupsWereMadeAt(whole) !== undefined && groups.length > 0;
+      expect(run.nodes.filter((node) => node.id === PLAN_NODE_ID)).toHaveLength(draws ? 1 : 0);
+      expect(run.nodes.some((node) => node.id.startsWith("group:") || node.id.startsWith("task:"))).toBe(false);
+      expect(run.rows.some((row) => row.id.startsWith("group:") || row.id.startsWith("task:"))).toBe(false);
     });
   }
 });
@@ -119,32 +119,35 @@ function dense() {
   };
 }
 
-describe("twelve steps and four groups of three", () => {
-  it("puts every node somewhere of its own, with each group's tasks between it and the next", () => {
+describe("twelve steps and a plan of four groups", () => {
+  it("draws twelve steps and one node for the whole plan, each somewhere of its own", () => {
     const { whole, groups } = dense();
     const run = workflowRunOf({ whole, groups });
-    expect(run.nodes).toHaveLength(12 + 4 + 12);
+    // Twelve steps and one Plan node — not twelve plus four groups plus their
+    // twelve tasks, which is what this canvas drew until 25 Sep 2026.
+    expect(run.nodes).toHaveLength(12 + 1);
     const where = run.nodes.map((node) => `${node.position.x},${node.position.y}`);
     expect(new Set(where).size).toBe(where.length);
 
-    const at = (id: string) => run.nodes.find((node) => node.id === id)!.position;
-    const columns = { group: new Set<number>(), task: new Set<number>() };
-    for (const [j, group] of groups.entries()) {
-      const mine = at(groupNodeId(group.id));
-      columns.group.add(mine.x);
-      const below = groups[j + 1];
-      const floor = below === undefined ? Infinity : at(groupNodeId(below.id)).y;
-      for (const task of group.tasks) {
-        const node = at(taskNodeId(task.id));
-        columns.task.add(node.x);
-        expect(node.y).toBeGreaterThanOrEqual(mine.y);
-        expect(node.y).toBeLessThan(floor);
-      }
-    }
-    // One column of groups and one of tasks, the tasks to the right.
-    expect(columns.group.size).toBe(1);
-    expect(columns.task.size).toBe(1);
-    expect([...columns.task][0]!).toBeGreaterThan([...columns.group][0]!);
+    // The plan sits under the step that recorded it, indented, and off nothing else.
+    const plan = run.nodes.find((node) => node.id === PLAN_NODE_ID)!;
+    const made = run.nodes.find((node) => node.id === stepNodeId("s1"))!;
+    expect(plan.position.y).toBeGreaterThan(made.position.y);
+    expect(plan.position.x).toBeGreaterThan(made.position.x);
+    expect(plan.position.x).toBeLessThan(run.nodes.find((node) => node.id === stepNodeId("s2"))!.position.x);
+    const into = run.edges.filter((edge) => edge.target === PLAN_NODE_ID);
+    expect(into.map((edge) => ({ source: edge.source, kind: edge.kind }))).toEqual([
+      { source: stepNodeId("s1"), kind: "made" },
+    ]);
+  });
+
+  it("says what the plan holds, and nothing about what is inside it", () => {
+    const { whole, groups } = dense();
+    const run = workflowRunOf({ whole, groups });
+    const card = run.nodes.find((node) => node.id === PLAN_NODE_ID)!.card;
+    expect(card.kind).toBe("plan");
+    expect(card.name).toBe("Plan");
+    expect(card.facts?.map((fact) => fact.value)).toEqual(["4 groups", "12 tasks"]);
   });
 
   it("opens on the step you are on and its neighbours, with no plan hanging off them", () => {
@@ -156,66 +159,32 @@ describe("twelve steps and four groups of three", () => {
   });
 });
 
-describe("a group comes off where it was made and where it was worked", () => {
-  it("hangs every group off the step that recorded the plan, and never on the spine", () => {
+describe("the plan comes off the step that recorded it", () => {
+  it("hangs one node off that step, and draws the plan nowhere else", () => {
     const { whole, groups } = arc("executingSequential");
     expect(groups.length).toBeGreaterThan(0);
     const run = workflowRunOf({ whole, groups });
     const madeAt = stepTheGroupsWereMadeAt(whole);
-    const under = run.nodes.filter((node) => node.id.startsWith("group:"));
-    expect(under).toHaveLength(groups.length);
-    expect(under.every((node) => node.position.y > 0)).toBe(true);
-    expect(new Set(under.map((node) => node.position.x)).size).toBe(1);
-    // Every group's one `made` edge leaves the step that recorded the plan.
+    expect(madeAt).toBeDefined();
     const made = run.edges.filter((edge) => edge.kind === "made");
-    expect(made).toHaveLength(groups.length);
-    expect(new Set(made.map((edge) => edge.source))).toEqual(new Set([stepNodeId(madeAt!)]));
-    expect(run.rows.filter((row) => row.depth === 1).map((row) => row.under)).toEqual(
-      groups.map(() => stepNodeId(madeAt!)),
-    );
+    expect(made).toHaveLength(1);
+    expect(made[0]?.source).toBe(stepNodeId(madeAt!));
+    expect(made[0]?.target).toBe(PLAN_NODE_ID);
+    // Stacked says it as one row, indented under the same step.
+    const row = run.rows.find((one) => one.id === PLAN_NODE_ID)!;
+    expect(row.under).toBe(stepNodeId(madeAt!));
+    expect(row.depth).toBe(1);
   });
 
-  it("draws a second edge into a worked group and none into an unworked one", () => {
+  it("draws no second edge, whatever the groups have got to", () => {
     const { whole, groups } = arc("groupFailed");
+    // The moment has groups off `pending` and one still waiting, which is what
+    // the second edge used to tell apart. Nothing draws that relation now.
+    expect(groups.some((group) => group.state !== "pending")).toBe(true);
+    expect(groups.some((group) => group.state === "pending")).toBe(true);
     const run = workflowRunOf({ whole, groups });
-    const worksAt = stepNodeId(stepThatWorksTheGroups(whole)!);
-    const worked = run.edges.filter((edge) => edge.kind === "worked");
-    // The moment has three groups off `pending` and one still waiting.
-    const moving = groups.filter((group) => group.state !== "pending");
-    expect(moving.length).toBeGreaterThan(0);
-    expect(moving.length).toBeLessThan(groups.length);
-    expect(worked.map((edge) => edge.target).sort()).toEqual(moving.map((one) => groupNodeId(one.id)).sort());
-    expect(new Set(worked.map((edge) => edge.source))).toEqual(new Set([worksAt]));
-    // Two edges into the worked node, one into the unworked — one node either way.
-    for (const group of groups) {
-      const into = run.edges.filter((edge) => edge.target === groupNodeId(group.id));
-      expect(into).toHaveLength(group.state === "pending" ? 1 : 2);
-    }
-    // The stacked run says the same, in words.
-    const said = run.rows.filter((row) => row.depth === 1);
-    expect(said.filter((row) => row.worked !== undefined)).toHaveLength(moving.length);
-    expect(new Set(said.map((row) => row.worked).filter(Boolean))).toEqual(new Set(["Implement"]));
-  });
-
-  it("hangs every task off its own group, in plan order", () => {
-    const { whole, groups } = arc("groupFailed");
-    const run = workflowRunOf({ whole, groups });
-    for (const group of groups) {
-      const groupId = groupNodeId(group.id);
-      const holds = run.edges.filter((edge) => edge.kind === "holds" && edge.source === groupId);
-      expect(holds.map((edge) => edge.target)).toEqual(group.tasks.map((task) => taskNodeId(task.id)));
-      // A task sits right of its group and never above it.
-      const at = run.nodes.find((node) => node.id === groupId)!;
-      for (const task of group.tasks) {
-        const node = run.nodes.find((one) => one.id === taskNodeId(task.id))!;
-        expect(node.position.x).toBeGreaterThan(at.position.x);
-        expect(node.position.y).toBeGreaterThanOrEqual(at.position.y);
-      }
-      // Stacked, a task hangs under its group rather than under the step.
-      const rows = run.rows.filter((row) => row.under === groupId);
-      expect(rows.map((row) => row.id)).toEqual(group.tasks.map((task) => taskNodeId(task.id)));
-      expect(rows.every((row) => row.depth === 2)).toBe(true);
-    }
+    expect(run.edges.filter((edge) => edge.target === PLAN_NODE_ID)).toHaveLength(1);
+    expect(run.edges.map((edge) => edge.kind)).not.toContain("worked");
   });
 
   it("names the step the Job is on, and narrows onto it rather than shrinking", () => {
@@ -225,28 +194,20 @@ describe("a group comes off where it was made and where it was worked", () => {
     const widest = run.opensOn[0]!;
     // Narrow opens on where you are, which is never the whole run.
     expect(widest.filter((id) => id.startsWith("step:")).length).toBeLessThan(whole.steps.length);
-    // The step the plan was recorded at is a neighbour here, so its groups come too.
-    expect(widest).toContain(groupNodeId(groups[0]!.id));
+    // The step the plan was recorded at is a neighbour here, so the plan comes too.
+    expect(widest).toContain(PLAN_NODE_ID);
     // Each choice is narrower than the one before it, and each holds the step
     // a person is on.
     for (const [at, choice] of run.opensOn.entries()) {
       expect(choice).toContain(run.running);
-      // A task is the finest grain and is left out of every choice.
-      expect(choice.some((id) => id.startsWith("task:"))).toBe(false);
       const before = run.opensOn[at - 1];
       if (before !== undefined) expect(before.length).toBeGreaterThan(choice.length);
     }
-    // The narrowest keeps the whole plan the step works, the groups whose turn
-    // has not come included — a frame too small for them draws a clipped plan
-    // rather than one card in an empty pane.
-    const last = run.opensOn[run.opensOn.length - 1]!;
-    expect(last.filter((id) => id.startsWith("group:"))).toHaveLength(groups.length);
-    expect(groups.some((group) => !worked(group))).toBe(true);
   });
 
   it("marks the card a person has open and no other", () => {
     const { whole, groups } = arc("groupFailed");
-    const open = groupNodeId(groups[0]!.id);
+    const open = stepNodeId(whole.steps[0]!.step_id);
     const run = workflowRunOf({ whole, groups, selected: open });
     expect(run.nodes.filter((node) => node.card.selected === true).map((node) => node.id)).toEqual([open]);
   });

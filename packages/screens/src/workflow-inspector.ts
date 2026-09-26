@@ -17,7 +17,8 @@ import type { GroupView } from "./draft/group";
 import { ordered } from "./facts";
 import { frozenBeneath } from "./frozen";
 import { activityOf, stateOf } from "./run";
-import { groupNodeId, stepNodeId, stepTheGroupsWereMadeAt } from "./workflow-canvas";
+import { groupNodeId } from "./plan-canvas";
+import { stepNodeId, stepTheGroupsWereMadeAt } from "./workflow-canvas";
 
 /** What the inspector draws, less the two controls the tab wires itself. */
 export type WorkflowReading = Omit<WorkflowInspectorProps, "redirect" | "stop"> & {

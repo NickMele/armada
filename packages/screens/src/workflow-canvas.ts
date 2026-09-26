@@ -7,11 +7,12 @@
 // **The steps are the ones the Job's own workflow file declares** — no
 // `verify-and-ship` is added (#1530, 22 Sep).
 //
-// **One node, two edges into it** (owner, 23 Sep 2026). A group is drawn once,
-// where the step that recorded the plan made it, and the step that works it
-// draws a second edge in. Two edges is planned and worked; one is planned. The
-// cost — crossing edges on a long plan — was taken knowingly, so nothing here
-// draws a group twice to avoid it.
+// **The steps, and one Plan node** (owner, 25 Sep 2026). The plan used to hang
+// off the step that recorded it, a node per group and a node per task, with a
+// second edge in from the step that worked each group. It is one node now, and
+// pressing it opens the Plan tab where the whole plan is drawn —
+// `plan-canvas.ts`. The second edge died with the group nodes: nothing on this
+// canvas is left for it to arrive at, and Plan has no step node to leave.
 
 import { ADVANCE_GATE } from "@armada/components";
 import type {
@@ -20,45 +21,37 @@ import type {
   WorkflowStackedRow,
   WorkflowStepCardProps,
   WorkflowStepFact,
-  StepActivity,
 } from "@armada/components";
 import type { JobDetail as JobWhole, StepDetail } from "@armada/protocol";
 
 import { isSweepMarker } from "./declared";
-import type { GroupState, GroupView } from "./draft/group";
-import type { TaskState, TaskView } from "./draft/task";
+import type { GroupView } from "./draft/group";
 import { ordered } from "./facts";
 import { frozenBeneath } from "./frozen";
+import { planActivityOf, plural } from "./plan-canvas";
 import { activityOf, stateOf } from "./run";
 
 /**
  * The layout, in the canvas's own coordinates.
  *
  * `STEP_APART` is `--w-workflow-node` plus `--space-12` plus a little, which
- * leaves room for an arrowhead. `TASK_ACROSS` is the group indent plus
- * `--w-workflow-group-node` plus that same room, so a task column clears its
- * group's card. Numbers rather than tokens because React Flow places by number
- * and a `var()` cannot reach it.
+ * leaves room for an arrowhead. The Plan node sits `PLAN_BELOW` under the step
+ * that recorded the plan, indented by `PLAN_INDENT` so it reads as inside that
+ * step rather than beside the next one. Numbers rather than tokens because
+ * React Flow places by number and a `var()` cannot reach it.
  */
 const STEP_APART = 320;
-const GROUP_INDENT = 16;
-const FIRST_GROUP = 150;
-const TASK_ACROSS = 272;
-/** One task's pitch down its group's column, and the gap to the next group. */
-const TASK_APART = 104;
-const AFTER_GROUP = 24;
-/** A group holding no task still takes a row of its own. */
-const GROUP_APART = 104;
+const PLAN_INDENT = 16;
+const PLAN_BELOW = 150;
 
-/** `step:`, `group:` and `task:`, so a node id is never mistaken for another kind in a join. */
+/** `step:`, so a node id is never mistaken for another kind in a join. */
 export const stepNodeId = (stepId: string): string => `step:${stepId}`;
-export const groupNodeId = (groupId: string): string => `group:${groupId}`;
-export const taskNodeId = (taskId: string): string => `task:${taskId}`;
 
-/** The task a node id names, or nothing where it names a step or a group. */
-export function taskOfNodeId(nodeId: string): string | undefined {
-  return nodeId.startsWith("task:") ? nodeId.slice("task:".length) : undefined;
-}
+/**
+ * The one node the plan takes on this canvas. **Not `plan:<id>`** — a Job has
+ * one plan, so there is nothing for an id to tell apart.
+ */
+export const PLAN_NODE_ID = "plan";
 
 /** The run, in both arrangements, off one reading. */
 export type WorkflowRun = {
@@ -70,51 +63,10 @@ export type WorkflowRun = {
   /**
    * What the canvas opens on when the whole run will not read, widest first —
    * the step a person is on with its neighbours, then that step alone, each
-   * carrying the groups its steps made or worked. A task is left out: it is
-   * the finest grain on the graph, and what a person pans or presses to once
-   * they have found its group.
+   * carrying the Plan node where one of those steps made or works it.
    */
   opensOn: string[][];
 };
-
-/**
- * A group's state mapped to the nearest step activity, for the mark alone.
- *
- * **The group's own word is kept and printed beside it**, so nothing is lost:
- * `joining` and `checking` are not step states and the step machine has no
- * mark for either. This is a drawing decision, which is why it is here and not
- * in the card.
- */
-const GROUP_ACTIVITY: Record<GroupState, StepActivity> = {
-  pending: "not_started",
-  running: "running",
-  joining: "running",
-  checking: "running",
-  passed: "advanced",
-  failed: "failed",
-  retrying: "retrying",
-  landed: "advanced",
-};
-
-/**
- * A task's state mapped the same way. `dropped` takes `stopped`, the step
- * machine's word for work that ended without advancing; the task's own word is
- * printed beside the mark either way.
- */
-const TASK_ACTIVITY: Record<TaskState, StepActivity> = {
-  open: "not_started",
-  working: "running",
-  done: "advanced",
-  failed: "failed",
-  dropped: "stopped",
-};
-
-/**
- * Whether a group has been worked — anything but `pending`. **This is what the
- * second edge says**, so it is one predicate rather than a condition spelled
- * at each caller.
- */
-export const worked = (group: GroupView): boolean => group.state !== "pending";
 
 /** The gate's own word. Absent on `auto`, which says nothing worth a row. */
 function gateOf(gate: string | undefined): string | undefined {
@@ -128,11 +80,6 @@ const checksOf = (step: StepDetail): number => (step.checks ?? []).filter((check
 /** What the Judge is asked here, counted. */
 const criteriaOf = (step: StepDetail): number =>
   (step.judge_checks ?? []).reduce((sum, judge) => sum + judge.criteria, 0);
-
-/** `1 group`, `4 groups`, `2 criteria` — the plural is given where it is not the `s`. */
-function plural(count: number, one: string, many = `${one}s`): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
 
 /** One step's card. Facts are values; the gate is the one sentence on it. */
 function stepCard(
@@ -166,45 +113,6 @@ function stepCard(
   };
 }
 
-/** One group's card. Its own word, with the nearest step mark behind it. */
-function groupCard(group: GroupView, onOpen: (() => void) | undefined): WorkflowStepCardProps {
-  const facts: WorkflowStepFact[] = [{ value: plural(group.tasks.length, "task") }];
-  if (group.checks_selected.length > 0) facts.push({ value: plural(group.checks_selected.length, "check") });
-  if (group.concurrent) facts.push({ value: "at the same time" });
-  if (group.retry_count > 0) facts.push({ value: `run again ${plural(group.retry_count, "time")}` });
-  return {
-    kind: "group",
-    name: `Group ${group.ordinal}`,
-    activity: GROUP_ACTIVITY[group.state],
-    said: group.state,
-    facts,
-    ...(onOpen === undefined ? {} : { onOpen }),
-  };
-}
-
-/**
- * One task's card. **The id is the first fact and never the name** — `T5`
- * alone would be a graph of identifiers.
- *
- * **Two facts, because a third wraps and a wrapped card overlaps the one under
- * it.** Turns displace the file count once something has run: the scope is
- * what there is to say before, and what it has taken is what there is to say
- * after.
- */
-function taskCard(task: TaskView, onOpen: (() => void) | undefined): WorkflowStepCardProps {
-  const facts: WorkflowStepFact[] = [{ value: task.id }];
-  if (task.turns !== undefined) facts.push({ value: plural(task.turns, "turn") });
-  else if (task.scope.length > 0) facts.push({ value: plural(task.scope.length, "file") });
-  return {
-    kind: "task",
-    name: task.title,
-    activity: TASK_ACTIVITY[task.state],
-    said: task.state,
-    facts,
-    ...(onOpen === undefined ? {} : { onOpen }),
-  };
-}
-
 /**
  * The step that made the groups: the one the plan was recorded at.
  *
@@ -222,8 +130,9 @@ export function stepTheGroupsWereMadeAt(whole: JobWhole): string | undefined {
  * The step that works the groups: the one after the step the plan was recorded
  * at, since a plan is written at one step and worked at the next.
  *
- * Absent where the recording step is the last. The groups are still drawn
- * there — what is missing is the second edge, not the node.
+ * Absent where the recording step is the last. **Nothing on this canvas comes
+ * off it any more** — it is read for what a step's own card counts, and for
+ * the board under the run.
  */
 export function stepThatWorksTheGroups(whole: JobWhole): string | undefined {
   const made = stepTheGroupsWereMadeAt(whole);
@@ -232,11 +141,34 @@ export function stepThatWorksTheGroups(whole: JobWhole): string | undefined {
   return steps[steps.findIndex((step) => step.step_id === made) + 1]?.step_id;
 }
 
+/**
+ * The plan's one card: what it is made of, and where its groups have got to.
+ *
+ * **The group count and the task count, and nothing else** — the whole plan is
+ * one press away, so a second line here would be the reading this node exists
+ * to stop drawing twice.
+ */
+function planCard(groups: readonly GroupView[], onOpen: (() => void) | undefined): WorkflowStepCardProps {
+  const { activity, said } = planActivityOf(groups);
+  const tasks = groups.reduce((sum, group) => sum + group.tasks.length, 0);
+  return {
+    kind: "plan",
+    name: "Plan",
+    activity,
+    said,
+    facts: [{ value: plural(groups.length, "group") }, { value: plural(tasks, "task") }],
+    ...(onOpen === undefined ? {} : { onOpen }),
+  };
+}
+
 export type WorkflowRunReading = {
   whole: JobWhole;
-  /** The plan's groups. Empty draws steps and nothing else. */
+  /** The plan's groups, for the Plan node's summary. Empty draws steps and nothing else. */
   groups: readonly GroupView[];
-  /** Opens a step, a group or a task in the inspector. Absent draws cards that are not controls. */
+  /**
+   * Opens a step in the inspector, or — on `PLAN_NODE_ID` — the Plan tab.
+   * Absent draws cards that are not controls.
+   */
   onOpen?: (nodeId: string) => void;
   /** The node a person has open, so the card being read says which one it is. */
   selected?: string | null;
@@ -254,15 +186,12 @@ export function workflowRunOf({ whole, groups, onOpen, selected }: WorkflowRunRe
   const opener = (id: string) => (onOpen === undefined ? undefined : () => onOpen(id));
   const read = (id: string, card: WorkflowStepCardProps): WorkflowStepCardProps =>
     id === selected ? { ...card, selected: true } : card;
-  /** The working step's label, for what a group's row says in the stacked run. */
-  const workedAt = steps.find((step) => step.step_id === worksAt)?.label;
 
   const nodes: WorkflowCanvasNode[] = [];
   const rows: WorkflowStackedRow[] = [];
   const edges: WorkflowCanvasEdge[] = [];
 
   steps.forEach((step, at) => {
-    const here = step.step_id === madeAt ? mine : [];
     const id = stepNodeId(step.step_id);
     // The step that works the groups counts them too — it made none, and a
     // card saying nothing about them would read as a step with no work in it.
@@ -302,71 +231,49 @@ export function workflowRunOf({ whole, groups, onOpen, selected }: WorkflowRunRe
       });
     }
 
-    // The groups this step made, with their tasks beside them. The step that
-    // works them reaches in with a second edge rather than taking a copy.
-    let down = FIRST_GROUP;
-    here.forEach((group) => {
-      const groupId = groupNodeId(group.id);
-      const groupsCard = read(groupId, groupCard(group, opener(groupId)));
-      nodes.push({ id: groupId, position: { x: at * STEP_APART + GROUP_INDENT, y: down }, card: groupsCard });
-      rows.push({
-        id: groupId,
-        card: groupsCard,
-        under: id,
-        depth: 1,
-        ...(worked(group) && workedAt !== undefined ? { worked: workedAt } : {}),
+    // The plan this step recorded, as one node. It hangs off the step that
+    // made it and off nothing else: the step that works it says how many
+    // groups it has on its own card, which is the whole of what this canvas
+    // now says about the relation.
+    if (step.step_id === madeAt && mine.length > 0) {
+      const card = read(PLAN_NODE_ID, planCard(mine, opener(PLAN_NODE_ID)));
+      nodes.push({
+        id: PLAN_NODE_ID,
+        position: { x: at * STEP_APART + PLAN_INDENT, y: PLAN_BELOW },
+        card,
       });
-      edges.push({ id: `${id}>${groupId}`, source: id, target: groupId, kind: "made" });
-      if (worked(group) && worksAt !== undefined) {
-        const from = stepNodeId(worksAt);
-        edges.push({ id: `${from}>${groupId}`, source: from, target: groupId, kind: "worked" });
-      }
-
-      group.tasks.forEach((task, k) => {
-        const taskId = taskNodeId(task.id);
-        const tasksCard = read(taskId, taskCard(task, opener(taskId)));
-        nodes.push({
-          id: taskId,
-          position: { x: at * STEP_APART + TASK_ACROSS, y: down + k * TASK_APART },
-          card: tasksCard,
-        });
-        rows.push({ id: taskId, card: tasksCard, under: groupId, depth: 2 });
-        edges.push({ id: `${groupId}>${taskId}`, source: groupId, target: taskId, kind: "holds" });
-      });
-      down += Math.max(GROUP_APART, group.tasks.length * TASK_APART + AFTER_GROUP);
-    });
+      rows.push({ id: PLAN_NODE_ID, card, under: id, depth: 1 });
+      edges.push({ id: `${id}>${PLAN_NODE_ID}`, source: id, target: PLAN_NODE_ID, kind: "made" });
+    }
   });
 
   const at = whole.job.current_step_id;
   const running = at !== undefined && steps.some((step) => step.step_id === at) ? stepNodeId(at) : null;
-  return { nodes, rows, edges, running, opensOn: opensOn(steps, at, madeAt, worksAt, mine) };
+  const drawsAPlan = madeAt !== undefined && mine.length > 0;
+  return { nodes, rows, edges, running, opensOn: opensOn(steps, at, madeAt, worksAt, drawsAPlan) };
 }
 
 /**
  * What to open on, widest first: the step a person is reading with its
- * neighbours, then that step alone, each carrying the groups its steps made or
- * worked.
- *
- * **The last entry keeps its groups even where they will not fit.** A frame
- * that cannot hold one step and its plan is better spent on a clipped picture
- * of that plan than on one card centred in an empty pane.
+ * neighbours, then that step alone, each carrying the Plan node where one of
+ * those steps made or works it.
  */
 function opensOn(
   steps: readonly StepDetail[],
   at: string | undefined,
   madeAt: string | undefined,
   worksAt: string | undefined,
-  groups: readonly GroupView[],
+  drawsAPlan: boolean,
 ): string[][] {
   // The plan belongs to both the step that wrote it and the step that works
-  // it, **worked or not** — which is why this is not the edge rule. A fit is a
-  // choice of what to look at, and from the working step what a person is
-  // looking for is the plan, including the groups their turn has not come to.
+  // it, **worked or not**. A fit is a choice of what to look at, and from the
+  // working step what a person is looking for is the plan.
   const holds = (named: readonly string[]): boolean =>
-    (madeAt !== undefined && named.includes(madeAt)) || (worksAt !== undefined && named.includes(worksAt));
+    drawsAPlan &&
+    ((madeAt !== undefined && named.includes(madeAt)) || (worksAt !== undefined && named.includes(worksAt)));
   const widening = (named: readonly string[]): string[] => [
     ...named.map(stepNodeId),
-    ...(holds(named) ? groups.map((group) => groupNodeId(group.id)) : []),
+    ...(holds(named) ? [PLAN_NODE_ID] : []),
   ];
 
   const where = steps.findIndex((step) => step.step_id === at);

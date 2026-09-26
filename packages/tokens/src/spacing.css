@@ -242,10 +242,12 @@
      and one node under it at zoom 1 inside Bridge's shortest window, which is
      what a wave of Jobs is. */
   --h-workflow-canvas: 420px;
-  /* A Job's own run needs more, because the whole plan hangs off it: 560px is
-     what a step and a three-group plan under it fit inside without dropping
+  /* A Job's own plan needs more, because it is a column of groups with their
+     tasks beside them: 560px is what three groups fit inside without dropping
      below the scale a card is legible at. Under that the fit opens on less of
-     the run rather than shrinking it, which is the same rule one step on. */
+     the plan rather than shrinking it, which is the same rule one step on.
+     The run itself no longer uses it — a run is a spine with one Plan node
+     under it (owner, 25 Sep 2026), which is what --h-workflow-canvas holds. */
   --h-workflow-run-canvas: 560px;
   /* The narrowest a workflow canvas is worth drawing beside its inspector.
      Under two of these the inspector folds under the run instead — the canvas

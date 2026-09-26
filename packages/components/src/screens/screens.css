@@ -1558,6 +1558,27 @@
 /* Plan — what the Job is held to, and the two acts at a plan gate. The board
    itself owns its own stylesheet; these two regions are the destination's.
    #1535. */
+
+/* The toggle between the graph and the list, above the plan rather than drawn
+   over it — Workflow's own arrangement, for the reason recorded there. */
+.armada-plan-tab__modes {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  justify-content: flex-start;
+  flex: none;
+  padding-block-end: var(--space-2);
+}
+
+/* React Flow measures its own frame, so the graph takes a height and never a
+   share of one — `.armada-workflow-tab__canvas`'s reason. The run's own token,
+   because what is drawn here is what used to hang off the run: a column of
+   groups with their tasks beside them. */
+.armada-plan-tab__graph {
+  flex: none;
+  height: var(--h-workflow-run-canvas);
+}
+
 .armada-plan-tab__criteria {
   list-style: none;
   margin: 0;
@@ -1709,12 +1730,10 @@
   height: var(--h-workflow-canvas);
 }
 
-/* A run with a plan hanging off it needs more, because it carries three depths
-   rather than one. A run with no plan is a spine, and the taller frame would
-   be void above and below it. */
-.armada-workflow-tab[data-plan] .armada-workflow-tab__canvas {
-  height: var(--h-workflow-run-canvas);
-}
+/* The taller frame went with the group nodes (owner, 25 Sep 2026). A run is a
+   spine with one Plan node under it now, which is exactly what
+   `--h-workflow-canvas` is measured for; `--h-workflow-run-canvas` draws the
+   plan itself, on the Plan tab. */
 
 /* The step's own board, under the run it is inside. */
 .armada-workflow-tab__opened {
