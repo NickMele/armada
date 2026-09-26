@@ -319,9 +319,22 @@ describe("classifying", () => {
   );
 });
 
+/**
+ * The Plan destination, as its list. **The list, not the graph**: Plan opens on
+ * the graph since 25 Sep 2026, and every claim below is about what a group's
+ * card says — which is the list's job. Pressed rather than assumed, because the
+ * arrangement is remembered per viewer and another file's press would otherwise
+ * decide this one.
+ */
+async function planList(moment: string) {
+  await at(moment, "Plan");
+  await page.getByRole("tab", { name: "List" }).click();
+  await expect.element(page.getByRole("list", { name: "Groups, in the order they run" })).toBeVisible();
+}
+
 describe("the plan", () => {
   test("arc/planned: the Plan tab draws four groups in the order they run, with eight tasks under them and no task in two groups", async () => {
-    await at("arc/planned", "Plan");
+    await planList("arc/planned");
     const groups = page.getByRole("list", { name: "Groups, in the order they run" });
     await expect.element(groups).toBeVisible();
     const headings = [...groups.element().querySelectorAll("h3")].map((one) => one.textContent);
@@ -333,7 +346,7 @@ describe("the plan", () => {
   });
 
   test("arc/planned: each task names the files it will touch, the tier the planner gave it, and the model that tier resolved to", async () => {
-    await at("arc/planned", "Plan");
+    await planList("arc/planned");
     await expect.element(taskRow("T1")).toHaveTextContent("difficult · opus");
     await expect.element(taskRow("T3")).toHaveTextContent("easy · haiku");
     await expect
@@ -342,7 +355,7 @@ describe("the plan", () => {
   });
 
   test("arc/planned: each group says which Checks run at its end — four where it writes Rust, seven where it writes Bridge", async () => {
-    await at("arc/planned", "Plan");
+    await planList("arc/planned");
     await expect.element(groupCard(1)).toHaveTextContent("4 checks will run at this boundary");
     await expect.element(groupCard(1)).toHaveTextContent("acceptance");
     await expect.element(groupCard(2)).toHaveTextContent("7 checks will run at this boundary");
@@ -350,7 +363,7 @@ describe("the plan", () => {
   });
 
   test("arc/planned: the case that covers a file two groups touch is drawn at the last of them, and the case with no spec reads as not covered rather than as passing", async () => {
-    await at("arc/planned", "Plan");
+    await planList("arc/planned");
     await expect.element(groupCard(4)).toHaveTextContent("overview.test.ts");
     await expect.element(groupCard(2)).not.toHaveTextContent("overview.test.ts");
     await expect.element(groupCard(2)).toHaveTextContent("Board.test.tsx");
@@ -358,7 +371,7 @@ describe("the plan", () => {
   });
 
   test("arc/planned: a task's inspector says what its Drone will be told, what it may run beside and the tests it owes", async () => {
-    await at("arc/planned", "Plan");
+    await planList("arc/planned");
     await taskRow("T5").getByRole("button").first().click();
     const sheet = page.getByRole("dialog").first();
     await expect.element(sheet).toHaveTextContent("What its Drone will be told");
@@ -369,14 +382,14 @@ describe("the plan", () => {
   });
 
   test("arc/planned: a file two groups claim is named as a warning, with both groups and both tasks", async () => {
-    await at("arc/planned", "Plan");
+    await planList("arc/planned");
     const warning = page.getByRole("region", { name: "Two groups claim the same file" });
     await expect.element(warning).toHaveTextContent("running-rows.tsx");
     await expect.element(warning).toHaveTextContent("group 3 (T6) and group 4 (T7)");
   });
 
   test("arc/group-failed: the Plan tab draws group three's failure with the one Check that failed named, and the six that passed beside it", async () => {
-    await at("arc/group-failed", "Plan");
+    await planList("arc/group-failed");
     await expect.element(groupCard(3)).toHaveTextContent("failed at its checks");
     await expect.element(groupCard(3)).toHaveTextContent("second run");
     await expect.element(groupCard(3)).toHaveTextContent("screens_test");
@@ -385,7 +398,7 @@ describe("the plan", () => {
   });
 
   test("arc/done-touched: T6 still reads done on the Plan tab and carries a flag naming T7", async () => {
-    await at("arc/done-touched", "Plan");
+    await planList("arc/done-touched");
     await expect.element(taskRow("T6")).toHaveTextContent("touched later · T7");
     await expect.element(taskRow("T6").getByText("Done")).toBeInTheDocument();
     await expect.element(groupCard(3)).toHaveTextContent("passed");
@@ -393,13 +406,13 @@ describe("the plan", () => {
   });
 
   test("arc/done-touched: a finished task shows what its own agent cost and a working one does not", async () => {
-    await at("arc/done-touched", "Plan");
+    await planList("arc/done-touched");
     await expect.element(taskRow("T1")).toHaveTextContent("34 turns · ~$2.40");
     await expect.element(taskRow("T7")).not.toHaveTextContent("$");
   });
 
   test("arc/plan-revision-refused: the Judge's refusal names the one task that was revised, and the other seven are untouched beside it", async () => {
-    await at("arc/plan-revision-refused", "Plan");
+    await planList("arc/plan-revision-refused");
     const asked = page.getByRole("region", {
       name: "What you asked the plan's Drone to change",
     });
@@ -423,7 +436,7 @@ describe("the plan", () => {
   });
 
   test("arc/plan-revision-refused: the case that fell out of the revised scope reads dropped, with the revision that dropped it", async () => {
-    await at("arc/plan-revision-refused", "Plan");
+    await planList("arc/plan-revision-refused");
     await expect.element(groupCard(4)).toHaveTextContent("Running.test.tsx");
     await expect.element(groupCard(4)).toHaveTextContent("dropped by a scope revision");
     await expect
@@ -432,7 +445,7 @@ describe("the plan", () => {
   });
 
   test("arc/plan-revision-refused: a group offers move up, move down and remove while the plan waits, and the first group cannot move up", async () => {
-    await at("arc/plan-revision-refused", "Plan");
+    await planList("arc/plan-revision-refused");
     const asks = page.getByRole("group", { name: "Ask about group 1" });
     await expect.element(asks.getByRole("button", { name: "Move up" })).toBeDisabled();
     await expect.element(asks.getByRole("button", { name: "Move down" })).toBeEnabled();
@@ -450,7 +463,7 @@ describe("the plan", () => {
   });
 
   test("arc/plan-revision-refused: moving a group past one that claims the same file warns before the ask goes out", async () => {
-    await at("arc/plan-revision-refused", "Plan");
+    await planList("arc/plan-revision-refused");
     await page
       .getByRole("group", { name: "Ask about group 3" })
       .getByRole("button", { name: "Move down" })
@@ -467,7 +480,7 @@ describe("the plan", () => {
   });
 
   test("arc/plan-revision-refused: a reorder the scopes do not disagree with carries no warning", async () => {
-    await at("arc/plan-revision-refused", "Plan");
+    await planList("arc/plan-revision-refused");
     await page
       .getByRole("group", { name: "Ask about group 2" })
       .getByRole("button", { name: "Move up" })
@@ -480,7 +493,7 @@ describe("the plan", () => {
   });
 
   test("arc/plan-revision-refused: a task's inspector asks for a rewrite, and the control is off until something is typed", async () => {
-    await at("arc/plan-revision-refused", "Plan");
+    await planList("arc/plan-revision-refused");
     await taskRow("T6").getByRole("button").first().click();
     const sheet = page.getByRole("dialog").first();
     await expect.element(sheet).toHaveTextContent("Rewrite this task");
@@ -491,7 +504,7 @@ describe("the plan", () => {
   });
 
   test("arc/planned: a plan already past its gate offers no changes at all, and draws no mark about asking", async () => {
-    await at("arc/planned", "Plan");
+    await planList("arc/planned");
     await expect.element(page.getByRole("tabpanel", { name: "Plan" })).toBeVisible();
     expect(page.getByRole("group", { name: "Ask about group 1" }).elements()).toHaveLength(0);
     expect(planAsksMark().elements()).toHaveLength(0);

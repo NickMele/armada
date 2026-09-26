@@ -6,12 +6,16 @@
 // the card is the group, the boundary is under it, and what a Drone will be
 // told is one press away.
 //
+// **Two views of one plan, Graph and List** (owner, 25 Sep 2026). The graph is
+// the one that came off Workflow — `plan-canvas.ts` places it — and the list
+// is this board, unchanged. A press on a task opens the same sheet either way.
+//
 // What this file holds is the open state of one reading — which task the
 // inspector is on, and which change has been asked for and not yet sent. What
 // the board says is `tab-plan-read.ts`, what an ask says is `tab-plan-ask.tsx`,
 // and what it all looks like is `PlanBoard`.
 
-import { JudgeRefusal, PlanBoard, PlanTaskSheet } from "@armada/components";
+import { JudgeRefusal, PlanBoard, PlanTaskSheet, Tabs, WorkflowCanvas } from "@armada/components";
 import { Button } from "@armada/components";
 import { useState } from "react";
 
@@ -31,6 +35,8 @@ import {
   touchedByOf,
 } from "./tab-plan-read";
 import { PlanAskDialog, rewriteInstruction, type PlanAskInFlight } from "./tab-plan-ask";
+import { planGraphOf } from "./plan-canvas";
+import { PLAN_VIEWS, PLAN_VIEW_LABEL, type PlanView } from "./plan-view";
 import { WavePlan } from "./wave-plan";
 import { waveReadingOf, type WaveRegionProps } from "./tab-wave";
 import type { HeldAct } from "./Acts";
@@ -54,6 +60,13 @@ export type PlanTabProps = {
   draft?: JobDraft;
   /** The window is at `--window-floor`, so the inspector goes flush. */
   floor: boolean;
+  /**
+   * Which arrangement the plan is in, and the press that moves it. **Remembered
+   * per viewer by the caller** — this package holds no storage, which is
+   * `workflow-view.ts`'s own rule and not a second mechanism.
+   */
+  view: PlanView;
+  onView: (view: PlanView) => void;
   /** Every control is refused while what is shown is not live. */
   stale: boolean;
   /** An act on this Job is already out. */
@@ -283,6 +296,8 @@ export function PlanTab({
   wave,
   draft,
   floor,
+  view,
+  onView,
   stale,
   acting,
   deciding,
@@ -313,6 +328,9 @@ export function PlanTab({
   const cases = casesOf(whole, draft);
   const touchedBy = touchedByOf(groups);
   const board = planBoardOf(whole, draft, setOpenTask, openTask ?? undefined, revisable);
+  // The same plan, placed. **One press for one task either way** — a toggle
+  // that opened a different surface from each view would be two screens.
+  const graph = planGraphOf({ groups, onOpenTask: setOpenTask, openTask });
   const revisions = revisionsOf(whole, draft, step);
   const reading = openTask === null ? undefined : taskSheetOf(openTask, groups, cases, touchedBy);
   const rewrite =
@@ -353,11 +371,35 @@ export function PlanTab({
           </p>
         )
       ) : (
-        <PlanBoard
-          {...board}
-          askPending={acting}
-          onAsk={(group, ask) => setAsking({ group, ask: ask as PlanAskKind })}
-        />
+        <>
+          {/* Above the plan rather than over it, the toggle on Workflow's own
+              arrangement. There is no third tab: the diagram of the repository
+              the same note asked for is not designed, and a disabled tab is a
+              promise a screen cannot keep. */}
+          <div className="armada-plan-tab__modes">
+            <Tabs
+              items={PLAN_VIEWS.map((one) => ({ id: one, label: PLAN_VIEW_LABEL[one] }))}
+              value={view}
+              onChange={(id) => onView(id as PlanView)}
+            />
+          </div>
+          {view === "graph" ? (
+            <div className="armada-plan-tab__graph">
+              <WorkflowCanvas
+                nodes={graph.nodes}
+                edges={graph.edges}
+                label={`${job.title}, as the plan's groups and tasks`}
+                opensOn={graph.opensOn}
+              />
+            </div>
+          ) : (
+            <PlanBoard
+              {...board}
+              askPending={acting}
+              onAsk={(group, ask) => setAsking({ group, ask: ask as PlanAskKind })}
+            />
+          )}
+        </>
       )}
       {/* Above the criteria and the gate, because a refusal is the answer to
           the last thing a person did and the gate is the next thing they will

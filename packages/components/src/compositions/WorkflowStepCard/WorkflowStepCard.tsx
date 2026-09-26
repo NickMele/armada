@@ -2,10 +2,10 @@ import { FactChip, type FactChipNamed } from "../FactChip/FactChip";
 import { StepActivityMark, type StepActivity } from "../StepActivityMark/StepActivityMark";
 
 /**
- * One node of a Job's workflow — a step, a group inside one, or a task inside
- * a group. **The same card on the canvas and in the stacked run**, so a toggle
- * between the two changes the arrangement and never what a step says about
- * itself.
+ * One node of a Job's graphs — a step, the plan one step recorded, a group
+ * inside a plan, or a task inside a group. **The same card on the canvas and
+ * in the stacked run**, so a toggle between the two changes the arrangement
+ * and never what a node says about itself.
  *
  * **Status colour is not chosen here.** The mark is `StepActivityMark`, whose
  * hue maps onto the step machine, and a chip takes a verdict's hue only where
@@ -21,9 +21,13 @@ export type WorkflowStepFact = {
 };
 
 export type WorkflowStepCardProps = {
-  /** A step of the workflow, a group inside one, or a task inside a group. */
-  kind: "step" | "group" | "task";
-  /** The step's label, the group's name, or the task's title. */
+  /**
+   * A step of the workflow, the plan a step recorded, a group of that plan, or
+   * a task inside a group. `plan` takes a step's own width: it is drawn beside
+   * steps, and the two narrower widths say *inside a plan*.
+   */
+  kind: "step" | "plan" | "group" | "task";
+  /** The step's label, `Plan`, the group's name, or the task's title. */
   name: string;
   /** Whether `name` is a `step_id` rather than a label, so it renders in mono. */
   nameIsAnIdentifier?: boolean;

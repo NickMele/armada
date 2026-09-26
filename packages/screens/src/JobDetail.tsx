@@ -40,6 +40,7 @@ import { RecordTab } from "./tab-record";
 import { WorkflowTab } from "./tab-workflow";
 import { WaveRegion, type WaveRegionProps } from "./tab-wave";
 import { whyNoSteps } from "./run";
+import { FIRST_PLAN_VIEW } from "./plan-view";
 import { FIRST_WORKFLOW_VIEW, type WorkflowView } from "./workflow-view";
 import { ledgerOf } from "./draft/ledger";
 
@@ -256,6 +257,9 @@ function OneJob(props: JobDetailProps) {
           onRedirect={props.onRedirect}
           onAct={props.onAct}
           onActHeld={props.onActHeld}
+          // Where the Plan node goes. The strip is this screen's, so the run
+          // asks for the destination rather than moving one itself.
+          onOpenPlan={() => setTab("plan")}
         />
       ) : tab === "plan" ? (
         <PlanTab
@@ -263,6 +267,8 @@ function OneJob(props: JobDetailProps) {
           whole={whole}
           wave={wave}
           floor={floor}
+          view={props.planView ?? FIRST_PLAN_VIEW}
+          onView={(view) => props.onPlanView?.(view)}
           stale={props.stale}
           acting={props.acting}
           deciding={props.deciding}

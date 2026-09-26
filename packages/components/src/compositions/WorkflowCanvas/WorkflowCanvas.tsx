@@ -21,9 +21,9 @@ import { GRAPH_CANVAS_SIDES, GraphCanvas, facingSides } from "../GraphCanvas/Gra
 import { WorkflowStepCard, type WorkflowStepCardProps } from "../WorkflowStepCard/WorkflowStepCard";
 
 /**
- * A Job's run, drawn as the workflow it froze — the steps, the groups hanging
- * off the step that wrote them, the tasks hanging off their groups, a second
- * edge from the step that worked a group, and a loop returning above. `#1539`.
+ * A Job's graph: the run as the workflow it froze — the steps, the one Plan
+ * node hanging off the step that recorded it, and a loop returning above — or
+ * the plan itself, a group and the tasks it holds. `#1539`.
  *
  * **Placement is the caller's**, computed from step order, which is the whole
  * difference between this surface and a Studio's whiteboard. Nothing here
@@ -42,18 +42,17 @@ export type WorkflowCanvasNode = {
 };
 
 /**
- * What one edge is. **Only `returns` is painted differently** — the two edges
- * into a group are told apart by where they come from, which is the reading
- * itself, and a second dash pattern would be a vocabulary nobody asked for.
+ * What one edge is. **Only `returns` is painted differently** — the rest are
+ * told apart by what they join, which is the reading itself, and a second dash
+ * pattern would be a vocabulary nobody asked for.
  */
-export type WorkflowCanvasEdgeKind = "leads" | "returns" | "made" | "worked" | "holds";
+export type WorkflowCanvasEdgeKind = "leads" | "returns" | "made" | "holds";
 
 /** What each kind is read as to somebody who cannot see the line. */
 const SAYS: Record<WorkflowCanvasEdgeKind, string> = {
   leads: "leads to",
   returns: "returns to",
   made: "made",
-  worked: "worked",
   holds: "holds",
 };
 
@@ -150,16 +149,11 @@ const EDGE_TYPES = { workflow: EdgeView };
 const OVER_THE_SPINE = { sourceHandle: `s-${Position.Top}`, targetHandle: `t-${Position.Top}` };
 
 /**
- * The two edges into a group leave the same side and arrive on different ones,
- * which is what tells them apart at a glance without a second dash pattern.
- * Neither arrives on the right: that side carries the group's own tasks.
- *
- * `made` comes in at the left, so a column of groups fans its drops out of the
- * step rather than stacking one line down the middle of every card above the
- * target — which reads as a chain, and a chain is the picture this replaced.
+ * The plan drops out of the step that recorded it: down off the step's own
+ * bottom edge and in at the plan's left, so the drop clears the spine rather
+ * than running down the middle of the card it leaves.
  */
 const WAS_MADE = { sourceHandle: `s-${Position.Bottom}`, targetHandle: `t-${Position.Left}` };
-const WAS_WORKED = { sourceHandle: `s-${Position.Bottom}`, targetHandle: `t-${Position.Top}` };
 
 /** How far out a person may take the run by hand, to see its shape. */
 const FURTHEST_OUT = 0.2;
@@ -300,9 +294,7 @@ export function WorkflowCanvas({
           ? OVER_THE_SPINE
           : edge.kind === "made"
             ? WAS_MADE
-            : edge.kind === "worked"
-              ? WAS_WORKED
-              : facingSides(placed.get(edge.source), placed.get(edge.target));
+            : facingSides(placed.get(edge.source), placed.get(edge.target));
       return {
         id: edge.id,
         source: edge.source,

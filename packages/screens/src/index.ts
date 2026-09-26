@@ -106,6 +106,9 @@ export * from "./tab-workflow";
 export * from "./workflow-canvas";
 export * from "./workflow-inspector";
 export * from "./workflow-view";
+// Plan — the same plan as a graph or as a list, the graph taken off Workflow.
+export * from "./plan-canvas";
+export * from "./plan-view";
 // The wave a Job dispatched — which Jobs wait on which, and which are asking
 // you something. #1544.
 export * from "./tab-wave";

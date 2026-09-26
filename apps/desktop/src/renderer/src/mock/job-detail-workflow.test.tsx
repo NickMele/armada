@@ -206,8 +206,9 @@ test("a step opens with its Checks and the tests at its boundary drawn apart", a
 });
 
 /**
- * The moment with three groups worked and one not, so the claim below has both
- * halves in one picture. `arc/group-failed` is the note's own scenario.
+ * The moment with three groups worked and one not — four groups and eight
+ * tasks, which is what the one Plan node below has to summarise without
+ * drawing any of them. `arc/group-failed` is the note's own scenario.
  */
 async function failed(): Promise<void> {
   mount("arc/group-failed");
@@ -217,43 +218,59 @@ async function failed(): Promise<void> {
 /** An edge, by what it says to somebody who cannot see the line. */
 const edge = (says: string) => page.getByLabelText(says).last();
 
-test("a group comes off the step that wrote it, and a worked one off the step that worked it", async () => {
+// # The plan is one node, and pressing it is the way to the whole of it
+//
+// The owner's note of 25 Sep: *instead of the workflow tab showing the entire
+// plan, it should just show a single "Plan" node summary. When clicked it takes
+// you to the "Plan" tab.* The cost is the second edge, which had nowhere left
+// to arrive — stated to him and taken.
+
+test("Workflow draws the steps and one Plan node, and no group or task node", async () => {
   await page.viewport(2000, 900);
   await failed();
-  // One node per group, with the plan step's edge into each of the four.
-  for (const ordinal of [1, 2, 3, 4]) {
-    await expect.element(edge(`Plan the change made Group ${ordinal}`)).toBeInTheDocument();
-  }
-  // Three have been worked and carry the second edge into that same node.
-  for (const ordinal of [1, 2, 3]) {
-    await expect.element(edge(`Implement worked Group ${ordinal}`)).toBeInTheDocument();
-  }
-  // The fourth has not, so it has one edge and no other.
-  expect(await page.getByLabelText("Implement worked Group 4").elements()).toHaveLength(0);
-  // A task hangs off its own group, never off the step.
-  await expect.element(edge("Group 3 holds Draw what is running, in four lists")).toBeInTheDocument();
-  expect(await page.getByLabelText(/^Implement holds /).elements()).toHaveLength(0);
+  // The plan comes off the step that recorded it, and off nothing else.
+  await expect.element(edge("Plan the change made Plan")).toBeInTheDocument();
+  const node = page.getByRole("button", { name: /^Plan, / }).last();
+  await expect.element(node).toBeVisible();
+  // It says what the plan is made of — the design board's own summary.
+  await expect.element(node).toHaveTextContent("4 groups");
+  await expect.element(node).toHaveTextContent("8 tasks");
+  // And nothing of what is inside it: no group node, no task node, no second edge.
+  expect(await page.getByRole("button", { name: /^Group \d, / }).elements()).toHaveLength(0);
+  expect(await page.getByRole("button", { name: /^Draw what is running, in four lists, / }).elements()).toHaveLength(0);
+  expect(await page.getByLabelText(/^Implement worked /).elements()).toHaveLength(0);
+});
+
+test("pressing the Plan node lands on the Plan tab", async () => {
+  await page.viewport(2000, 900);
+  await failed();
+  await page.getByRole("button", { name: /^Plan, / }).last().click();
+  await expect.element(page.getByRole("tab", { name: /^Plan/, selected: true }).last()).toBeVisible();
+  await expect.element(page.getByRole("tabpanel", { name: "Plan" }).last()).toBeVisible();
 });
 
 test("Stacked says what the graph says, in words", async () => {
   await failed();
   await page.getByRole("tab", { name: "Stacked" }).last().click();
-  // Every group and every task is a row, under the step that wrote them.
-  for (const ordinal of [1, 2, 3, 4]) {
-    await expect.element(card(`Group ${ordinal}`)).toBeVisible();
-  }
-  await expect.element(card("Draw what is running, in four lists")).toBeVisible();
-  // A column has no second edge to draw, so a worked group says which step
-  // worked it — three of the four, and the pending one says nothing.
-  expect(await page.getByText("worked at Implement").elements()).toHaveLength(3);
+  // The steps, and the plan as one row under the step that recorded it.
+  await expect.element(card("Plan the change")).toBeVisible();
+  await expect.element(card("Implement")).toBeVisible();
+  await expect.element(card("Plan")).toBeVisible();
+  // A column that still listed every group would be the toggle changing subject.
+  expect(await page.getByRole("button", { name: /^Group \d, / }).elements()).toHaveLength(0);
+  expect(await page.getByText("worked at Implement").elements()).toHaveLength(0);
 });
 
-test("a press on a task opens that task, and a press on its group takes the panel back", async () => {
+test("a press on a task in the step's board opens that task, and a press on its group takes the panel back", async () => {
   await page.viewport(2000, 900);
   await failed();
-  await card("Open a Drone's Job from its row").click();
+  // The board under the run is what a task is opened from now: the canvas
+  // above draws steps and the plan, and the board draws what is inside the
+  // step that is moving.
+  const task = page.getByRole("listitem", { name: "T6 Open a Drone's Job from its row" }).last();
+  await task.getByRole("button").first().click();
   await expect.element(page.getByRole("region", { name: "T6 · Open a Drone's Job from its row, task" }).last()).toBeVisible();
-  await card("Group 3").click();
+  await page.getByRole("button", { name: /^Group 3\b/ }).last().click();
   await expect.element(page.getByRole("region", { name: "Group 3, group" }).last()).toBeVisible();
 });
 

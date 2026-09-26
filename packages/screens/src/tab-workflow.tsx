@@ -1,10 +1,13 @@
 // Workflow — the Job's run, drawn as the workflow it froze. `#1539`.
 //
-// **A full canvas, not a spine** (owner, 23 Sep 2026): the steps, the groups
-// hanging off the step that wrote them, the tasks hanging off their groups,
-// and a second edge from the step that worked a group. The running step's
-// board stays under it — a node says where a group came from, the board says
-// what happened inside it, and neither says the other.
+// **The steps, and one Plan node** (owner, 25 Sep 2026). The whole plan used
+// to hang off the step that wrote it — a node per group, a node per task, and
+// a second edge from the step that worked each group. It is one node now,
+// carrying the group count and the task count, and pressing it opens the Plan
+// tab where the plan is drawn whole. The second edge went with the group
+// nodes, knowingly: `plan-canvas.ts` carries what was traded away. The running
+// step's board stays under the run — the graph says which steps there are, the
+// board says what happened inside the one that is moving.
 //
 // **Canvas by default, stacked available, at every width** (#1530, 21 and 22
 // Sep). The toggle is remembered per viewer, and where it is kept is the
@@ -35,13 +38,8 @@ import { ACT_LABEL, HOLD_LABEL, HOLD_SAID } from "./copy";
 import { groupsThatOpen, implementBoardOf } from "./implement";
 import { taskReadingOf } from "./implement-task";
 import { steeringOf } from "./steering";
-import {
-  groupNodeId,
-  stepThatWorksTheGroups,
-  taskNodeId,
-  taskOfNodeId,
-  workflowRunOf,
-} from "./workflow-canvas";
+import { groupNodeId, taskNodeId } from "./plan-canvas";
+import { PLAN_NODE_ID, stepThatWorksTheGroups, workflowRunOf } from "./workflow-canvas";
 import { workflowReadingOf } from "./workflow-inspector";
 import { WORKFLOW_VIEWS, WORKFLOW_VIEW_LABEL, type WorkflowView } from "./workflow-view";
 
@@ -83,6 +81,12 @@ export type WorkflowTabProps = {
   onRedirect: (jobId: string, instruction: string) => void;
   onAct: (act: ConfirmableAct, jobId: string) => void;
   onActHeld: (act: HeldAct, jobId: string) => void;
+  /**
+   * Where the Plan node goes: the Plan tab. **The screen's, not this tab's** —
+   * `JobDetail.tsx` owns which destination is open, and a tab that moved it
+   * itself would be a second place the strip can be driven from.
+   */
+  onOpenPlan: () => void;
 };
 
 export function WorkflowTab({
@@ -102,6 +106,7 @@ export function WorkflowTab({
   onRedirect,
   onAct,
   onActHeld,
+  onOpenPlan,
 }: WorkflowTabProps) {
   // The node a person has open. **Not the running step held in state** — that
   // moves under them as the Job advances, and a panel that changed subject
@@ -147,17 +152,17 @@ export function WorkflowTab({
   const groupsUnder = stepThatWorksTheGroups(whole);
   const step = whole.steps.find((one) => one.step_id === groupsUnder);
   const openGroups = opened ?? groupsThatOpen(groups);
-  // The whole plan, as one graph. A press on a task card opens that task and
-  // presses it again to close; a press on a step or a group takes the panel
-  // off whichever task was open rather than leaving two selections live.
+  // The steps, and the one Plan node. A press on a step opens it in the panel
+  // and takes that panel off whichever task the board had open, rather than
+  // leaving two selections live; a press on the Plan node leaves for the Plan
+  // tab, so nothing here is selected by it.
   const run = workflowRunOf({
     whole,
     groups,
     selected: openTask === null ? open : taskNodeId(openTask),
     onOpen: (id) => {
-      const task = taskOfNodeId(id);
-      if (task !== undefined) {
-        setOpenTask(task === openTask ? null : task);
+      if (id === PLAN_NODE_ID) {
+        onOpenPlan();
         return;
       }
       setOpen(id);
@@ -203,18 +208,12 @@ export function WorkflowTab({
         })) ?? workflowReadingOf({ whole, groups, selected: open, groupsUnder });
   const steering = steeringOf(job, whole);
   const label = `${job.title}, as its workflow's run`;
-  // Whether anything hangs off the run. A spine wants a shorter frame than a
-  // run carrying three depths, and a taller one around it would be void.
-  const plan = run.rows.some((row) => row.depth !== undefined);
 
   return (
     <div className="armada-detail-tab" role="tabpanel" aria-label={TAB_LABEL.workflow}>
-      <div
-        className="armada-workflow-tab"
-        data-view={view}
-        data-narrow={narrow || undefined}
-        data-plan={plan || undefined}
-      >
+      {/* No `data-plan` any more: the run is a spine with at most one node
+          under it, which is the height `--h-workflow-canvas` is set for. */}
+      <div className="armada-workflow-tab" data-view={view} data-narrow={narrow || undefined}>
         <div className="armada-workflow-tab__surface">
           {/* Above the run rather than over it: drawn inside the canvas the
               toggle sat on top of the last step's card at every width.
