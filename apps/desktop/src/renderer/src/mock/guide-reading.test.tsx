@@ -120,8 +120,8 @@ test("a guide with no relation draws no figure, and holds no frame where one wou
 
   // There is no honest picture of a rule, so the guide draws none rather than
   // inventing one, and holds no space for the one it is not drawing.
-  expect(GUIDE_COMPLETION.figure).toBeUndefined();
   expect(panel.getByRole("img").query()).toBeNull();
+  expect(GUIDE_COMPLETION.figure).toBeUndefined();
 });
 
 test("the drawing animates once when the guide is opened, and never on a loop", async () => {
