@@ -1,4 +1,6 @@
 import { FactChip, type FactChipNamed } from "../FactChip/FactChip";
+import { GuideMark } from "../GuideMark/GuideMark";
+import { GUIDE_GROUP_BOUNDARY } from "../../guides";
 import { StepBar, type TaskBarSegment } from "../StepBar/StepBar";
 
 /**
@@ -98,6 +100,9 @@ export function GroupBoundary({
       <section className="armada-boundary__region" aria-label="Checks at this boundary">
         <p className="armada-boundary__head">
           <span className="armada-boundary__says">{says}</span>
+          {/* What a boundary is, and why one nobody reached says nothing. The
+              one Armada word on this region, so the one mark. */}
+          <GuideMark guide={GUIDE_GROUP_BOUNDARY} />
           {verdictSays === undefined ? null : <FactChip named={verdictNamed}>{verdictSays}</FactChip>}
           {retrySays === undefined ? null : <FactChip>{retrySays}</FactChip>}
           {commit === undefined ? null : <FactChip title={commit}>{commit}</FactChip>}

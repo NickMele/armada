@@ -2,7 +2,7 @@
 //
 // **Nothing here is a Job, and the fixtures on the Board are other people's
 // work.** What a person is holding lives in `draft` — the words, the picture,
-// the two refs, and what else is running where this would write.
+// the branches and the two refs.
 //
 // **`gates` is empty and that is the state, not a gap.** The workflow is
 // chosen by the proposer, and the gates lock at approval (#1530, 21 Sep), so
@@ -12,12 +12,31 @@ import type { ArcMoment } from "./arc-base";
 import { ARC_NOW, arcStep, featureWorkflow } from "./arc-base";
 import { ARC_TIERS } from "./arc-plan";
 import { lightFixture } from "./light";
-import type { LandingRule, PeerOverlapAnswer, ProposalView, SketchAttachment } from "../../draft";
+import type { BranchesAnswer, LandingRule, ProposalView, SketchAttachment } from "../../draft";
 import type { JobFixture } from "../fixture";
 
 const PROMPT =
   "The rail says Drones 1 of 2 and nothing says what the 2 is. Make the stat say what is " +
   "running, and let a press on it list the Drone, its Job and its step.";
+
+/**
+ * The branches both ref fields pick over: the base, and the two Jobs already
+ * writing where this work would. What `branchesOf` derives from a Manifest and
+ * the worktrees Fleet holds — no read answers it yet, so the moment carries it.
+ */
+export const ARC_BRANCHES: BranchesAnswer = [
+  { name: "main", base: true },
+  {
+    name: "armada/18-fold-the-capacity-read",
+    base: false,
+    job: "Fold the capacity read into one query",
+  },
+  {
+    name: "armada/19-give-the-rail-its-own-scroll",
+    base: false,
+    job: "Give the rail its own scroll",
+  },
+];
 
 /** Where the work starts and where it lands. They differ, and both are drawn. */
 export const ARC_LANDING: LandingRule = {
@@ -46,7 +65,14 @@ export function arcProposal(over: Partial<ProposalView> = {}): ProposalView {
   };
 }
 
-/** Two Jobs already writing where this one would. */
+/**
+ * Two Jobs on the Board behind the composer, each on a branch of its own.
+ *
+ * **They are the Board's rows and the branch list's, not a panel's.** The
+ * overlap panel that named them beside the request is gone; what they are
+ * still here for is a Board that is not empty, and the two branches
+ * `ARC_BRANCHES` offers under the base.
+ */
 function peerJobs(): JobFixture[] {
   return [
     lightFixture(
@@ -86,27 +112,6 @@ function peerJobs(): JobFixture[] {
   ];
 }
 
-/** Who else claims these paths. A fact, never a verdict — nothing is blocked. */
-function peers(): PeerOverlapAnswer {
-  return {
-    paths_asked: ["crates/api/src/", "crates/fleet/src/", "packages/screens/src/"],
-    peers: [
-      {
-        job: "01M2D3P0QW001CAPACITYREAD",
-        title: "Fold the capacity read into one query",
-        status: "running",
-        shared_paths: ["crates/api/src/"],
-      },
-      {
-        job: "01M2D3P0QW001RAILSCROLL0",
-        title: "Give the rail its own scroll",
-        status: "awaiting_review",
-        shared_paths: ["packages/screens/src/overview.ts"],
-      },
-    ],
-  };
-}
-
 /**
  * The picture, the Studio node it was made from, and the boxes behind it.
  *
@@ -131,6 +136,23 @@ function sketch(): SketchAttachment {
         { id: "b1-b2", from: "b1", to: "b2" },
         { id: "b2-b3", from: "b2", to: "b3" },
       ],
+      // A ring round the two boxes the panel is made of, which is the thing no
+      // box and no join says: these two are one surface.
+      strokes: [
+        {
+          id: "s1",
+          points: [
+            { x: -40, y: 146 },
+            { x: 300, y: 128 },
+            { x: 608, y: 152 },
+            { x: 624, y: 234 },
+            { x: 300, y: 268 },
+            { x: -30, y: 250 },
+            { x: -46, y: 180 },
+            { x: -40, y: 146 },
+          ],
+        },
+      ],
     },
   };
 }
@@ -138,11 +160,11 @@ function sketch(): SketchAttachment {
 export function dispatchTyping(): ArcMoment {
   return {
     name: "dispatchTyping",
-    says: "Dispatch — the prompt half typed, and what else is writing there",
+    says: "Dispatch — the prompt half typed, over the repository's branches",
     fixtures: peerJobs(),
     draft: {
       prompt: PROMPT,
-      peers: peers(),
+      branches: ARC_BRANCHES,
       proposal: arcProposal(),
       landing: ARC_LANDING,
     },
@@ -156,8 +178,8 @@ export function dispatchSketch(): ArcMoment {
     fixtures: peerJobs(),
     draft: {
       prompt: PROMPT,
+      branches: ARC_BRANCHES,
       sketch: sketch(),
-      peers: peers(),
       proposal: arcProposal(),
       landing: ARC_LANDING,
     },

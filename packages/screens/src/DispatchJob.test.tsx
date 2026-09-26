@@ -70,9 +70,8 @@ const PROPOSED: Answered = {
  * outstanding — which is the only state the guard exists for.
  */
 /**
- * What this screen is handed beside the request: where the work starts, who
- * else is writing there, and what the settings block may offer. **`peers` is
- * `null` on purpose** — nobody has looked, which is every dispatch today.
+ * What this screen is handed beside the request: where the work starts, and
+ * what the settings block may offer.
  */
 const HELD = {
   landing: {
@@ -84,7 +83,9 @@ const HELD = {
     complete_when: "delivered",
     land_together: [],
   },
-  peers: null,
+  // Nothing has listed the repository's branches either, which is every
+  // dispatch against a real Fleet — so the two ref fields draw plain.
+  branches: null,
   workflows: [],
   models: [],
   machineCap: null,
@@ -103,7 +104,6 @@ function opened(answering: () => Promise<Answered>): { sent: string[] } {
       onOpen={() => {}}
       onApprove={() => {}}
       approving={[]}
-      byHand={<p>The form, by hand</p>}
       // Nothing published, which is the state before Fleet's first message and
       // the one these cases are about: what the guard does is not a function of
       // how far the call has got.
@@ -130,7 +130,7 @@ test("two presses in one task are one call", async () => {
   // them, so the second reaches the handler with the button still enabled in
   // the DOM — which is the whole case the ref exists for and the one a click
   // helper that waits for the control to settle can never produce.
-  const button = page.getByRole("button", { name: "Dispatch" }).element() as HTMLButtonElement;
+  const button = page.getByRole("button", { name: "Dispatch", exact: true }).element() as HTMLButtonElement;
   button.click();
   button.click();
 
@@ -155,15 +155,15 @@ test("the answer releases it", async () => {
   const { sent } = opened(() => next());
 
   await userEvent.fill(field(), REQUEST);
-  await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
+  await userEvent.click(page.getByRole("button", { name: "Dispatch", exact: true }));
   expect(sent).toEqual([REQUEST]);
 
   next = () => Promise.resolve(UNRESOLVED);
   first.answer(UNRESOLVED);
   // The refusal put the request back, so the second press has one to send.
-  await expect.element(page.getByRole("button", { name: "Dispatch" })).toBeEnabled();
+  await expect.element(page.getByRole("button", { name: "Dispatch", exact: true })).toBeEnabled();
 
-  await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
+  await userEvent.click(page.getByRole("button", { name: "Dispatch", exact: true }));
   expect(sent, "the answer did not release the guard").toEqual([REQUEST, REQUEST]);
 });
 
@@ -182,9 +182,9 @@ test("a call that threw gives the surface back", async () => {
   try {
     const { sent } = opened(() => Promise.reject(new Error("the preload has no proposer")));
     await userEvent.fill(field(), REQUEST);
-    await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
+    await userEvent.click(page.getByRole("button", { name: "Dispatch", exact: true }));
 
-    const dispatch = page.getByRole("button", { name: "Dispatch" });
+    const dispatch = page.getByRole("button", { name: "Dispatch", exact: true });
     await expect.element(dispatch).toBeEnabled();
     await userEvent.click(dispatch);
     expect(sent, "a throw left the surface unable to ask again").toEqual([REQUEST, REQUEST]);
@@ -197,21 +197,27 @@ test("a call that threw gives the surface back", async () => {
 test("whitespace is not a request", async () => {
   const { sent } = opened(() => Promise.resolve(UNRESOLVED));
   await userEvent.fill(field(), "   \t ");
-  await expect.element(page.getByRole("button", { name: "Dispatch" })).toBeDisabled();
+  await expect.element(page.getByRole("button", { name: "Dispatch", exact: true })).toBeDisabled();
   expect(sent).toEqual([]);
 });
 
 /**
- * Hand entry is one press away and never a dead end. **The override has to be
- * leavable** — a form somebody reached by mistake with no way back is the
- * surface that made the proposer worth building.
+ * There is one way through this surface and no way off it.
+ *
+ * **The owner took hand entry out on 2026-09-23**, once Settings carried every
+ * decision the form did. This is what a screen that offered a second route
+ * would fail: a refusal draws no way out, and the footer carries one control.
  */
-test("hand entry is reachable and leavable", async () => {
+test("nothing offers a second way to make a Job", async () => {
   opened(() => Promise.resolve(UNRESOLVED));
-  await userEvent.click(page.getByRole("button", { name: "Enter by hand" }));
-  await expect.element(page.getByText("The form, by hand")).toBeVisible();
+  await userEvent.fill(field(), REQUEST);
+  await userEvent.click(page.getByRole("button", { name: "Dispatch", exact: true }));
 
-  await userEvent.click(page.getByRole("button", { name: "Describe the work instead" }));
+  await expect.element(page.getByText(/No workflow fits this request/)).toBeVisible();
+  await expect.element(page.getByRole("button", { name: "Enter by hand" })).not.toBeInTheDocument();
+  await expect
+    .element(page.getByRole("button", { name: "Describe the work instead" }))
+    .not.toBeInTheDocument();
   await expect.element(field()).toBeVisible();
 });
 
@@ -231,7 +237,6 @@ test("the proposal is approved from here", async () => {
       onOpen={() => {}}
       onApprove={(jobId) => approved.push(jobId)}
       approving={[]}
-      byHand={<p>The form, by hand</p>}
       watching={null}
       onStop={() => {}}
       {...HELD}
@@ -240,7 +245,7 @@ test("the proposal is approved from here", async () => {
   );
 
   await userEvent.fill(field(), REQUEST);
-  await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
+  await userEvent.click(page.getByRole("button", { name: "Dispatch", exact: true }));
 
   await userEvent.click(
     page.getByRole("button", { name: "Approve Stop the board flickering on every event" }),
@@ -265,7 +270,6 @@ test("the row follows the board, not the answer", async () => {
       approving={[]}
       // What the board says now, which is not what came back with the proposal.
       statusOf={() => "queued"}
-      byHand={<p>The form, by hand</p>}
       watching={null}
       onStop={() => {}}
       {...HELD}
@@ -274,7 +278,7 @@ test("the row follows the board, not the answer", async () => {
   );
 
   await userEvent.fill(field(), REQUEST);
-  await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
+  await userEvent.click(page.getByRole("button", { name: "Dispatch", exact: true }));
 
   await expect
     .element(page.getByRole("button", { name: "Review Stop the board flickering on every event" }))

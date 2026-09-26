@@ -11,6 +11,9 @@ import type { ReactNode } from "react";
 import type { Finding, JobExamined, Look } from "@armada/protocol";
 import { Button } from "../../primitives/Button/Button";
 import { FigureList, type Figure } from "../FigureList/FigureList";
+import { GuideMark } from "../GuideMark/GuideMark";
+import { GUIDE_LOOK, GUIDE_PROCESSES, GUIDE_WORKTREE_SIZE } from "../../guides";
+import type { Guide } from "../../guides/guide";
 import { Logs, Processes, Worktrees } from "./JobResources.lists";
 import type { PulseReading } from "./JobResources.lists";
 
@@ -106,10 +109,16 @@ export function JobResources({
             disabled**: a greyed control still says an act exists here and puts
             the reason on a person to work out. */}
         {nothingToAsk !== undefined ? null : (
-          <Button size="sm" onClick={onExamine} disabled={looking}>
-            <Search size={12} strokeWidth={2} aria-hidden="true" />
-            {looking ? "Looking" : "Look now"}
-          </Button>
+          <span className="armada-holds__act">
+            <Button size="sm" onClick={onExamine} disabled={looking}>
+              <Search size={12} strokeWidth={2} aria-hidden="true" />
+              {looking ? "Looking" : "Look now"}
+            </Button>
+            {/* What a look is, what it costs and what its three answers mean.
+                Beside the act rather than beside the verdict: the verdict is
+                this job's reading, and the act is the Armada word. */}
+            <GuideMark guide={GUIDE_LOOK} />
+          </span>
         )}
       </div>
 
@@ -125,10 +134,10 @@ export function JobResources({
         </p>
       ) : (
         <>
-          <Region label="Processes">
+          <Region label="Processes" guide={GUIDE_PROCESSES}>
             <Processes reading={reading} examined={examined} />
           </Region>
-          <Region label="Worktrees">
+          <Region label="Worktrees" guide={GUIDE_WORKTREE_SIZE}>
             <Worktrees worktrees={reading.worktrees} />
           </Region>
           <Region label="Logs">
@@ -148,12 +157,13 @@ export function JobResources({
  * **The second half is the caller's sentence.** How often a reading is taken
  * again is a fact about the app around this panel, and a panel that asserted
  * one would be claiming a schedule it cannot see.
+ *
+ * **Both halves are readings and neither explains one.** *A process can exit
+ * between the reading and this screen* used to ride here; it is true of a job
+ * that never ran, so it is the look's guide (#1602).
  */
 function readAt(reading: PulseReading, age?: string, refreshed?: string): string {
-  const said =
-    age === undefined
-      ? `Read at ${reading.readAt}.`
-      : `Read ${age} ago. A process can exit between the reading and this screen.`;
+  const said = age === undefined ? `Read at ${reading.readAt}.` : `Read ${age} ago.`;
   return refreshed === undefined ? said : `${said} ${refreshed}`;
 }
 
@@ -164,10 +174,16 @@ function readAt(reading: PulseReading, age?: string, refreshed?: string): string
  * when it held nothing would make "no worktree on disk" and "this build does
  * not draw worktrees" the same screen.
  */
-function Region({ label, children }: { label: string; children: ReactNode }) {
+function Region({ label, guide, children }: { label: string; guide?: Guide; children: ReactNode }) {
   return (
     <section className="armada-holds__region" aria-label={label}>
-      <h3 className="armada-holds__band">{label}</h3>
+      {/* The `?` on the band, where the region's own word is. Two of the three
+          bands carry one: a log is a log, and a mark on it would be the noise
+          the rule about where a mark goes exists to refuse. */}
+      <div className="armada-holds__band-row">
+        <h3 className="armada-holds__band">{label}</h3>
+        {guide === undefined ? null : <GuideMark guide={guide} />}
+      </div>
       {children}
     </section>
   );
@@ -211,9 +227,7 @@ function Headline({
   }
   if (examined === null) {
     return (
-      <p className="armada-holds__verdict">
-        Nobody has asked whether this job is working. Looking costs no model call.
-      </p>
+      <p className="armada-holds__verdict">Nobody has asked whether this job is working.</p>
     );
   }
   return (

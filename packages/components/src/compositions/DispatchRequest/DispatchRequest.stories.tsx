@@ -4,12 +4,14 @@ import { expect, fireEvent, fn, waitFor } from "storybook/test";
 import type { StagedAttachment } from "@armada/protocol";
 
 import { DispatchSettings } from "../DispatchSettings/DispatchSettings";
+import { GUIDE_DISPATCH } from "../../guides";
 import { DispatchRequest } from "./DispatchRequest";
 import type { Proposal } from "./DispatchRequest";
 
 /**
- * Dispatching by describing the work, which is the path — the form behind
- * `Enter by hand` is the override.
+ * Dispatching by describing the work, which is the only way in — the form
+ * behind `Enter by hand` is gone, and Settings is where a decision is
+ * overridden.
  *
  * The complaint this answers, in the owner's words: *"I hate having to come up
  * with a title and brief and determine the workflow for a set of work."* Three
@@ -29,6 +31,11 @@ const meta: Meta<typeof DispatchRequest> = {
     onRequest: fn(),
     repository: "/Users/user/armada",
     refs: { from: "main", target: "main" },
+    branches: [
+      { name: "main", base: true },
+      { name: "armada/18-fold-the-capacity-read", job: "Fold the capacity read into one query" },
+      { name: "armada/19-give-the-rail-its-own-scroll", job: "Give the rail its own scroll" },
+    ],
     onRefs: fn(),
     links: [],
     onAddLink: fn(),
@@ -39,7 +46,6 @@ const meta: Meta<typeof DispatchRequest> = {
     onAttach: fn(),
     onRemoveAttachment: fn(),
     onDispatch: fn(),
-    onEnterByHand: fn(),
     onReset: fn(),
     onOpen: fn(),
     onApprove: fn(),
@@ -69,15 +75,30 @@ export const NothingTyped: Story = {
    * Typed into, it comes alive, and dispatching sends exactly once. A rendering
    * shows the button greyed; only a press shows that nothing went out.
    */
-  play: async ({ args, canvas, userEvent }) => {
-    const dispatch = canvas.getByRole("button", { name: "Dispatch" });
-    await expect(dispatch).toBeDisabled();
+  play: async ({ args, canvas, userEvent, step }) => {
+    await step("the control that spends money is off until a request exists", async () => {
+      const dispatch = canvas.getByRole("button", { name: "Dispatch" });
+      await expect(dispatch).toBeDisabled();
 
-    // Dispatched rather than clicked. The app's base styles take a disabled
-    // control out of pointer reach, so a pointer cannot press it at all; the
-    // event still arrives here to prove the handler is not bound either.
-    fireEvent.click(dispatch);
-    await expect(args.onDispatch).not.toHaveBeenCalled();
+      // Dispatched rather than clicked. The app's base styles take a disabled
+      // control out of pointer reach, so a pointer cannot press it at all; the
+      // event still arrives here to prove the handler is not bound either.
+      fireEvent.click(dispatch);
+      await expect(args.onDispatch).not.toHaveBeenCalled();
+    });
+
+    // #1540 drew the three as a numbered run under the controls, because the
+    // order was the substance. Every one of them was true before anything was
+    // typed, so #1602 took all three off and the card's own `?` is what
+    // carries them — the whole of what this surface says about itself.
+    await step("the card asks for the work and explains nothing about it", async () => {
+      await expect(canvas.queryByText("What happens next")).toBeNull();
+      await expect(canvas.queryByText(/Armada reads the request/)).toBeNull();
+      await expect(canvas.queryAllByRole("listitem")).toHaveLength(0);
+      await expect(
+        canvas.getByRole("button", { name: `Open guide ${GUIDE_DISPATCH.number}, ${GUIDE_DISPATCH.title}` }),
+      ).toBeVisible();
+    });
 
     await userEvent.type(canvas.getByRole("textbox", { name: "Request" }), "Fix the flicker");
     await expect(args.onRequest).toHaveBeenCalled();
@@ -298,12 +319,11 @@ export const WithAttachments: Story = {
 export const Reading: Story = {
   args: { request: REQUEST, proposal: { at: "reading" } },
   /**
-   * Inert on every path out, which is the thing a rendering cannot show: the
-   * field, the primary and the override are all dead while a call is out.
+   * Inert while a call is out, which is the thing a rendering cannot show: the
+   * field is dead and the one control is pending rather than pressable.
    */
   play: async ({ args, canvas }) => {
     await expect(canvas.getByRole("textbox", { name: "Request" })).toBeDisabled();
-    await expect(canvas.getByRole("button", { name: "Enter by hand" })).toBeDisabled();
 
     // Pending, not disabled: this is the control being waited on, so it
     // stays focusable and sweeps a bar rather than greying out. #1117.
@@ -576,17 +596,21 @@ export const SeveralJobs: Story = {
  * work is judged against, so a default would be the standard a drone is held
  * to rather than a guess somebody could correct.
  *
- * The two ways on are both here: the request is still in the field, and
- * `Enter by hand` is the override it always was.
+ * **The way on is the field, and there is no second one.** `Enter by hand`
+ * used to sit under this and is gone — the workflow this could not resolve is
+ * a Settings field now, so the refusal points at the surface rather than out
+ * of it.
  */
 export const NoWorkflowResolved: Story = {
   args: { request: REQUEST, proposal: { at: "unresolved" } },
-  play: async ({ args, canvas, userEvent }) => {
+  play: async ({ canvas }) => {
     // The request came back unchanged, which is the whole claim of this refusal.
     await expect(canvas.getByRole("textbox", { name: "Request" })).toHaveValue(REQUEST);
 
-    await userEvent.click(canvas.getByRole("button", { name: "Enter by hand" }));
-    await expect(args.onEnterByHand).toHaveBeenCalledOnce();
+    // One control on the footer, and it is the one that asks again. A refusal
+    // that offered a way off the surface is what this note took out.
+    await expect(canvas.queryByRole("button", { name: "Enter by hand" })).toBeNull();
+    await expect(canvas.getByRole("button", { name: "Dispatch" })).toBeEnabled();
   },
 };
 

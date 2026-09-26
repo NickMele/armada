@@ -1,5 +1,7 @@
 import { Checkbox } from "../../primitives/Checkbox/Checkbox";
 import { Button } from "../../primitives/Button/Button";
+import { GuideMark } from "../GuideMark/GuideMark";
+import { GUIDE_ALWAYS_LOOKS } from "../../guides";
 
 /**
  * One step's gate: **three independent boxes, and a fourth state the boxes
@@ -47,20 +49,19 @@ export type ProposalGatesProps = {
   onGate?: (stepId: string, box: GateBox, ticked: boolean) => void;
   /** Take the decision off the repository for this Job, or hand it back. */
   onOverride?: (stepId: string, overridden: boolean) => void;
-  /** The line the ticks cannot turn off, said once above the steps. */
-  alwaysLooks: string;
 };
 
-export function ProposalGates({ steps, onGate, onOverride, alwaysLooks }: ProposalGatesProps) {
+export function ProposalGates({ steps, onGate, onOverride }: ProposalGatesProps) {
   return (
     <section className="armada-proposal__region" aria-label="What each step is gated by">
-      <h3 className="armada-proposal__heading">What each step is gated by</h3>
-      {/* Above the steps rather than on each of them: it is the same sentence
-          about every one, and repeated per row it would read as a property of
-          the row that some other row might not have. */}
-      <p className="armada-proposal__always" role="note">
-        {alwaysLooks}
-      </p>
+      {/* The `?` on the heading, not on a row: what the ticks cannot turn off
+          is the same about every step, and a mark per row would read as a
+          property of that row. The sentence that used to stand here is guide
+          9 — it was true of a Job nobody had approved (#1602). */}
+      <div className="armada-proposal__heading-row">
+        <h3 className="armada-proposal__heading">What each step is gated by</h3>
+        <GuideMark guide={GUIDE_ALWAYS_LOOKS} />
+      </div>
       <ul className="armada-proposal__gates">
         {steps.map((step) => (
           <li className="armada-proposal__gate" key={step.id} aria-label={step.label}>

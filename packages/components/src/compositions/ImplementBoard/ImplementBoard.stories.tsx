@@ -21,10 +21,6 @@ type Story = StoryObj<typeof ImplementBoard>;
 const NAMES = ["typecheck", "format", "screens_test", "components_test", "bridge_build", "storybook", "acceptance"];
 const NO_CASES = "Fleet does not serve the cases a boundary owes yet, so none is drawn here.";
 
-const ORDER =
-  "One group at a time. No task of the next group starts while this one is being checked, " +
-  "and a task reads done only once its group has gone green.";
-
 const passed = (ordinal: number, commit: string, tasks: ImplementGroup["tasks"]): ImplementGroup => ({
   id: `g${ordinal}`,
   ordinal,
@@ -137,7 +133,6 @@ const PENDING: ImplementGroup = {
 export const FanOutThenJoin: Story = {
   args: {
     stepName: "Implement",
-    orderSays: ORDER,
     groups: [GROUP_ONE, CONCURRENT, PENDING],
     openGroups: ["g3"],
     onOpenGroup: fn(),
@@ -149,7 +144,6 @@ export const FanOutThenJoin: Story = {
 export const AGroupFailed: Story = {
   args: {
     stepName: "Implement",
-    orderSays: ORDER,
     groups: [GROUP_ONE, FAILED, PENDING],
     openGroups: ["g3"],
     onOpenGroup: fn(),
@@ -167,7 +161,6 @@ export const AGroupFailed: Story = {
 export const AFoldedGroupStillSaysWhatItGotThrough: Story = {
   args: {
     stepName: "Implement",
-    orderSays: ORDER,
     groups: [GROUP_ONE, CONCURRENT, PENDING],
     openGroups: ["g3"],
     onOpenGroup: fn(),

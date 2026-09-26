@@ -53,7 +53,6 @@ export * from "./compositions/FailureNotice/FailureNotice";
 export * from "./compositions/FramesPaired/FramesPaired";
 export * from "./compositions/FramesShown/FramesShown";
 export * from "./compositions/GamingFlags/GamingFlags";
-export * from "./compositions/JobComposer/JobComposer";
 export * from "./compositions/JobDiffSheet/JobDiffSheet";
 export * from "./compositions/JobBrief/JobBrief";
 export * from "./compositions/JobDetailHeaderActions/JobDetailHeaderActions";
@@ -195,8 +194,8 @@ export * from "./foundations/Tokens/Tokens";
 export * from "./compositions/DroneBrief/DroneBrief";
 
 // Dispatch a job by describing the work. The Job proposer answers the title,
-// the workflow and the split, so the form behind `Enter by hand` is the
-// override rather than the path.
+// the workflow and the split, and it is the only way in — the hand form that
+// used to sit behind `Enter by hand` is gone.
 export * from "./compositions/DispatchRequest/DispatchRequest";
 
 // One worktree Fleet is holding, and the test it did not pass. The reasons are
@@ -348,10 +347,8 @@ export * from "./compositions/StudioFrameSheet/StudioFrameSheet";
 // above the runner. #1383.
 export * from "./compositions/DriftSheet/DriftSheet";
 export * from "./compositions/VerifySheet/VerifySheet";
-// The dispatch form's optional settings, and what else is writing where a
-// request would. #1540.
+// The dispatch form's optional settings. #1540.
 export * from "./compositions/DispatchSettings/DispatchSettings";
-export * from "./compositions/WhatElseIsRunning/WhatElseIsRunning";
 // The tier map and the Drone cap, which the dispatch form and the proposal
 // both set — one control drawn at two moments, never two. #1549, #1550.
 export * from "./compositions/DispatchSettings/TierModels";
@@ -369,3 +366,15 @@ export * from "./compositions/GroupBoundary/GroupBoundary";
 export * from "./compositions/ImplementBoard/ImplementBoard";
 // A wave of Jobs under one plan, and which of them waits on which. #1544.
 export * from "./compositions/WaveCanvas/WaveCanvas";
+// The two branch fields on the dispatch form: pick one, or type one that is
+// not there yet.
+export * from "./compositions/BranchPicker/BranchPicker";
+// The guidance system — #1602, #1603. The guides themselves are data, one file
+// each under `guides/`; the `?` is what asks for one, the card is what a
+// person reads, and the catalogue is every one of them in order.
+export * from "./guides";
+export * from "./guidance";
+export * from "./compositions/GuideMark/GuideMark";
+export * from "./compositions/GuideCard/GuideCard";
+export * from "./compositions/GuideCatalogue/GuideCatalogue";
+export * from "./compositions/GuidesSetting/GuidesSetting";

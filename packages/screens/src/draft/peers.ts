@@ -1,14 +1,17 @@
-// What else is running where this work would write. Draft, for
+// What else is running where a Job writes. Draft, for
 // `crates/ipc/src/overlap.rs`.
 //
 // Source of truth today: `JobDetail.write_scope_overlaps`, `ScopeOverlap` and
-// `SharedPath`. The draft's only change is **when** it can be asked: this is
-// for dispatch, before a Job exists, and the wire's field hangs off a Job.
+// `SharedPath`.
+//
+// **The dispatch half went on 2026-09-23.** `peerOverlapAsked` answered the
+// same shape before a Job existed, for the panel beside the request; the owner
+// took that panel out and the Board is where what is running is read. A Job's
+// own overlap is a different question and stays.
 //
 // **A fact, never a verdict** — `docs/concepts/fleet.md`, "surfaced, never
 // serialised". There is no `blocked` flag here and no severity, because there
-// is no field a Bridge could grey the approve button from. A person dispatching
-// anyway is the ordinary case.
+// is no field a Bridge could grey a control from.
 
 import type { JobDetail, ScopeOverlap } from "@armada/protocol";
 
@@ -56,23 +59,6 @@ export function peerOverlapOf(detail: JobDetail): PeerOverlapAnswer {
     paths_asked: detail.write_targets ?? [],
     peers: overlaps.map(peerOf),
   };
-}
-
-/**
- * The same answer at dispatch, where there is no Job yet.
- *
- * `overlaps` is what a comparison came back with, and `undefined` is no
- * comparison having been made — which is what a form draws before anybody has
- * typed a path.
- */
-export function peerOverlapAsked(
-  pathsAsked: readonly string[],
-  overlaps?: readonly ScopeOverlap[],
-): PeerOverlapAnswer {
-  if (overlaps === undefined) {
-    return null;
-  }
-  return { paths_asked: [...pathsAsked], peers: overlaps.map(peerOf) };
 }
 
 function peerOf(overlap: ScopeOverlap): PeerView {

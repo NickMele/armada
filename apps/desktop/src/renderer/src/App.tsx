@@ -24,7 +24,7 @@ import { useDockAnswering } from "./dock-answering";
 import { HelmDock, helmReplying } from "./HelmDock";
 import { chippedJobId, contextOf, cursorRowFor, dismissed, NO_CHIP, opened, screenOf } from "./helm-context";
 import type { ChipState } from "./helm-context";
-import { Button } from "@armada/components";
+import { Button, GuidanceProvider, GuideCatalogue } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
 import type { BridgeState } from "../../shared/bridge";
@@ -131,12 +131,13 @@ import { useDrafted } from "./drafted";
 import { useWhereOpen } from "./where-open";
 import { useWorkflowView } from "./workflow-view";
 import { usePanelOpen } from "./panel-open";
+import { useGuideListWidth } from "./guide-list-width";
 import { statsOf, fleetPanelOf } from "./left-column";
 import { useCommandPalette } from "@armada/shell";
 import { copyDebugInfoFor } from "@armada/shell";
 import { Shell } from "@armada/shell";
 import { SURFACE, SURFACES, useSurfaceKeys } from "@armada/shell";
-import { useAtFloor } from "@armada/shell";
+import { useAtFloor, useNarrow } from "@armada/shell";
 import { watchUncaught } from "@armada/shell";
 import type { Uncaught } from "@armada/shell";
 
@@ -199,6 +200,10 @@ export function App({ draft }: AppProps = {}) {
   // Whether Kit is open — a rail surface since #1275, at `⌘8`. Machine-wide,
   // and the rail's pick is what names its second tier.
   const [kitting, setKitting] = useState(false);
+  // Whether the guide catalogue is open — a rail surface since #1602, and the
+  // last row, so it carries no digit. Every guide, numbered and grouped,
+  // readable without the screen that raised any of them.
+  const [guiding, setGuiding] = useState(false);
   // Whether the Manifest surface is open — Journey 9's *Running one*. **Its
   // own view, and it needs no Job to draw**: it is read off the file Fleet
   // already holds, which is what lets a person run this project's lint with
@@ -264,6 +269,7 @@ export function App({ draft }: AppProps = {}) {
   // Whether the window is at `--window-floor`, `JobDetail`'s own reading —
   // Fleet settings is the same trailing layer and takes it the same way.
   const floor = useAtFloor();
+  const narrow = useNarrow();
   // Where things are' own open choice — held locally so a press moves it at
   // once, `#927`'s round trip off the critical path of a toggle.
   const [whereOpen, pressWhereOpen] = useWhereOpen(state.preferences.where_things_are_open);
@@ -272,6 +278,8 @@ export function App({ draft }: AppProps = {}) {
   // The left column's own fold, remembered across a restart — Bridge/1088.
   const [statsOpen, setStatsOpen] = usePanelOpen("stats");
   const [fleetOpen, setFleetOpen] = usePanelOpen("fleet");
+  // The catalogue list's width, remembered the same way the shell's column is.
+  const [guideList, resizeGuideList] = useGuideListWidth();
 
   // The open Job, read out of the list rather than copied beside it. A Job that
   // leaves the list — superseded, or gone from a resync — closes its own detail
@@ -497,6 +505,7 @@ export function App({ draft }: AppProps = {}) {
     setOverviewing(surfaceId === SURFACE.overview);
     setSettingsShowing(surfaceId === SURFACE.settings);
     setKitting(surfaceId === SURFACE.kit);
+    setGuiding(surfaceId === SURFACE.guides);
     setStudying(surfaceId === SURFACE.studios);
     setOpenStudio(null);
     setStudioNode(null);
@@ -603,7 +612,10 @@ export function App({ draft }: AppProps = {}) {
   );
 
   return (
-    <>
+    /* The guidance system, over the whole window — #1602, #1603. It holds what
+       has been met, and the card it opens is a framed layer, so it belongs
+       above every surface rather than inside the one that raised it. */
+    <GuidanceProvider onReadAll={() => goTo(SURFACE.guides)}>
       <Shell
         connection={state.connection}
         repositories={repositories}
@@ -686,9 +698,11 @@ export function App({ draft }: AppProps = {}) {
                   ? SURFACE.settings
                   : kitting
                     ? SURFACE.kit
-                    : studying
-                      ? SURFACE.studios
-                      : SURFACE.board
+                    : guiding
+                      ? SURFACE.guides
+                      : studying
+                        ? SURFACE.studios
+                        : SURFACE.board
         }
         onSurface={goTo}
       >
@@ -1053,6 +1067,17 @@ export function App({ draft }: AppProps = {}) {
                 onSetManifestServerReach={setManifestServerReach}
               />
             </Boundary>
+          ) : guiding ? (
+            /* The list of guides and the one open beside it — the catalogue
+               half of #1602, rearranged. It draws off the guide table alone,
+               so it needs nothing from Fleet and works disconnected.
+               No pane: the two columns are the screen and each scrolls
+               itself, which is what lets the folded sheet be flush to it.
+               The list's width is the window's to remember, the same way the
+               shell's own left column is — the note of 25 Sep 2026. */
+            <Boundary region="Guides" {...guarded}>
+              <GuideCatalogue narrow={narrow} floor={floor} listWidth={guideList} onResizeList={resizeGuideList} />
+            </Boundary>
           ) : settingsShowing ? (
             <Boundary region="Settings" {...guarded}>
               <BridgeSettings
@@ -1060,6 +1085,7 @@ export function App({ draft }: AppProps = {}) {
                 live={live}
                 health={state.health}
                 onSave={commands.saveLimits}
+                onReadGuides={() => goTo(SURFACE.guides)}
               />
             </Boundary>
           ) : (
@@ -1165,6 +1191,6 @@ export function App({ draft }: AppProps = {}) {
 
       <CopiedToast copied={copied} />
       <SaidToast said={telling} />
-    </>
+    </GuidanceProvider>
   );
 }

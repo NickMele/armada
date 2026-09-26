@@ -181,6 +181,9 @@
 
 .armada-outcome__says,
 .armada-outcome__completes {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   margin: 0;
   font-family: var(--font-sans);
   font-size: var(--text-xs);

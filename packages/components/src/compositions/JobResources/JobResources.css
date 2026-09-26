@@ -21,6 +21,15 @@
   min-width: 0;
 }
 
+/* The act and its `?`, held together so the space-between above keeps them at
+   the trailing edge rather than pushing the mark into the verdict. */
+.armada-holds__act {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 /* The sentence a person came for, read before any figure. Sans and body text:
    it is the one line here that is not machine-derived. */
 .armada-holds__verdict {
@@ -280,6 +289,14 @@
 /* The band's name. The look rows' own label treatment, because the two are the
    same register — what this group of readings is — and a second one would be a
    heading competing with the verdict above. */
+/* The band and its `?`, on one line. */
+.armada-holds__band-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
 .armada-holds__band {
   margin: 0;
   font-family: var(--font-sans);

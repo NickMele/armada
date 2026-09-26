@@ -67,6 +67,23 @@ function classified(over: Partial<ProposalView> = {}): ProposalView {
   return arcProposal({ status: "awaiting_approval", gates: gates(false), ...over });
 }
 
+/**
+ * The same proposal one press later, which every moment after it reads.
+ *
+ * **One spelling for the whole arc past the press.** What locks, locks at
+ * approval (#1530, 21 Sep) — so a Job with a plan recorded or a Drone out is
+ * held to exactly these gates, this tier map and this cap, and `approved_at` is
+ * what draws them as a reading rather than as controls somebody could move
+ * under a running Drone.
+ */
+export function arcApproved(): ProposalView {
+  return classified({
+    status: "approved",
+    gates: gates(true),
+    approved_at: ARC_APPROVED_AT,
+  });
+}
+
 /** The Job itself, at the gate — no branch, no Drone, no step entered. */
 function atTheGate(status: string, over = {}): JobFixture {
   const job = arcJob(status, { current_step_id: "plan", branch: undefined, ...over });
@@ -165,7 +182,6 @@ export function proposingReview(): ArcMoment {
     opens: ARC_JOB_ID,
     draft: {
       prompt: before.draft.prompt,
-      peers: before.draft.peers,
       proposal: classified(),
       landing: ARC_LANDING,
       criteria: arcCriterionViews(),
@@ -181,10 +197,7 @@ export function approvedFrozen(): ArcMoment {
     fixtures: [{ ...job, name: "queued — approved, and the linked issue has moved since" }],
     opens: ARC_JOB_ID,
     draft: {
-      proposal: classified({
-        gates: gates(true),
-        approved_at: ARC_APPROVED_AT,
-      }),
+      proposal: arcApproved(),
       landing: ARC_LANDING,
       // The Job keeps the words it froze, and says the issue has moved since
       // (#1530, 22 Sep). The instant is the issue's edit, never the freeze.

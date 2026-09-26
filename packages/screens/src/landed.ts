@@ -318,11 +318,10 @@ function leftBehindOf(
         : { value: artifactPath("log", repo, records, job.id, job.assigned_drone) }),
     },
   ];
-  return {
-    name: "Left behind",
-    parts,
-    note: "Reclaiming the worktree takes the checkout back and leaves the branch and the record.",
-  };
+  // No note. *Reclaiming the worktree takes the checkout back and leaves the
+  // branch and the record* stood here and is true of a Job that never ran, so
+  // it is guide 13's third paragraph now and nothing else (#1602).
+  return { name: "Left behind", parts };
 }
 
 /** The hue a step's last verdict takes. Anything else stays neutral. */

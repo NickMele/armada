@@ -252,14 +252,8 @@ function ranBeside(said: string, checks: boolean, judge: boolean): string {
     : `${said}, with ${ran.join(" and ")} run first so you read what they found.`;
 }
 
-/**
- * The line the ticks cannot turn off.
- *
- * **Fleet refuses work that went outside what the plan declared and looks for
- * a gamed check whatever the boxes say** (#1530, 22 Sep) —
- * `crates/fleet/src/gate.rs`. It is drawn once per screen rather than once per
- * step, because it is the same sentence about every one of them.
- */
-export const FLEET_ALWAYS_LOOKS =
-  "Whatever is ticked, Fleet checks that the work stayed inside what the plan declared, and " +
-  "looks for a Check that was gamed. No tick turns that off.";
+// The line the ticks cannot turn off used to be here, drawn once over the gate
+// boxes. Fleet refuses work that went outside what the plan declared and looks
+// for a gamed check whatever the boxes say (#1530, 22 Sep) —
+// `crates/fleet/src/gate.rs`. It is true of a Job nobody approved, so it is
+// guide 9 and the `?` on the region's heading (#1602).

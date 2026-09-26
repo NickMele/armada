@@ -2,6 +2,8 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { FactChip } from "../FactChip/FactChip";
 import { GroupBoundary, type GroupBoundaryProps } from "../GroupBoundary/GroupBoundary";
+import { GuideMark } from "../GuideMark/GuideMark";
+import { GUIDE_GROUP_ORDER } from "../../guides";
 import { StepBar } from "../StepBar/StepBar";
 import { TaskMark, type TaskMarkState } from "../TaskMark/TaskMark";
 import type { PlanGroupState } from "../PlanBoard/PlanBoard";
@@ -68,8 +70,6 @@ export type ImplementGroup = {
 export type ImplementBoardProps = {
   /** The step's own label — `Implement`, off the frozen workflow. */
   stepName: string;
-  /** One line above the groups: one group at a time, and what that forbids. */
-  orderSays: string;
   groups: readonly ImplementGroup[];
   /** Which groups are open, by id. */
   openGroups: readonly string[];
@@ -183,7 +183,6 @@ function Group({
 
 export function ImplementBoard({
   stepName,
-  orderSays,
   groups,
   openGroups,
   onOpenGroup,
@@ -192,9 +191,15 @@ export function ImplementBoard({
 }: ImplementBoardProps) {
   return (
     <section className="armada-implement" aria-label={`${stepName}, opened`}>
-      <p className="armada-implement__order" role="note">
-        {orderSays}
-      </p>
+      {/* The noun and nothing else, with the `?` on it. **A label, not the
+          sentence that was here** — `Groups` is true of a step that has never
+          run, and the rule about what runs when is the guide's (#1602). Not on
+          a group's own head: that head is a button, and a button inside a
+          button is not markup a browser keeps. */}
+      <div className="armada-implement__order">
+        <h3 className="armada-implement__order-title">Groups</h3>
+        <GuideMark guide={GUIDE_GROUP_ORDER} />
+      </div>
       <ol className="armada-implement__groups" aria-label="The groups of this step, in the order they run">
         {groups.map((group) => (
           <Group

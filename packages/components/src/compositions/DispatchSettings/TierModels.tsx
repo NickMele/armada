@@ -1,4 +1,6 @@
 import { Select } from "../../primitives/Select/Select";
+import { GuideMark } from "../GuideMark/GuideMark";
+import { GUIDE_TIERS } from "../../guides";
 
 /**
  * Which model each tier runs on.
@@ -31,16 +33,19 @@ export type TierModelsProps = {
   onTiers: (tiers: TierChoice) => void;
   /** The models a tier may name. Empty until the connection answers. */
   models: readonly string[];
-  /** What is said under the label. The two surfaces say it differently. */
-  said: string;
   disabled?: boolean;
 };
 
-export function TierModels({ tiers, onTiers, models, said, disabled = false }: TierModelsProps) {
+export function TierModels({ tiers, onTiers, models, disabled = false }: TierModelsProps) {
   return (
     <div className="armada-dispatch-settings__tiers">
-      <span className="armada-dispatch-settings__label">Models by tier</span>
-      <p className="armada-dispatch-settings__said">{said}</p>
+      {/* The label and its `?`. Each of the two surfaces drew a sentence here
+          saying what a tier is, in its own words — both true of a job nobody
+          had dispatched, and both now guide 7 (#1602). */}
+      <span className="armada-dispatch-settings__label">
+        Models by tier
+        <GuideMark guide={GUIDE_TIERS} />
+      </span>
       <div className="armada-dispatch-settings__tier-row">
         {TIERS.map(([tier, label]) => (
           <Select

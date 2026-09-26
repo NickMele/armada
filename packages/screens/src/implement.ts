@@ -35,14 +35,6 @@ import {
   touchedByOf,
 } from "./tab-plan-read";
 
-/**
- * One group at a time. **The rule this line is the only evidence of** — no task
- * of the next group is working while this one is being checked (`#1530`).
- */
-export const ORDER_WHILE_RUNNING =
-  "One group at a time. No task of the next group starts while this one is being checked, " +
-  "and a task reads done only once its group has gone green.";
-
 /** Why no case is drawn at a boundary. Fleet serves none, which is not "none owed". */
 export const NO_CASES_AT_BOUNDARY =
   "Fleet does not serve the cases a boundary owes yet, so none is drawn here. " +
@@ -233,7 +225,6 @@ export function implementBoardOf({
   }));
   return {
     stepName: step.label,
-    orderSays: ORDER_WHILE_RUNNING,
     groups: drawn,
     openGroups,
     onOpenGroup,

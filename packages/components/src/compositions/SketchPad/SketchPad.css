@@ -20,10 +20,53 @@
 }
 
 /* The acts on what is selected. Laid out here rather than in GraphCanvas: the
-   aside is the surface's, and a Studio's stacks where these sit in a row. */
+   aside is the surface's, and a Studio's stacks where these sit in a row.
+   It wraps because the pad shares its card with the prompt: five acts do not
+   fit one row at the desktop floor, and a row that overflows puts Remove
+   outside the canvas rather than on a second line. */
 .armada-sketch-pad__acts {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--space-2);
+}
+
+/* The ink, in React Flow's own transformed viewport, so a stroke pans and
+   zooms with the box it was drawn beside. It never takes the pointer: Undo is
+   how a line comes off, so there is nothing here to hit. */
+.armada-sketch-pad__ink {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* A hand's line reads at an edge's weight and a foreground's colour: it is
+   what the person drew, not a relation the pad computed. `--edge-active` is
+   the width a selected edge already takes. */
+.armada-sketch-pad__ink path {
+  fill: none;
+  stroke: var(--fg-muted);
+  stroke-width: var(--edge-active);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* A stroke keeps its drawn weight as the pad zooms out, or a picture fitted
+     into the pad loses every line it has while the boxes stay legible. */
+  vector-effect: non-scaling-stroke;
+}
+
+/* What catches the pointer while the pen is down. React Flow's pane sits
+   inside its renderer at 4, not at the pane's own 1, so 3 left every press
+   going to the pane and drew nothing; level with the renderer and later in the
+   DOM puts the pen over it. Under the panels at 5, so the acts and the zoom
+   pair stay pressable without putting the pen down first. */
+.armada-sketch-pad__pen {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  cursor: crosshair;
+  touch-action: none;
 }
 
 /* Centred on the pad rather than in a corner, because on an empty pad it is

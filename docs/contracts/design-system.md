@@ -115,6 +115,12 @@ is allowed only as that light, and never where a person reads a state.
    **The workflow canvas carries a toggle to a stacked run**, canvas by
    default, because a narrow window reads a list better than a graph and
    the graph is still what the surface is for.
+   **Freehand is the sketch pad's alone, and it is still no second
+   library.** A line a person draws by hand is an SVG path in React
+   Flow's own viewport, so it pans and zooms with the boxes; it takes no
+   drawing tool and adds nothing to `GraphCanvas`, which every other
+   graph draws on. A surface that wants a pen mounts its own through the
+   canvas's `children`, or it does without one.
 
 ---
 
@@ -607,6 +613,20 @@ edge and its ground lifts one step at `--duration-fast`.
 `prefers-reduced-motion` every transition duration is zero and each
 state still reads from colour and label.
 
+**A layer nobody summoned does not enter.** The licence above is for chrome a
+person asked for, and it is the press that pays for it. A guide card opened by
+a `?` scales from 0.97 like any dialog; the same card opened because somebody
+met a piece for the first time is simply there. #1603.
+
+**Teaching borrows a game's motion and never its scoring.** Motion may show how
+pieces relate, where the relation is what is being learned — a task joining its
+group, a group's work becoming a commit, members landing in order. **There are
+no points, no streaks, no badges and no progress bar for its own sake**, and
+this sentence is here in as many words because the next person to read *learn
+from games* will reach for a badge. Whatever a relation is drawn as, it is
+drawn once: three animations of one relation, drawn three ways, is worse than
+none.
+
 **What animates on a loop is what is still working**, because a hue or a
 label can say *which* and only motion says *still*. Three things do: the
 running mark, a control waiting on Fleet, and the live phase's top edge.
@@ -904,6 +924,19 @@ sit there at any width is gone.
 > day (#1583). It is the fold's own mechanism generalised: below
 > `--layout-breakpoint` the dock has always been a layer.
 
+> **Rule.** The workflow canvas's own inspector takes that same arrangement. A
+> press on a node opens it on a layer over the canvas; nothing is open until a
+> press; the canvas keeps the destination's full width at every state of it; and
+> Close, in the panel's own head, is the way back. It is a layer inside a route
+> and not one over a route, so the clause above stands.
+> Why: the owner, 25 September 2026 — *"This panel should overlay the canvas. By
+> default it is not open, so the canvas spans the width of the page and this
+> panel is opened when you click a node."* It reads as a layer because it takes
+> the card treatment every panel on the canvas takes; before that it carried the
+> canvas's own ground and blended into it. **Not Helm's indigo** — `--helm`
+> marks Helm's own chrome and nothing else (Tokens → Helm), and this panel sits
+> inside one Job.
+
 **It takes no scrim and no modality**, unlike the sheet it folds to. A person
 reads a Job and asks Helm about it, so the screen underneath stays live and
 reachable, and one press on Close or `⌘J` puts it away. `--w-work-min` is what
@@ -977,7 +1010,8 @@ floors at 390px, which leaves 358px between its gutters.
 | Left column | Expanded or at its rail, whichever the person last chose — user-resizable, Navigation, Stats and Fleet together | Auto-collapses to the 48px rail whatever was chosen; Stats and Fleet each keep one status dot | A bottom tab bar |
 | Job row | One shape at every width — a stacked row carrying the badge, the headline sentence and the labelled field run beneath | The same row. Nothing reshapes | The same row, field run wrapped |
 | Helm's dock | A layer over the content when open, taking none of its width; closed draws nothing, and the title row's Helm button opens it | An edge strip; open draws it as a sheet over the content instead | Not built |
-| Job detail's inspector | A column beside the run | **A sheet over the run**, opened by pressing a step and closed by `Esc`; flush to both edges at the floor | Not built |
+| Job detail's Overview inspector | A column beside the run | **A sheet over the run**, opened by pressing a step and closed by `Esc`; flush to both edges at the floor | Not built |
+| The Workflow canvas's inspector | A layer over the canvas, opened by pressing a node and closed by Close; nothing until a press | The same layer, at the width of the destination | Not built |
 
 **There were three columns here until #1583**, the middle one being 1100–1280
 with the dock open — the band where the dock's 380px and job detail's two
@@ -1104,9 +1138,16 @@ These have no trigger, so flip and alignment do not apply to them.
 | Layer | Opens |
 | --- | --- |
 | Dialog | Centred in the window on both axes |
+| Guide card | Centred in the window on both axes |
 | Sheet | Full height, flush to one side edge, trailing by default |
 | Toast | Bottom trailing corner, inset `--space-6` |
 | Command palette | Horizontally centred, top-anchored |
+
+**A guide card is framed even though a `?` raised it.** It is the one layer
+that can also open with no trigger at all — the first time a person meets a
+piece — and a layer that anchored when it was pressed for and centred when it
+was not would be two layers wearing one name. It takes `--w-dialog-wide`,
+because a guide is three paragraphs and a picture.
 
 The palette's offset, and why it is not centred, are under Command palette.
 
@@ -1129,7 +1170,7 @@ order is the order a person meets them.
 
 | Token | Layer | Why it sits here |
 | --- | --- | --- |
-| `--z-dock` | Helm's dock | Over the content, under anything opened from inside it |
+| `--z-dock` | Helm's dock, and the workflow canvas's inspector | Over the content, under anything opened from inside it |
 | `--z-menu` | Dropdown, popover, split-button menu | Opens over the surface |
 | `--z-tooltip` | Tooltip | Explains the thing a menu is over |
 | `--z-modal` | Dialog, sheet | Interrupts both |
@@ -1139,10 +1180,13 @@ order is the order a person meets them.
 A number meaning "above my sibling" means "under every other layer" the moment
 its layer resolves against the window rather than its parent.
 
-**The dock is the one layer a person works beside rather than through**, so it
-is the one with no scrim and the only one under `--z-menu`. It still needs a
-token: a card lifts itself a step while it is hovered, which is enough to paint
-over a layer left at `auto`.
+**`--z-dock` is the layer a person works beside rather than through**, so it is
+the one with no scrim and the only one under `--z-menu`. Two things take it, for
+one reason: Helm's dock over the content, and the workflow canvas's inspector
+over the canvas — a person reads a node and replies to its Drone, so what is
+under each stays live and one press away. It still needs a token: a card lifts
+itself a step while it is hovered, which is enough to paint over a layer left at
+`auto`.
 
 ### Placement resolves before paint
 
@@ -2626,6 +2670,20 @@ Manifest "destructive-op list" setting governs Drone-initiated
 operations only, not your own clicks.
 
 ### Behaviour rules that shape copy
+
+**A screen reports. An explanation is something a person chooses to see.** The
+owner, 23 September 2026: *"I hate it, I just want the app to show facts. Any
+hints or guides should be something I choose to see."* A sentence that would
+still be true of a Job that had never run is an explanation, and it belongs in
+a guide rather than on the screen. #1602.
+
+**A guide is data, numbered, in `packages/components/src/guides/`.** One file
+each, one catalogue listing them in order, and a `?` beside the piece a guide
+explains. The mark goes where the vocabulary is Armada's own — a group
+boundary, a landing rule, how a graph is read — and never on every noun. The
+mark is the character `?` rather than a glyph: `circle-*` is reserved to Judge
+criterion verdicts, and the owner's own word for the control is a question
+mark. An empty state saying what would be here is a fact about now and stays.
 
 **A healthy state is stated, never implied.** "Fleet running" renders in
 the Fleet panel even when nothing is wrong, because an empty panel reads

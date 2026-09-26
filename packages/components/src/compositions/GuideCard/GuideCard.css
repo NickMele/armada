@@ -1,0 +1,176 @@
+/* One guide, read. A framed layer on Dialog's own rules: --bg-overlay, a
+ * hairline edge, --radius-lg and --shadow-overlay, centred in the window and
+ * bounded by it. No blur, and never a second floating layer inside it.
+ *
+ * MISSING TOKEN, named here and reported, the same one Dialog names:
+ * --armada-hairline: packages/tokens declares no border-width shorthand for an
+ *   edge, so --border-width is aliased locally the way Dialog aliases it.
+ *
+ * The measure is --w-dialog-wide rather than --w-dialog. A guide is three
+ * paragraphs and a picture; 440px sets a column a picture cannot sit in. */
+.armada-guide-card-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: var(--scrim);
+}
+
+.armada-guide-card {
+  --armada-hairline: var(--border-width);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: var(--w-dialog-wide);
+  max-height: 100%;
+  padding: var(--pad-card);
+  border-radius: var(--radius-lg);
+  background: var(--bg-overlay);
+  border: var(--armada-hairline) solid var(--border-default);
+  box-shadow: var(--shadow-overlay);
+}
+
+/* **Only a card somebody pressed for enters.** The contract lets chrome a
+   person summoned scale from 0.97 with its scrim fading; a card that opened on
+   its own was summoned by nobody, so it is simply there. Under reduced motion
+   --duration-base is zero and the invited one is simply there as well. */
+.armada-guide-card[data-invited] {
+  animation: armada-guide-card-in var(--duration-base) var(--ease);
+}
+
+.armada-guide-card-scrim:has(.armada-guide-card[data-invited]) {
+  animation: armada-guide-card-scrim-in var(--duration-base) var(--ease);
+}
+
+@keyframes armada-guide-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@keyframes armada-guide-card-scrim-in {
+  from {
+    background-color: transparent;
+  }
+}
+
+/* Head, offer and actions are fixed. Only the body gives, so Close is
+   reachable at any window height. */
+.armada-guide-card__head,
+.armada-guide-card__offer,
+.armada-guide-card__actions {
+  flex: none;
+}
+
+.armada-guide-card__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* The number is machine-derived reference, so it reads in mono and recedes —
+   it is what a person cites, not what they came to read. */
+.armada-guide-card__number {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+.armada-guide-card__title {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+  text-wrap: pretty;
+}
+
+.armada-guide-card__body {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-wrap: pretty;
+}
+
+.armada-guide-card__paragraph {
+  margin: 0;
+}
+
+/* Sized by what it is rather than by a frame this holds open for it: no
+   aspect ratio is imposed, because a guide with no picture draws none. */
+.armada-guide-card__picture {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: var(--armada-hairline) solid var(--border-subtle);
+}
+
+/* The switch is separated the way the dialog separates its field, and for the
+   same reason: a region that scrolls meeting one that does not, with nothing
+   between them, clips a line and gives no sign it did. */
+.armada-guide-card__offer {
+  padding-top: var(--space-4);
+  border-top: var(--armada-hairline) solid var(--border-subtle);
+}
+
+.armada-guide-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.armada-guide-card__close,
+.armada-guide-card__secondary {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: var(--h-control);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+
+/* A ghost recedes by losing its fill, never by shrinking. */
+.armada-guide-card__secondary {
+  border: var(--armada-hairline) solid transparent;
+  background: none;
+  color: var(--fg-muted);
+}
+
+.armada-guide-card__secondary:hover {
+  background: var(--bg-hover);
+  color: var(--fg-default);
+}
+
+/* This layer's ground is --bg-overlay, so its one filled control takes
+   --bg-raised, the same step Dialog's secondary takes. */
+.armada-guide-card__close {
+  border: var(--armada-hairline) solid var(--border-strong);
+  background: var(--bg-raised);
+  color: var(--fg-default);
+}
+
+.armada-guide-card__close:hover {
+  background: var(--bg-hover);
+}
+
+.armada-guide-card__close:focus-visible,
+.armada-guide-card__secondary:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}

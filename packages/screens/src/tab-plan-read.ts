@@ -17,9 +17,6 @@ import { planRevisionsOf, type PlanAskKind, type PlanRevisionView } from "./draf
 import type { TaskView } from "./draft/task";
 import { money } from "./facts";
 
-/** How the groups run. One line, and the one thing the order itself says. */
-export const ORDER_SAID = "The groups run one at a time, in this order.";
-
 /**
  * The plan's groups. **The draft where a moment carries one, and today's wire
  * derived otherwise** — `taskGroupsOf` draws one task per group, so a board
@@ -254,10 +251,6 @@ export const ASK_LABEL: Record<PlanAskKind, string> = {
   rewrite: "Rewrite this task",
 };
 
-/** The standing line over the group controls. Once, above the cards. */
-export const ASKS_SAY =
-  "The plan is the Drone's record. Each of these asks it for a different split, and it may refuse.";
-
 /**
  * The rewrite ask's own words. **Prose, because a rewrite is not a field** —
  * what a task should be instead is a sentence the Drone reads, and a picker
@@ -429,7 +422,6 @@ export function planBoardOf(
   const clashes = clashesOf(groups);
   return {
     approach: whole?.work_plan?.approach ?? "",
-    orderSays: ORDER_SAID,
     groups: groups.map((group, at) =>
       groupCardOf(
         group,
@@ -441,7 +433,7 @@ export function planBoardOf(
       ),
     ),
     ...(clashes.length === 0 ? {} : { clashes }),
-    ...(revisable ? { asksSay: ASKS_SAY } : {}),
+    ...(revisable ? { askable: true } : {}),
     ...(openTaskId === undefined ? {} : { openTaskId }),
     onOpenTask,
   };

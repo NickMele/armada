@@ -16,17 +16,21 @@ import { JudgeQuestion } from "../JudgeQuestion/JudgeQuestion";
 export type JobMemberLink = "stacked" | "merged" | "published";
 
 /**
- * What each link does, written once.
+ * Which link a member carries, written once.
  *
  * **Fixed copy, identical on every member that carries it** — the Voice
- * contract's rule for Armada's own strings. The three are not interchangeable:
- * one keeps working, one parks, one waits on a release.
+ * contract's rule for Armada's own strings.
+ *
+ * **Each says which of the three this member is and stops there.** What the
+ * three *are* — that stacked keeps working and rebases, that parked does not,
+ * that published waits on a release rather than on the merge — is true of a
+ * member that has never run, so it is guide 2 and the `?` over the list
+ * (#1602). The sentences here used to carry both.
  */
 export const MEMBER_LINK: Readonly<Record<JobMemberLink, string>> = {
-  stacked:
-    "Stacked on the one before it. It keeps working, and rebases when that branch lands.",
+  stacked: "Stacked on the one before it.",
   merged: "Parked until the one before it lands.",
-  published: "Waits on what the merge before it publishes, rather than on the merge.",
+  published: "Waits on what the one before it publishes.",
 };
 
 /** The button, and the word it produces. `design-system.md`, the verb table. */

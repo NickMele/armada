@@ -130,41 +130,13 @@
   text-wrap: pretty;
 }
 
-/* What the press sets off. A numbered list because the three are in order and
-   the order is the substance — an unordered run of three would read as three
-   things that might happen. */
-.armada-dispatch__next {
+/* The title and its `?`, so the header's own space-between keeps the close
+   control at the trailing edge. */
+.armada-dispatch__head {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--space-1);
   min-width: 0;
-  padding-top: var(--space-3);
-  border-top: var(--border-width) solid var(--border-subtle);
-}
-
-.armada-dispatch__next-head {
-  min-width: 0;
-  color: var(--fg-default);
-  font-size: var(--text-sm);
-  line-height: var(--leading-sm);
-  font-weight: var(--weight-medium);
-}
-
-.armada-dispatch__next-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-  margin: 0;
-  padding-inline-start: var(--space-4);
-}
-
-.armada-dispatch__next-line {
-  min-width: 0;
-  color: var(--fg-muted);
-  font-size: var(--text-xs);
-  line-height: var(--leading-xs);
-  text-wrap: pretty;
 }
 
 /* The wait, where Fleet has said nothing about the call — an older Fleet, or
@@ -332,20 +304,25 @@
   min-width: 0;
 }
 
-/* The position, and the whole of the graph: a proposal of several is a chain,
-   so the number is what says which waits on which. Mono, because it is a
-   machine reading, and set back so the title leads. */
+/* The position in a run whose order is the substance — the proposal's chain,
+   where the number says which waits on which, and the three lines of what
+   happens next. Mono, because it is a machine reading, and set back so the
+   words lead. One treatment, because it is one kind of thing. */
 .armada-dispatch__ordinal {
   flex: none;
-  /* Beside the title it numbers, not centred against a row whose height comes
-     from the two lines under it. The body's own line height is what puts it
-     there. */
-  align-self: start;
   width: var(--space-4);
   color: var(--fg-subtle);
   font-size: var(--text-xs);
-  line-height: var(--leading-sm);
   text-align: end;
+}
+
+/* On the chain, beside the title it numbers, not centred against a row whose
+   height comes from the two lines under it. The body's own line height is what
+   puts it there; the next list aligns on its baseline instead and needs
+   neither. */
+.armada-dispatch__job > .armada-dispatch__ordinal {
+  align-self: start;
+  line-height: var(--leading-sm);
 }
 
 .armada-dispatch__job-body {
@@ -397,16 +374,6 @@
   color: var(--fg-muted);
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
-}
-
-/* What approving does, and what it does not decide. Read once, under the list
-   it is about. */
-.armada-dispatch__gate {
-  min-width: 0;
-  color: var(--fg-muted);
-  font-size: var(--text-xs);
-  line-height: var(--leading-xs);
-  text-wrap: pretty;
 }
 
 /* Cancel-side first, the accent at the trailing edge where the reading ends —

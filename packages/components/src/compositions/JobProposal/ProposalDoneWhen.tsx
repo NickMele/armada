@@ -1,4 +1,6 @@
 import { Input } from "../../primitives/Input/Input";
+import { GuideMark } from "../GuideMark/GuideMark";
+import { GUIDE_CRITERIA } from "../../guides";
 
 /**
  * One thing the Job is held to, with where its words came from.
@@ -29,14 +31,24 @@ export type ProposalDoneWhenProps = {
   criteria: readonly ProposalCriterion[];
   /** One criterion reworded. Absent draws them frozen, which is after approval. */
   onCriterion?: (at: number, text: string) => void;
-  /** Said under the list. What the Judge marks against, and when. */
-  said: string;
 };
 
-export function ProposalDoneWhen({ criteria, onCriterion, said }: ProposalDoneWhenProps) {
+/**
+ * What the Job is held to.
+ *
+ * **Nothing here says what a criterion is.** A line under the list said the
+ * Judge marks against these words, and said it two ways — one before approval
+ * and one after. Both were true of a Job that never ran, so they are guide 10
+ * and the `?` on the heading (#1602). Where each line came from and how it is
+ * answered stays on the row, because that is this Job's own.
+ */
+export function ProposalDoneWhen({ criteria, onCriterion }: ProposalDoneWhenProps) {
   return (
     <section className="armada-proposal__region" aria-label="Done when">
-      <h3 className="armada-proposal__heading">Done when</h3>
+      <div className="armada-proposal__heading-row">
+        <h3 className="armada-proposal__heading">Done when</h3>
+        <GuideMark guide={GUIDE_CRITERIA} />
+      </div>
       {criteria.length === 0 ? (
         <p className="armada-proposal__said">
           Nothing was read out of a request or an issue, so this Job is held to the workflow
@@ -67,7 +79,6 @@ export function ProposalDoneWhen({ criteria, onCriterion, said }: ProposalDoneWh
           ))}
         </ul>
       )}
-      <p className="armada-proposal__said">{said}</p>
     </section>
   );
 }

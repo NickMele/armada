@@ -131,19 +131,6 @@ function studioGoneFact(job: JobSummary, whole: JobWhole | null): JobDetailField
   return [{ label: "That Studio has been deleted" }];
 }
 
-/** Where a workflow came from, in Fleet's own words for `WorkflowSource` — #425. */
-export const WORKFLOW_SOURCE: Readonly<Record<string, string>> = {
-  armada: "carried by Armada",
-  kit: "from Kit",
-  repository: "from the repository",
-};
-
-/** `, from Kit`, or nothing where Fleet did not say. An unknown word renders as itself. */
-export function sourceOf(source: string | undefined): string {
-  if (source === undefined || source === "") return "";
-  return `, ${WORKFLOW_SOURCE[source] ?? source}`;
-}
-
 /**
  * The pull request Fleet opened, by its number, clickable.
  *

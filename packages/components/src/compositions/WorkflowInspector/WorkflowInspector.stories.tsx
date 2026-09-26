@@ -30,7 +30,15 @@ const tests = [
   { id: "c2", title: "Pressing the stat lists the Drone's Job", outcome: "not covered" },
 ];
 
-/** A group mid-flight: two tasks, the Checks at its boundary, and the cases beside them. */
+/**
+ * A group mid-flight: two tasks, the Checks at its boundary, and the cases
+ * beside them.
+ *
+ * **A `play`, because the way out is a claim.** The caller draws this panel on
+ * a layer over the workflow canvas, so Close is what gives the canvas back —
+ * Helm's dock is closed by the Close in its own head and this is the same
+ * arrangement. A panel drawn on a layer with no way off it is the v1 complaint.
+ */
 export const AGroupRunning: Story = {
   args: {
     name: "Group 3",
@@ -60,6 +68,17 @@ export const AGroupRunning: Story = {
       onCommit: fn(),
       onAsk: fn(),
     },
+    onClose: fn(),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    // In the head, beside what the panel is reading, and not at the foot under
+    // the reply box — the dock's own place for it.
+    const head = canvas.getByRole("heading", { name: "Group 3" }).closest("header");
+    await expect(head).not.toBeNull();
+    const close = canvas.getByRole("button", { name: "Close" });
+    await expect(head!.contains(close)).toBe(true);
+    await userEvent.click(close);
+    await expect(args.onClose).toHaveBeenCalled();
   },
 };
 

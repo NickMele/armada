@@ -20,8 +20,6 @@ const APPROACH =
   "One read of everything running, then the stat's words, then the panel, then what holds " +
   "the next Drone back.";
 
-const ORDER = "The groups run one at a time, in this order.";
-
 const RUST = ["build", "test", "acceptance", "format"];
 const BRIDGE = [
   "test",
@@ -98,13 +96,12 @@ function planned(): PlanBoardGroup[] {
 }
 
 export const Planned: Story = {
-  args: { approach: APPROACH, orderSays: ORDER, groups: planned(), onOpenTask: fn() },
+  args: { approach: APPROACH, groups: planned(), onOpenTask: fn() },
 };
 
 export const GroupFailed: Story = {
   args: {
     approach: APPROACH,
-    orderSays: ORDER,
     groups: [
       {
         ...planned()[1]!,
@@ -130,7 +127,6 @@ export const GroupFailed: Story = {
 export const DoneTouchedLater: Story = {
   args: {
     approach: APPROACH,
-    orderSays: ORDER,
     groups: [
       {
         ...planned()[1]!,
@@ -155,7 +151,6 @@ export const DoneTouchedLater: Story = {
 export const OrderContradictsScope: Story = {
   args: {
     approach: APPROACH,
-    orderSays: ORDER,
     groups: planned(),
     clashes: [
       {
@@ -192,9 +187,6 @@ const ASKS = [
   { id: "remove", label: "Remove" },
 ];
 
-const ASKS_SAY =
-  "The plan is the Drone's record. Each of these asks it for a different split, and it may refuse.";
-
 /**
  * The plan at its gate, where it may still be argued with. Every group offers
  * the same three controls, and the first group's Move up is drawn off rather
@@ -204,8 +196,7 @@ const ASKS_SAY =
 export const WaitingAtItsGate: Story = {
   args: {
     approach: APPROACH,
-    orderSays: ORDER,
-    asksSay: ASKS_SAY,
+    askable: true,
     groups: planned().map((group, at) => ({
       ...group,
       asks: ASKS.map((ask) =>

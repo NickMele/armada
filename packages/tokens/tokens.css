@@ -745,15 +745,19 @@
      zoom rather than beside it. #1539. */
   --w-workflow-node: 260px;
   --w-workflow-group-node: 228px;
-  /* The workflow canvas's floor. React Flow measures its own frame, so the
-     surface needs a height and not a flex basis of nothing. 420px holds a step
-     card and one group under it at zoom 1 inside Bridge's shortest window. */
+  /* A task inside a group takes the same --space-8 step down again, so the
+     three depths read as nested at any zoom rather than as three widths. */
+  --w-workflow-task-node: 196px;
+  /* A graph canvas's floor. React Flow measures its own frame, so the surface
+     needs a height and not a flex basis of nothing. 420px holds a step card
+     and one node under it at zoom 1 inside Bridge's shortest window, which is
+     what a wave of Jobs is. */
   --h-workflow-canvas: 420px;
-  /* The same canvas with a step opened under it. The run is then the map and
-     the board beneath is the reading, so the canvas takes a fixed height
-     rather than the column. Its groups hang in the board rather than on it, so
-     a spine of step cards is all it has to hold. #1536. */
-  --h-workflow-canvas-opened: 180px;
+  /* A Job's own run needs more, because the whole plan hangs off it: 560px is
+     what a step and a three-group plan under it fit inside without dropping
+     below the scale a card is legible at. Under that the fit opens on less of
+     the run rather than shrinking it, which is the same rule one step on. */
+  --h-workflow-run-canvas: 560px;
   /* The narrowest a workflow canvas is worth drawing beside its inspector.
      Under two of these the inspector folds under the run instead — the canvas
      is the one region on that tab that cannot be read at half a column. */
@@ -766,6 +770,46 @@
      prompt, the refs and the settings block. #1547. */
   --w-sketch-box: 240px;
   --h-sketch-pad: 300px;
+  /* The guide catalogue's list, beside the guide it opens. Its own name rather
+     than --w-run-column's 380 or --w-menu's 240: the run column holds a step
+     name beside an elapsed on one line, and a menu holds a command; this holds
+     a title that is allowed to wrap, so the three are free to move apart.
+
+     260px is what the longest title costs at --text-sm on two lines —
+     `How a member reaches the one before it`, 38 characters, with the number
+     column and the row's own padding taken off first. Wider and every other
+     title leaves half a line empty; narrower and that one takes three.
+
+     **No floor beside it, unlike the run column's pair.** The list is only a
+     column above --layout-breakpoint, where the narrowest content box is
+     1100 less the 48px rail — the guide beside it keeps 750px there, which is
+     past its own 68ch measure. Below the breakpoint there is no second column
+     to be crushed by: the list is the whole width and the guide is a layer
+     over it.
+
+     **286px since the owner asked for a tenth more**, 25 Sep 2026 — 260 plus
+     10%. The measurement above still holds at it: the four titles that wrap
+     take two lines and none takes three. */
+  --w-guide-list: 286px;
+  /* The drag range, since the same note asked for the edge to be draggable.
+     A pair rather than the single value --w-guide-list was, for the reason the
+     run column's own pair exists: a width a person moves needs somewhere to
+     stop.
+
+     220px is the floor, measured 25 Sep 2026 at 1101px — the narrowest window
+     that draws two columns at all. Under 212px the four longest titles take a
+     third line each and the list stops being a scannable index; 220 is the
+     next step on the 4px grid above that, with room for a title longer than
+     today's longest.
+
+     400px is the ceiling, from the same window: the catalogue's content box is
+     853px there, so with the --space-6 gutter between them the two columns are
+     even at 414px. Past that the index is wider than the guide it indexes,
+     which inverts the screen. 400 is the widest round value under it, and it
+     is already past the 320px where every title sits on one line — so the
+     ceiling costs a person nothing they could use. */
+  --w-guide-list-min: 220px;
+  --w-guide-list-max: 400px;
   --palette-width: 560px;
   --palette-max-height: 400px;
 

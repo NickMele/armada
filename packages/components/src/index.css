@@ -49,7 +49,6 @@
 @import "./compositions/EvidenceTrail/EvidenceTrail.css";
 @import "./compositions/EvidenceCard/EvidenceCard.css";
 @import "./compositions/BoardEmptyState/BoardEmptyState.css";
-@import "./compositions/JobComposer/JobComposer.css";
 @import "./compositions/JobDetailHeaderActions/JobDetailHeaderActions.css";
 @import "./compositions/FailureNotice/FailureNotice.css";
 @import "./compositions/JobBrief/JobBrief.css";
@@ -330,10 +329,8 @@
 /* A Job whose members are Jobs — pull requests landing in order. #1543. */
 @import "./compositions/JobMembers/JobMembers.css";
 
-/* The dispatch form's optional settings, and what else is writing where a
-   request would. #1540. */
+/* The dispatch form's optional settings. #1540. */
 @import "./compositions/DispatchSettings/DispatchSettings.css";
-@import "./compositions/WhatElseIsRunning/WhatElseIsRunning.css";
 /* The picture a person draws beside the prompt, on GraphCanvas. #1547. */
 @import "./compositions/SketchPad/SketchPad.css";
 
@@ -346,6 +343,17 @@
 
 /* A wave of Jobs under one plan, and which of them waits on which. #1544. */
 @import "./compositions/WaveCanvas/WaveCanvas.css";
+
+/* The two branch fields on the dispatch form: pick one, or type one that is
+   not there yet. An @import after the first rule below is dropped, so the
+   run of imports is where a new one is appended. */
+@import "./compositions/BranchPicker/BranchPicker.css";
+/* The guidance system — #1602, #1603. The `?` beside a piece, the card it
+   opens, and the catalogue every card is also in. */
+@import "./compositions/GuideMark/GuideMark.css";
+@import "./compositions/GuideCard/GuideCard.css";
+@import "./compositions/GuideCatalogue/GuideCatalogue.css";
+@import "./compositions/GuidesSetting/GuidesSetting.css";
 
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */

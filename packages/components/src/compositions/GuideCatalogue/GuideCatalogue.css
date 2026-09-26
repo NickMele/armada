@@ -1,0 +1,283 @@
+/* The catalogue: the list of guides, and the one that is open beside it.
+
+   Two columns and not a pane, so the arrangement is the screen. `position:
+   relative` and `overflow: hidden` are what let the folded sheet be the
+   screen's layer rather than the window's — job detail's own pair, and the
+   reason the sheet stays inside the surface's corners. */
+.armada-guides {
+  display: grid;
+  /* --armada-guide-list is what a drag sets, inline; the token is what the
+     column rests at. The fallback is the declaration, so a caller that wires
+     no width draws the resting one and nothing here has to know which. */
+  grid-template-columns: var(--armada-guide-list, var(--w-guide-list)) minmax(0, 1fr);
+  column-gap: var(--space-6);
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Under --layout-breakpoint the list is the whole content and the guide is the
+   sheet over it. One track rather than a panel squeezed under a floor. */
+.armada-guides[data-narrow] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Each column scrolls itself. The list must not have scrolled away under a
+   reader who is deep in a guide — they are read against each other, which is
+   the same reason job detail's run and panel are two scrollers. */
+.armada-guides__list,
+.armada-guides__panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.armada-guides__list {
+  gap: var(--space-4);
+  /* Room under the last row for the same reason a pane keeps it: a scroller
+     clips at its padding box and the last row otherwise ends flush. */
+  padding-bottom: var(--space-6);
+}
+
+/* The list's inner edge, a third track drawn only where a caller wired the
+   width — the shell's own rule, an edge that looks grabbable and does nothing
+   being worse than none. The gutter is unchanged by it: the grid's own
+   --space-6 gives way to the handle's --space-2 hit area between two --space-2
+   margins, which is the same 24px. The grip is the shell's exactly — a short
+   --border-default pill at the vertical centre, visible at rest and brightening
+   to --border-strong on hover, focus or drag, so nothing appears from nothing. */
+.armada-guides:has(.armada-guides__handle) {
+  grid-template-columns: var(--armada-guide-list, var(--w-guide-list)) auto minmax(0, 1fr);
+  column-gap: 0;
+}
+
+.armada-guides__handle {
+  align-self: stretch;
+  position: relative;
+  width: var(--space-2);
+  margin: 0 var(--space-2);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.armada-guides__handle::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--border-width);
+  height: var(--space-8);
+  border-radius: var(--radius-sm);
+  background: var(--border-default);
+  transform: translateY(-50%);
+}
+
+.armada-guides__handle:hover::before,
+.armada-guides__handle:focus-visible::before,
+.armada-guides__handle[data-dragging="true"]::before {
+  background: var(--border-strong);
+}
+
+.armada-guides__handle:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--border-width) * -2);
+}
+
+.armada-guides__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* The section band, on the eyebrow treatment the rest of the app uses for one.
+   The count sits at the trailing edge — a fact about the group, not a score. */
+.armada-guides__group-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  font-weight: var(--weight-medium);
+  color: var(--fg-subtle);
+  padding: 0 var(--space-2) var(--space-2);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-guides__count {
+  flex: none;
+  letter-spacing: normal;
+  color: var(--fg-subtle);
+}
+
+.armada-guides__entries {
+  display: flex;
+  flex-direction: column;
+  /* 2px between rows, the rail's own gap: enough to separate two rows without
+     a rule, and no gap token spells it. Reported, as the rail reports it. */
+  gap: calc(var(--space-1) / 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A row. The number in its own column, so every title starts on one line and
+   the list reads as numbered without a marker glyph. The left edge is
+   --row-focus-bar with its colour dropped at rest, so choosing a row adds no
+   width and nothing shifts. */
+.armada-guides__row {
+  display: grid;
+  grid-template-columns: var(--space-6) minmax(0, 1fr);
+  column-gap: var(--space-2);
+  align-items: baseline;
+  width: 100%;
+  padding: var(--space-2);
+  border: 0;
+  border-left: var(--row-focus-bar);
+  border-left-color: transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease);
+}
+
+.armada-guides__row:hover {
+  background: var(--bg-hover);
+}
+
+/* The chosen row: the surface plus the accent edge, the pair the contract
+   calls a focused row and the workflow rail already draws. */
+.armada-guides__row[aria-current] {
+  background: var(--bg-hover);
+  border-left-color: var(--accent);
+}
+
+.armada-guides__row:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.armada-guides__number {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+  text-align: right;
+}
+
+.armada-guides__row-title {
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+.armada-guides__row[aria-current] .armada-guides__row-title {
+  color: var(--fg-default);
+}
+
+/* The guide itself. A card, which is what separates it from the list — the
+   same treatment job detail's panel takes against its own gutter. */
+.armada-guides__panel {
+  gap: var(--space-3);
+  padding: var(--pad-card);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+/* Folded into the sheet: the sheet draws the surface and the radius, so the
+   body keeps its padding and nothing else. `bleed` is why. */
+.armada-guides__folded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--pad-card);
+}
+
+/* The measure is bounded, because a paragraph the width of a 2000px window is
+   a paragraph nobody finishes. 68ch is a reading measure and not a layout
+   value, which is why it is not a token. */
+.armada-guides__panel > *,
+.armada-guides__folded > * {
+  max-width: 68ch;
+}
+
+.armada-guides__panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* The number and the group: machine reference and a filing, so both recede.
+   The card carries neither, and this is the room the card did not have. */
+.armada-guides__eyebrow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+.armada-guides__panel-title {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+  text-wrap: pretty;
+}
+
+.armada-guides__paragraph {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-wrap: pretty;
+}
+
+/* Sized by what it is rather than by a frame held open for it: no aspect ratio
+   is imposed, because a guide with no picture draws none. */
+.armada-guides__picture {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--border-subtle);
+}
+
+/* Where the same knowledge is written for a reader of the repository. Set off
+   the way the card sets off its switch, and for the same reason: a value that
+   is not part of the reading needs a line between it and the last paragraph. */
+.armada-guides__concept {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--border-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-guides__concept-label {
+  flex: none;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}

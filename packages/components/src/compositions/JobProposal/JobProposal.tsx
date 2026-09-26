@@ -37,8 +37,6 @@ export type JobProposalProps = {
   steps: readonly ProposalGateRow[];
   onGate?: (stepId: string, box: GateBox, ticked: boolean) => void;
   onOverride?: (stepId: string, overridden: boolean) => void;
-  /** The line no tick turns off. */
-  alwaysLooks: string;
   tiers: TierChoice;
   onTiers?: (tiers: TierChoice) => void;
   models: readonly string[];
@@ -72,7 +70,6 @@ export function JobProposal({
   steps,
   onGate,
   onOverride,
-  alwaysLooks,
   tiers,
   onTiers,
   models,
@@ -107,7 +104,6 @@ export function JobProposal({
         steps={steps}
         {...(onGate === undefined ? {} : { onGate })}
         {...(onOverride === undefined ? {} : { onOverride })}
-        alwaysLooks={alwaysLooks}
       />
 
       <section className="armada-proposal__region" aria-label="What each task runs on">
@@ -137,12 +133,7 @@ export function JobProposal({
           </>
         ) : (
           <>
-            <TierModels
-              tiers={tiers}
-              onTiers={onTiers}
-              models={models}
-              said="The planner marks each task Difficult, Medium or Easy, and the model follows from this map. A tier left on Auto is Armada's to pick."
-            />
+            <TierModels tiers={tiers} onTiers={onTiers} models={models} />
             <DroneCap
               {...(droneCap === undefined ? {} : { cap: droneCap })}
               onCap={onDroneCap}
@@ -158,15 +149,7 @@ export function JobProposal({
         completeChoices={completeChoices}
       />
 
-      <ProposalDoneWhen
-        criteria={criteria}
-        {...(onCriterion === undefined ? {} : { onCriterion })}
-        said={
-          frozen
-            ? "The Judge marks against these words, as they were when you approved."
-            : "Read out of the issue this work is linked to where there is one. The Judge marks against whatever these say when you approve."
-        }
-      />
+      <ProposalDoneWhen criteria={criteria} {...(onCriterion === undefined ? {} : { onCriterion })} />
     </div>
   );
 }

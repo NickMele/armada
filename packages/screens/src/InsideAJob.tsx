@@ -6,6 +6,9 @@ import type { ReactNode } from "react";
 import { ChevronRight, ChevronUp } from "lucide-react";
 import { Fragment, useCallback, useState } from "react";
 import {
+  GuideMark,
+  GUIDE_MEMBER_LINK,
+  GUIDE_STEP_BAR,
   RunTree,
   RunTreeSkeleton,
   Sheet,
@@ -382,7 +385,14 @@ export function InsideAJob({
       {members === undefined ? null : (
         <div className="armada-inside__landing">
           <div className="armada-inside__region-head">
-            <Eyebrow>{membersLabel}</Eyebrow>
+            {/* The band and its `?`, the same pair the run's head carries.
+                What the three links are is true of a member that never ran,
+                so the cards say which one they have and this says what the
+                three mean — `#1602`. */}
+            <span className="armada-inside__region-name">
+              <Eyebrow>{membersLabel}</Eyebrow>
+              <GuideMark guide={GUIDE_MEMBER_LINK} />
+            </span>
           </div>
           {members}
         </div>
@@ -392,7 +402,12 @@ export function InsideAJob({
         {/* The run, and the pointers beneath it. Left, at every state. */}
         <div className="armada-inside__run">
           <div className="armada-inside__region-head">
-            <Eyebrow>{runLabel}</Eyebrow>
+            {/* The band and its `?` together, so the head's own
+                space-between still puts the workflow's name at the far edge. */}
+            <span className="armada-inside__region-name">
+              <Eyebrow>{runLabel}</Eyebrow>
+              <GuideMark guide={GUIDE_STEP_BAR} />
+            </span>
             {runWorkflowLabel === undefined ? null : (
               <span className="armada-inside__region-meta">{runWorkflowLabel}</span>
             )}
