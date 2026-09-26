@@ -38,6 +38,11 @@ The same question, rewritten and called *perfect*:
 Nothing was left out. Every fact in the first version survives in the second,
 said as a thing that happens to somebody.
 
+**What he has already decided is in `.claude/decisions/`, and the patterns
+behind those answers are in `.claude/skills/how-the-owner-decides/`.** Read them
+before writing the options: a question he has answered before is a question that
+wastes an answer, and his own reasoning makes a better recommendation than yours.
+
 ## The shape
 
 | In this order | |
