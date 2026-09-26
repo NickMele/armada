@@ -3,6 +3,7 @@ import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerE
 import { GUIDE_GROUPS, GUIDES } from "../../guides";
 import type { Guide, GuideGroupId } from "../../guides/guide";
 import { Sheet } from "../../primitives/Sheet/Sheet";
+import { GuideSteps } from "../GuideSteps/GuideSteps";
 
 /**
  * Every guide: the list on the left, the one you chose open beside it.
@@ -150,7 +151,12 @@ export function GuideCatalogue({
 
       {/* Beside the list wherever the window can pay for both. */}
       {narrow || open === undefined ? null : (
-        <article className="armada-guides__panel">
+        <article
+          className="armada-guides__panel"
+          // Named by the guide it holds, the way the sheet it folds into is:
+          // without it the region beside the list is one nothing can name.
+          aria-label={open.title}
+        >
           <div className="armada-guides__panel-head">
             <p className="armada-guides__eyebrow">
               <span className="mono">Guide {open.number}</span>
@@ -159,7 +165,7 @@ export function GuideCatalogue({
             </p>
             <h2 className="armada-guides__panel-title">{open.title}</h2>
           </div>
-          <GuideBody guide={open} />
+          <GuideBody key={open.number} guide={open} />
         </article>
       )}
 
@@ -179,7 +185,7 @@ export function GuideCatalogue({
           onClose={() => setReading(false)}
         >
           <div className="armada-guides__folded">
-            <GuideBody guide={open} />
+            <GuideBody key={open.number} guide={open} />
           </div>
         </Sheet>
       ) : null}
@@ -317,16 +323,7 @@ function ListHandle({ width, onResize }: { width: number; onResize: (width: numb
 function GuideBody({ guide }: { guide: Guide }) {
   return (
     <>
-      {/* No frame is held for a picture that does not exist — the guide data's
-          own rule, and none of the fourteen carries one yet. */}
-      {guide.picture === undefined ? null : (
-        <img className="armada-guides__picture" src={guide.picture.src} alt={guide.picture.alt} />
-      )}
-      {guide.body.map((paragraph) => (
-        <p key={paragraph} className="armada-guides__paragraph">
-          {paragraph}
-        </p>
-      ))}
+      <GuideSteps guide={guide} where="panel" />
       {/* A machine value carries a word naming it. Not a link: it names a file
           in the repository rather than an address, and no surface navigates. */}
       {guide.concept === undefined ? null : (

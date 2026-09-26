@@ -1,0 +1,174 @@
+/* A guide's drawing: the real app, small and moving. Every length here is a
+   token, and the components inside bring their own.
+
+   MISSING TOKEN, named here and reported, the one Dialog and GuideCard both
+   name: --armada-hairline aliases --border-width, because packages/tokens
+   declares no border-width shorthand for an edge.
+
+   The drawing is framed and sunken, so it reads as a figure inside the reading
+   rather than as more chrome. Two scales, one drawing. */
+.armada-guide-figure {
+  --armada-hairline: var(--border-width);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: var(--armada-hairline) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+}
+
+/* Beside the list, where the window can pay for the width. */
+.armada-guide-figure[data-scale="panel"] {
+  padding: var(--space-4);
+}
+
+/* Inside the card the `?` opens, which is a narrow layer. The drawing is the
+   same one; what changes is what it sits in. */
+.armada-guide-figure[data-scale="card"] {
+  padding: var(--space-3);
+}
+
+/* The stage holds the real components. It never sets a type size or a colour:
+   a card that looked different here would be a second drawing of the app. */
+.armada-guide-figure__stage {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ---- arriving -------------------------------------------------------------
+
+   One animation per element, on the wrapper. It runs once, when the guide is
+   opened; a loop is what says *still working*, and a guide is not working. */
+.armada-guide-figure__arriving {
+  min-width: 0;
+  animation: armada-guide-arriving var(--duration-travel) var(--ease)
+    calc(var(--duration-travel) * var(--armada-figure-order) * 0.4) both;
+}
+
+@keyframes armada-guide-arriving {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--space-3) * -1));
+  }
+}
+
+/* A bar filling: the wrapper opens from the start of the real bar to its end,
+   which is the movement filling is. The bar's own segments are untouched. */
+.armada-guide-figure__filling {
+  min-width: 0;
+  animation: armada-guide-filling var(--duration-travel) var(--ease)
+    calc(var(--duration-travel) * var(--armada-figure-order) * 0.4) both;
+}
+
+@keyframes armada-guide-filling {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+
+/* Held still, every drawing is its own finished state: every step drawn, every
+   bar full to where the work got to, every member on its rail. Nothing was
+   carried by the movement. */
+.armada-guide-figure[data-still] .armada-guide-figure__arriving,
+.armada-guide-figure[data-still] .armada-guide-figure__filling {
+  animation: none;
+}
+
+/* ---- a job's run ----------------------------------------------------------
+
+   The steps in order, as the stacked run arranges them: one card per step,
+   top to bottom. */
+.armada-guide-figure__run {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* ---- the groups of a plan -------------------------------------------------
+
+   A group, then its tasks indented under it, then the next group. The indent
+   is the canvas's own reading: a task hangs off the group that holds it. */
+.armada-guide-figure__groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.armada-guide-figure__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-guide-figure__tasks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-inline-start: var(--space-5);
+}
+
+/* ---- the bars -------------------------------------------------------------
+
+   Two real step bars, each named by what its segments count. The name is a
+   label on the drawing, not a sentence: the guide's own step carries the
+   sentence. */
+.armada-guide-figure__bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.armada-guide-figure__bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-guide-figure__bar-name {
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+/* ---- members landing in order ---------------------------------------------
+
+   The real list, so the rail joining one card to the next is the one a person
+   sees on the job. Two rules below reach into that component's own classes,
+   which is the binding this figure accepts: rename one and the guide breaks
+   loudly, where an invented drawing would have gone on looking right. */
+.armada-guide-figure__members {
+  min-width: 0;
+}
+
+/* A member's fact table is five rows of detail, and the relation here is the
+   order. The cards keep their rail, their number, their badge and their link. */
+.armada-guide-figure__members .armada-members__facts {
+  display: none;
+}
+
+/* Each member arrives in its own turn, staged by its place in the one list.
+   Spelled per child because the stagger belongs to the drawing rather than to
+   `JobMembers`, which has no idea it is being drawn. */
+.armada-guide-figure__members .armada-members__member {
+  animation: armada-guide-arriving var(--duration-travel) var(--ease) both;
+}
+
+.armada-guide-figure__members .armada-members__member:nth-child(2) {
+  animation-delay: calc(var(--duration-travel) * 0.4);
+}
+
+.armada-guide-figure__members .armada-members__member:nth-child(3) {
+  animation-delay: calc(var(--duration-travel) * 0.8);
+}
+
+.armada-guide-figure[data-still] .armada-members__member {
+  animation: none;
+}

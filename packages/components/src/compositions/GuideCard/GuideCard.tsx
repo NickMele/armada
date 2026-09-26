@@ -3,10 +3,11 @@ import { useEffect, useRef } from "react";
 import { ScrollArea } from "../../primitives/ScrollArea/ScrollArea";
 import { Switch } from "../../primitives/Switch/Switch";
 import type { Guide } from "../../guides/guide";
+import { GuideSteps } from "../GuideSteps/GuideSteps";
 
 /**
- * One guide, read. A number, a title, room for a picture and a few short
- * paragraphs — the shape a game's guide entry has.
+ * One guide, read. A number, a title, and the guide's own numbered steps with
+ * its drawing under one of them — the shape a game's guide entry has.
  *
  * **A card is read, never glimpsed**, which is why it is a framed layer and
  * not a tooltip. It is centred in the window, it takes a scrim, and it goes
@@ -75,14 +76,7 @@ export function GuideCard({ guide, invited = true, onClose, off, onOff, onReadAl
         </div>
 
         <ScrollArea className="armada-guide-card__body">
-          {guide.picture === undefined ? null : (
-            <img className="armada-guide-card__picture" src={guide.picture.src} alt={guide.picture.alt} />
-          )}
-          {guide.body.map((paragraph) => (
-            <p key={paragraph} className="armada-guide-card__paragraph">
-              {paragraph}
-            </p>
-          ))}
+          <GuideSteps guide={guide} where="card" />
         </ScrollArea>
 
         {offered ? (

@@ -378,3 +378,6 @@ export * from "./compositions/GuideMark/GuideMark";
 export * from "./compositions/GuideCard/GuideCard";
 export * from "./compositions/GuideCatalogue/GuideCatalogue";
 export * from "./compositions/GuidesSetting/GuidesSetting";
+// A guide, read: its numbered steps and the drawing under one of them.
+export * from "./compositions/GuideFigure/GuideFigure";
+export * from "./compositions/GuideSteps/GuideSteps";

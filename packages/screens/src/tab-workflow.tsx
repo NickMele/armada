@@ -15,8 +15,6 @@
 // plan that step holds rather than shrinking the run.
 
 import {
-  GuideMark,
-  GUIDE_GROUP_EDGES,
   ImplementBoard,
   Tabs,
   WorkflowCanvas,
@@ -219,17 +217,10 @@ export function WorkflowTab({
           {/* Above the run rather than over it: drawn inside the canvas the
               toggle sat on top of the last step's card at every width.
 
-              The `?` rides with the toggle, because what it explains is how to
-              read the picture — a group hangs off the step that planned it,
-              and a second edge arrives from the step that worked it. On the
-              head rather than on a node: a mark on one group node would claim
-              the rule belongs to that group. Owed since `#1607`; `#1602`. */}
-          <div className="armada-workflow-tab__modes">
-            {toggle}
-            {/* Not drawn on Stacked at all: a column has no edges, so a mark
-                about reading them would explain a picture that is not there. */}
-            {view === "canvas" ? <GuideMark guide={GUIDE_GROUP_EDGES} /> : null}
-          </div>
+              No `?` here any more. Guide 11 explained how a group gets its
+              second edge; the plan's graph moved to the Plan tab on 25
+              September 2026, so the guide was retired and its number with it. */}
+          <div className="armada-workflow-tab__modes">{toggle}</div>
           {view === "canvas" ? (
             <div className="armada-workflow-tab__canvas">
               <WorkflowCanvas

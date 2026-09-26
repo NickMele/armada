@@ -52,21 +52,21 @@ export const EveryGuide: Story = {
 };
 
 /**
- * **A row's press opens that guide beside the list.** Asserted on the guide's
- * own body text rather than on its title, which the row also carries: a title
- * drawn twice would let a panel that never changed pass this.
+ * **A row's press opens that guide beside the list.** Asserted on one of the
+ * guide's own steps rather than on its title, which the row also carries: a
+ * title drawn twice would let a panel that never changed pass this.
  */
 export const OpensWhatWasPressed: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const guide = GUIDES[7];
     if (guide === undefined) throw new Error("no eighth guide");
-    const paragraph = guide.body[0];
-    if (paragraph === undefined) throw new Error("no body");
+    const line = guide.steps[0];
+    if (line === undefined) throw new Error("no steps");
 
-    await expect(canvas.queryByText(paragraph)).toBeNull();
+    await expect(canvas.queryByText(line)).toBeNull();
     await userEvent.click(canvas.getByRole("button", rowFor(guide)));
-    await expect(canvas.getByText(paragraph)).toBeVisible();
+    await expect(canvas.getByText(line)).toBeVisible();
     await expect(canvas.getByRole("button", rowFor(guide))).toHaveAttribute("aria-current", "true");
 
     // One at a time: the guide that was open on arrival is no longer marked.
@@ -82,11 +82,11 @@ export const OpensWhatWasPressed: Story = {
  * card already does.
  */
 export const ArrivesOnOne: Story = {
-  args: { arriveAt: 11 },
+  args: { arriveAt: 14 },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const guide = GUIDES.find((one) => one.number === 11);
-    if (guide === undefined) throw new Error("no guide 11");
+    const guide = GUIDES.find((one) => one.number === 14);
+    if (guide === undefined) throw new Error("no guide 14");
     await expect(canvas.getByRole("heading", { name: guide.title })).toBeVisible();
     await expect(canvas.getByRole("button", rowFor(guide))).toHaveAttribute("aria-current", "true");
   },
@@ -171,8 +171,8 @@ export const Narrow: Story = {
     const canvas = within(canvasElement);
     const guide = GUIDES[3];
     if (guide === undefined) throw new Error("no fourth guide");
-    const paragraph = guide.body[0];
-    if (paragraph === undefined) throw new Error("no body");
+    const line = guide.steps[0];
+    if (line === undefined) throw new Error("no steps");
 
     // Arrives on the list: nothing is over it, and every row is pressable.
     await expect(canvas.queryByRole("dialog")).toBeNull();
@@ -181,7 +181,7 @@ export const Narrow: Story = {
     await userEvent.click(canvas.getByRole("button", rowFor(guide)));
 
     const sheet = canvas.getByRole("dialog", { name: guide.title });
-    await expect(within(sheet).getByText(paragraph)).toBeVisible();
+    await expect(within(sheet).getByText(line)).toBeVisible();
 
     await userEvent.click(within(sheet).getByRole("button", { name: /Close/ }));
     await expect(canvas.queryByRole("dialog")).toBeNull();

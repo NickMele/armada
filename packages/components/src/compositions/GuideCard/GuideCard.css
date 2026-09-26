@@ -6,8 +6,8 @@
  * --armada-hairline: packages/tokens declares no border-width shorthand for an
  *   edge, so --border-width is aliased locally the way Dialog aliases it.
  *
- * The measure is --w-dialog-wide rather than --w-dialog. A guide is three
- * paragraphs and a picture; 440px sets a column a picture cannot sit in. */
+ * The measure is --w-dialog-wide rather than --w-dialog. A guide carries a
+ * drawing of the real app; 440px sets a column that drawing cannot sit in. */
 .armada-guide-card-scrim {
   position: fixed;
   inset: 0;
@@ -101,19 +101,6 @@
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
   text-wrap: pretty;
-}
-
-.armada-guide-card__paragraph {
-  margin: 0;
-}
-
-/* Sized by what it is rather than by a frame this holds open for it: no
-   aspect ratio is imposed, because a guide with no picture draws none. */
-.armada-guide-card__picture {
-  width: 100%;
-  height: auto;
-  border-radius: var(--radius-md);
-  border: var(--armada-hairline) solid var(--border-subtle);
 }
 
 /* The switch is separated the way the dialog separates its field, and for the

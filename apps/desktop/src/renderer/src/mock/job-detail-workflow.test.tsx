@@ -8,7 +8,7 @@
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { page } from "vitest/browser";
 import { executingSequential } from "@armada/screens/src/fixtures/build/arc";
-import { GUIDE_GROUP_EDGES, GUIDE_GROUP_ORDER } from "@armada/components";
+import { GUIDE_GROUP_ORDER, GUIDES, RETIRED_GUIDE_NUMBERS } from "@armada/components";
 
 import { mount, unmountAfterEach } from "./testing";
 
@@ -257,11 +257,10 @@ test("a press on a task opens that task, and a press on its group takes the pane
   await expect.element(page.getByRole("region", { name: "Group 3, group" }).last()).toBeVisible();
 });
 
-// # What this destination no longer says, and the two marks that carry it
+// # What this destination no longer says, and the mark that carries it
 //
-// Two standing sentences: the implement board's order line, and — never on the
-// screen, because the mark was owed since #1607 — how a group gets its second
-// edge. Both are true of a Job that had never run, which is #1602's test.
+// The implement board's order line stood over the groups and is guide 4 now.
+// It is true of a Job that had never run, which is #1602's test.
 
 /** One guide's `?`, by the name `GuideMark` gives it. */
 const markFor = (guide: { number: number; title: string }) =>
@@ -288,14 +287,15 @@ test("the implement board heads its groups with the noun, and the mark hangs on 
     .toBeVisible();
 });
 
-test("the canvas head carries the mark for how a group is drawn, and Stacked does not", async () => {
+test("the canvas head carries no mark, because the guide that hung there is retired", async () => {
   await workflow();
-  await expect.element(markFor(GUIDE_GROUP_EDGES).last()).toBeVisible();
+  // Guide 11 explained how a group gets its second edge. The plan's graph
+  // moved to the Plan tab on 25 September 2026, so it was retired rather than
+  // rewritten, and 11 is a number nothing may take again.
+  expect(RETIRED_GUIDE_NUMBERS).toContain(11);
+  expect(GUIDES.map((guide) => guide.number)).not.toContain(11);
+  expect(page.getByRole("button", { name: /^Open guide 11,/ }).elements()).toHaveLength(0);
 
-  // Off on Stacked. A column draws no edges, so a mark about reading them
-  // would explain a picture that is not on screen — and mounting it is what
-  // would spend a person's one first contact on it.
   await page.getByRole("tab", { name: "Stacked" }).last().click();
   await expect.element(page.getByRole("list", { name: /as its workflow's run$/ }).last()).toBeVisible();
-  expect(markFor(GUIDE_GROUP_EDGES).elements()).toHaveLength(0);
 });

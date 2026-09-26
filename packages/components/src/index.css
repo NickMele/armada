@@ -354,6 +354,9 @@
 @import "./compositions/GuideCard/GuideCard.css";
 @import "./compositions/GuideCatalogue/GuideCatalogue.css";
 @import "./compositions/GuidesSetting/GuidesSetting.css";
+/* A guide's numbered steps, and the drawing of the real app under one of them. */
+@import "./compositions/GuideFigure/GuideFigure.css";
+@import "./compositions/GuideSteps/GuideSteps.css";
 
 /* The thread and the composer, stacked — Bridge's own wrapper, `TheShell`'s
    frame is what gives the pair its edges. */
