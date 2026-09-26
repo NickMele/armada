@@ -46,6 +46,17 @@ The two rules above and this one are one position: the screen reports, the
 teaching is offered once and then waits to be asked. What he rejects is not
 being taught — it is being told things he did not ask for, twice.
 
+> **Humanize the app's own words, not only the words you send him.**
+> `2026-09-25-a-guide-is-steps-over-the-real-app-moving.md` — shown a list of
+> guide titles he had asked for, he refused it: *"Your titles are still full of
+> AI fluff and not /humanizer."* The titles that replaced them are the questions
+> a person would type: *When is a job done?*, *How much disk is this using?*
+
+His global instruction to run `~/.claude/skills/humanizer` over every message
+covers the app too. A title, a label, an empty state and a guide are all things
+he reads. *A process is named by its executable* was accurate and unsearchable;
+*What are these processes?* is the same fact as a question somebody has.
+
 > **Remove the constraint rather than document it.**
 > `2026-09-22-helm-overlays.md` — three screens worked around the dock's 380px
 > and the proposal was a contract rule. He made the dock overlay instead, so
@@ -146,5 +157,5 @@ The register is the evidence; this file is only the reading of it.
 
 **A rule that gets contradicted is deleted, not hedged.** If he decides the
 other way, the decision file records both and the rule here goes or narrows.
-Twelve rules from four days is a thin basis, and this file will read as more certain
+Thirteen rules from five days is a thin basis, and this file will read as more certain
 than it is.
