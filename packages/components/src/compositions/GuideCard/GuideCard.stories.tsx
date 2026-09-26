@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
-import { GUIDE_COMPLETION, GUIDE_GROUP_EDGES } from "../../guides";
+import { GUIDE_ALWAYS_LOOKS, GUIDE_COMPLETION, GUIDE_MEMBER_LINK } from "../../guides";
 import { GuideCard } from "./GuideCard";
 
 const meta: Meta<typeof GuideCard> = {
@@ -16,9 +16,14 @@ type Story = StoryObj<typeof GuideCard>;
 /** Pressed for. It scales in behind its scrim, the way summoned chrome may. */
 export const Asked: Story = {};
 
-/** Four paragraphs rather than three. The body is the part that gives. */
+/** Ten steps rather than eight. The list is the part that gives. */
 export const Longer: Story = {
-  args: { guide: GUIDE_GROUP_EDGES },
+  args: { guide: GUIDE_ALWAYS_LOOKS },
+};
+
+/** A guide that carries a drawing, in the narrowest layer it is drawn in. */
+export const WithAFigure: Story = {
+  args: { guide: GUIDE_MEMBER_LINK },
 };
 
 /**

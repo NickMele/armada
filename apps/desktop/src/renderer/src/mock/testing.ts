@@ -3,7 +3,6 @@
 
 import { afterEach, expect } from "vitest";
 import { page, userEvent } from "vitest/browser";
-import type { GuideShape } from "@armada/components";
 
 import { mountApp } from "./mount";
 import type { Mounted } from "./mount";
@@ -22,17 +21,12 @@ export function unmountAfterEach(): void {
   });
 }
 
-/**
- * Mount `App` on a scenario, in a host the app's stylesheet sizes as its window.
- *
- * `guides` is what the mock's `?guides=` sets — a shape to read guides in, and a
- * comparison rather than a setting. Absent is prose, which is what Bridge draws.
- */
-export function mount(scenario: string | Scenario, guides?: GuideShape): Mounted {
+/** Mount `App` on a scenario, in a host the app's stylesheet sizes as its window. */
+export function mount(scenario: string | Scenario): Mounted {
   const host = document.createElement("div");
   host.id = "root";
   document.body.append(host);
-  const app = mountApp(scenario, host, undefined, guides);
+  const app = mountApp(scenario, host);
   mounted.push({ app, host });
   return app;
 }

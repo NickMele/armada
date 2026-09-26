@@ -378,8 +378,6 @@ export * from "./compositions/GuideMark/GuideMark";
 export * from "./compositions/GuideCard/GuideCard";
 export * from "./compositions/GuideCatalogue/GuideCatalogue";
 export * from "./compositions/GuidesSetting/GuidesSetting";
-// Two other shapes of one guide, for the owner to choose between — steps, and a
-// figure with captions. The mock sets the shape and Bridge sets none.
-export * from "./guide-shape";
+// A guide, read: its numbered steps and the drawing under one of them.
 export * from "./compositions/GuideFigure/GuideFigure";
-export * from "./compositions/GuideShaped/GuideShaped";
+export * from "./compositions/GuideSteps/GuideSteps";

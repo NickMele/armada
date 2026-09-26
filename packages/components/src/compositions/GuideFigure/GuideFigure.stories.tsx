@@ -7,6 +7,7 @@ import { GuideFigure } from "./GuideFigure";
 const meta: Meta<typeof GuideFigure> = {
   title: "Compositions/Guide figure",
   component: GuideFigure,
+  args: { scale: "panel" },
   decorators: [
     (Story) => (
       <div
@@ -26,38 +27,53 @@ export default meta;
 type Story = StoryObj<typeof GuideFigure>;
 
 /**
- * **Three members landing onto one branch, in order** — the relation guide 2
- * teaches, and one of the three `docs/contracts/design-system.md` names as worth
- * drawing. Each member owns a segment of the branch, so a segment drawing is
- * that member landing. It runs once and never loops.
+ * **A job running its workflow's steps, in order** — the real
+ * `WorkflowStepCard`, the same card the canvas and the stacked run both draw,
+ * with the registry's own words on it. Guides 15 and 19 share it.
+ */
+export const WorkflowSteps: Story = {
+  args: { figure: "workflow-steps" },
+};
+
+/**
+ * **The groups of a plan, one at a time.** Real group and task cards: the first
+ * group is through its checks before the second starts, which is what guides 4
+ * and 17 both name.
+ */
+export const GroupOrder: Story = {
+  args: { figure: "group-order" },
+};
+
+/**
+ * **Two real `StepBar`s, filling.** The wrapper opens from the start of each
+ * bar to its end; the bar's own segments are untouched, so what fills is the
+ * component the run draws.
+ */
+export const StepBars: Story = {
+  args: { figure: "step-bar" },
+};
+
+/**
+ * **The real member list**, rail and all, each card arriving in its turn. This
+ * is the figure that binds hardest: it is `JobMembers` itself, so a change to
+ * that list changes this guide.
  */
 export const MembersLanding: Story = {
-  args: { figure: "members-landing", scale: "lead" },
+  args: { figure: "members-landing" },
 };
 
-/** The same drawing under one step, where the step's line is what is being read. */
-export const MembersLandingInline: Story = {
-  args: { figure: "members-landing", scale: "inline" },
-};
-
-/**
- * **The four landing rules, and the drawing that shows the weakness.** Guide 1
- * is a rule, not a relation: nothing relates to anything here, so nothing
- * animates and no picture carries a fact the sentence does not. It exists only
- * because the `figure` shape makes a guide lead with a drawing.
- */
-export const CompletionRules: Story = {
-  args: { figure: "completion-rules", scale: "lead" },
+/** The same drawing in the layer a `?` opens, which is the narrower of the two. */
+export const InTheCard: Story = {
+  args: { figure: "members-landing", scale: "card" },
 };
 
 /**
- * **Held still, the drawing is the finished branch.** Under
- * `prefers-reduced-motion` nothing runs, and every reading the motion arrived at
- * is already there: three segments drawn, three marks numbered, three links
- * named. Nothing was carried by the movement.
+ * **Held still, the drawing is its own finished state.** Under
+ * `prefers-reduced-motion` nothing runs, and every reading the motion arrived
+ * at is already there: the order on the rail, the link each member carries.
  */
 export const HeldStill: Story = {
-  args: { figure: "members-landing", scale: "lead" },
+  args: { figure: "members-landing" },
   beforeEach: () => {
     const real = window.matchMedia;
     window.matchMedia = (query: string) => {
@@ -72,10 +88,10 @@ export const HeldStill: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const figure = canvas.getByRole("img", { name: /landing onto it in order/ });
+    const figure = canvas.getByRole("img", { name: /landing in order/ });
     await expect(figure.getAnimations({ subtree: true })).toHaveLength(0);
     // The order and the links read from the drawing itself, not from the label.
-    for (const word of ["1", "2", "3", "Stacked", "Parked", "Waiting on a release", "main"]) {
+    for (const word of ["1", "2", "3", "Stacked on the one before it."]) {
       await expect(within(figure).getByText(word)).toBeVisible();
     }
   },

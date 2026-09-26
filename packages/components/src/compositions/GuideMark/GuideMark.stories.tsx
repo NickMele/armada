@@ -60,7 +60,7 @@ export const OpensItsCard: Story = {
     // tree a frame before it can be seen. Waiting is the assertion: a card
     // that never reaches full opacity is one nobody can read.
     await waitFor(() => expect(card).toBeVisible());
-    await expect(within(card).getByText(guide.body[0] as string)).toBeVisible();
+    await expect(within(card).getByText(guide.steps[0] as string)).toBeVisible();
 
     await userEvent.click(within(card).getByRole("button", { name: "Close" }));
     await expect(

@@ -1,0 +1,48 @@
+/* A guide, read as numbered steps with its drawing under one of them. One
+   stylesheet for both surfaces, so a guide reads the same in the catalogue
+   panel and in the card the `?` opens.
+
+   The number sits in its own column so every line starts at one place and the
+   list reads as numbered without a marker glyph. */
+.armada-guide-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  list-style: none;
+}
+
+.armada-guide-steps__step {
+  display: grid;
+  grid-template-columns: var(--space-6) minmax(0, 1fr);
+  column-gap: var(--space-3);
+  row-gap: var(--space-3);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.armada-guide-steps__ordinal {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+  text-align: right;
+}
+
+/* One line, which is the shape's whole claim. It wraps at a narrow width
+   rather than being clipped — a step is a sentence, not a fixed row. */
+.armada-guide-steps__line {
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-wrap: pretty;
+}
+
+/* The figure under the step it belongs to, in the line's own column so it sits
+   under the words rather than under the number. */
+.armada-guide-steps__figure {
+  grid-column: 2;
+  min-width: 0;
+}

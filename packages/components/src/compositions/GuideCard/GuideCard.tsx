@@ -3,12 +3,11 @@ import { useEffect, useRef } from "react";
 import { ScrollArea } from "../../primitives/ScrollArea/ScrollArea";
 import { Switch } from "../../primitives/Switch/Switch";
 import type { Guide } from "../../guides/guide";
-import { useGuideShape } from "../../guide-shape";
-import { GuideShaped } from "../GuideShaped/GuideShaped";
+import { GuideSteps } from "../GuideSteps/GuideSteps";
 
 /**
- * One guide, read. A number, a title, room for a picture and a few short
- * paragraphs — the shape a game's guide entry has.
+ * One guide, read. A number, a title, and the guide's own numbered steps with
+ * its drawing under one of them — the shape a game's guide entry has.
  *
  * **A card is read, never glimpsed**, which is why it is a framed layer and
  * not a tooltip. It is centred in the window, it takes a scrim, and it goes
@@ -40,10 +39,6 @@ export type GuideCardProps = {
 
 export function GuideCard({ guide, invited = true, onClose, off, onOff, onReadAll }: GuideCardProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
-  // The mock's `?guides=`. Bridge provides no shape, so a card in the app is
-  // prose and the paragraphs below are the rendering it always had.
-  const shape = useGuideShape();
-  const shaped = shape !== "prose" && guide.shapes !== undefined ? shape : undefined;
 
   // Close holds initial focus, `Dialog`'s own rule: the safe control is the
   // one under the cursor, and on a card every control is safe but one is the
@@ -81,17 +76,7 @@ export function GuideCard({ guide, invited = true, onClose, off, onOff, onReadAl
         </div>
 
         <ScrollArea className="armada-guide-card__body">
-          {guide.picture === undefined ? null : (
-            <img className="armada-guide-card__picture" src={guide.picture.src} alt={guide.picture.alt} />
-          )}
-          {shaped !== undefined ? <GuideShaped guide={guide} shape={shaped} where="card" /> : null}
-          {shaped !== undefined
-            ? null
-            : guide.body.map((paragraph) => (
-                <p key={paragraph} className="armada-guide-card__paragraph">
-                  {paragraph}
-                </p>
-              ))}
+          <GuideSteps guide={guide} where="card" />
         </ScrollArea>
 
         {offered ? (

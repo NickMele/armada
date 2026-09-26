@@ -159,9 +159,9 @@
   padding: var(--pad-card);
 }
 
-/* The measure is bounded, because a paragraph the width of a 2000px window is
-   a paragraph nobody finishes. 68ch is a reading measure and not a layout
-   value, which is why it is not a token. */
+/* The measure is bounded, because a step the width of a 2000px window is a
+   line nobody finishes. 68ch is a reading measure and not a layout value,
+   which is why it is not a token. */
 .armada-guides__panel > *,
 .armada-guides__folded > * {
   max-width: 68ch;
@@ -196,26 +196,9 @@
   text-wrap: pretty;
 }
 
-.armada-guides__paragraph {
-  margin: 0;
-  color: var(--fg-muted);
-  font-size: var(--text-sm);
-  line-height: var(--leading-sm);
-  text-wrap: pretty;
-}
-
-/* Sized by what it is rather than by a frame held open for it: no aspect ratio
-   is imposed, because a guide with no picture draws none. */
-.armada-guides__picture {
-  width: 100%;
-  height: auto;
-  border-radius: var(--radius-md);
-  border: var(--border-width) solid var(--border-subtle);
-}
-
 /* Where the same knowledge is written for a reader of the repository. Set off
    the way the card sets off its switch, and for the same reason: a value that
-   is not part of the reading needs a line between it and the last paragraph. */
+   is not part of the reading needs a line between it and the last step. */
 .armada-guides__concept {
   display: flex;
   flex-wrap: wrap;
